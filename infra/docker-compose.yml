@@ -1,7 +1,9 @@
 name: interview-insights
 
-# Local dev stack — Postgres, Redis, Redpanda (Kafka-compatible), plus the
-# app services. See docs/ARCHITECTURE.md "Deployment shape (target state)".
+# Local dev: Postgres only. `api` and `web` run directly on the host via npm
+# (see README.md) — no code talks to Redis/Kafka yet, so they aren't run
+# until something actually depends on them (docs/DECISIONS.md D9: avoid
+# premature infrastructure). Add them back here when Phase 3+ needs them.
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,65 +21,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  redpanda:
-    image: redpandadata/redpanda:v24.2.7
-    restart: unless-stopped
-    command:
-      - redpanda
-      - start
-      - --smp=1
-      - --memory=512M
-      - --overprovisioned
-      - --node-id=0
-      - --check=false
-      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
-    ports:
-      - "9092:9092"
-
-  api:
-    build:
-      context: ../api
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
-      REDIS_URL: redis://redis:6379
-      KAFKA_BROKERS: redpanda:9092
-      PORT: 3001
-      EMAIL_HASH_SECRET: dev-only-change-me
-      CORS_ORIGIN: http://localhost:3000
-    ports:
-      - "3001:3001"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  web:
-    build:
-      context: ../web
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api
 
 volumes:
   postgres_data:
