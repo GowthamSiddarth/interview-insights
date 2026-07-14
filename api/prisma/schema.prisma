@@ -1,0 +1,349 @@
+// Prisma schema — source of truth is docs/DATA_MODEL.md.
+// Do not hand-edit production schema; every change here becomes a migration
+// (`npx prisma migrate dev --name <change>`), per docs/DECISIONS.md D6.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// 1. companies, candidates
+// ---------------------------------------------------------------------------
+
+enum CompanySizeBucket {
+  startup
+  mid
+  large
+  enterprise
+}
+
+model Company {
+  id         String            @id @default(uuid()) @db.Uuid
+  name       String
+  slug       String            @unique
+  industry   String?
+  sizeBucket CompanySizeBucket @map("size_bucket")
+  logoUrl    String?           @map("logo_url")
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  interviewProcesses   InterviewProcess[]
+  interviewers         Interviewer[]
+  recruiters           Recruiter[]
+  companyLevelMappings CompanyLevelMapping[]
+
+  @@map("companies")
+}
+
+enum VerificationStatus {
+  unverified
+  email_verified
+  document_verified
+}
+
+model Candidate {
+  id                 String             @id @default(uuid()) @db.Uuid
+  // Hashed, never store raw email — see docs/DATA_MODEL.md design principle 1.
+  emailHash          String             @unique @map("email_hash")
+  verificationStatus VerificationStatus @default(unverified) @map("verification_status")
+  verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  interviewProcesses InterviewProcess[]
+  roundRatings       RoundRating[]
+  recruiterRatings   RecruiterRating[]
+  overallReviews     OverallReview[]
+
+  @@map("candidates")
+}
+
+// ---------------------------------------------------------------------------
+// 2. interview_processes
+// ---------------------------------------------------------------------------
+
+enum ProcessOutcome {
+  offer
+  rejected
+  withdrawn
+  ghosted
+  in_progress
+}
+
+// Phase 2 taxonomy (docs/DATA_MODEL.md D5) — schema-ready, unused until the
+// company_level_mappings backfill job exists. `unmapped` is a valid value;
+// never guess a mapping.
+enum NormalizedBand {
+  entry
+  mid
+  senior
+  staff
+  principal
+  manager
+  director
+  exec
+  unmapped
+}
+
+model InterviewProcess {
+  id              String          @id @default(uuid()) @db.Uuid
+  companyId       String          @map("company_id") @db.Uuid
+  candidateId     String          @map("candidate_id") @db.Uuid
+  roleTitle       String          @map("role_title")
+  // Free text for MVP, e.g. "L5", "Senior" — normalize later, see normalizedBand.
+  level           String?
+  department      String?
+  applicationDate DateTime?       @map("application_date") @db.Date
+  outcome         ProcessOutcome
+  // Nullable, populated progressively via batch backfill — never inline at write time.
+  normalizedBand  NormalizedBand? @map("normalized_band")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  company               Company                @relation(fields: [companyId], references: [id])
+  candidate             Candidate              @relation(fields: [candidateId], references: [id])
+  rounds                Round[]
+  recruiterInteractions RecruiterInteraction[]
+  overallReview         OverallReview?
+
+  @@index([companyId, roleTitle])
+  @@index([companyId, createdAt])
+  @@index([normalizedBand])
+  @@map("interview_processes")
+}
+
+// ---------------------------------------------------------------------------
+// 3. interviewers, recruiters
+// ---------------------------------------------------------------------------
+
+model Interviewer {
+  id                     String   @id @default(uuid()) @db.Uuid
+  companyId              String   @map("company_id") @db.Uuid
+  // For de-duplication only — never returned by the public API.
+  internalIdentifierHash String   @map("internal_identifier_hash")
+  // Generated label, e.g. "Interviewer A" — computed per-process, never a real name.
+  // See docs/DECISIONS.md D2: hard constraint, do not expose real names publicly.
+  displayLabel           String   @map("display_label")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  company Company @relation(fields: [companyId], references: [id])
+  rounds  Round[]
+
+  @@map("interviewers")
+}
+
+model Recruiter {
+  id                     String   @id @default(uuid()) @db.Uuid
+  companyId              String   @map("company_id") @db.Uuid
+  internalIdentifierHash String   @map("internal_identifier_hash")
+  displayLabel           String   @map("display_label")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  company               Company                @relation(fields: [companyId], references: [id])
+  recruiterInteractions RecruiterInteraction[]
+
+  @@map("recruiters")
+}
+
+// ---------------------------------------------------------------------------
+// 4. rounds
+// ---------------------------------------------------------------------------
+
+enum RoundType {
+  coding
+  system_design
+  behavioral
+  leadership
+  case_study
+  assessment
+  take_home
+  other
+}
+
+model Round {
+  id                       String    @id @default(uuid()) @db.Uuid
+  processId                String    @map("process_id") @db.Uuid
+  sequenceNumber           Int       @map("sequence_number") @db.SmallInt
+  title                    String
+  description              String?
+  roundType                RoundType @map("round_type")
+  interviewerId            String?   @map("interviewer_id") @db.Uuid
+  scheduledDurationMinutes Int?      @map("scheduled_duration_minutes") @db.SmallInt
+  // Type-specific fields keyed by roundType — do NOT add new columns per
+  // round type, see docs/DATA_MODEL.md "type_metadata examples" and
+  // CLAUDE.md conventions.
+  typeMetadata             Json?     @map("type_metadata")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  process     InterviewProcess @relation(fields: [processId], references: [id])
+  interviewer Interviewer?     @relation(fields: [interviewerId], references: [id])
+  ratings     RoundRating[]
+
+  @@index([processId, sequenceNumber])
+  @@index([roundType])
+  @@map("rounds")
+}
+
+// ---------------------------------------------------------------------------
+// 5. round_ratings
+// ---------------------------------------------------------------------------
+
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+  flagged
+}
+
+model RoundRating {
+  id                   String           @id @default(uuid()) @db.Uuid
+  roundId              String           @map("round_id") @db.Uuid
+  candidateId          String           @map("candidate_id") @db.Uuid
+  difficulty           Int              @db.SmallInt
+  fairness             Int              @db.SmallInt
+  communicationFluency Int              @map("communication_fluency") @db.SmallInt
+  attentiveness        Int              @db.SmallInt
+  // Higher = less bias perceived. Polarity is intentional — do not flip
+  // without updating every aggregate/display consumer. See docs/DATA_MODEL.md.
+  biasSignal           Int              @map("bias_signal") @db.SmallInt
+  technicalDepth       Int?             @map("technical_depth") @db.SmallInt
+  freeText             String?          @map("free_text")
+  status               ModerationStatus @default(pending)
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  round     Round     @relation(fields: [roundId], references: [id])
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  // One rating per candidate per round — docs/DECISIONS.md D8.
+  // 1-5 CHECK constraints (difficulty, fairness, communication_fluency,
+  // attentiveness, bias_signal, technical_depth) aren't expressible in Prisma
+  // schema language — they're added via raw SQL appended to the init
+  // migration, see prisma/migrations/*_init/migration.sql.
+  @@unique([roundId, candidateId])
+  @@map("round_ratings")
+}
+
+// ---------------------------------------------------------------------------
+// 6. recruiter_interactions
+// ---------------------------------------------------------------------------
+
+model RecruiterInteraction {
+  id          String   @id @default(uuid()) @db.Uuid
+  processId   String   @map("process_id") @db.Uuid
+  recruiterId String   @map("recruiter_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  process   InterviewProcess  @relation(fields: [processId], references: [id])
+  recruiter Recruiter         @relation(fields: [recruiterId], references: [id])
+  ratings   RecruiterRating[]
+
+  @@map("recruiter_interactions")
+}
+
+// ---------------------------------------------------------------------------
+// 7. recruiter_ratings
+// ---------------------------------------------------------------------------
+
+model RecruiterRating {
+  id                     String           @id @default(uuid()) @db.Uuid
+  recruiterInteractionId String           @map("recruiter_interaction_id") @db.Uuid
+  candidateId            String           @map("candidate_id") @db.Uuid
+  approachability        Int              @db.SmallInt
+  responseTime           Int              @map("response_time") @db.SmallInt
+  timeliness             Int              @db.SmallInt
+  communicationQuality   Int              @map("communication_quality") @db.SmallInt
+  freeText               String?          @map("free_text")
+  status                 ModerationStatus @default(pending)
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  recruiterInteraction RecruiterInteraction @relation(fields: [recruiterInteractionId], references: [id])
+  candidate            Candidate            @relation(fields: [candidateId], references: [id])
+
+  // One rating per candidate per interaction — docs/DECISIONS.md D8.
+  // 1-5 CHECK constraints added via raw SQL, see note on RoundRating above.
+  @@unique([recruiterInteractionId, candidateId])
+  @@map("recruiter_ratings")
+}
+
+// ---------------------------------------------------------------------------
+// 8. overall_reviews
+// ---------------------------------------------------------------------------
+
+model OverallReview {
+  id                String           @id @default(uuid()) @db.Uuid
+  // One overall review per process.
+  processId         String           @unique @map("process_id") @db.Uuid
+  candidateId       String           @map("candidate_id") @db.Uuid
+  overallExperience Int              @map("overall_experience") @db.SmallInt
+  wouldRecommend    Boolean          @map("would_recommend")
+  reviewText        String?          @map("review_text")
+  status            ModerationStatus @default(pending)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  process   InterviewProcess @relation(fields: [processId], references: [id])
+  candidate Candidate        @relation(fields: [candidateId], references: [id])
+
+  // 1-5 CHECK constraint added via raw SQL, see note on RoundRating above.
+  @@map("overall_reviews")
+}
+
+// ---------------------------------------------------------------------------
+// 9. moderation_queue
+// ---------------------------------------------------------------------------
+
+enum ModerationEntityType {
+  round_rating
+  recruiter_rating
+  overall_review
+}
+
+enum ModerationFlagReason {
+  spam_pattern
+  rate_limit
+  duplicate
+  manual_report
+}
+
+model ModerationQueueEntry {
+  id         String                @id @default(uuid()) @db.Uuid
+  entityType ModerationEntityType  @map("entity_type")
+  // Polymorphic reference (by entityType) to round_ratings / recruiter_ratings
+  // / overall_reviews — intentionally not an FK, see docs/DATA_MODEL.md.
+  entityId   String                @map("entity_id") @db.Uuid
+  flagReason ModerationFlagReason? @map("flag_reason")
+  reviewedBy String?               @map("reviewed_by")
+  reviewedAt DateTime?             @map("reviewed_at") @db.Timestamptz
+  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([entityType, entityId])
+  @@map("moderation_queue")
+}
+
+// ---------------------------------------------------------------------------
+// 10. company_level_mappings — phase 2, schema-ready but unused at MVP (D5)
+// ---------------------------------------------------------------------------
+
+model CompanyLevelMapping {
+  id             String         @id @default(uuid()) @db.Uuid
+  companyId      String         @map("company_id") @db.Uuid
+  rawLevelString String         @map("raw_level_string")
+  normalizedBand NormalizedBand @map("normalized_band")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, rawLevelString])
+  @@map("company_level_mappings")
+}
+
+// ---------------------------------------------------------------------------
+// 11. Aggregation layer (materialized views) — NOT modeled here.
+// ---------------------------------------------------------------------------
+// company_round_type_aggregates, company_recruiter_aggregates, and
+// company_overall_aggregates (docs/DATA_MODEL.md "Aggregation layer") are
+// Postgres materialized views, not Prisma models — Prisma migrations don't
+// manage them well. They'll be added as raw SQL in a dedicated migration
+// (`prisma migrate dev --create-only` + hand-written CREATE MATERIALIZED VIEW)
+// when Phase 4 (analytics) starts. See docs/ROADMAP.md Phase 4.

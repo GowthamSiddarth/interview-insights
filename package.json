@@ -1,0 +1,10 @@
+{
+  "name": "interview-insights",
+  "private": true,
+  "description": "Convenience scripts across api/web/workers. Each service keeps its own package-lock.json and is built/deployed independently (see each Dockerfile) — this is not an npm workspaces root.",
+  "scripts": {
+    "lint": "npm run lint --prefix api && npm run lint --prefix web",
+    "test": "npm test --prefix api && npm test --prefix web",
+    "build": "npm run build --prefix api && npm run build --prefix web && npm run build --prefix workers"
+  }
+}
