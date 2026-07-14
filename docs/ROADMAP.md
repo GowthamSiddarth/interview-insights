@@ -53,6 +53,11 @@ infrastructure" docs/DECISIONS.md D9 warns against: it adds real operational
 cost (things to run, patch, pay for, and debug) before there's a problem it
 solves. Target cloud: **AWS** (D11) — every item below assumes that, with a
 local-only emulation path noted so it can be prototyped at zero cloud cost.
+[LocalStack](https://www.localstack.io/) emulates most of the AWS services
+referenced below (Secrets Manager, IAM, S3, SQS) behind the real AWS SDK/CLI,
+so `api`/CI can point at `http://localhost:4566` instead of real AWS during
+local development — called out again where it's most relevant, but it's
+useful across most of this phase.
 
 ### 8a. CI/CD maturity
 *Trigger: more than one contributor, or any deploy target beyond your own
@@ -80,7 +85,10 @@ shared/staging environment exists — not needed for solo local dev with
 - Open question to resolve before this ships: rotating `EMAIL_HASH_SECRET`
   invalidates every existing `email_hash`, breaking candidate lookups —
   needs a dual-read migration strategy, not a hard cutover
-- Local emulation: HashiCorp Vault in dev mode (`vault server -dev`)
+- Local emulation: HashiCorp Vault in dev mode (`vault server -dev`), or
+  LocalStack if you'd rather develop directly against the real
+  `SecretsManagerClient` from the AWS SDK and swap only the endpoint URL for
+  production
 
 ### 8c. Networking (VPC, ingress/egress)
 *Trigger: first deploy to a shared/staging AWS environment — a single local
@@ -107,7 +115,9 @@ unlike everything else in this phase.*
   credential
 - No IAM users with long-lived access keys for humans; IAM Identity Center
   (SSO) + short-lived STS sessions for anyone needing console/CLI access
-- No local equivalent needed — this is a habit, not infrastructure to stand up
+- Mostly a habit, not infrastructure to stand up — but LocalStack can dry-run
+  a role/policy JSON against its IAM emulation to catch typos in an ARN or an
+  overly broad `Resource: "*"` before it's ever applied for real
 
 ### 8e. Redis / caching
 *Trigger: Phase 3's fraud-check rate limiting, or Phase 4's aggregate
