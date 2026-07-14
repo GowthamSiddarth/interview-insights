@@ -57,6 +57,8 @@ services:
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: redpanda:9092
       PORT: 3001
+      EMAIL_HASH_SECRET: dev-only-change-me
+      CORS_ORIGIN: http://localhost:3000
     ports:
       - "3001:3001"
     depends_on:

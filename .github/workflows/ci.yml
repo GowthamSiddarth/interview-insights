@@ -24,6 +24,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
+      EMAIL_HASH_SECRET: ci-test-secret
     defaults:
       run:
         working-directory: api

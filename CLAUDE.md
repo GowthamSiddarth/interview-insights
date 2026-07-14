@@ -80,31 +80,40 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-14: Phase 1 (repo scaffold) is done.
+As of 2026-07-14: Phase 1 (repo scaffold) and Phase 2 (thin vertical slice)
+are done.
 
-- Repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS), `web/`
-  (Next.js + Tailwind), `workers/` (placeholder, no logic yet),
-  `infra/` (docker-compose.yml wired for Postgres/Redis/Redpanda/api/web;
-  `k8s/base`, `k8s/overlays/{dev,staging,prod}`, `terraform/` are empty
-  placeholders until Phase 7), `.github/workflows/ci.yml`.
-- Prisma schema (`api/prisma/schema.prisma`) implements every table in
-  `docs/DATA_MODEL.md` in the documented migration order, plus the first
-  migration (`api/prisma/migrations/20260714000000_init`). Note: the 1-5
-  CHECK constraints on rating columns aren't expressible in Prisma schema
-  language, so they're appended as raw SQL at the end of that migration
-  file — see the comments in schema.prisma next to `RoundRating`,
-  `RecruiterRating`, and `OverallReview`.
-- Verified end-to-end against a real local Postgres: migration applies
-  cleanly, `prisma migrate status` reports no drift, CHECK constraints are
-  live, and a minimal vertical slice (NestJS `/health` endpoint using
-  `PrismaService`) passes its unit test and its Postgres-backed e2e test.
-  `api`/`web` build + lint + test clean; `workers` typechecks.
-- Aggregation materialized views are intentionally NOT in schema.prisma —
-  Prisma doesn't manage views well; they'll be raw SQL in a dedicated
-  migration when Phase 4 (analytics) starts.
-- Next step: Phase 2 — CRUD for Company → InterviewProcess → Round →
-  RoundRating (API only), then a minimal frontend flow, per
-  `docs/ROADMAP.md`.
+**Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
+`web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
+(docker-compose.yml wired for Postgres/Redis/Redpanda/api/web; `k8s/base`,
+`k8s/overlays/{dev,staging,prod}`, `terraform/` are empty placeholders until
+Phase 7), `.github/workflows/ci.yml`. Prisma schema
+(`api/prisma/schema.prisma`) implements every table in `docs/DATA_MODEL.md`
+in the documented migration order, plus the first migration
+(`api/prisma/migrations/20260714000000_init`). The 1-5 CHECK constraints on
+rating columns aren't expressible in Prisma schema language, so they're
+appended as raw SQL at the end of that migration file. Aggregation
+materialized views are intentionally NOT in schema.prisma — they'll be raw
+SQL in a dedicated migration when Phase 4 starts.
+
+**Phase 2** — Create + Read (scope decision: Update/Delete deferred until
+there's auth to gate who can call them, and rating/review edits after
+submission would undermine the moderation model anyway) for the full
+Company → InterviewProcess → Round → RoundRating chain, plus a Candidates
+endpoint (dependency for InterviewProcess — email is hashed server-side with
+an HMAC pepper, `EMAIL_HASH_SECRET`, and the raw email is never persisted).
+Global `PrismaExceptionFilter` maps unique/FK/not-found Prisma errors to
+409/422/404. 38 unit tests (DTO validation + email-hash + Candidate service
+logic) and integration e2e tests against a real Postgres (unique-constraint
+conflict, moderation gate, validation edge cases) all pass. Minimal Next.js
+wizard drives the whole flow; verified by actually running both servers and
+driving it with a headless-Chromium (Playwright) script — this caught a real
+bug (NestJS doesn't enable CORS by default, so every browser fetch from
+`web` to `api` failed preflight even though curl-based checks looked fine)
+now fixed via `app.enableCors()` + `CORS_ORIGIN` env var. `api`/`web` build +
+lint + test clean; `workers` typechecks.
+- Next step: Phase 3 — moderation queue worker, fraud checks, candidate
+  verification flow, per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

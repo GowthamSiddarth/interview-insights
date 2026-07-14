@@ -11,10 +11,11 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [x] Local Docker Compose (Postgres, Redis, Redpanda)
 
 ## Phase 2 — Thin vertical slice
-- [ ] CRUD for Company → InterviewProcess → Round → RoundRating, API only
-- [ ] Minimal frontend flow to create/view one full slice end to end
-- [ ] Unit tests for validation logic
-- [ ] Integration tests against a real test Postgres (Dockerized)
+- [x] Create + Read for Company → InterviewProcess → Round → RoundRating, API
+      only (Update/Delete intentionally deferred — see CLAUDE.md current status)
+- [x] Minimal frontend flow to create/view one full slice end to end
+- [x] Unit tests for validation logic
+- [x] Integration tests against a real test Postgres (Dockerized)
 
 ## Phase 3 — Trust & moderation
 - [ ] Moderation queue as its own service/worker
@@ -33,8 +34,9 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [ ] Filtering by role, round type, date range
 
 ## Phase 6 — CI/CD & containerization
-- [ ] GitHub Actions: lint, type-check, test, build on PR
-- [ ] Dockerfile per service (api, web, workers)
+- [x] GitHub Actions: lint, type-check, test, build on PR (built during
+      Phase 1 scaffolding, ahead of sequence — `.github/workflows/ci.yml`)
+- [x] Dockerfile per service (api, web, workers) (ditto)
 
 ## Phase 7 — Kubernetes
 - [ ] Local kind/minikube cluster with plain manifests
