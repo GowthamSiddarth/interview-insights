@@ -45,7 +45,111 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [ ] Move to Helm only if manifests become genuinely repetitive across
       services/environments
 
+## Phase 8 — Production hardening & platform scale-out
+
+Not a day-one checklist — a menu, each item gated by an explicit trigger.
+Building any of this before its trigger is exactly the "premature
+infrastructure" docs/DECISIONS.md D9 warns against: it adds real operational
+cost (things to run, patch, pay for, and debug) before there's a problem it
+solves. Target cloud: **AWS** (D11) — every item below assumes that, with a
+local-only emulation path noted so it can be prototyped at zero cloud cost.
+
+### 8a. CI/CD maturity
+*Trigger: more than one contributor, or any deploy target beyond your own
+machine.*
+- Branch protection + required status checks (`.github/workflows/ci.yml`
+  already produces the checks — just require them in GitHub repo settings)
+- CD workflow separate from CI: auto-deploy `main` to staging, manual
+  approval gate for prod (GitHub Environments + required reviewers)
+- PR-triggered ephemeral preview environments (scoped DB schema + short-lived
+  api/web instance per PR), torn down on PR close
+- CI authenticates to AWS via OIDC federation (GitHub's OIDC provider → an
+  IAM role scoped to exactly "push image, update service") — never long-lived
+  AWS access keys sitting in repo secrets
+- Local emulation: [`nektos/act`](https://github.com/nektos/act) runs the
+  Actions workflow locally for fast iteration without pushing
+
+### 8b. Secrets management
+*Trigger: before anything touches real candidate data, or before any
+shared/staging environment exists — not needed for solo local dev with
+`.env` files.*
+- AWS Secrets Manager for rotated/sensitive values (`EMAIL_HASH_SECRET`,
+  `DATABASE_URL`); Parameter Store for cheaper, less-sensitive config
+- Services fetch secrets at boot via their IAM task role — never baked into
+  a Docker image or pasted into a CI variable
+- Open question to resolve before this ships: rotating `EMAIL_HASH_SECRET`
+  invalidates every existing `email_hash`, breaking candidate lookups —
+  needs a dual-read migration strategy, not a hard cutover
+- Local emulation: HashiCorp Vault in dev mode (`vault server -dev`)
+
+### 8c. Networking (VPC, ingress/egress)
+*Trigger: first deploy to a shared/staging AWS environment — a single local
+Postgres container has nothing to isolate.*
+- VPC: public subnets hold only the load balancer; `api`, Postgres, Redis,
+  and workers live in private subnets with no public IPs
+- Security groups as the primary ingress control (api SG accepts 443 only
+  from the ALB SG; Postgres SG accepts 5432 only from the api SG)
+- NAT gateway for egress from private subnets — this bills hourly, so don't
+  provision it until something in a private subnet actually needs outbound
+  internet (e.g. calling an email provider)
+- WAF in front of the ALB once there's public traffic, rate-limiting at the
+  edge before requests reach `api`
+- Local equivalent: docker-compose's bridge network already models this —
+  only map `ports:` for services you're actively developing against; in a
+  "prod-like" local run, drop Postgres's port mapping so only `api` can
+  reach it over the compose network
+
+### 8d. IAM
+*Trigger: first AWS resource of any kind — get this right from day one,
+unlike everything else in this phase.*
+- One IAM role per service (api task role, worker task role, CI deploy
+  role), each scoped to only what that service does — never a shared admin
+  credential
+- No IAM users with long-lived access keys for humans; IAM Identity Center
+  (SSO) + short-lived STS sessions for anyone needing console/CLI access
+- No local equivalent needed — this is a habit, not infrastructure to stand up
+
+### 8e. Redis / caching
+*Trigger: Phase 3's fraud-check rate limiting, or Phase 4's aggregate
+caching — don't add Redis before one of those actually reads/writes to it
+(this is why it was removed from `infra/docker-compose.yml` in the first
+place).*
+- Managed: ElastiCache (Redis or Valkey) in the same private subnet as `api`
+- Use for: rate-limiting candidate submissions (Phase 3), caching
+  shrinkage-scored aggregates (Phase 4) with a short TTL and explicit
+  invalidation on new approved ratings
+- Local equivalent: `redis:7-alpine` back in `infra/docker-compose.yml`,
+  added the same day the code first needs it
+
+### 8f. Observability, logging, telemetry
+*Trigger: first shared/staging deployment with real traffic — one developer
+and one local Postgres doesn't need distributed tracing.*
+- Structured JSON logs (NestJS logger → pino) shipped to CloudWatch Logs
+  (or self-hosted Loki to cut cost)
+- OpenTelemetry SDK instrumenting NestJS (HTTP + Prisma spans) → OTel
+  Collector → AWS X-Ray or self-hosted Jaeger/Tempo
+- Metrics via a Prometheus-format `/metrics` endpoint, scraped by Grafana
+  Cloud or self-hosted Prometheus + Grafana
+- Alerting on SLOs (p99 latency, 5xx rate) only once there's a baseline to
+  alert against — don't wire up PagerDuty/Opsgenie before there's a metric
+  worth paging on
+- Local equivalent: a docker-compose profile with Prometheus + Grafana +
+  Jaeger (or the Grafana "LGTM" all-in-one image) — genuinely worth running
+  locally before this touches cloud billing at all
+
+### 8g. Distributed systems hardening (Kafka/Redpanda consumers)
+*Trigger: Phase 3's moderation worker and Phase 4's aggregation worker are
+the first real consumers — this isn't new scope, just what "production
+grade" means once they exist.*
+- Consumer groups so multiple worker replicas don't double-process the same
+  event
+- Idempotent consumers — a redelivered message must not double-count a
+  rating in an aggregate
+- A dead-letter topic for messages that fail processing repeatedly, so one
+  bad message can't jam the whole topic
+
 ## Deferred until real usage data exists
 - `normalized_band` / `company_level_mappings` population (D5)
 - ClickHouse migration for analytics (only if materialized views strain)
 - Tuning `k` in the shrinkage formula
+- Everything in Phase 8, gated by the triggers listed there

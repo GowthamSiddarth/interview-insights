@@ -96,6 +96,21 @@ multiply across Phase 2+.
 
 ---
 
+### D11 — AWS as the target cloud provider
+**Decision:** AWS is the cloud target for everything in `docs/ROADMAP.md`
+Phase 8 (CI/CD, secrets, networking, IAM, caching, observability). ECS
+Fargate or EKS for compute, Secrets Manager for secrets, ElastiCache for
+Redis, CloudWatch/X-Ray for logs/traces, IAM Identity Center for human access.
+**Why:** Most mature ecosystem for this exact shape of stack (containerized
+Node services + Postgres + Kafka-compatible bus), the deepest bench of
+docs/examples for pairing GitHub Actions with OIDC-federated deploys, and no
+existing organizational lock-in to Azure/GCP that would override the default.
+**Not yet decided:** none of Phase 8 is built — this only fixes which cloud
+to target *when* each item's trigger condition is met, so the eventual build
+doesn't re-litigate the provider choice piecemeal.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

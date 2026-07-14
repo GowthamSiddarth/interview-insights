@@ -52,6 +52,7 @@ Full schema: `docs/DATA_MODEL.md`.
 | Frontend | Next.js + Tailwind |
 | API framework | NestJS (Node/TypeScript) — see D10 in docs/DECISIONS.md |
 | Container/orchestration | Docker Compose (local) → Kubernetes (deployed) |
+| Cloud provider (Phase 8+, not yet built) | AWS — see D11 in docs/DECISIONS.md |
 
 See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 
