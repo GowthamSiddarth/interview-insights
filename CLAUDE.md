@@ -64,6 +64,12 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 - Schema changes always start as a Prisma migration file, never ad hoc SQL.
 - Don't add new round-type-specific columns to `rounds` — use the
   `type_metadata` JSONB field (see `docs/DATA_MODEL.md` for examples).
+- **Plan a phase before implementing any of it.** Before writing code for a
+  new `docs/ROADMAP.md` phase, break it into GitHub issues (with a milestone)
+  covering the whole phase first — same pattern used for Phase 3 (issues
+  #1-#3 filed together before any of them were implemented). Implementation
+  starts only after that planning pass is done; see
+  `wiki/github-project-setup.md` for the `gh` commands.
 
 ## Build order (see docs/ROADMAP.md for full detail)
 
