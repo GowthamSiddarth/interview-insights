@@ -22,9 +22,10 @@ companion to the "Current status" section in `CLAUDE.md`.
       now, not a separate `workers`/Kafka-consuming service; see D12 in
       `docs/DECISIONS.md` for why, and revisit once there's async load to
       justify decoupling it
-- [ ] Basic fraud checks (rate limiting, duplicate detection) before any
-      launch traffic — see D3 in `docs/DECISIONS.md`, this is not optional
-      (GitHub issue #2)
+- [x] Basic fraud checks (rate limiting, duplicate detection) before any
+      launch traffic — see D3 in `docs/DECISIONS.md` (GitHub issue #2).
+      Flags into `moderation_queue.flag_reason` rather than rejecting the
+      write outright; see D13 for why and its known scaling limits
 - [ ] Candidate verification flow (email domain match at minimum)
       (GitHub issue #3)
 
