@@ -64,6 +64,43 @@ export interface RoundRating {
   createdAt: string;
 }
 
+export interface RoundTypeAnalytics {
+  roundType: Round['roundType'];
+  sampleSize: number;
+  scores: {
+    difficulty: number | null;
+    fairness: number | null;
+    communicationFluency: number | null;
+    attentiveness: number | null;
+    biasSignal: number | null;
+  };
+}
+
+export interface RecruiterAnalytics {
+  sampleSize: number;
+  scores: {
+    approachability: number | null;
+    responseTime: number | null;
+    timeliness: number | null;
+    communicationQuality: number | null;
+  };
+}
+
+export interface OverallAnalytics {
+  sampleSize: number;
+  scores: {
+    overallExperience: number | null;
+    wouldRecommendPct: number | null;
+  };
+}
+
+export interface CompanyAnalytics {
+  companyId: string;
+  roundTypes: RoundTypeAnalytics[];
+  recruiter: RecruiterAnalytics | null;
+  overall: OverallAnalytics | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -136,4 +173,7 @@ export const api = {
 
   listApprovedRatingsForRound: (roundId: string) =>
     request<RoundRating[]>(`/rounds/${roundId}/ratings`),
+
+  getCompanyAnalytics: (companyId: string) =>
+    request<CompanyAnalytics>(`/companies/${companyId}/analytics`),
 };
