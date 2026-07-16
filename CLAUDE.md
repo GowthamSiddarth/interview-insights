@@ -93,7 +93,8 @@ single most useful thing to keep current.*
 
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), and Phase 5 (search &
-discovery) are all done. Phase 6 is done except issue #18 (blocked).
+discovery) are all done. Phase 6 is done except issue #18 (blocked). Phase 7
+(Kubernetes) is planned (issues #27-#29 filed) but not yet implemented.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -384,10 +385,21 @@ already did.
 
 **Phase 5 is now fully done** — all three GitHub issues (#21-#23) closed
 via merged PRs. `api` and `web` both build/lint/test clean.
-- Next step: no explicit next phase requested yet. Phase 6 remainder
-  (issue #18, branch protection) is blocked on GitHub plan limits; Phase 7
-  (Kubernetes) and Phase 8 (production hardening menu) are the next
-  unstarted roadmap items — wait for direction before planning either.
+
+**Phase 7 planning** — before any implementation, filed all three of
+Phase 7's issues under a "Phase 7 — Kubernetes" milestone (issues #27-#29,
+each depending on the previous), per the "plan a phase before implementing"
+convention: #27 base manifests for the stateful deps (Postgres,
+OpenSearch), #28 base manifests for `api`/`web` (Deployment/Service/
+Ingress/ConfigMap, depends on #27's in-cluster Service DNS), #29 Kustomize
+overlays for dev/staging/prod (depends on #27+#28 existing first; staging/
+prod overlays are structural only until Phase 8's networking/secrets
+triggers actually fire — only `dev` gets deployed as part of that issue).
+Helm explicitly out of scope for all three, per docs/ARCHITECTURE.md, until
+manifests are "genuinely repetitive" — not the case with 2-3 services yet.
+`workers/` still has no manifest — it's still a no-logic placeholder.
+- Next step: implement issue #27 (stateful-dependency manifests) once
+  given the go-ahead.
 
 ## Open decisions still to make
 
