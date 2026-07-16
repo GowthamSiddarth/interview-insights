@@ -94,7 +94,8 @@ single most useful thing to keep current.*
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), and Phase 5 (search &
 discovery) are all done. Phase 6 is done except issue #18 (blocked). Phase 7
-(Kubernetes) is planned (issues #27-#29 filed) but not yet implemented.
+(Kubernetes) is planned (issues #27-#29 filed); issue #27 is done, #28
+and #29 are not yet implemented.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -398,8 +399,44 @@ triggers actually fire — only `dev` gets deployed as part of that issue).
 Helm explicitly out of scope for all three, per docs/ARCHITECTURE.md, until
 manifests are "genuinely repetitive" — not the case with 2-3 services yet.
 `workers/` still has no manifest — it's still a no-logic placeholder.
-- Next step: implement issue #27 (stateful-dependency manifests) once
-  given the go-ahead.
+
+**Phase 7, issue #27 (stateful-dependency manifests)** — `infra/k8s/base/`
+gained numbered manifests (ordering matters for `kubectl apply -f dir/`:
+namespace must land before anything referencing it) — `00-namespace.yaml`,
+`01-postgres-secret.yaml` (plaintext `Secret`, acceptable for local-only
+kind/minikube — real secret management is gated on Phase 8b's trigger),
+`02-opensearch-config.yaml`, `03-postgres.yaml`, `04-opensearch.yaml`.
+Both Postgres and OpenSearch are StatefulSets (stable identity + a
+`volumeClaimTemplates` PVC each) fronted by headless Services, mirroring
+`infra/docker-compose.yml`'s image/env/healthcheck values exactly so
+issue #28's `api` config only has to swap hostnames.
+Found and fixed two real bugs while building this, neither hit by the
+Docker Compose setup because Compose doesn't reproduce either condition:
+- **Postgres wouldn't `initdb` at the PVC mount root** — a fresh PVC's
+  root can contain filesystem-reserved entries (e.g. `lost+found`), which
+  `initdb` refuses to initialize into. Fixed by pointing `PGDATA` at a
+  subdirectory of the mount (`/var/lib/postgresql/data/pgdata`), the
+  standard workaround.
+- **OpenSearch failed to start** with "max virtual memory areas
+  vm.max_map_count [65530] is too low" — most container hosts default
+  below what OpenSearch/Elasticsearch require. Fixed with a privileged
+  `initContainer` (`sysctl -w vm.max_map_count=262144`) ahead of the main
+  container, the same pattern OpenSearch's own k8s docs use.
+Also set OpenSearch's container memory limit (1536Mi) well above its
+`-Xmx512m` JVM heap — the heap is only part of a node's real memory
+footprint, and a limit too close to heap size risks an OOMKill under real
+indexing load.
+Manually verified against a local `kind` cluster (`kind create cluster
+--name interview-insights`): both StatefulSets reach `1/1 Running`, PVCs
+`Bound`; port-forwarded to each and confirmed `psql`/`_cluster/health`
+connectivity; deleted the `postgres-0` pod and confirmed a row inserted
+beforehand was still present after the StatefulSet recreated it — proving
+the PVC (not `emptyDir`) is what's actually persisting data. Documented
+the `kind` workflow in the root `README.md` as an alternative to Docker
+Compose for local dev.
+- Next step: issue #28 (`api`/`web` manifests), which depends on this
+  issue's Service DNS names (`postgres`, `opensearch` in the
+  `interview-insights` namespace) being reachable in-cluster.
 
 ## Open decisions still to make
 

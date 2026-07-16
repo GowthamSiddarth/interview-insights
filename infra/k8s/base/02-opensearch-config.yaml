@@ -1,0 +1,12 @@
+# Mirrors infra/docker-compose.yml's opensearch service env exactly:
+# single-node, security plugin disabled — local/dev only. Revisit before
+# any shared cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-config
+  namespace: interview-insights
+data:
+  discovery.type: single-node
+  DISABLE_SECURITY_PLUGIN: "true"
+  OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"

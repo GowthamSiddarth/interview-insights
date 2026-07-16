@@ -1,0 +1,89 @@
+# Mirrors infra/docker-compose.yml's opensearch service (image, single-node
+# config, healthcheck). Memory limit is set above the -Xmx512m heap
+# configured in 02-opensearch-config.yaml — JVM heap is only part of a
+# node's memory footprint (page cache, off-heap structures), so a limit
+# too close to the heap size causes the container to be OOMKilled under
+# real indexing load.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch
+  namespace: interview-insights
+spec:
+  clusterIP: None
+  selector:
+    app: opensearch
+  ports:
+    - port: 9200
+      targetPort: 9200
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opensearch
+  namespace: interview-insights
+spec:
+  serviceName: opensearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opensearch
+  template:
+    metadata:
+      labels:
+        app: opensearch
+    spec:
+      # OpenSearch (like Elasticsearch) needs a higher vm.max_map_count
+      # than most container hosts default to, or it fails at startup with
+      # "max virtual memory areas vm.max_map_count [65530] is too low".
+      # A privileged initContainer sets it on the node before the main
+      # container starts, same pattern OpenSearch's own k8s docs use.
+      initContainers:
+        - name: sysctl
+          image: busybox:1.36
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: opensearch
+          image: opensearchproject/opensearch:2.19.1
+          ports:
+            - containerPort: 9200
+            - containerPort: 9600
+          envFrom:
+            - configMapRef:
+                name: opensearch-config
+          volumeMounts:
+            - name: opensearch-data
+              mountPath: /usr/share/opensearch/data
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 15
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: opensearch-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
