@@ -158,6 +158,26 @@ turn out to matter in practice (add fuzzy matching then, not before).
 
 ---
 
+### D14 — Candidate verification token is returned directly, not emailed
+**Decision:** Phase 3 issue #3's `POST /candidates/:id/verification-token`
+returns the raw token in the response body. `POST /candidates/verify`
+consumes it and flips `verificationStatus` to `email_verified`. The token is
+single-use (`consumedAt`) and issuing a new one supersedes any still-valid
+token for that candidate. No email is actually sent.
+**Why:** There's no email-sending integration anywhere in this codebase yet,
+and building one is a distinct, non-trivial workstream (provider choice,
+templates, deliverability) out of scope for "the verification flow exists
+and works." Returning the token directly keeps the flow fully testable
+end-to-end today. This is a real, if temporary, security gap: anyone who
+can call the API on a candidate's behalf can verify them without proving
+email ownership — acceptable for pre-launch development, not for real
+candidate data.
+**Revisit when:** before any real (non-test) candidate data flows through
+this — swap the response for "sent" and wire an actual email provider,
+without changing the token/consumption model underneath.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

@@ -135,10 +135,14 @@ describe('Fraud checks (e2e)', () => {
     const [roundA] = await createProcessWithRounds(candidateA, 1);
     const [roundB] = await createProcessWithRounds(candidateB, 1);
 
-    const reviewText = 'Great interview, fair and well-structured questions.';
+    // Unique per run — the dockerized dev Postgres persists data across
+    // test runs (fraud-checks duplicate detection is a full-table scan by
+    // design, see D13), so a fixed literal string here would collide with
+    // leftover rows from a previous run instead of only this test's data.
+    const reviewText = `Great interview, fair and well-structured questions. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
     const first = await submitRating(roundA, candidateA, reviewText);
     // Same text, different case/whitespace, different candidate/round.
-    const second = await submitRating(roundB, candidateB, '  GREAT interview,   fair and well-structured questions.  ');
+    const second = await submitRating(roundB, candidateB, `  ${reviewText.toUpperCase()}  `);
 
     expect(first.queueEntry.flagReason).toBeNull();
     expect(second.queueEntry.flagReason).toBe('duplicate');
@@ -148,7 +152,11 @@ describe('Fraud checks (e2e)', () => {
     const candidateId = await createCandidate();
     const [roundId] = await createProcessWithRounds(candidateId, 1);
 
-    const { queueEntry } = await submitRating(roundId, candidateId, 'A genuinely unique review.');
+    const { queueEntry } = await submitRating(
+      roundId,
+      candidateId,
+      `A genuinely unique review. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`,
+    );
 
     expect(queueEntry.flagReason).toBeNull();
   });
