@@ -178,6 +178,25 @@ without changing the token/consumption model underneath.
 
 ---
 
+### D15 — Aggregation materialized views have no refresh trigger yet
+**Decision:** The three materialized views from `docs/DATA_MODEL.md`
+(`company_round_type_aggregates`, `company_recruiter_aggregates`,
+`company_overall_aggregates`), added in Phase 4 issue #7, only reflect data
+as of migration time or the last manual `REFRESH MATERIALIZED VIEW` call —
+nothing refreshes them automatically yet. Each has a unique index on its
+grain columns so a future `REFRESH ... CONCURRENTLY` won't lock readers out.
+**Why:** Issue #7 is scoped to "the views exist and compute correctly, from
+approved rows only" — deciding *when* to refresh belongs with whatever
+actually reads them, so it's deferred to issue #9 (the analytics endpoint)
+rather than guessed at here.
+**Revisit when:** issue #9 is implemented — refresh-on-read is the likely
+starting point (simplest, correct, fine at today's volume); an
+event-driven refresh (Kafka consumer on approved-rating events) only
+becomes worth it once on-read refresh measurably strains, per the same D9
+reasoning already applied to moderation (D12) and fraud checks (D13).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

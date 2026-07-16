@@ -32,10 +32,11 @@ companion to the "Current status" section in `CLAUDE.md`.
       directly), see D14 in `docs/DECISIONS.md`
 
 ## Phase 4 — Analytics
-- [ ] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
-- [ ] Shrinkage scoring implemented at the API layer (D4)
-- [ ] `/companies/:id/analytics` endpoint
-- [ ] Dashboard UI (company / round-type / recruiter views)
+- [x] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
+      (GitHub issue #7) — approved-only, no refresh trigger yet, see D15
+- [ ] Shrinkage scoring implemented at the API layer (D4) (GitHub issue #8)
+- [ ] `/companies/:id/analytics` endpoint (GitHub issue #9)
+- [ ] Dashboard UI (company / round-type / recruiter views) (GitHub issue #10)
 
 ## Phase 5 — Search & discovery
 - [ ] OpenSearch indexing for company + review search
