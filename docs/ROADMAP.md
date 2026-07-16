@@ -79,9 +79,12 @@ companion to the "Current status" section in `CLAUDE.md`.
       plan; revisit if/when either changes
 
 ## Phase 7 — Kubernetes
-- [ ] Local kind/minikube cluster with plain manifests
-      (`infra/k8s/base`: Deployment, Service, Ingress, ConfigMap, Secret)
-- [ ] Staging overlay via Kustomize
+- [ ] Base manifests for Postgres + OpenSearch (GitHub issue #27)
+- [ ] Base manifests for `api` + `web` (Deployment, Service, Ingress,
+      ConfigMap) (GitHub issue #28) — depends on #27
+- [ ] Kustomize overlays for dev/staging/prod (GitHub issue #29) — depends
+      on #27 and #28; staging/prod overlays are structural only until a
+      real shared cluster exists (Phase 8 triggers)
 - [ ] Move to Helm only if manifests become genuinely repetitive across
       services/environments
 
