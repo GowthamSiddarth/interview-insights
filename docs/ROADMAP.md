@@ -18,10 +18,15 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [x] Integration tests against a real test Postgres (Dockerized)
 
 ## Phase 3 — Trust & moderation
-- [ ] Moderation queue as its own service/worker
+- [x] Moderation queue (GitHub issue #1) — runs in-process within `api` for
+      now, not a separate `workers`/Kafka-consuming service; see D12 in
+      `docs/DECISIONS.md` for why, and revisit once there's async load to
+      justify decoupling it
 - [ ] Basic fraud checks (rate limiting, duplicate detection) before any
       launch traffic — see D3 in `docs/DECISIONS.md`, this is not optional
+      (GitHub issue #2)
 - [ ] Candidate verification flow (email domain match at minimum)
+      (GitHub issue #3)
 
 ## Phase 4 — Analytics
 - [ ] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
