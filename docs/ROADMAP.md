@@ -62,7 +62,10 @@ companion to the "Current status" section in `CLAUDE.md`.
       apply automatically on container start; `docker compose --profile
       full up --build` for prod-like local testing, default `docker
       compose up` still just Postgres for the fast dev loop
-- [ ] Branch protection on `main` requiring CI checks (GitHub issue #18)
+- [ ] Branch protection on `main` requiring CI checks (GitHub issue #18) —
+      **blocked**: both classic branch protection and repository rulesets
+      require GitHub Pro (or a public repo) for private repos on the free
+      plan; revisit if/when either changes
 
 ## Phase 7 — Kubernetes
 - [ ] Local kind/minikube cluster with plain manifests
