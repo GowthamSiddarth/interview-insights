@@ -45,3 +45,11 @@ See `docs/ROADMAP.md` Phase 4.
 2. [Issue #8 — Shrinkage scoring](phase-4-analytics/issue-8-shrinkage-scoring/README.md)
 3. [Issue #9 — Analytics endpoint](phase-4-analytics/issue-9-analytics-endpoint/README.md)
 4. [Issue #10 — Dashboard UI](phase-4-analytics/issue-10-dashboard-ui/README.md)
+
+## Phase 5 — Search & discovery
+
+See `docs/ROADMAP.md` Phase 5.
+
+1. [Issue #21 — OpenSearch setup & company search](phase-5-search-discovery/issue-21-opensearch-company-search/README.md)
+2. [Issue #22 — Review search with faceted filtering](phase-5-search-discovery/issue-22-review-search-faceted-filtering/README.md)
+3. [Issue #23 — Search UI](phase-5-search-discovery/issue-23-search-ui/README.md)
