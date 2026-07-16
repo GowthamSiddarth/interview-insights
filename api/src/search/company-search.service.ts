@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from '@opensearch-project/opensearch';
 import { OPENSEARCH_CLIENT } from './opensearch-client.provider';
+import { isIndexAlreadyExistsError } from './opensearch-errors.util';
 
 const COMPANIES_INDEX = 'companies';
 
@@ -54,21 +55,8 @@ export class CompanySearchService implements OnModuleInit {
         },
       });
     } catch (err) {
-      if (!this.isIndexAlreadyExistsError(err)) throw err;
+      if (!isIndexAlreadyExistsError(err)) throw err;
     }
-  }
-
-  private isIndexAlreadyExistsError(err: unknown): boolean {
-    if (typeof err !== 'object' || err === null || !('body' in err)) return false;
-    const body = (err as { body?: unknown }).body;
-    if (typeof body !== 'object' || body === null || !('error' in body)) return false;
-    const error = (body as { error?: unknown }).error;
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'type' in error &&
-      (error as { type?: unknown }).type === 'resource_already_exists_exception'
-    );
   }
 
   // `refresh: true` forces the document to be immediately searchable
@@ -94,10 +82,18 @@ export class CompanySearchService implements OnModuleInit {
       index: COMPANIES_INDEX,
       body: {
         query: {
+          // No fuzziness: AUTO's edit-distance tolerance is meant for
+          // typo correction on words, but it also lets two long numeric
+          // tokens that happen to be a couple of digits apart fuzzy-match
+          // each other (found via a genuinely flaky-looking e2e test — two
+          // companies with different Date.now()-based identifiers matched
+          // when they shouldn't have). Same risk applies to real slugs/names
+          // containing numbers. Plain multi_match still gives partial/
+          // multi-word matching via its default OR term semantics, without
+          // that false-positive risk.
           multi_match: {
             query,
             fields: ['name^2', 'slug'],
-            fuzziness: 'AUTO',
           },
         },
       },

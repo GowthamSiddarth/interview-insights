@@ -1,10 +1,12 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotImplementedException,
 } from '@nestjs/common';
 import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReviewSearchService } from '../search/review-search.service';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 
@@ -17,7 +19,12 @@ type PrismaTransaction = Prisma.TransactionClient;
 // justify decoupling it (docs/DECISIONS.md D9), per docs/ROADMAP.md Phase 3.
 @Injectable()
 export class ModerationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ModerationService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reviewSearchService: ReviewSearchService,
+  ) {}
 
   // Called by the write path right after creating a rating/review — accepts
   // an optional transaction client so the moderation_queue row is created
@@ -78,8 +85,8 @@ export class ModerationService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updatedEntry = await tx.moderationQueueEntry.update({
+    const updatedEntry = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.moderationQueueEntry.update({
         where: { id },
         data: {
           reviewedAt: new Date(),
@@ -91,7 +98,43 @@ export class ModerationService {
         where: { id: entry.entityId },
         data: { status: decision },
       });
-      return updatedEntry;
+      return updated;
     });
+
+    // Outside the transaction, best-effort — search indexing is derived
+    // (docs/DECISIONS.md D16/D17), never allowed to fail the moderation
+    // decision itself, which is already committed at this point.
+    if (decision === 'approved') {
+      await this.indexApprovedReview(entry.entityId);
+    }
+
+    return updatedEntry;
+  }
+
+  private async indexApprovedReview(roundRatingId: string) {
+    try {
+      const roundRating = await this.prisma.roundRating.findUniqueOrThrow({
+        where: { id: roundRatingId },
+        include: { round: { include: { process: true } } },
+      });
+      await this.reviewSearchService.indexReview({
+        id: roundRating.id,
+        companyId: roundRating.round.process.companyId,
+        roleTitle: roundRating.round.process.roleTitle,
+        roundType: roundRating.round.roundType,
+        freeText: roundRating.freeText,
+        createdAt: roundRating.createdAt,
+        difficulty: roundRating.difficulty,
+        fairness: roundRating.fairness,
+        communicationFluency: roundRating.communicationFluency,
+        attentiveness: roundRating.attentiveness,
+        biasSignal: roundRating.biasSignal,
+      });
+    } catch (err) {
+      this.logger.error(
+        'Failed to index approved review in OpenSearch',
+        err instanceof Error ? err.stack : err,
+      );
+    }
   }
 }

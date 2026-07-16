@@ -226,6 +226,36 @@ an event-driven path per the same Phase 8g framing as D12/D13.
 
 ---
 
+### D17 — Review search indexing runs from `ModerationService.review()`, after commit
+**Decision:** Phase 5 issue #22 indexes an approved `round_rating` into the
+`reviews` OpenSearch index from inside `ModerationService`'s existing
+`review()` method — after the DB transaction that flips its status to
+`approved` commits, not inside it. Same best-effort framing as D16 (logged,
+swallowed, never fails the moderation decision, which is already committed
+by the time indexing runs). Only a `decision === 'approved'` triggers
+indexing; `rejected`/`flagged` never index anything, and nothing removes a
+document once indexed (there's no un-approve path in the current model).
+**Why:** Extends D16's reasoning to a second index. Indexing after commit
+(not inside the transaction) is deliberate: the transaction's only job is
+the atomic queue-entry + rating-status update; search indexing needs a
+separate read (`round_rating` joined through `round` → `process` for
+`companyId`/`roleTitle`) that has no business holding that transaction
+open, and a failure to index must not roll back an already-decided
+moderation outcome.
+**Found while building this:** a real relevance bug in `CompanySearchService`
+(D16) — `fuzziness: 'AUTO'` let two long numeric tokens a few digits apart
+(e.g. two `Date.now()`-based test identifiers) fuzzy-match each other,
+surfacing as an apparently flaky e2e test that was actually a deterministic
+false-positive match. Removed fuzziness from that query. Also bumped
+`test/jest-e2e.json`'s `testTimeout` to 30s (from Jest's 5s default) — e2e
+`beforeAll` hooks boot a full Nest app plus connections to Postgres *and*
+OpenSearch, which measurably exceeded 5s under heavy repeated local test
+runs.
+**Revisit when:** same trigger as D16 — a second consumer of approved-review
+events, or indexing latency becomes observable enough to matter.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

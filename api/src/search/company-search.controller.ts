@@ -3,7 +3,7 @@ import { CompanySearchService } from './company-search.service';
 import { SearchCompaniesQueryDto } from './dto/search-companies-query.dto';
 
 @Controller('search/companies')
-export class SearchController {
+export class CompanySearchController {
   constructor(private readonly companySearchService: CompanySearchService) {}
 
   @Get()
