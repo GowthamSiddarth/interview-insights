@@ -197,6 +197,35 @@ reasoning already applied to moderation (D12) and fraud checks (D13).
 
 ---
 
+### D16 — Company search indexing is synchronous, in-process, and best-effort
+**Decision:** Phase 5 issue #21 indexes a company into OpenSearch
+synchronously, right after the Postgres write, inside `CompaniesService
+.create()` — not via a Kafka/Redpanda event. Unlike D12's moderation
+enqueue (which happens in the *same transaction* as the write, so a
+failure there fails the whole write), search indexing is wrapped in its
+own try/catch: a failure to index is logged and swallowed, never thrown
+back to the caller. The company row in Postgres is created either way.
+**Why:** Same "nothing else produces to Redpanda yet" reasoning as
+D12/D13 — a Kafka consumer for company-creation events would be premature
+infrastructure (D9) with only one consumer (this index) to justify it. The
+best-effort (not transactional) framing is new here though: OpenSearch is
+explicitly a derived, secondary store per `docs/ARCHITECTURE.md` ("Search
+is separate from the primary store"), not the source of truth the way
+`moderation_queue` effectively is for moderation state — so it shouldn't
+be allowed to block or fail the primary write the way an in-transaction
+failure would. Also fixed a real concurrency bug hit while building this:
+`CompanySearchService.onModuleInit()` originally did a check-then-act
+(`indices.exists` then `indices.create`), which races when multiple app
+instances start concurrently (multiple Jest workers in tests; multiple
+replicas in a real deployment) — fixed by always attempting creation and
+swallowing the resulting `resource_already_exists_exception`.
+**Revisit when:** there's a second consumer of company-creation events
+(e.g. a future audit log or notification), or indexing latency becomes
+observable enough in the request path to matter — at that point, move to
+an event-driven path per the same Phase 8g framing as D12/D13.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

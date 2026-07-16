@@ -1,10 +1,11 @@
 name: interview-insights
 
-# Default (`docker compose up`): Postgres only. `api`/`web` run directly on
-# the host via npm for the fast local-dev loop (see README.md) — no code
-# talks to Redis/Kafka yet, so those aren't run either until something
-# actually depends on them (docs/DECISIONS.md D9: avoid premature
-# infrastructure).
+# Default (`docker compose up`): Postgres + OpenSearch. `api`/`web` run
+# directly on the host via npm for the fast local-dev loop (see README.md)
+# — no code talks to Redis/Kafka yet, so those aren't run either until
+# something actually depends on them (docs/DECISIONS.md D9: avoid
+# premature infrastructure). OpenSearch was added here for Phase 5 (GitHub
+# issue #21) — the first real trigger, per that same D9 reasoning.
 #
 # `docker compose --profile full up --build`: also builds and runs `api`
 # and `web` as containers, for prod-like local testing of the actual Docker
@@ -28,6 +29,23 @@ services:
       timeout: 5s
       retries: 10
 
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
     profiles: ["full"]
     build:
@@ -38,11 +56,14 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
       EMAIL_HASH_SECRET: dev-only-change-me
       CORS_ORIGIN: http://localhost:3000
+      OPENSEARCH_URL: http://opensearch:9200
       PORT: 3001
     ports:
       - "3001:3001"
     depends_on:
       postgres:
+        condition: service_healthy
+      opensearch:
         condition: service_healthy
 
   web:
@@ -60,3 +81,4 @@ services:
 
 volumes:
   postgres_data:
+  opensearch_data:
