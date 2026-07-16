@@ -191,7 +191,25 @@ noted for `ModerationService`). 4 new integration tests
 (`aggregation-views.e2e-spec.ts`, 24 e2e tests total now) prove all three
 views compute correctly against a real Postgres, including that a
 zero-approved group produces no row at all (not a row of nulls/zeros).
-- Next step: Phase 4 issue #8 (shrinkage scoring), per `docs/ROADMAP.md`.
+
+**Phase 4, issue #8 (shrinkage scoring)** — a new `analytics/` module (no
+controller yet, that's issue #9): `computeShrinkageScore()` is a pure
+function implementing the D4 formula (`k = 8` default, hard floor
+`n < 3` → `null`); `GlobalAveragesService` computes platform-wide averages
+per metric from the issue #7 materialized views, weighted by each
+company's own `sample_size` (mathematically identical to averaging every
+raw approved rating directly, without re-scanning the raw tables) — returns
+`null` when there's no platform data yet for that slice (cold start).
+Scope note: the "fall back to the company-wide aggregate when a
+round-type slice is under the floor" behavior from `docs/DATA_MODEL.md`
+belongs to issue #9 (it decides which aggregate to feed the formula), not
+this one. 15 new unit tests (formula boundary conditions + service parsing
+logic, mocked Prisma) plus 2 new integration tests
+(`global-averages.e2e-spec.ts`, 26 e2e tests total now) prove the weighted
+global average matches hand-computed values against real multi-company
+data, and correctly returns `null` for a round type with no data at all.
+- Next step: Phase 4 issue #9 (`/companies/:id/analytics` endpoint), per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
