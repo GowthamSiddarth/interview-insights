@@ -4,6 +4,12 @@ Phased so each step produces something testable before adding the next
 layer of complexity. Update the checkboxes as you go — this is a good
 companion to the "Current status" section in `CLAUDE.md`.
 
+Each phase's planning pass (see CLAUDE.md Conventions — "plan a phase
+before implementing any of it") files one issue per feature item below,
+plus a final "write the engineering blog for this phase" issue, done last
+once the rest are merged. See `wiki/blog/README.md` for the resulting
+posts, organized by phase.
+
 ## Phase 1 — Foundation
 - [x] Repo scaffold matching the layout in `docs/ARCHITECTURE.md`
 - [x] Prisma schema + first migration implementing `docs/DATA_MODEL.md`,
