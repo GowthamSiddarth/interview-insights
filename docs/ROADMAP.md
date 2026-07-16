@@ -48,8 +48,12 @@ companion to the "Current status" section in `CLAUDE.md`.
       reachable from the Phase 2 wizard once a company is selected
 
 ## Phase 5 — Search & discovery
-- [ ] OpenSearch indexing for company + review search
-- [ ] Filtering by role, round type, date range
+- [x] OpenSearch indexing for company search (GitHub issue #21) —
+      `infra/docker-compose.yml` default service (first real trigger, per
+      D9); synchronous, best-effort indexing on company creation, see D16
+- [ ] Review search indexing (GitHub issue #22)
+- [ ] Filtering by role, round type, date range (GitHub issue #22)
+- [ ] Search UI (GitHub issue #23)
 
 ## Phase 6 — CI/CD & containerization
 - [x] GitHub Actions: lint, type-check, test, build on PR (built during

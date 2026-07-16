@@ -288,8 +288,38 @@ closed; revisit if/when the account upgrades to Pro or the repo's
 visibility changes. The branch+PR discipline (CLAUDE.md convention) still
 applies day to day regardless — this issue was specifically about
 *platform-enforcing* it, which isn't available yet.
-- Next step: Phase 5 — search & discovery, filed under a milestone before
-  any code, per the "plan a phase before implementing" convention.
+
+**Phase 5 planning** — before any implementation, filed all three of
+Phase 5's issues under a "Phase 5 — Search & discovery" milestone
+(issues #21-#23, each depending on the previous), per the "plan a phase
+before implementing" convention. Included a search UI issue in this pass
+(user's call — the original `docs/ROADMAP.md` bullets didn't list one).
+
+**Phase 5, issue #21 (OpenSearch + company search)** — `infra/
+docker-compose.yml` gained an `opensearch` default service (single-node,
+security plugin disabled for local dev) — the first real trigger to add
+it, per D9. A new `search/` module (`@opensearch-project/opensearch`
+client): `CompanySearchService` indexes a company into a `companies`
+index synchronously, in-process, right after `CompaniesService.create()`'s
+Postgres write — but best-effort (wrapped in try/catch, logged not
+thrown), since OpenSearch is a derived/secondary store, not the source of
+truth (D16). `GET /search/companies?q=` does a fuzzy multi-match search
+over `name`/`slug`. Found and fixed a real concurrency bug while building
+this: `onModuleInit`'s original check-then-act index creation
+(`indices.exists` then `indices.create`) raced when multiple app
+instances started concurrently (surfaced immediately by parallel Jest
+workers in the e2e suite; would also hit multiple replicas in a real
+deployment) — fixed by always attempting creation and swallowing the
+resulting `resource_already_exists_exception`. 9 new unit tests (mocked
+OpenSearch client — index creation/race-swallowing, indexing, search
+result mapping) plus 4 new integration tests (`company-search.e2e-spec.ts`,
+35 e2e tests total now) against a real OpenSearch + Postgres prove a
+created company is searchable within the same request cycle, ranks a
+closer name match above a looser one, and returns an empty array (not an
+error) for no matches. Re-ran the full e2e suite three times to confirm
+the concurrency fix is actually stable, not just lucky once.
+- Next step: Phase 5 issue #22 (review search with faceted filtering by
+  role/round type/date range), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

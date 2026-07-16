@@ -5,17 +5,15 @@ interviewer traits) plus recruiter interactions, rolled up into
 company-level analytics. See `CLAUDE.md` and `docs/` for the full
 architecture, data model, and decisions log.
 
-Currently implemented: Phases 1-4 — repo scaffold, a Create+Read vertical
-slice (Company → InterviewProcess → Round → RoundRating), trust &
-moderation (moderation queue, fraud checks, candidate verification), and
-analytics (materialized views, shrinkage scoring, a `/companies/:id/analytics`
-endpoint, and a dashboard UI). See `docs/ROADMAP.md` for what's next and
-`CLAUDE.md`'s "Current status" for what was last verified working.
+Currently implemented: Phases 1-4 (repo scaffold, a Create+Read vertical
+slice, trust & moderation, and analytics) plus part of Phase 5 (search).
+See `docs/ROADMAP.md` for what's next and `CLAUDE.md`'s "Current status"
+for what was last verified working.
 
 ## Prerequisites
 
 - Node.js 22+
-- Docker — used **only** to run Postgres locally. `api` and `web` run
+- Docker — used for Postgres and OpenSearch locally. `api` and `web` run
   directly on the host with npm. If you don't have Docker yet:
   - macOS: `brew install --cask docker`, then open the Docker app once so
     its daemon starts (or install Docker Desktop from
@@ -27,17 +25,18 @@ endpoint, and a dashboard UI). See `docs/ROADMAP.md` for what's next and
 
 ## Quick start
 
-**1. Start Postgres**
+**1. Start Postgres + OpenSearch**
 
 ```bash
 cd infra
 docker compose up -d
 ```
 
-This starts a single `postgres` container on `localhost:5432` (see
-`infra/docker-compose.yml`). Nothing else runs in Docker — `api`/`web`
-don't yet depend on Redis or Kafka, so those aren't started until something
-actually needs them (docs/DECISIONS.md D9).
+This starts `postgres` (`localhost:5432`) and `opensearch`
+(`localhost:9200`) — see `infra/docker-compose.yml`. Nothing else runs in
+Docker by default — `api`/`web` don't yet depend on Redis or Kafka, so
+those aren't started until something actually needs them
+(docs/DECISIONS.md D9).
 
 **2. Set up and run the API**
 
@@ -69,8 +68,9 @@ is moderation-gated before it's public (see `docs/DECISIONS.md` D3), and
 there's no moderation worker yet (Phase 3), so the public ratings count
 stays at `0` by design.
 
-**Stopping/resetting:** `docker compose down` stops Postgres (data persists
-in a named volume). Add `-v` to also wipe the data and start fresh next time.
+**Stopping/resetting:** `docker compose down` stops Postgres and OpenSearch
+(data persists in named volumes). Add `-v` to also wipe the data and start
+fresh next time.
 
 ### Alternative: full-stack Docker Compose
 

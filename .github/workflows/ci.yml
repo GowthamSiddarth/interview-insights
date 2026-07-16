@@ -22,8 +22,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      opensearch:
+        image: opensearchproject/opensearch:2.19.1
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -sf http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
+      OPENSEARCH_URL: http://localhost:9200
       EMAIL_HASH_SECRET: ci-test-secret
     defaults:
       run:
