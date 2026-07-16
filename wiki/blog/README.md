@@ -53,3 +53,10 @@ See `docs/ROADMAP.md` Phase 5.
 1. [Issue #21 — OpenSearch setup & company search](phase-5-search-discovery/issue-21-opensearch-company-search/README.md)
 2. [Issue #22 — Review search with faceted filtering](phase-5-search-discovery/issue-22-review-search-faceted-filtering/README.md)
 3. [Issue #23 — Search UI](phase-5-search-discovery/issue-23-search-ui/README.md)
+
+## Phase 6 — CI/CD & containerization
+
+See `docs/ROADMAP.md` Phase 6.
+
+1. [Issue #17 — Full-stack Docker Compose](phase-6-cicd-containerization/issue-17-fullstack-docker-compose/README.md)
+2. [Issue #18 — Branch protection (blocked)](phase-6-cicd-containerization/issue-18-branch-protection-blocked/README.md)
