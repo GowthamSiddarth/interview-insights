@@ -208,8 +208,33 @@ logic, mocked Prisma) plus 2 new integration tests
 (`global-averages.e2e-spec.ts`, 26 e2e tests total now) prove the weighted
 global average matches hand-computed values against real multi-company
 data, and correctly returns `null` for a round type with no data at all.
-- Next step: Phase 4 issue #9 (`/companies/:id/analytics` endpoint), per
-  `docs/ROADMAP.md`.
+
+**Phase 4, issue #9 (`GET /companies/:companyId/analytics`)** — a new
+`AnalyticsService`/`AnalyticsController` in `analytics/` (now wired into
+`AppModule`, since the module finally has a controller): fetches a
+company's own rows from all three issue #7 materialized views, shrinkage-
+scores each metric against issue #8's `GlobalAveragesService` +
+`computeShrinkageScore()`, and returns every score alongside its real
+`sample_size` — always, even when the score itself is `null` below the
+floor (D4: transparency, not a hidden gate). Round types the company has
+never been rated on simply don't appear (the view itself excludes
+zero-sample groups); `recruiter`/`overall` are `null` when the company has
+no rows in those views at all. Scope note carried over from issue #8: the
+"fall back to company-wide when a round-type slice is under the floor"
+nuance from `docs/DATA_MODEL.md` is deferred, not implemented — not
+required by this issue's acceptance criteria, and adds real complexity
+without evidence it's needed yet. 5 new unit tests (mocked Prisma +
+`GlobalAveragesService`) plus 5 new integration tests
+(`analytics.e2e-spec.ts`, 31 e2e tests total now) prove the endpoint
+against real Postgres, including a hand-recomputed shrinkage value, the
+null-with-real-sample_size case, empty responses, and 404/400s. Also
+manually verified end-to-end: booted the api against the Docker Postgres,
+drove real HTTP calls through the actual write → moderation-approve →
+refresh-view → analytics-read loop via curl, and confirmed the returned
+score matched the shrinkage formula's expected pull toward the
+platform-wide average.
+- Next step: Phase 4 issue #10 (dashboard UI), per `docs/ROADMAP.md` — the
+  last item in Phase 4.
 
 ## Open decisions still to make
 

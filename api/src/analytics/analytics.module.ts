@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { GlobalAveragesService } from './global-averages.service';
+import { AnalyticsService } from './analytics.service';
+import { AnalyticsController } from './analytics.controller';
 
-// No controller yet — this lays the shrinkage-scoring groundwork
-// (docs/ROADMAP.md Phase 4 issue #8). Issue #9 (the analytics endpoint)
-// imports this module for GlobalAveragesService and uses
-// computeShrinkageScore directly from shrinkage-score.util.
 @Module({
-  providers: [GlobalAveragesService],
-  exports: [GlobalAveragesService],
+  controllers: [AnalyticsController],
+  providers: [GlobalAveragesService, AnalyticsService],
+  exports: [GlobalAveragesService, AnalyticsService],
 })
 export class AnalyticsModule {}
