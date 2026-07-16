@@ -36,3 +36,12 @@ See `docs/ROADMAP.md` Phase 3. One post per GitHub issue from here on.
 1. [Issue #1 — Moderation queue](phase-3-trust-moderation/issue-1-moderation-queue/README.md)
 2. [Issue #2 — Fraud checks](phase-3-trust-moderation/issue-2-fraud-checks/README.md)
 3. [Issue #3 — Candidate verification](phase-3-trust-moderation/issue-3-candidate-verification/README.md)
+
+## Phase 4 — Analytics
+
+See `docs/ROADMAP.md` Phase 4.
+
+1. [Issue #7 — Aggregation materialized views](phase-4-analytics/issue-7-materialized-views/README.md)
+2. [Issue #8 — Shrinkage scoring](phase-4-analytics/issue-8-shrinkage-scoring/README.md)
+3. [Issue #9 — Analytics endpoint](phase-4-analytics/issue-9-analytics-endpoint/README.md)
+4. [Issue #10 — Dashboard UI](phase-4-analytics/issue-10-dashboard-ui/README.md)
