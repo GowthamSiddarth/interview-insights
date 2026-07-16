@@ -57,8 +57,27 @@ model Candidate {
   roundRatings       RoundRating[]
   recruiterRatings   RecruiterRating[]
   overallReviews     OverallReview[]
+  verificationTokens CandidateVerificationToken[]
 
   @@map("candidates")
+}
+
+// docs/ROADMAP.md Phase 3 issue #3 — email-verification link/token flow.
+// Hashed, never store the raw token — same pattern as candidates.email_hash.
+model CandidateVerificationToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  candidateId String    @map("candidate_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  // Single-use: set the first time this token is successfully verified, or
+  // when superseded by a newer token issued for the same candidate.
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+  @@map("candidate_verification_tokens")
 }
 
 // ---------------------------------------------------------------------------

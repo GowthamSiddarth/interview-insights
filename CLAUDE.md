@@ -81,9 +81,8 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-16: Phase 1 (repo scaffold) and Phase 2 (thin vertical slice)
-are done; Phase 3 (trust & moderation) is in progress — issues #1 and #2
-done, #3 not started.
+As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice), and
+Phase 3 (trust & moderation) are all done.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -142,8 +141,28 @@ D13 for why (and its known scaling limits — duplicate detection is a
 full-table scan, fine at today's volume only). 7 new unit tests +
 `fraud-checks.e2e-spec.ts` (15 e2e tests total now) prove both checks trip
 correctly against a real Postgres without ever rejecting the write.
-- Next step: Phase 3 issue #3 (candidate verification flow), per
-  `docs/ROADMAP.md`.
+
+**Phase 3, issue #3 (candidate verification)** — a new
+`candidate-verification/` module plus a `CandidateVerificationToken` table
+(migration `20260716032724_add_candidate_verification_tokens`):
+`POST /candidates/:id/verification-token` issues a single-use, 24h-expiring,
+hashed token (issuing a new one supersedes any still-valid one for that
+candidate); `POST /candidates/verify` consumes it and flips
+`verificationStatus` to `email_verified`. No email is actually sent — the
+token is returned directly in the response, a deliberate temporary gap, see
+D14. 12 new unit tests + `candidate-verification.e2e-spec.ts` (20 e2e tests
+total now) prove the full issue → verify → `email_verified` loop, plus
+reuse/unknown-token/expiry rejections, against a real Postgres. Along the
+way, fixed a real bug in `fraud-checks.e2e-spec.ts`: it used fixed literal
+`free_text` strings, which collided with leftover rows from earlier runs
+against the same persistent Docker Postgres volume and made the "distinct
+text isn't flagged" assertion flaky — fixed by making the text unique per
+run, same pattern already used for slugs/emails elsewhere in the suite.
+
+Phase 3 is now fully done — all three GitHub issues (#1-#3) closed via
+merged PRs. All `api` unit + e2e tests, build, and lint pass.
+- Next step: Phase 4 — analytics (materialized views, shrinkage scoring,
+  `/companies/:id/analytics` endpoint, dashboard UI), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
