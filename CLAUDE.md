@@ -236,6 +236,32 @@ platform-wide average.
 - Next step: Phase 4 issue #10 (dashboard UI), per `docs/ROADMAP.md` — the
   last item in Phase 4.
 
+**Phase 4, issue #10 (dashboard UI)** — a new page,
+`web/src/app/companies/[companyId]/analytics/page.tsx`, fetching issue #9's
+endpoint and rendering three sections: overall experience, per-round-type
+breakdown, recruiter experience. A reusable `ScoreDisplay` component
+(`web/src/components/ScoreDisplay.tsx`) centralizes the null-handling rule
+(CLAUDE.md hard constraint #3): a `null` score always renders "Not enough
+reviews yet", never `0`/blank, and the real `sample_size` is always shown
+alongside it — even when the score itself is null. Reachable from the
+Phase 2 wizard via a "View analytics dashboard" link once a company is
+selected. 3 new component tests (`score-display.spec.tsx`) cover the
+null/non-null/singular-"review" branches. Manually verified in a real
+browser (Playwright): seeded a company with a deliberate mix (one round
+type well above the shrinkage floor, one below it, plus an
+under-the-floor recruiter and overall review), and confirmed the
+dashboard renders real numbers for the scored slice and "Not enough
+reviews yet" exactly 11 times (5 behavioral metrics + 4 recruiter + 2
+overall) everywhere else, with zero console errors; also confirmed the
+wizard's dashboard link navigates to the right company correctly.
+
+**Phase 4 is now fully done** — all four GitHub issues (#7-#10) closed via
+merged PRs. `api` and `web` both build/lint/test clean.
+- Next step: Phase 5 — search & discovery (OpenSearch indexing, filtering
+  by role/round type/date range), per `docs/ROADMAP.md`. Per the
+  "plan a phase before implementing" convention, file Phase 5's issues
+  under a milestone before writing any code for it.
+
 ## Open decisions still to make
 
 - Exact value of `k` in the shrinkage scoring formula (start at 8, tune later)

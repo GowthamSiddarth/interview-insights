@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiError, Company, InterviewProcess, Round, RoundRating } from '@/lib/api';
 
 function ErrorBanner({ message }: { message: string | null }) {
@@ -161,7 +162,14 @@ export default function HomePage() {
             </button>
           </form>
         )}
-        {company && <p className="text-sm text-green-700 dark:text-green-400">Using {company.name}.</p>}
+        {company && (
+          <p className="text-sm text-green-700 dark:text-green-400">
+            Using {company.name}.{' '}
+            <Link href={`/companies/${company.id}/analytics`} className="underline">
+              View analytics dashboard
+            </Link>
+          </p>
+        )}
       </section>
 
       {company && (

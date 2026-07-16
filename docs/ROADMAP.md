@@ -43,7 +43,9 @@ companion to the "Current status" section in `CLAUDE.md`.
       implemented (not required by this issue's acceptance criteria;
       adds real complexity — revisit once the dashboard, issue #10,
       or real usage shows it's needed)
-- [ ] Dashboard UI (company / round-type / recruiter views) (GitHub issue #10)
+- [x] Dashboard UI (company / round-type / recruiter views) (GitHub
+      issue #10) — `web/src/app/companies/[companyId]/analytics/page.tsx`,
+      reachable from the Phase 2 wizard once a company is selected
 
 ## Phase 5 — Search & discovery
 - [ ] OpenSearch indexing for company + review search
