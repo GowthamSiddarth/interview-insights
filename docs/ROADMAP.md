@@ -82,8 +82,9 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [x] Base manifests for Postgres + OpenSearch (GitHub issue #27) —
       `infra/k8s/base/`, StatefulSets + headless Services + PVCs,
       verified against a local `kind` cluster
-- [ ] Base manifests for `api` + `web` (Deployment, Service, Ingress,
-      ConfigMap) (GitHub issue #28) — depends on #27
+- [x] Base manifests for `api` + `web` (Deployment, Service, Ingress,
+      ConfigMap) (GitHub issue #28) — depends on #27; verified against a
+      local `kind` cluster with an nginx Ingress controller
 - [ ] Kustomize overlays for dev/staging/prod (GitHub issue #29) — depends
       on #27 and #28; staging/prod overlays are structural only until a
       real shared cluster exists (Phase 8 triggers)

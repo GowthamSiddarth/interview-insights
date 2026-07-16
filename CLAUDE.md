@@ -94,8 +94,8 @@ single most useful thing to keep current.*
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), and Phase 5 (search &
 discovery) are all done. Phase 6 is done except issue #18 (blocked). Phase 7
-(Kubernetes) is planned (issues #27-#29 filed); issue #27 is done, #28
-and #29 are not yet implemented.
+(Kubernetes) is planned (issues #27-#29 filed); issues #27 and #28 are
+done, #29 is not yet implemented.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -434,9 +434,46 @@ beforehand was still present after the StatefulSet recreated it — proving
 the PVC (not `emptyDir`) is what's actually persisting data. Documented
 the `kind` workflow in the root `README.md` as an alternative to Docker
 Compose for local dev.
-- Next step: issue #28 (`api`/`web` manifests), which depends on this
-  issue's Service DNS names (`postgres`, `opensearch` in the
-  `interview-insights` namespace) being reachable in-cluster.
+**Phase 7, issue #28 (`api`/`web` manifests)** — `infra/k8s/base/` gained
+`05-api.yaml` (ConfigMap + Secret + Service + Deployment), `06-web.yaml`
+(Service + Deployment), `07-ingress.yaml` (a single nginx `Ingress` with
+two host rules — `app.interview-insights.local` → `web`,
+`api.interview-insights.local` → `api` — host-based rather than
+path-based routing, to avoid an nginx rewrite-target annotation and keep
+`NEXT_PUBLIC_API_URL` a plain origin). `api-secrets`' `DATABASE_URL`
+duplicates issue #27's Postgres credentials as one connection string —
+Kubernetes has no native way to compose an env var out of several Secret
+keys, and a wrapper entrypoint just to avoid the duplication isn't worth
+it at local-dev scale.
+
+Found and fixed a real bug while building this, pre-existing since issue
+#17 but only surfaced by needing an API origin other than `localhost:3001`:
+**`web`'s `NEXT_PUBLIC_API_URL` was set as a Docker Compose runtime env
+var, but Next.js inlines `NEXT_PUBLIC_*` vars into the client bundle at
+*build* time** — the compose setting was a silent no-op, masked only
+because `web/src/lib/api.ts`'s hardcoded fallback (`localhost:3001`)
+happened to match. Fixed by adding a `NEXT_PUBLIC_API_URL` build `ARG` to
+`web/Dockerfile` and moving `infra/docker-compose.yml`'s full profile to
+set it via `build.args` instead of `environment`. The `api`/`web` k8s
+images are therefore built directly with `docker build` (not through
+compose) so each can take its own `--build-arg` matching its target
+Ingress host — `kind load docker-image` loads them into the cluster.
+
+Manually verified against a local `kind` cluster recreated with the
+ingress-ready node config (`kubeadmConfigPatches` node-label +
+`extraPortMappings` for 80/443 — a plain `kind create cluster` doesn't
+route external traffic in) plus the kind-specific `ingress-nginx` deploy
+manifest: both Deployments reach `1/1 Ready`; `curl --resolve` against
+both Ingress hosts (no `/etc/hosts` edit) confirms routing; and a full
+Playwright run through the *actual* Ingress-fronted `web` — create
+company → candidate/process → round → rating (submitted `pending`, per
+CLAUDE.md hard constraint #2) → search finds the just-created company via
+the in-cluster `opensearch` Service DNS — passed with zero console
+errors, including CORS succeeding now that `CORS_ORIGIN` matches the real
+browser origin (`http://app.interview-insights.local`) rather than
+`localhost`.
+- Next step: issue #29 (Kustomize overlays for dev/staging/prod), the
+  last item in Phase 7.
 
 ## Open decisions still to make
 

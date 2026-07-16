@@ -90,19 +90,75 @@ ports as the host-based setup: web at `http://localhost:3000`, api at
 
 ### Alternative: local Kubernetes (Phase 7, in progress)
 
-Base manifests for Postgres and OpenSearch (`infra/k8s/base/`) run against
-any local cluster — verified with [kind](https://kind.sigs.k8s.io/):
+All of `infra/k8s/base/` (Postgres, OpenSearch, `api`, `web`, Ingress) runs
+against any local cluster — verified with [kind](https://kind.sigs.k8s.io/).
+Kustomize overlays (issue #29) aren't written yet, so this applies the base
+manifests directly.
+
+**1. Create a cluster with an Ingress-ready node** (needed for the
+`api`/`web` Ingress below — a plain `kind create cluster` won't route
+external traffic in):
 
 ```bash
 brew install kind
-kind create cluster --name interview-insights
-kubectl apply -f infra/k8s/base/
-kubectl -n interview-insights get pods   # both should reach 1/1 Running
+cat <<'EOF' > /tmp/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+      - containerPort: 443
+        hostPort: 443
+EOF
+kind create cluster --name interview-insights --config /tmp/kind-config.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl wait --namespace ingress-nginx --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller --timeout=180s
 ```
 
-`api`/`web` manifests (issue #28) and Kustomize overlays (issue #29) aren't
-written yet — see `docs/ROADMAP.md` Phase 7. Until then, port-forward to
-reach Postgres/OpenSearch the same way the sections below describe:
+**2. Build and load the `api`/`web` images.** Next.js inlines
+`NEXT_PUBLIC_API_URL` into the client bundle at *build* time (see
+`web/Dockerfile`), so it must be set as a `--build-arg` matching the
+Ingress host below — not as a runtime env var (that was a latent bug in
+the Docker Compose full profile, fixed alongside this):
+
+```bash
+docker build -t interview-insights-api:k8s -f api/Dockerfile api
+docker build -t interview-insights-web:k8s -f web/Dockerfile \
+  --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local web
+kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
+  --name interview-insights
+```
+
+**3. Apply the manifests:**
+
+```bash
+kubectl apply -f infra/k8s/base/
+kubectl -n interview-insights get pods   # all four should reach 1/1 Running
+```
+
+**4. Reach it.** The Ingress routes two hostnames
+(`app.interview-insights.local` for `web`, `api.interview-insights.local`
+for `api`) that don't resolve anywhere by default. Either add both to
+`/etc/hosts` pointing at `127.0.0.1`, or — to avoid touching a system file
+just for local testing — use `curl --resolve` / a browser launched with a
+host-resolver override:
+
+```bash
+curl --resolve app.interview-insights.local:80:127.0.0.1 http://app.interview-insights.local/
+curl --resolve api.interview-insights.local:80:127.0.0.1 http://api.interview-insights.local/health
+```
+
+To reach Postgres/OpenSearch directly (e.g. for a DB client), port-forward
+the same way as the Docker Compose setup:
 
 ```bash
 kubectl -n interview-insights port-forward svc/postgres 5432:5432
