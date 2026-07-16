@@ -23,9 +23,16 @@ export class ModerationService {
   // an optional transaction client so the moderation_queue row is created
   // atomically with the entity it references (docs/DATA_MODEL.md: this is a
   // polymorphic reference, intentionally not an FK, so nothing enforces that
-  // pairing at the database level).
-  enqueue(entityType: ModerationEntityType, entityId: string, tx: PrismaTransaction = this.prisma) {
-    return tx.moderationQueueEntry.create({ data: { entityType, entityId } });
+  // pairing at the database level). `flagReason` is an optional pre-write
+  // signal from FraudChecksService — the entity itself still starts
+  // `pending` either way, see CLAUDE.md hard constraint #2.
+  enqueue(
+    entityType: ModerationEntityType,
+    entityId: string,
+    tx: PrismaTransaction = this.prisma,
+    flagReason?: ModerationFlagReason,
+  ) {
+    return tx.moderationQueueEntry.create({ data: { entityType, entityId, flagReason } });
   }
 
   // Unreviewed queue entries — no moderator UI yet, so this is the whole

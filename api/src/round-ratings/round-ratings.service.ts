@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 import { CreateRoundRatingDto } from './dto/create-round-rating.dto';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class RoundRatingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly moderationService: ModerationService,
+    private readonly fraudChecksService: FraudChecksService,
   ) {}
 
   create(roundId: string, dto: CreateRoundRatingDto) {
@@ -17,8 +19,15 @@ export class RoundRatingsService {
     // transaction so a rating can never exist without one (docs/DATA_MODEL.md
     // notes this pairing isn't enforced by an FK).
     return this.prisma.$transaction(async (tx) => {
+      // Runs against pre-existing rows only (before this one is inserted),
+      // so it never flags a rating as a duplicate of itself.
+      const flagReason = await this.fraudChecksService.detectFlagReason(
+        dto.candidateId,
+        dto.freeText,
+        tx,
+      );
       const rating = await tx.roundRating.create({ data: { ...dto, roundId } });
-      await this.moderationService.enqueue('round_rating', rating.id, tx);
+      await this.moderationService.enqueue('round_rating', rating.id, tx, flagReason);
       return rating;
     });
   }

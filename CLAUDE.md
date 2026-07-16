@@ -82,8 +82,8 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 single most useful thing to keep current.*
 
 As of 2026-07-16: Phase 1 (repo scaffold) and Phase 2 (thin vertical slice)
-are done; Phase 3 (trust & moderation) is in progress — issue #1 done, #2
-and #3 not started.
+are done; Phase 3 (trust & moderation) is in progress — issues #1 and #2
+done, #3 not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -131,8 +131,19 @@ reject/flag staying hidden, double-review conflicting (409), and a
 not-found entry (404). GitHub issue #1 tracked via `wiki/github-project-setup.md`'s
 workflow — milestone "Phase 3 — Trust & moderation", issues #1-#3 on the
 Board.
-- Next step: Phase 3 issues #2 (fraud checks) and #3 (candidate
-  verification), per `docs/ROADMAP.md`.
+
+**Phase 3, issue #2 (fraud checks)** — a `FraudChecksService` in a new
+`fraud-checks/` module: rate-limits a candidate to 3 ratings per rolling
+24h window, and flags exact-match (case/whitespace-normalized) duplicate
+`free_text` across any existing rating. Neither ever blocks the write —
+both only attach a `flagReason` (`rate_limit`/`duplicate`) to the
+moderation_queue entry `RoundRatingsService.create()` already creates; see
+D13 for why (and its known scaling limits — duplicate detection is a
+full-table scan, fine at today's volume only). 7 new unit tests +
+`fraud-checks.e2e-spec.ts` (15 e2e tests total now) prove both checks trip
+correctly against a real Postgres without ever rejecting the write.
+- Next step: Phase 3 issue #3 (candidate verification flow), per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

@@ -133,6 +133,31 @@ onto the same Kafka/Redpanda-backed `workers` process together, per
 
 ---
 
+### D13 — Fraud checks flag, never reject, and duplicate detection is exact-match only
+**Decision:** Phase 3 issue #2's rate-limiting and duplicate-text checks
+(`FraudChecksService`) never block a write. A rating that trips either check
+is still created as `pending` like any other (CLAUDE.md hard constraint #2
+says every write starts pending, no carve-out for suspicious ones) — the
+only effect is its `moderation_queue` row gets a `flagReason`
+(`rate_limit`/`duplicate`) so a human reviewer sees why it's suspicious.
+Duplicate detection is exact-match after normalizing whitespace/case, via a
+full-table scan-and-compare in application code — not fuzzy/near-duplicate
+matching, and not backed by an index.
+**Why:** A hard reject risks blocking a legitimate candidate (e.g.
+interviewing for multiple roles the same week, or two candidates
+independently writing similar short reviews) with no recourse, which
+undermines trust worse than a false negative would. The schema's
+`flag_reason` enum already models this as a moderation signal, not a
+gate — see docs/DATA_MODEL.md. The full-table-scan approach is a
+`docs/DECISIONS.md` D9-style honest MVP: correct at today's data volume,
+not something that scales.
+**Revisit when:** real volume makes the full-table scan slow (add a Postgres
+trigram index, or move to the OpenSearch layer in `docs/ROADMAP.md` Phase
+5), or false negatives/positives from exact-match-only duplicate detection
+turn out to matter in practice (add fuzzy matching then, not before).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
