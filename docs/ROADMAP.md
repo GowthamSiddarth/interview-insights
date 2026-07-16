@@ -37,7 +37,12 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [x] Shrinkage scoring implemented at the API layer (D4) (GitHub issue #8)
       — pure formula util + a `GlobalAveragesService` computing
       sample-size-weighted platform averages off the issue #7 views
-- [ ] `/companies/:id/analytics` endpoint (GitHub issue #9)
+- [x] `/companies/:id/analytics` endpoint (GitHub issue #9) — the
+      "fall back to company-wide when a round-type slice is under the
+      floor" nuance from `docs/DATA_MODEL.md` is deferred, not
+      implemented (not required by this issue's acceptance criteria;
+      adds real complexity — revisit once the dashboard, issue #10,
+      or real usage shows it's needed)
 - [ ] Dashboard UI (company / round-type / recruiter views) (GitHub issue #10)
 
 ## Phase 5 — Search & discovery
