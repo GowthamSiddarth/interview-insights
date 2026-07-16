@@ -15,6 +15,8 @@ posts, organized by phase.
 - [x] Prisma schema + first migration implementing `docs/DATA_MODEL.md`,
       in the order listed under "Migration ordering"
 - [x] Local Docker Compose (Postgres, Redis, Redpanda)
+- [x] Engineering blog (`wiki/blog/phase-1-foundation/`, PR #33) — written
+      after the fact, since this phase predates the blog-issue convention
 
 ## Phase 2 — Thin vertical slice
 - [x] Create + Read for Company → InterviewProcess → Round → RoundRating, API
@@ -22,6 +24,8 @@ posts, organized by phase.
 - [x] Minimal frontend flow to create/view one full slice end to end
 - [x] Unit tests for validation logic
 - [x] Integration tests against a real test Postgres (Dockerized)
+- [x] Engineering blog (`wiki/blog/phase-2-vertical-slice/`, PR #34) —
+      written after the fact, same reason as Phase 1
 
 ## Phase 3 — Trust & moderation
 - [x] Moderation queue (GitHub issue #1) — runs in-process within `api` for
@@ -36,6 +40,7 @@ posts, organized by phase.
       expiring email-verification token flips `unverified` →
       `email_verified`; no actual email is sent yet (the token is returned
       directly), see D14 in `docs/DECISIONS.md`
+- [x] Engineering blog (`wiki/blog/phase-3-trust-moderation/`, PR #35)
 
 ## Phase 4 — Analytics
 - [x] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
@@ -52,6 +57,7 @@ posts, organized by phase.
 - [x] Dashboard UI (company / round-type / recruiter views) (GitHub
       issue #10) — `web/src/app/companies/[companyId]/analytics/page.tsx`,
       reachable from the Phase 2 wizard once a company is selected
+- [x] Engineering blog (`wiki/blog/phase-4-analytics/`, PR #36)
 
 ## Phase 5 — Search & discovery
 - [x] OpenSearch indexing for company search (GitHub issue #21) —
@@ -67,6 +73,7 @@ posts, organized by phase.
       `/search/reviews` (role title, round type, date range); explicit empty
       states for zero-match searches on both steps (`EmptyState` component),
       never a silently blank list
+- [x] Engineering blog (`wiki/blog/phase-5-search-discovery/`, PR #37)
 
 ## Phase 6 — CI/CD & containerization
 - [x] GitHub Actions: lint, type-check, test, build on PR (built during
@@ -83,6 +90,8 @@ posts, organized by phase.
       **blocked**: both classic branch protection and repository rulesets
       require GitHub Pro (or a public repo) for private repos on the free
       plan; revisit if/when either changes
+- [x] Engineering blog (`wiki/blog/phase-6-cicd-containerization/`, PR #38)
+      — covers both #17 and #18 (a blocked issue still gets documented)
 
 ## Phase 7 — Kubernetes
 - [x] Base manifests for Postgres + OpenSearch (GitHub issue #27) —
@@ -96,6 +105,9 @@ posts, organized by phase.
       real shared cluster exists (Phase 8 triggers)
 - [ ] Move to Helm only if manifests become genuinely repetitive across
       services/environments
+- [ ] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PR #39) — covers
+      #27-#28 so far; not checked off until #29 ships its own post too,
+      per the "done last, once every other issue is merged" rule
 
 ## Phase 8 — Production hardening & platform scale-out
 
