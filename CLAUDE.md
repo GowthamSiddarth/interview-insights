@@ -91,8 +91,9 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice), and
-Phase 3 (trust & moderation) are all done.
+As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+Phase 3 (trust & moderation), Phase 4 (analytics), and Phase 5 (search &
+discovery) are all done. Phase 6 is done except issue #18 (blocked).
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -356,8 +357,37 @@ individually and combined; an invalid `roundType` is rejected (400).
 Stress-tested the full e2e suite ~25 times while chasing the above bugs to
 confirm both fixes actually resolve what looked like flakiness, rather
 than assuming a passing run was enough.
-- Next step: Phase 5 issue #23 (search UI) — the last item in Phase 5, per
-  `docs/ROADMAP.md`.
+
+**Phase 5, issue #23 (search UI)** — a new page,
+`web/src/app/search/page.tsx`: step 1 searches companies via issue #21's
+`GET /search/companies?q=`; selecting one reveals step 2, which filters
+that company's reviews via issue #22's `GET /search/reviews` (role title,
+round type, date range, individually or combined). A reusable
+`EmptyState` component (`web/src/components/EmptyState.tsx`) renders an
+explicit "no results" message for both steps — a zero-result search must
+never look identical to "haven't searched yet" or "still loading."
+Reachable from the Phase 2 wizard homepage via a "Search companies &
+reviews" link. 1 new component test (`search-page.spec.tsx`) covers the
+company empty-state path. Manually verified in a real browser
+(Playwright): seeded a company plus 3 approved reviews (2 role
+titles, 3 round types) directly via Prisma/OpenSearch (bypassing the API,
+since moderation approval for 3 rows one at a time is tedious) and drove
+all 7 steps — company empty state, company found, review selection,
+unfiltered results (3/3), round-type filter narrowing to exactly 1 result,
+and a no-match filter empty state — with zero console errors. This caught
+a real bug in the *seed script*, not the app: the script created the
+company via raw Prisma, which skips `CompaniesService.create()`'s
+OpenSearch indexing call entirely (since that only runs through the API
+layer), so the company was never searchable — the seed script now also
+indexes the company directly, mirroring the manual review-indexing it
+already did.
+
+**Phase 5 is now fully done** — all three GitHub issues (#21-#23) closed
+via merged PRs. `api` and `web` both build/lint/test clean.
+- Next step: no explicit next phase requested yet. Phase 6 remainder
+  (issue #18, branch protection) is blocked on GitHub plan limits; Phase 7
+  (Kubernetes) and Phase 8 (production hardening menu) are the next
+  unstarted roadmap items — wait for direction before planning either.
 
 ## Open decisions still to make
 
