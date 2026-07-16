@@ -1,0 +1,98 @@
+# Structural only — not deployed as part of issue #29 (see the issue and
+# docs/ROADMAP.md Phase 7: staging/prod overlays exist to make the
+# manifest *shape* ready, gated on Phase 8's real triggers — a shared
+# AWS environment, real secrets management, real networking — before any
+# of this ever runs against a real cluster).
+#
+# Own namespace per environment, so dev/staging/prod could all coexist in
+# the same cluster without colliding — not required locally (each
+# environment would realistically get its own cluster), but the standard
+# Kustomize idiom and cheap to set up correctly now.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: interview-insights-staging
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: staging
+    includeSelectors: false
+
+# Image tagging strategy (the actual decision this issue's scope calls
+# for): `api`'s image is environment-agnostic — every config difference
+# it needs is a runtime env var (ConfigMap/Secret), so the same built
+# image can run in any environment; only its *tag* needs to identify
+# which release it is, e.g. a CI-produced git-SHA tag once Phase 8's
+# CI/CD exists. `web` is different, and this is worth understanding on
+# its own: Next.js bakes NEXT_PUBLIC_API_URL into the client bundle at
+# *build* time (see wiki/blog/phase-7-kubernetes/issue-28's post) — so
+# staging's web image is not just a re-tag of dev's, it is a genuinely
+# different build (`--build-arg NEXT_PUBLIC_API_URL=http://api.staging.
+# interview-insights.local`), and reusing dev's image here would silently
+# point staging's frontend at the wrong API host. The tags below are
+# placeholders for "the build produced for this environment" — there is
+# no CI pipeline producing them yet (that's Phase 8a).
+images:
+  - name: interview-insights-api
+    newTag: staging # placeholder — real value: a CI-produced release tag
+  - name: interview-insights-web
+    newTag: staging # placeholder — a DIFFERENT build than dev's, not a re-tag
+
+# More than one replica for the app tier once there's a real environment
+# to justify it — deliberately not a large number without evidence it's
+# needed. Postgres/OpenSearch stay single-replica: both are configured
+# single-node (docs/DECISIONS.md D9's local-dev framing), and scaling
+# either is real work (replication topology, not just a replica count)
+# out of scope for this issue.
+replicas:
+  - name: api
+    count: 2
+  - name: web
+    count: 2
+
+patches:
+  # Real resource values instead of dev's minimal defaults — still a
+  # starting guess to tune once there's real traffic, not derived from
+  # any load test.
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  - target:
+      kind: Deployment
+      name: web
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  # Ingress host per environment — rule 0 is web, rule 1 is api (matches
+  # infra/k8s/base/07-ingress.yaml's declared order).
+  - target:
+      kind: Ingress
+      name: interview-insights
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.staging.interview-insights.local
+      - op: replace
+        path: /spec/rules/1/host
+        value: api.staging.interview-insights.local
+  # CORS_ORIGIN has to track the Ingress host above, or the deployed api
+  # would reject its own staging frontend's requests.
+  - target:
+      kind: ConfigMap
+      name: api-config
+    patch: |-
+      - op: replace
+        path: /data/CORS_ORIGIN
+        value: http://app.staging.interview-insights.local

@@ -103,10 +103,10 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 single most useful thing to keep current.*
 
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
-Phase 3 (trust & moderation), Phase 4 (analytics), and Phase 5 (search &
-discovery) are all done. Phase 6 is done except issue #18 (blocked). Phase 7
-(Kubernetes) is planned (issues #27-#29 filed); issues #27 and #28 are
-done, #29 is not yet implemented.
+Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
+discovery), and Phase 7 (Kubernetes) are all done. Phase 6 is done except
+issue #18 (blocked). Every phase has an engineering blog under
+`wiki/blog/` except Phase 7's own issue #29 post, still pending.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -483,8 +483,43 @@ the in-cluster `opensearch` Service DNS — passed with zero console
 errors, including CORS succeeding now that `CORS_ORIGIN` matches the real
 browser origin (`http://app.interview-insights.local`) rather than
 `localhost`.
-- Next step: issue #29 (Kustomize overlays for dev/staging/prod), the
-  last item in Phase 7.
+**Phase 7, issue #29 (Kustomize overlays)** — `infra/k8s/base/` gained a
+`kustomization.yaml` listing every base manifest; each of
+`infra/k8s/overlays/{dev,staging,prod}/` got a real `kustomization.yaml`
+in place of its placeholder `.gitkeep`. `dev` is close to a no-op by
+design — it's the exact config issues #27/#28 already built and verified,
+now formalized as an overlay (own `environment: dev` label) rather than
+applying `infra/k8s/base/` directly — and it's the only overlay actually
+applied to a real cluster as part of this issue, per the issue's own
+acceptance criteria. `staging`/`prod` are structural only (own namespace,
+2 replicas for `api`/`web` only — Postgres/OpenSearch stay single-replica,
+since scaling either is a real replication-topology change out of scope
+here — real-ish resource requests/limits, per-environment Ingress hosts
++ matching `CORS_ORIGIN`, and distinct image tags), gated on Phase 8's
+real triggers before either ever runs against a real cluster. Used
+Kustomize's newer `labels:` field with `includeSelectors: false` rather
+than the older `commonLabels`, specifically because `commonLabels` also
+rewrites `spec.selector.matchLabels` — which is immutable on an
+already-created Deployment/StatefulSet, and `dev`'s whole point is to be
+safely re-appliable over the exact resources issues #27/#28 already
+created. Verified concretely, not just assumed: applied `dev` over the
+live cluster and confirmed zero pod restarts (proving it was a true
+no-op besides labels), and re-confirmed `web`/`api /health` both still
+respond through the Ingress afterward. `kubectl kustomize` on all three
+overlays produces valid, genuinely-differing output (namespace, labels,
+replicas, resource values, Ingress hosts, image tags), satisfying the
+issue's acceptance criteria directly.
+
+**Phase 7 is now fully done for its planned scope** — issues #27-#29 all
+closed via merged PRs (Helm remains explicitly out of scope per
+`docs/ARCHITECTURE.md`, until manifests are "genuinely repetitive," not
+the case with 2-3 services). `wiki/blog/phase-7-kubernetes/` still needs
+issue #29's own post — the last piece before that phase's blog is
+complete too.
+- Next step: no explicit next phase requested yet. Phase 8 (production
+  hardening menu) is the next unstarted roadmap item, but every one of
+  its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
+  a real trigger or explicit direction before planning any of it.
 
 ## Open decisions still to make
 
