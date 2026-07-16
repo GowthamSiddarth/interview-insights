@@ -1,0 +1,32 @@
+# The only overlay actually deployed as part of GitHub issue #29 — this is
+# the exact shape already verified against a local `kind` cluster in
+# issues #27/#28, now formalized as an overlay instead of applying
+# infra/k8s/base/ directly. Deliberately close to a no-op: `dev` doesn't
+# need different replica counts or resource limits from the base
+# defaults, and its image tags already match what issues #27/#28 built
+# and loaded into `kind` (`:k8s`). The value of a "do-nothing" overlay is
+# still real: it gives `dev` an explicit, labeled identity in the same
+# structure staging/prod use, rather than a special case that skips
+# Kustomize entirely.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: dev
+    # false: only stamps metadata/pod-template labels, never touches
+    # spec.selector.matchLabels — Deployment/StatefulSet selectors are
+    # immutable after creation, so if this overlay is ever applied over
+    # already-running resources (as it is here — the same cluster and
+    # namespace issues #27/#28 already deployed to), touching selectors
+    # would fail outright rather than update anything.
+    includeSelectors: false
+
+images:
+  - name: interview-insights-api
+    newTag: k8s
+  - name: interview-insights-web
+    newTag: k8s

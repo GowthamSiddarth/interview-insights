@@ -1,0 +1,70 @@
+# Structural only — not deployed as part of issue #29, same reasoning as
+# overlays/staging/kustomization.yaml. Deliberately near-identical to
+# staging at this point: there's no real traffic or usage data for either
+# environment yet to justify picking different replica counts or resource
+# values between them, and inventing a difference without evidence would
+# be exactly the kind of premature, unjustified tuning docs/DECISIONS.md
+# D9 warns against elsewhere. The two overlays exist as separate,
+# independently-adjustable structures for the day real data *does*
+# justify diverging them — not because they need to differ today.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: interview-insights-prod
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: prod
+    includeSelectors: false
+
+images:
+  - name: interview-insights-api
+    newTag: prod # placeholder — real value: a CI-produced release tag
+  - name: interview-insights-web
+    newTag: prod # placeholder — a build of its own, see overlays/staging's note
+
+replicas:
+  - name: api
+    count: 2
+  - name: web
+    count: 2
+
+patches:
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  - target:
+      kind: Deployment
+      name: web
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  - target:
+      kind: Ingress
+      name: interview-insights
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.prod.interview-insights.local
+      - op: replace
+        path: /spec/rules/1/host
+        value: api.prod.interview-insights.local
+  - target:
+      kind: ConfigMap
+      name: api-config
+    patch: |-
+      - op: replace
+        path: /data/CORS_ORIGIN
+        value: http://app.prod.interview-insights.local

@@ -88,12 +88,15 @@ manual `prisma migrate deploy` step needed) — see `api/Dockerfile`. Same
 ports as the host-based setup: web at `http://localhost:3000`, api at
 `http://localhost:3001`.
 
-### Alternative: local Kubernetes (Phase 7, in progress)
+### Alternative: local Kubernetes (Phase 7)
 
 All of `infra/k8s/base/` (Postgres, OpenSearch, `api`, `web`, Ingress) runs
 against any local cluster — verified with [kind](https://kind.sigs.k8s.io/).
-Kustomize overlays (issue #29) aren't written yet, so this applies the base
-manifests directly.
+Kustomize overlays live in `infra/k8s/overlays/{dev,staging,prod}/` —
+`dev` is the same config as the base (formalized as an overlay), the only
+one actually meant to be applied locally; `staging`/`prod` are structural
+only (own namespace, real-ish resource values, per-environment Ingress
+hosts, distinct image tags) until a real shared cluster exists.
 
 **1. Create a cluster with an Ingress-ready node** (needed for the
 `api`/`web` Ingress below — a plain `kind create cluster` won't route
@@ -138,12 +141,16 @@ kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
   --name interview-insights
 ```
 
-**3. Apply the manifests:**
+**3. Apply the `dev` overlay:**
 
 ```bash
-kubectl apply -f infra/k8s/base/
+kubectl apply -k infra/k8s/overlays/dev
 kubectl -n interview-insights get pods   # all four should reach 1/1 Running
 ```
+
+(`kubectl kustomize infra/k8s/overlays/staging` / `.../prod` also build
+cleanly, for inspection — neither is meant to be applied against this
+local cluster.)
 
 **4. Reach it.** The Ingress routes two hostnames
 (`app.interview-insights.local` for `web`, `api.interview-insights.local`

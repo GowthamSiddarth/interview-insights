@@ -100,14 +100,16 @@ posts, organized by phase.
 - [x] Base manifests for `api` + `web` (Deployment, Service, Ingress,
       ConfigMap) (GitHub issue #28) — depends on #27; verified against a
       local `kind` cluster with an nginx Ingress controller
-- [ ] Kustomize overlays for dev/staging/prod (GitHub issue #29) — depends
-      on #27 and #28; staging/prod overlays are structural only until a
-      real shared cluster exists (Phase 8 triggers)
+- [x] Kustomize overlays for dev/staging/prod (GitHub issue #29) — `dev`
+      is the exact base config, formalized as an overlay and re-verified
+      against the live `kind` cluster; `staging`/`prod` are structural
+      only (separate namespace, 2 replicas for `api`/`web`, real resource
+      values, per-environment Ingress hosts + `CORS_ORIGIN`, distinct
+      image tags) until a real shared cluster exists (Phase 8 triggers)
 - [ ] Move to Helm only if manifests become genuinely repetitive across
       services/environments
-- [ ] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PR #39) — covers
-      #27-#28 so far; not checked off until #29 ships its own post too,
-      per the "done last, once every other issue is merged" rule
+- [ ] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PR #39 covers
+      #27-#28) — issue #29's own post still to be added
 
 ## Phase 8 — Production hardening & platform scale-out
 
