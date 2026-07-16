@@ -150,8 +150,9 @@ describe('Vertical slice (e2e)', () => {
       })
       .expect(409);
 
-    // Public reads only ever surface moderation-approved ratings — with no
-    // moderation worker yet (Phase 3), this is empty by design.
+    // Public reads only ever surface moderation-approved ratings — this one
+    // is still pending, so it stays hidden. See moderation.e2e-spec.ts for
+    // the full pending -> approved -> publicly visible flow.
     const publicRatings = await server().get(`/rounds/${roundId}/ratings`).expect(200);
     expect(publicRatings.body).toEqual([]);
   });

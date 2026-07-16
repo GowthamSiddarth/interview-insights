@@ -81,14 +81,16 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-14: Phase 1 (repo scaffold) and Phase 2 (thin vertical slice)
-are done.
+As of 2026-07-16: Phase 1 (repo scaffold) and Phase 2 (thin vertical slice)
+are done; Phase 3 (trust & moderation) is in progress — issue #1 done, #2
+and #3 not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
-(docker-compose.yml wired for Postgres/Redis/Redpanda/api/web; `k8s/base`,
-`k8s/overlays/{dev,staging,prod}`, `terraform/` are empty placeholders until
-Phase 7), `.github/workflows/ci.yml`. Prisma schema
+(docker-compose.yml runs Postgres only — Redis/Redpanda/api/web all removed
+from it, see D9/D12; `k8s/base`, `k8s/overlays/{dev,staging,prod}`,
+`terraform/` are empty placeholders until Phase 7), `.github/workflows/ci.yml`.
+Prisma schema
 (`api/prisma/schema.prisma`) implements every table in `docs/DATA_MODEL.md`
 in the documented migration order, plus the first migration
 (`api/prisma/migrations/20260714000000_init`). The 1-5 CHECK constraints on
@@ -113,8 +115,24 @@ bug (NestJS doesn't enable CORS by default, so every browser fetch from
 `web` to `api` failed preflight even though curl-based checks looked fine)
 now fixed via `app.enableCors()` + `CORS_ORIGIN` env var. `api`/`web` build +
 lint + test clean; `workers` typechecks.
-- Next step: Phase 3 — moderation queue worker, fraud checks, candidate
-  verification flow, per `docs/ROADMAP.md`.
+
+**Phase 3, issue #1 (moderation queue)** — a `ModerationModule` in `api`
+(not a separate worker — see D12): `RoundRatingsService.create()` inserts a
+`moderation_queue` row in the same transaction as the rating; `POST
+/moderation/queue/:id/{approve,reject,flag}` transitions both the queue
+entry and the underlying rating's status; `GET /moderation/queue` lists
+unreviewed entries. Only `round_rating` is wired up (the only entity type
+with a write path so far) — `recruiter_rating`/`overall_review` raise
+`NotImplementedException` until those exist. 14 new unit tests + a dedicated
+`moderation.e2e-spec.ts` (12 e2e tests total now) prove the full loop against
+a real Postgres: submit → enqueued pending → approve → now publicly visible
+via the Phase 2 `GET /rounds/:roundId/ratings` endpoint; also covers
+reject/flag staying hidden, double-review conflicting (409), and a
+not-found entry (404). GitHub issue #1 tracked via `wiki/github-project-setup.md`'s
+workflow — milestone "Phase 3 — Trust & moderation", issues #1-#3 on the
+Board.
+- Next step: Phase 3 issues #2 (fraud checks) and #3 (candidate
+  verification), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

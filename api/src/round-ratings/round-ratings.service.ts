@@ -1,17 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { CreateRoundRatingDto } from './dto/create-round-rating.dto';
 
 @Injectable()
 export class RoundRatingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly moderationService: ModerationService,
+  ) {}
 
   create(roundId: string, dto: CreateRoundRatingDto) {
     // status defaults to 'pending' (schema default) — every rating starts
     // gated behind moderation, see CLAUDE.md hard constraint #2 and
-    // docs/DECISIONS.md D3. Nothing here flips it to 'approved'; that's the
-    // moderation worker's job (docs/ROADMAP.md Phase 3).
-    return this.prisma.roundRating.create({ data: { ...dto, roundId } });
+    // docs/DECISIONS.md D3. The moderation_queue row is created in the same
+    // transaction so a rating can never exist without one (docs/DATA_MODEL.md
+    // notes this pairing isn't enforced by an FK).
+    return this.prisma.$transaction(async (tx) => {
+      const rating = await tx.roundRating.create({ data: { ...dto, roundId } });
+      await this.moderationService.enqueue('round_rating', rating.id, tx);
+      return rating;
+    });
   }
 
   // Public read — only ever returns moderation-approved ratings. Will be

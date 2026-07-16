@@ -111,6 +111,28 @@ doesn't re-litigate the provider choice piecemeal.
 
 ---
 
+### D12 — Moderation runs in-process, not as a separate worker/Kafka consumer
+**Decision:** Phase 3's moderation queue (GitHub issue #1) is a NestJS module
+inside `api` — enqueuing a `moderation_queue` row happens in the same DB
+transaction as the rating/review write, and review actions
+(`POST /moderation/queue/:id/{approve,reject,flag}`) run synchronously
+against Postgres. No `workers` process, no Redpanda/Kafka consumer.
+**Why:** `docs/ARCHITECTURE.md` describes moderation as event-driven off the
+Kafka/Redpanda bus, but nothing in the app produces to that bus yet (it was
+removed from local `docker-compose.yml` entirely — see D9). Standing up a
+consumer for a queue nothing populates would be exactly the premature
+infrastructure D9 warns against. Enqueuing is a single fast insert, so doing
+it inline doesn't reintroduce the "slow inline check" problem the
+event-driven design is meant to avoid — that concern is about fraud/ML
+*scoring* (Phase 3 issue #2, still unbuilt), not the enqueue step itself.
+**Revisit when:** there's a second consumer of the same write events (e.g.
+Phase 4's aggregation worker) or actual throughput that benefits from
+decoupling the write path from moderation — at that point both would move
+onto the same Kafka/Redpanda-backed `workers` process together, per
+`docs/ROADMAP.md` Phase 8g.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
