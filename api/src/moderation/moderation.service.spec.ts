@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotImplementedException } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReviewSearchService } from '../search/review-search.service';
 
 describe('ModerationService', () => {
   let service: ModerationService;
@@ -12,9 +13,10 @@ describe('ModerationService', () => {
       findUniqueOrThrow: jest.Mock;
       update: jest.Mock;
     };
-    roundRating: { update: jest.Mock };
+    roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock };
     $transaction: jest.Mock;
   };
+  let reviewSearchService: { indexReview: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -24,12 +26,17 @@ describe('ModerationService', () => {
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
       },
-      roundRating: { update: jest.fn() },
+      roundRating: { update: jest.fn(), findUniqueOrThrow: jest.fn() },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
+    reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ModerationService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ModerationService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ReviewSearchService, useValue: reviewSearchService },
+      ],
     }).compile();
 
     service = module.get(ModerationService);
@@ -82,6 +89,20 @@ describe('ModerationService', () => {
         Promise.resolve({ id: 'queue-1', ...args.data }),
       );
       prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        freeText: 'Great round',
+        createdAt: new Date('2026-01-01'),
+        difficulty: 3,
+        fairness: 4,
+        communicationFluency: 4,
+        attentiveness: 4,
+        biasSignal: 5,
+        round: {
+          roundType: 'coding',
+          process: { companyId: 'company-1', roleTitle: 'Engineer' },
+        },
+      });
     }
 
     it('approve() flips the round rating to approved and stamps the queue entry reviewed', async () => {
@@ -101,7 +122,34 @@ describe('ModerationService', () => {
       expect(result).toMatchObject({ reviewedBy: 'gowtham' });
     });
 
-    it('reject() flips the round rating to rejected', async () => {
+    it('approve() indexes the approved review into OpenSearch', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approve('queue-1', {});
+
+      expect(reviewSearchService.indexReview).toHaveBeenCalledWith({
+        id: 'rating-1',
+        companyId: 'company-1',
+        roleTitle: 'Engineer',
+        roundType: 'coding',
+        freeText: 'Great round',
+        createdAt: new Date('2026-01-01'),
+        difficulty: 3,
+        fairness: 4,
+        communicationFluency: 4,
+        attentiveness: 4,
+        biasSignal: 5,
+      });
+    });
+
+    it('approve() still succeeds even if search indexing fails', async () => {
+      mockPendingRoundRatingEntry();
+      reviewSearchService.indexReview.mockRejectedValue(new Error('OpenSearch unreachable'));
+
+      await expect(service.approve('queue-1', {})).resolves.toBeDefined();
+    });
+
+    it('reject() flips the round rating to rejected and does not index it', async () => {
       mockPendingRoundRatingEntry();
 
       await service.reject('queue-1', {});
@@ -110,9 +158,10 @@ describe('ModerationService', () => {
         where: { id: 'rating-1' },
         data: { status: 'rejected' },
       });
+      expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
     });
 
-    it('flag() flips the round rating to flagged and records the flag reason', async () => {
+    it('flag() flips the round rating to flagged, records the flag reason, and does not index it', async () => {
       mockPendingRoundRatingEntry();
 
       await service.flag('queue-1', { flagReason: 'spam_pattern' });
@@ -126,6 +175,7 @@ describe('ModerationService', () => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
         data: { reviewedAt: expect.any(Date), reviewedBy: undefined, flagReason: 'spam_pattern' },
       });
+      expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
     });
 
     it('throws a conflict if the entry was already reviewed', async () => {

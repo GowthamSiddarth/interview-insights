@@ -51,8 +51,11 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [x] OpenSearch indexing for company search (GitHub issue #21) —
       `infra/docker-compose.yml` default service (first real trigger, per
       D9); synchronous, best-effort indexing on company creation, see D16
-- [ ] Review search indexing (GitHub issue #22)
-- [ ] Filtering by role, round type, date range (GitHub issue #22)
+- [x] Review search indexing (GitHub issue #22) — indexes an approved
+      `round_rating` from `ModerationService.review()`, after commit;
+      synchronous, best-effort, see D17
+- [x] Filtering by role, round type, date range (GitHub issue #22) —
+      `GET /search/reviews?q=&companyId=&roleTitle=&roundType=&dateFrom=&dateTo=`
 - [ ] Search UI (GitHub issue #23)
 
 ## Phase 6 — CI/CD & containerization

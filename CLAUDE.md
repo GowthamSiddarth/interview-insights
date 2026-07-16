@@ -303,23 +303,61 @@ client): `CompanySearchService` indexes a company into a `companies`
 index synchronously, in-process, right after `CompaniesService.create()`'s
 Postgres write — but best-effort (wrapped in try/catch, logged not
 thrown), since OpenSearch is a derived/secondary store, not the source of
-truth (D16). `GET /search/companies?q=` does a fuzzy multi-match search
-over `name`/`slug`. Found and fixed a real concurrency bug while building
-this: `onModuleInit`'s original check-then-act index creation
+truth (D16). `GET /search/companies?q=` does a multi-match search over
+`name`/`slug` (no fuzziness — see issue #22's notes below on why that was
+removed). Found and fixed a real concurrency bug while building this:
+`onModuleInit`'s original check-then-act index creation
 (`indices.exists` then `indices.create`) raced when multiple app
 instances started concurrently (surfaced immediately by parallel Jest
 workers in the e2e suite; would also hit multiple replicas in a real
 deployment) — fixed by always attempting creation and swallowing the
 resulting `resource_already_exists_exception`. 9 new unit tests (mocked
 OpenSearch client — index creation/race-swallowing, indexing, search
-result mapping) plus 4 new integration tests (`company-search.e2e-spec.ts`,
-35 e2e tests total now) against a real OpenSearch + Postgres prove a
-created company is searchable within the same request cycle, ranks a
-closer name match above a looser one, and returns an empty array (not an
-error) for no matches. Re-ran the full e2e suite three times to confirm
-the concurrency fix is actually stable, not just lucky once.
-- Next step: Phase 5 issue #22 (review search with faceted filtering by
-  role/round type/date range), per `docs/ROADMAP.md`.
+result mapping) plus 4 new integration tests (`company-search.e2e-spec.ts`)
+against a real OpenSearch + Postgres prove a created company is
+searchable within the same request cycle, ranks a closer name match
+above a looser one, and returns an empty array (not an error) for no
+matches.
+
+**Phase 5, issue #22 (review search with faceted filtering)** — extends
+`ModerationService.review()`: approving a `round_rating` now also indexes
+it into a new `reviews` OpenSearch index (companyId, roleTitle, roundType,
+freeText, createdAt, scores — never `candidateId`, CLAUDE.md hard
+constraint #1), after the DB transaction commits, best-effort, same
+pattern as D16 (see D17). `GET /search/reviews?q=&companyId=&roleTitle=
+&roundType=&dateFrom=&dateTo=` combines a free-text match on `freeText`
+with facet filters. Extracted the shared "swallow
+resource_already_exists_exception" logic (D16) into
+`opensearch-errors.util.ts` now that two services need it.
+
+Found and fixed two more real bugs while building this:
+- **`roleTitle` filter used `match` instead of `match_phrase`** — `match`'s
+  per-token OR semantics meant filtering for "Staff Engineer X" also
+  matched "Product Manager X" purely because they shared token X. An e2e
+  test caught this directly (not flaky — deterministically wrong).
+- **`fuzziness: 'AUTO'` on `CompanySearchService`'s query (D16) was a
+  latent relevance bug**, not something specific to issue #22: two long
+  numeric tokens a few digits apart (e.g. two `Date.now()`-based
+  identifiers) could fuzzy-match each other. Looked exactly like a flaky
+  e2e test at first — it wasn't; it was a deterministic false-positive
+  match that only *appeared* random because it depended on how close two
+  independently-generated random numbers landed. Removed fuzziness from
+  that query. Also bumped `test/jest-e2e.json`'s `testTimeout` to 30s
+  (from Jest's 5s default) — `beforeAll` hooks booting a full Nest app
+  plus Postgres *and* OpenSearch connections measurably exceeded 5s under
+  heavy repeated local test runs. Both are documented in D17.
+
+11 new unit tests (mocked OpenSearch client + `ModerationService` wiring)
+plus 7 new integration tests (`review-search.e2e-spec.ts`, 43 e2e tests
+total now) against real Postgres + OpenSearch prove: an approved review is
+searchable/filterable; pending and rejected reviews never appear; each
+filter (roleTitle, roundType, date range) narrows results correctly, both
+individually and combined; an invalid `roundType` is rejected (400).
+Stress-tested the full e2e suite ~25 times while chasing the above bugs to
+confirm both fixes actually resolve what looked like flakiness, rather
+than assuming a passing run was enough.
+- Next step: Phase 5 issue #23 (search UI) — the last item in Phase 5, per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
