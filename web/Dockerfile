@@ -6,6 +6,13 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM deps AS build
+# Next.js inlines NEXT_PUBLIC_* vars into the client bundle at build time —
+# setting it as a container *runtime* env var (as infra/docker-compose.yml's
+# full profile does) has no effect on an already-built image. Must be a
+# build ARG instead, which is why different deploy targets (docker-compose
+# full profile vs. k8s Ingress hosts) need their own image build.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY . .
 RUN npm run build
 

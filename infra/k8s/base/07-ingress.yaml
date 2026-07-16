@@ -1,0 +1,36 @@
+# Host-based routing (one host per service) rather than path-based —
+# avoids needing an nginx rewrite-target annotation to strip a shared path
+# prefix, and keeps NEXT_PUBLIC_API_URL a plain origin (see 06-web.yaml).
+# Requires an nginx ingress controller in the cluster (for kind:
+# https://kind.sigs.k8s.io/docs/user/ingress/ — a kind cluster created with
+# the ingress-ready node config, then the kind-specific ingress-nginx
+# deploy manifest) and both hostnames resolving to the cluster — see
+# README.md's Kubernetes section for the exact commands.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: interview-insights
+  namespace: interview-insights
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.interview-insights.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 3000
+    - host: api.interview-insights.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3001

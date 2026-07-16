@@ -71,9 +71,15 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile
+      # Next.js inlines NEXT_PUBLIC_* vars into the client bundle at build
+      # time — setting this under `environment:` below was a latent no-op
+      # (found while building Phase 7's k8s manifests, GitHub issue #28):
+      # the built image already had NEXT_PUBLIC_API_URL undefined baked in,
+      # and only worked because web/src/lib/api.ts's fallback
+      # ('http://localhost:3001') happened to match this profile's value.
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3001
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
     ports:
       - "3000:3000"
     depends_on:

@@ -1,0 +1,87 @@
+# Non-secret env for `api`. OPENSEARCH_URL/DATABASE_URL point at 03/04's
+# in-cluster Service DNS names (short form resolves within the same
+# namespace) — mirrors infra/docker-compose.yml's compose-network hostnames.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: interview-insights
+data:
+  PORT: "3001"
+  OPENSEARCH_URL: http://opensearch:9200
+  CORS_ORIGIN: http://app.interview-insights.local
+---
+# Plaintext, same local-only reasoning as 01-postgres-secret.yaml.
+# DATABASE_URL duplicates 01-postgres-secret.yaml's credentials as a single
+# connection string — Kubernetes has no native way to compose one env var
+# out of several Secret keys, and a wrapper entrypoint script just to avoid
+# this duplication isn't worth it at local-dev scale.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-secrets
+  namespace: interview-insights
+type: Opaque
+stringData:
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
+  EMAIL_HASH_SECRET: dev-only-change-me
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: interview-insights
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 3001
+      targetPort: 3001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: interview-insights
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: interview-insights-api:k8s
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
