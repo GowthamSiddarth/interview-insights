@@ -107,6 +107,9 @@ export default function HomePage() {
         <p className="text-sm text-gray-500">
           Phase 2 vertical slice: Company → InterviewProcess → Round → RoundRating.
         </p>
+        <Link href="/search" className="text-sm underline">
+          Search companies &amp; reviews
+        </Link>
       </header>
 
       <ErrorBanner message={error} />

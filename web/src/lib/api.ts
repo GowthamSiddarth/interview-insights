@@ -101,6 +101,37 @@ export interface CompanyAnalytics {
   overall: OverallAnalytics | null;
 }
 
+export interface CompanySearchResult {
+  id: string;
+  name: string;
+  slug: string;
+  industry: string | null;
+  sizeBucket: Company['sizeBucket'];
+}
+
+export interface ReviewSearchResult {
+  id: string;
+  companyId: string;
+  roleTitle: string;
+  roundType: Round['roundType'];
+  freeText: string | null;
+  createdAt: string;
+  difficulty: number;
+  fairness: number;
+  communicationFluency: number;
+  attentiveness: number;
+  biasSignal: number;
+}
+
+export interface ReviewSearchFilters {
+  q?: string;
+  companyId?: string;
+  roleTitle?: string;
+  roundType?: Round['roundType'];
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -176,4 +207,18 @@ export const api = {
 
   getCompanyAnalytics: (companyId: string) =>
     request<CompanyAnalytics>(`/companies/${companyId}/analytics`),
+
+  searchCompanies: (q: string) =>
+    request<CompanySearchResult[]>(`/search/companies?q=${encodeURIComponent(q)}`),
+
+  searchReviews: (filters: ReviewSearchFilters) => {
+    const query = new URLSearchParams();
+    if (filters.q) query.set('q', filters.q);
+    if (filters.companyId) query.set('companyId', filters.companyId);
+    if (filters.roleTitle) query.set('roleTitle', filters.roleTitle);
+    if (filters.roundType) query.set('roundType', filters.roundType);
+    if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) query.set('dateTo', filters.dateTo);
+    return request<ReviewSearchResult[]>(`/search/reviews?${query.toString()}`);
+  },
 };

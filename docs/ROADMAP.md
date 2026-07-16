@@ -56,7 +56,11 @@ companion to the "Current status" section in `CLAUDE.md`.
       synchronous, best-effort, see D17
 - [x] Filtering by role, round type, date range (GitHub issue #22) —
       `GET /search/reviews?q=&companyId=&roleTitle=&roundType=&dateFrom=&dateTo=`
-- [ ] Search UI (GitHub issue #23)
+- [x] Search UI (GitHub issue #23) — `web/src/app/search/page.tsx`: find a
+      company via `/search/companies`, then filter its reviews via
+      `/search/reviews` (role title, round type, date range); explicit empty
+      states for zero-match searches on both steps (`EmptyState` component),
+      never a silently blank list
 
 ## Phase 6 — CI/CD & containerization
 - [x] GitHub Actions: lint, type-check, test, build on PR (built during
