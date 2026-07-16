@@ -60,3 +60,11 @@ See `docs/ROADMAP.md` Phase 6.
 
 1. [Issue #17 — Full-stack Docker Compose](phase-6-cicd-containerization/issue-17-fullstack-docker-compose/README.md)
 2. [Issue #18 — Branch protection (blocked)](phase-6-cicd-containerization/issue-18-branch-protection-blocked/README.md)
+
+## Phase 7 — Kubernetes
+
+See `docs/ROADMAP.md` Phase 7. Issue #29 (Kustomize overlays) isn't
+implemented yet, so it has no post here yet either — added once it ships.
+
+1. [Issue #27 — Base manifests for Postgres & OpenSearch](phase-7-kubernetes/issue-27-postgres-opensearch-manifests/README.md)
+2. [Issue #28 — Base manifests for api, web & Ingress](phase-7-kubernetes/issue-28-api-web-ingress-manifests/README.md)
