@@ -34,7 +34,9 @@ companion to the "Current status" section in `CLAUDE.md`.
 ## Phase 4 — Analytics
 - [x] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
       (GitHub issue #7) — approved-only, no refresh trigger yet, see D15
-- [ ] Shrinkage scoring implemented at the API layer (D4) (GitHub issue #8)
+- [x] Shrinkage scoring implemented at the API layer (D4) (GitHub issue #8)
+      — pure formula util + a `GlobalAveragesService` computing
+      sample-size-weighted platform averages off the issue #7 views
 - [ ] `/companies/:id/analytics` endpoint (GitHub issue #9)
 - [ ] Dashboard UI (company / round-type / recruiter views) (GitHub issue #10)
 
