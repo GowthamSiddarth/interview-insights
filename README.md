@@ -88,6 +88,29 @@ manual `prisma migrate deploy` step needed) — see `api/Dockerfile`. Same
 ports as the host-based setup: web at `http://localhost:3000`, api at
 `http://localhost:3001`.
 
+### Alternative: local Kubernetes (Phase 7, in progress)
+
+Base manifests for Postgres and OpenSearch (`infra/k8s/base/`) run against
+any local cluster — verified with [kind](https://kind.sigs.k8s.io/):
+
+```bash
+brew install kind
+kind create cluster --name interview-insights
+kubectl apply -f infra/k8s/base/
+kubectl -n interview-insights get pods   # both should reach 1/1 Running
+```
+
+`api`/`web` manifests (issue #28) and Kustomize overlays (issue #29) aren't
+written yet — see `docs/ROADMAP.md` Phase 7. Until then, port-forward to
+reach Postgres/OpenSearch the same way the sections below describe:
+
+```bash
+kubectl -n interview-insights port-forward svc/postgres 5432:5432
+kubectl -n interview-insights port-forward svc/opensearch 9200:9200
+```
+
+Tear down with `kind delete cluster --name interview-insights`.
+
 ## Connecting a database client (DBeaver, etc.)
 
 With Postgres running via the Docker Compose above, connect using the

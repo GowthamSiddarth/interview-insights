@@ -79,7 +79,9 @@ companion to the "Current status" section in `CLAUDE.md`.
       plan; revisit if/when either changes
 
 ## Phase 7 — Kubernetes
-- [ ] Base manifests for Postgres + OpenSearch (GitHub issue #27)
+- [x] Base manifests for Postgres + OpenSearch (GitHub issue #27) —
+      `infra/k8s/base/`, StatefulSets + headless Services + PVCs,
+      verified against a local `kind` cluster
 - [ ] Base manifests for `api` + `web` (Deployment, Service, Ingress,
       ConfigMap) (GitHub issue #28) — depends on #27
 - [ ] Kustomize overlays for dev/staging/prod (GitHub issue #29) — depends
