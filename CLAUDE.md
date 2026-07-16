@@ -167,8 +167,27 @@ run, same pattern already used for slugs/emails elsewhere in the suite.
 
 Phase 3 is now fully done — all three GitHub issues (#1-#3) closed via
 merged PRs. All `api` unit + e2e tests, build, and lint pass.
-- Next step: Phase 4 — analytics (materialized views, shrinkage scoring,
-  `/companies/:id/analytics` endpoint, dashboard UI), per `docs/ROADMAP.md`.
+
+**Phase 4 planning** — before any implementation, filed all four of
+Phase 4's issues under a "Phase 4 — Analytics" milestone (issues #7-#10,
+each noting its dependency on the previous), per the new CLAUDE.md
+convention: plan a whole phase before implementing any of it.
+
+**Phase 4, issue #7 (materialized views)** — raw SQL migration (not
+`schema.prisma` — Prisma doesn't manage views) adding the three views from
+`docs/DATA_MODEL.md`: `company_round_type_aggregates`,
+`company_recruiter_aggregates`, `company_overall_aggregates`. All three
+aggregate `status = 'approved'` rows only, and each has a unique index on
+its grain columns so a future `REFRESH ... CONCURRENTLY` won't lock
+readers out. No refresh trigger exists yet — deferred to issue #9, see D15.
+`company_recruiter_aggregates`/`company_overall_aggregates` are
+schema-correct but will stay empty until `recruiter_ratings`/
+`overall_reviews` get a write path (still not built — same caveat already
+noted for `ModerationService`). 4 new integration tests
+(`aggregation-views.e2e-spec.ts`, 24 e2e tests total now) prove all three
+views compute correctly against a real Postgres, including that a
+zero-approved group produces no row at all (not a row of nulls/zeros).
+- Next step: Phase 4 issue #8 (shrinkage scoring), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
