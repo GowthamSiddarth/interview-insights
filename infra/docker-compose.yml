@@ -1,9 +1,15 @@
 name: interview-insights
 
-# Local dev: Postgres only. `api` and `web` run directly on the host via npm
-# (see README.md) — no code talks to Redis/Kafka yet, so they aren't run
-# until something actually depends on them (docs/DECISIONS.md D9: avoid
-# premature infrastructure). Add them back here when Phase 3+ needs them.
+# Default (`docker compose up`): Postgres only. `api`/`web` run directly on
+# the host via npm for the fast local-dev loop (see README.md) — no code
+# talks to Redis/Kafka yet, so those aren't run either until something
+# actually depends on them (docs/DECISIONS.md D9: avoid premature
+# infrastructure).
+#
+# `docker compose --profile full up --build`: also builds and runs `api`
+# and `web` as containers, for prod-like local testing of the actual Docker
+# images (GitHub issue #17) — migrations are applied automatically on
+# container start (see api/Dockerfile's CMD).
 services:
   postgres:
     image: postgres:16-alpine
@@ -21,6 +27,36 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    profiles: ["full"]
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
+      EMAIL_HASH_SECRET: dev-only-change-me
+      CORS_ORIGIN: http://localhost:3000
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    profiles: ["full"]
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:

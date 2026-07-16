@@ -5,10 +5,12 @@ interviewer traits) plus recruiter interactions, rolled up into
 company-level analytics. See `CLAUDE.md` and `docs/` for the full
 architecture, data model, and decisions log.
 
-Currently implemented: Phase 1 (repo scaffold + schema) and Phase 2 (a thin
-Create+Read vertical slice — Company → InterviewProcess → Round →
-RoundRating — end to end through both the API and a minimal web UI). See
-`docs/ROADMAP.md` for what's next.
+Currently implemented: Phases 1-4 — repo scaffold, a Create+Read vertical
+slice (Company → InterviewProcess → Round → RoundRating), trust &
+moderation (moderation queue, fraud checks, candidate verification), and
+analytics (materialized views, shrinkage scoring, a `/companies/:id/analytics`
+endpoint, and a dashboard UI). See `docs/ROADMAP.md` for what's next and
+`CLAUDE.md`'s "Current status" for what was last verified working.
 
 ## Prerequisites
 
@@ -70,6 +72,22 @@ stays at `0` by design.
 **Stopping/resetting:** `docker compose down` stops Postgres (data persists
 in a named volume). Add `-v` to also wipe the data and start fresh next time.
 
+### Alternative: full-stack Docker Compose
+
+For prod-like local testing of the actual `api`/`web` Docker images
+(rather than the fast host-based loop above):
+
+```bash
+cd infra
+docker compose --profile full up --build
+```
+
+This builds and runs `api` and `web` as containers alongside `postgres`.
+Migrations are applied automatically when the `api` container starts (no
+manual `prisma migrate deploy` step needed) — see `api/Dockerfile`. Same
+ports as the host-based setup: web at `http://localhost:3000`, api at
+`http://localhost:3001`.
+
 ## Connecting a database client (DBeaver, etc.)
 
 With Postgres running via the Docker Compose above, connect using the
@@ -124,14 +142,11 @@ schema/migrations apply.
 api/       NestJS API (Prisma schema + migrations live here)
 web/       Next.js + Tailwind frontend
 workers/   Background workers (moderation, aggregation) — placeholder, Phase 3+
-infra/     docker-compose.yml (Postgres only, see above), k8s manifests
-           (Phase 7), terraform (future)
+infra/     docker-compose.yml (Postgres by default, full-stack behind the
+           `full` profile — see above), k8s manifests (Phase 7), terraform
+           (future)
 docs/      Architecture, data model, decisions log, roadmap
 ```
-
-`api/Dockerfile` and `web/Dockerfile` exist for later containerized
-deployment (docs/ROADMAP.md Phase 6/7) but aren't part of local dev — they
-aren't built or run by `infra/docker-compose.yml` right now.
 
 Read `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, and `docs/DECISIONS.md`
 before making structural changes, and see `CLAUDE.md`'s "Current status"
