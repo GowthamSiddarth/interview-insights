@@ -70,6 +70,10 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   #1-#3 filed together before any of them were implemented). Implementation
   starts only after that planning pass is done; see
   `wiki/github-project-setup.md` for the `gh` commands.
+- **Always branch + PR, never commit directly to `main`.** Applies to every
+  change, including documentation-only or workflow-convention updates like
+  this one — there's no carve-out for changes that don't touch application
+  code.
 
 ## Build order (see docs/ROADMAP.md for full detail)
 
