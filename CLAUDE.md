@@ -70,6 +70,17 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   #1-#3 filed together before any of them were implemented). Implementation
   starts only after that planning pass is done; see
   `wiki/github-project-setup.md` for the `gh` commands.
+- **Every phase's planning batch also includes a "write the engineering
+  blog for this phase" issue**, filed alongside the phase's feature issues
+  during the same planning pass — but implemented *last*, once every other
+  issue in the phase is merged, since the post documents the finished
+  work. Posts live under `wiki/blog/<phase-slug>/`: one post per GitHub
+  issue for phases planned this way, or per logical sub-topic for the
+  handful of phases (1-2) that predate the issue/milestone convention.
+  Each post covers key concepts, core technologies, infra build steps,
+  system design approach, and a step-by-step implementation account — see
+  `wiki/blog/README.md` for the index and any existing post for the
+  expected depth.
 - **Always branch + PR, never commit directly to `main`.** Applies to every
   change, including documentation-only or workflow-convention updates like
   this one — there's no carve-out for changes that don't touch application
