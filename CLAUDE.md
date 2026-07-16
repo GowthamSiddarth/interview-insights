@@ -277,10 +277,19 @@ zero console errors; (2) ran the `api` image against a genuinely fresh,
 empty Postgres in an isolated container to prove all 3 migrations apply
 correctly from a clean state, not just a no-op; (3) `npm run build`,
 `lint`, `test` all still pass natively in both `api` and `web`.
-- Next step: Phase 6 hardening issue #18 (branch protection on `main`),
-  per `docs/ROADMAP.md`. Then Phase 5 — search & discovery, filed under a
-  milestone before any code, per the "plan a phase before implementing"
-  convention.
+
+**Phase 6 hardening, issue #18 (branch protection)** — blocked, not done.
+Both classic branch protection (`PUT .../branches/main/protection`) and the
+newer repository rulesets API (`POST .../rulesets`) return 403 "Upgrade to
+GitHub Pro or make this repository public" for private repos on the free
+plan — confirmed directly via both endpoints, not an assumption. Left open
+on GitHub (with the blocker documented in an issue comment) rather than
+closed; revisit if/when the account upgrades to Pro or the repo's
+visibility changes. The branch+PR discipline (CLAUDE.md convention) still
+applies day to day regardless — this issue was specifically about
+*platform-enforcing* it, which isn't available yet.
+- Next step: Phase 5 — search & discovery, filed under a milestone before
+  any code, per the "plan a phase before implementing" convention.
 
 ## Open decisions still to make
 
