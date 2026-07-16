@@ -55,6 +55,14 @@ companion to the "Current status" section in `CLAUDE.md`.
 - [x] GitHub Actions: lint, type-check, test, build on PR (built during
       Phase 1 scaffolding, ahead of sequence — `.github/workflows/ci.yml`)
 - [x] Dockerfile per service (api, web, workers) (ditto)
+- [x] Full-stack Docker Compose profile (GitHub issue #17) — fixed a latent
+      `api/Dockerfile` bug (runtime stage relied on npx auto-installing the
+      `prisma` CLI over the network) by copying the built `node_modules`
+      wholesale instead of reinstalling with `--omit=dev`; migrations now
+      apply automatically on container start; `docker compose --profile
+      full up --build` for prod-like local testing, default `docker
+      compose up` still just Postgres for the fast dev loop
+- [ ] Branch protection on `main` requiring CI checks (GitHub issue #18)
 
 ## Phase 7 — Kubernetes
 - [ ] Local kind/minikube cluster with plain manifests

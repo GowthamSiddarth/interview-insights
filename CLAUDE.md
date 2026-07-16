@@ -257,10 +257,30 @@ wizard's dashboard link navigates to the right company correctly.
 
 **Phase 4 is now fully done** — all four GitHub issues (#7-#10) closed via
 merged PRs. `api` and `web` both build/lint/test clean.
-- Next step: Phase 5 — search & discovery (OpenSearch indexing, filtering
-  by role/round type/date range), per `docs/ROADMAP.md`. Per the
-  "plan a phase before implementing" convention, file Phase 5's issues
-  under a milestone before writing any code for it.
+
+**Phase 6 hardening, issue #17 (full-stack Docker Compose)** — fixed a
+latent bug in `api/Dockerfile`: its runtime stage ran `npm ci --omit=dev`
+(dropping the `prisma` CLI, a devDependency) then still called `npx prisma
+generate`, silently relying on npx auto-installing the CLI over the
+network. Fixed per Prisma's own documented pattern — copy the built
+`node_modules` wholesale from the build stage instead of reinstalling.
+Also fixed `web/Dockerfile` trying to copy a `public/` directory that
+didn't exist (added `web/public/.gitkeep`). `api`'s container now runs
+`prisma migrate deploy` automatically before starting. `infra/
+docker-compose.yml` gained `api`/`web` back behind a `full` Compose
+profile — default `docker compose up` still just Postgres (fast dev loop
+unchanged), `docker compose --profile full up --build` gives the complete
+containerized stack. Verified three ways: (1) built + ran the full profile
+against the existing dev Postgres, confirmed `/health` and a real browser
+flow through the containerized web talking to the containerized api with
+zero console errors; (2) ran the `api` image against a genuinely fresh,
+empty Postgres in an isolated container to prove all 3 migrations apply
+correctly from a clean state, not just a no-op; (3) `npm run build`,
+`lint`, `test` all still pass natively in both `api` and `web`.
+- Next step: Phase 6 hardening issue #18 (branch protection on `main`),
+  per `docs/ROADMAP.md`. Then Phase 5 — search & discovery, filed under a
+  milestone before any code, per the "plan a phase before implementing"
+  convention.
 
 ## Open decisions still to make
 

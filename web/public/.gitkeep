@@ -1,0 +1,3 @@
+Placeholder — Next.js convention expects a public/ directory for static
+assets (favicon, images, etc.). web/Dockerfile copies it into the runtime
+image; without this file the directory wouldn't exist to copy at all.
