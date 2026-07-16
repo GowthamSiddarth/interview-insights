@@ -20,3 +20,11 @@ See `docs/ROADMAP.md` Phase 1.
 1. [Repo scaffold & stack decisions](phase-1-foundation/01-repo-scaffold-and-stack-decisions/README.md)
 2. [Prisma schema & first migration](phase-1-foundation/02-prisma-schema-and-first-migration/README.md)
 3. [Local Docker Compose](phase-1-foundation/03-local-docker-compose/README.md)
+
+## Phase 2 — Thin vertical slice
+
+See `docs/ROADMAP.md` Phase 2.
+
+1. [API: Create + Read endpoints](phase-2-vertical-slice/01-api-create-read-endpoints/README.md)
+2. [Testing strategy: unit + real-Postgres integration](phase-2-vertical-slice/02-testing-strategy/README.md)
+3. [Frontend wizard & real-browser verification](phase-2-vertical-slice/03-frontend-wizard-and-browser-verification/README.md)
