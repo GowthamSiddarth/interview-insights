@@ -340,6 +340,34 @@ the actual cloud provider decision (real AWS EKS cost vs. OCI/OKE
 free-forever) has to be made for real, and this LocalStack-tested
 integration code is what gets wired into the real deployed path.
 
+**Found while building this:** two real limitations, neither assumed —
+both confirmed directly before working around them.
+- **LocalStack now requires a free-account auth token
+  (`LOCALSTACK_AUTH_TOKEN`) just to start the container at all**, even
+  for community/non-commercial use of free services like IAM and
+  Secrets Manager — a 2026 packaging change, not something specific to
+  this project ("we will only support one single image for LocalStack
+  for AWS via Docker Hub, which will require a user account and an auth
+  token to run," per LocalStack's own announcement). `docker compose`
+  doesn't forward host env vars into a container automatically either —
+  `infra/docker-compose.yml`'s `localstack` service has to explicitly
+  declare `LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?...}` to read
+  it from the host shell, with a clear failure message if it's unset,
+  rather than silently starting without it and crash-looping on a vague
+  license error.
+- **IAM policy *simulation* isn't reliably emulated, only policy CRUD
+  is.** `iam simulate-custom-policy` fails outright ("not currently
+  supported by LocalStack"); `iam simulate-principal-policy` runs
+  without error but returns `explicitDeny` unconditionally regardless of
+  the actual policy content — i.e. it doesn't evaluate anything. Confirmed
+  by testing both directly, not assumed from docs. `infra/aws/
+  verify-iam-policy.sh` combines two checks instead: LocalStack's real
+  `create-policy` call proves the JSON is syntactically valid IAM policy
+  language (catches the kind of structural typo real IAM would also
+  reject); a plain structural check on the parsed JSON proves the
+  *semantic* properties (exactly one read-only action, no bare `"*"`
+  resource) that simulation would otherwise be the natural tool for.
+
 ---
 
 ## Still open (revisit when you have more information)

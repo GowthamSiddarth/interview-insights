@@ -298,7 +298,7 @@ Cloud-Readiness Practice (Local, Free)".
 - [x] Install ingress-nginx via Helm instead of raw upstream YAML
       (GitHub issue #65) — third-party infra only; our own api/web/
       postgres/opensearch manifests stay on Kustomize, see D19
-- [ ] LocalStack: IAM policy validation + Secrets Manager integration
+- [x] LocalStack: IAM policy validation + Secrets Manager integration
       path, not deployed (GitHub issue #66) — confirmed LocalStack's free
       tier covers IAM/Secrets Manager but not EKS (Ultimate-tier only);
       `kind` stays the compute layer regardless, see D20

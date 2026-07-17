@@ -85,6 +85,29 @@ services:
     depends_on:
       - api
 
+  # Opt-in (GitHub issue #66, Phase 10) — local, free-tier practice for
+  # AWS-shaped IAM/Secrets Manager integration, not part of the default
+  # dev loop and not depended on by any actually-deployed code path (see
+  # docs/DECISIONS.md D20). Scoped to just the two services this phase
+  # needs, not LocalStack's full service catalog.
+  localstack:
+    profiles: ["localstack"]
+    image: localstack/localstack:latest
+    restart: unless-stopped
+    environment:
+      SERVICES: iam,secretsmanager
+      # Read from the host shell — LocalStack now requires a free-tier
+      # auth token just to start at all (a 2026 pricing/packaging change,
+      # not specific to this project). Never hardcode a real token here.
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set LOCALSTACK_AUTH_TOKEN in your shell profile — see README.md}
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres_data:
   opensearch_data:
