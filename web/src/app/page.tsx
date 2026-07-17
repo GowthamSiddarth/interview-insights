@@ -105,7 +105,8 @@ export default function HomePage() {
       <header>
         <h1 className="text-2xl font-semibold">Interview Insights</h1>
         <p className="text-sm text-gray-500">
-          Phase 2 vertical slice: Company → InterviewProcess → Round → RoundRating.
+          Rate your interview experience, round by round, and see how a
+          company&apos;s process compares.
         </p>
         <Link href="/search" className="text-sm underline">
           Search companies &amp; reviews
@@ -305,10 +306,11 @@ export default function HomePage() {
               <p className="text-green-700 dark:text-green-400">
                 Rating submitted — status: <strong>{rating.status}</strong>.
               </p>
+              {/* Every rating is moderated before it's public (docs/DECISIONS.md D3) —
+                  a pending rating won't count below until it's approved. */}
               <p className="text-gray-500">
-                Every rating starts <code>pending</code> and stays invisible to the public until a
-                moderator approves it (docs/DECISIONS.md D3). The public ratings list below is
-                expected to be empty until Phase 3&apos;s moderation worker exists.
+                Thanks for sharing your experience. Every rating is reviewed before it
+                becomes public, so yours may not appear in the count below right away.
               </p>
               <p>
                 Public approved ratings for this round:{' '}

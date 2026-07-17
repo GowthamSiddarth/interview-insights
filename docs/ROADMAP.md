@@ -267,7 +267,7 @@ anything, same "plan before implementing" discipline as every other
 phase. Milestone: "UX/UI Polish Pass" — not a numbered phase, a backlog
 item planned the same way.
 
-- [ ] Remove internal dev-note leaks and fix stale moderation copy
+- [x] Remove internal dev-note leaks and fix stale moderation copy
       (GitHub issue #57) — includes a factually stale claim ("expected to
       be empty until Phase 3's moderation worker exists"), not just
       unpolished text
