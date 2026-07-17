@@ -258,14 +258,18 @@ specific features anymore.*
 - Tuning `k` in the shrinkage formula
 - Everything in Phase 8, gated by the triggers listed there
 
-## UX/UI Polish Pass
+## Phase 9 — UX/UI Polish Pass
 Noticed running the app end-to-end after Phase 7: leftover dev-only
 notes/placeholder copy, inconsistent styling, and general rough UX edges
 across the Phase 2 wizard, Phase 4 dashboard, and Phase 5 search pages.
 Audited (walked every page, checked the source directly) before filing
 anything, same "plan before implementing" discipline as every other
-phase. Milestone: "UX/UI Polish Pass" — not a numbered phase, a backlog
-item planned the same way.
+phase. Milestone: "Phase 9 — UX/UI Polish Pass".
+
+Numbered by when it was planned, not by execution order relative to
+Phase 8 — Phase 8 remains trigger-gated (see its own intro) and may well
+start later than this phase finishes; the numbers here just track
+planning sequence, same as they always have.
 
 - [x] Remove internal dev-note leaks and fix stale moderation copy
       (GitHub issue #57) — includes a factually stale claim ("expected to
@@ -281,12 +285,15 @@ item planned the same way.
       (GitHub issue #60) — depends on #58
 - [ ] Investigate ambiguous loading vs. empty states (GitHub issue #61) —
       investigation first, not a confirmed bug yet
+- [ ] Engineering blog (GitHub issue #68) — `wiki/blog/
+      phase-9-ux-ui-polish/`, done last once every other Phase 9 issue
+      is merged
 
-## Cloud-Readiness Practice (Local, Free)
+## Phase 10 — Cloud-Readiness Practice (Local, Free)
 Local, zero-cost practice for cloud-shaped tooling ahead of any real
 Phase 8 trigger firing — doesn't supersede D11 (AWS) and doesn't start
-Phase 8 for real (see docs/DECISIONS.md D19/D20). Milestone:
-"Cloud-Readiness Practice (Local, Free)".
+Phase 8 for real (see docs/DECISIONS.md D19/D20). Milestone: "Phase 10 —
+Cloud-Readiness Practice (Local, Free)".
 
 - [x] Install ingress-nginx via Helm instead of raw upstream YAML
       (GitHub issue #65) — third-party infra only; our own api/web/
@@ -295,3 +302,6 @@ Phase 8 for real (see docs/DECISIONS.md D19/D20). Milestone:
       path, not deployed (GitHub issue #66) — confirmed LocalStack's free
       tier covers IAM/Secrets Manager but not EKS (Ultimate-tier only);
       `kind` stays the compute layer regardless, see D20
+- [ ] Engineering blog (GitHub issue #69) — `wiki/blog/
+      phase-10-cloud-readiness-practice/`, done last once every other
+      Phase 10 issue is merged
