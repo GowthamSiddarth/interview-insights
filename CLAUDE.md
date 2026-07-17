@@ -105,8 +105,8 @@ single most useful thing to keep current.*
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), and Phase 7 (Kubernetes) are all done. Phase 6 is done except
-issue #18 (blocked). Every phase has an engineering blog under
-`wiki/blog/` except Phase 7's own issue #29 post, still pending.
+issue #18 (blocked). Every phase has a complete engineering blog under
+`wiki/blog/`.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -513,9 +513,9 @@ issue's acceptance criteria directly.
 **Phase 7 is now fully done for its planned scope** — issues #27-#29 all
 closed via merged PRs (Helm remains explicitly out of scope per
 `docs/ARCHITECTURE.md`, until manifests are "genuinely repetitive," not
-the case with 2-3 services). `wiki/blog/phase-7-kubernetes/` still needs
-issue #29's own post — the last piece before that phase's blog is
-complete too.
+the case with 2-3 services). `wiki/blog/phase-7-kubernetes/` now has a
+post for all three issues — Phase 7's blog is complete, and every phase's
+blog is complete.
 - Next step: no explicit next phase requested yet. Phase 8 (production
   hardening menu) is the next unstarted roadmap item, but every one of
   its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for

@@ -63,8 +63,9 @@ See `docs/ROADMAP.md` Phase 6.
 
 ## Phase 7 — Kubernetes
 
-See `docs/ROADMAP.md` Phase 7. Issue #29 (Kustomize overlays) isn't
-implemented yet, so it has no post here yet either — added once it ships.
+See `docs/ROADMAP.md` Phase 7. All three issues are done — this phase's
+blog is complete.
 
 1. [Issue #27 — Base manifests for Postgres & OpenSearch](phase-7-kubernetes/issue-27-postgres-opensearch-manifests/README.md)
 2. [Issue #28 — Base manifests for api, web & Ingress](phase-7-kubernetes/issue-28-api-web-ingress-manifests/README.md)
+3. [Issue #29 — Kustomize overlays for dev/staging/prod](phase-7-kubernetes/issue-29-kustomize-overlays/README.md)
