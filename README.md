@@ -232,6 +232,40 @@ cd api
 AWS_ENDPOINT_URL=http://localhost:4566 npm run test:e2e -- secrets-provider
 ```
 
+### LocalStack in the kind cluster (Phase 11)
+
+Extends the practice above into the actually-running `kind` cluster —
+`api`'s pod will (from GitHub issue #79 onward) fetch its real secrets
+from this instance via an assumed IAM role, instead of the plaintext
+`api-secrets` k8s `Secret`. Opt-in: `infra/k8s/base/localstack/` isn't in
+`infra/k8s/base/kustomization.yaml`'s resources list, so the plain `dev`
+overlay is unaffected either way.
+
+**1. Create the auth-token Secret** (same token as above, never committed):
+
+```bash
+kubectl create secret generic localstack-credentials \
+  --namespace interview-insights \
+  --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN"
+```
+
+**2. Apply the `dev-localstack` overlay** — composes `dev` with the one
+extra LocalStack resource:
+
+```bash
+kubectl apply -k infra/k8s/overlays/dev-localstack
+kubectl wait --for=condition=ready pod -l app=localstack -n interview-insights --timeout=120s
+```
+
+**3. Seed it** — the two secrets `api` needs, plus the IAM role with
+`infra/aws/api-secrets-access-policy.json` attached (idempotent, safe to
+re-run):
+
+```bash
+kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
+./infra/aws/seed-localstack.sh
+```
+
 ## Connecting a database client (DBeaver, etc.)
 
 With Postgres running via the Docker Compose above, connect using the

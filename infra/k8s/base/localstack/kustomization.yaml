@@ -1,0 +1,12 @@
+# A nested base, not a flat file reference — Kustomize's load restrictor
+# blocks a raw (non-kustomization) YAML file being referenced from outside
+# its own kustomization root, even one level up via `../../`. Wrapping
+# 08-localstack.yaml in its own kustomization.yaml makes it a proper base
+# directory, which overlays are always allowed to reference regardless of
+# location (same reason infra/k8s/overlays/dev already references
+# ../../base directly).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 08-localstack.yaml

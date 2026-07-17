@@ -1,0 +1,13 @@
+# Opt-in variant of `dev` (GitHub issue #78, Phase 11) — composes the
+# existing `dev` overlay with one extra resource (LocalStack) that isn't
+# in base/kustomization.yaml's resources list, so plain `dev` stays
+# unaffected. Apply with:
+#   kubectl apply -k infra/k8s/overlays/dev-localstack
+# after creating the localstack-credentials Secret (see
+# infra/k8s/base/08-localstack.yaml's comment).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../dev
+  - ../../base/localstack
