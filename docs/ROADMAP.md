@@ -302,6 +302,5 @@ Cloud-Readiness Practice (Local, Free)".
       path, not deployed (GitHub issue #66) — confirmed LocalStack's free
       tier covers IAM/Secrets Manager but not EKS (Ultimate-tier only);
       `kind` stays the compute layer regardless, see D20
-- [ ] Engineering blog (GitHub issue #69) — `wiki/blog/
-      phase-10-cloud-readiness-practice/`, done last once every other
-      Phase 10 issue is merged
+- [x] Engineering blog (GitHub issue #69) — `wiki/blog/
+      phase-10-cloud-readiness-practice/`; Phase 10 is now fully done
