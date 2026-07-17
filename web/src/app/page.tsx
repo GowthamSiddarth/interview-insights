@@ -314,7 +314,11 @@ export default function HomePage() {
               </p>
               <p>
                 Public approved ratings for this round:{' '}
-                <strong>{approvedRatings?.length ?? 0}</strong>
+                {/* null means still fetching, not "confirmed zero" — GitHub
+                    issue #61 found these looked identical (both rendered
+                    "0"), verified live against a deliberately delayed
+                    response. */}
+                <strong>{approvedRatings === null ? '…' : approvedRatings.length}</strong>
               </p>
             </div>
           )}

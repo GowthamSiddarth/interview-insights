@@ -285,8 +285,15 @@ planning sequence, same as they always have.
 - [x] Visual design pass: layout width and basic branding consistency
       (GitHub issue #60) — shared `PageContainer`/`Button` components make
       the width and accent-color decisions structural, not copy-pasted
-- [ ] Investigate ambiguous loading vs. empty states (GitHub issue #61) —
-      investigation first, not a confirmed bug yet
+- [x] Investigate ambiguous loading vs. empty states (GitHub issue #61) —
+      confirmed live (delayed API responses) and fixed two real cases:
+      the homepage's approved-ratings count showed "0" identically
+      whether still fetching or confirmed zero, and the search page
+      showed no indicator at all while a search was in flight (first
+      search: indistinguishable from "haven't searched"; repeat search:
+      stale previous results lingered with no sign a new one was
+      running). The analytics dashboard already had a correct, distinct
+      "Loading…" state — no fix needed there
 - [ ] Engineering blog (GitHub issue #68) — `wiki/blog/
       phase-9-ux-ui-polish/`, done last once every other Phase 9 issue
       is merged

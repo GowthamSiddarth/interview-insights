@@ -370,6 +370,38 @@ both confirmed directly before working around them.
 
 ---
 
+### D21 — `<form action={fn}>`'s pre-await state updates don't flush immediately; use `onSubmit` when an in-flight indicator matters
+**Decision:** `web/src/app/search/page.tsx`'s two search forms use plain
+`onSubmit={fn}` handlers (`event.preventDefault()` + `new
+FormData(event.currentTarget)`), not React 19's `<form action={fn}>`
+pattern used elsewhere in this app (e.g. `web/src/app/page.tsx`'s wizard
+forms).
+**Why:** found while fixing GitHub issue #61 (Phase 9). A `setState` call
+made *before* the first `await` inside a function passed to `<form
+action={fn}>` does not flush to the DOM until some `await` inside that
+same function resolves — confirmed directly, in both a Testing Library
+unit test and a real browser against a deliberately delayed API response,
+not assumed from a framework changelog. Concretely: `setCompanySearching
+(true)` called as the first line of `handleCompanySearch`, before
+`await api.searchCompanies(q)`, never rendered — the UI stayed on
+whatever it showed before the click, with no visible feedback that a
+search was running. The same "set a flag, then await" shape *did* work
+correctly elsewhere in this app (`web/src/app/page.tsx`'s `setRating(...)`
+followed later by `await api.listApprovedRatingsForRound(...)` — see
+`approvedRatings === null` in that file) — the difference is that
+`setRating` happens *after* the call's own first `await` already
+resolved, not before it. Switching the search forms to plain `onSubmit`
+handlers sidesteps this entirely: a normal DOM event handler's `setState`
+calls flush the same way any click handler's do, with no dependency on
+React's action/transition batching semantics.
+**Revisit when:** never, really — this is now the standing rule for any
+future form in this app that needs to show an in-flight state before its
+own first `await`. `<form action={fn}>` remains fine (and is unchanged
+elsewhere in this app) for forms that only need to show state *after*
+an await resolves, or that don't need an in-flight indicator at all.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
