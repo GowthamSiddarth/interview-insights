@@ -89,6 +89,12 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   change, including documentation-only or workflow-convention updates like
   this one — there's no carve-out for changes that don't touch application
   code.
+- **Move an issue's board status to "In Progress" the moment work actually
+  starts on it** (not when it's filed during planning), and **assign every
+  PR to yourself** (`gh pr create --assignee <github-username>`), same as
+  issues already are. See `wiki/github-project-setup.md`'s "Workflow
+  convention" section for this project's concrete `gh project item-edit`
+  IDs.
 
 ## Build order (see docs/ROADMAP.md for full detail)
 
