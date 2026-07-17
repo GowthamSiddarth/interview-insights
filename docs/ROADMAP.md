@@ -236,3 +236,13 @@ grade" means once they exist.*
 - ClickHouse migration for analytics (only if materialized views strain)
 - Tuning `k` in the shrinkage formula
 - Everything in Phase 8, gated by the triggers listed there
+
+## Deferred — UX/UI polish pass
+Noticed running the app end-to-end after Phase 7: leftover dev-only
+notes/placeholder copy, inconsistent styling, and general rough UX edges
+across the Phase 2 wizard, Phase 4 dashboard, and Phase 5 search pages.
+No itemized list yet — every page so far was built to prove a feature
+works, not to be a finished UI. When this gets picked up, start with an
+audit pass (walk every page, write down concrete issues) before fixing
+anything, same "plan before implementing" discipline as every other
+phase — don't start patching individual things ad hoc.
