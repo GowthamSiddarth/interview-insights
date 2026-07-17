@@ -258,12 +258,26 @@ specific features anymore.*
 - Tuning `k` in the shrinkage formula
 - Everything in Phase 8, gated by the triggers listed there
 
-## Deferred — UX/UI polish pass
+## UX/UI Polish Pass
 Noticed running the app end-to-end after Phase 7: leftover dev-only
 notes/placeholder copy, inconsistent styling, and general rough UX edges
 across the Phase 2 wizard, Phase 4 dashboard, and Phase 5 search pages.
-No itemized list yet — every page so far was built to prove a feature
-works, not to be a finished UI. When this gets picked up, start with an
-audit pass (walk every page, write down concrete issues) before fixing
+Audited (walked every page, checked the source directly) before filing
 anything, same "plan before implementing" discipline as every other
-phase — don't start patching individual things ad hoc.
+phase. Milestone: "UX/UI Polish Pass" — not a numbered phase, a backlog
+item planned the same way.
+
+- [ ] Remove internal dev-note leaks and fix stale moderation copy
+      (GitHub issue #57) — includes a factually stale claim ("expected to
+      be empty until Phase 3's moderation worker exists"), not just
+      unpolished text
+- [ ] Add persistent shared navigation across all pages (GitHub issue
+      #58) — `web/src/app/layout.tsx` currently renders nothing but
+      `{children}`; no way back from `/search` or the analytics dashboard
+      to the homepage
+- [ ] Wizard: allow changing the selected company without a page reload
+      (GitHub issue #59)
+- [ ] Visual design pass: layout width and basic branding consistency
+      (GitHub issue #60) — depends on #58
+- [ ] Investigate ambiguous loading vs. empty states (GitHub issue #61) —
+      investigation first, not a confirmed bug yet
