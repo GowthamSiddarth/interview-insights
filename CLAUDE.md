@@ -70,6 +70,10 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   #1-#3 filed together before any of them were implemented). Implementation
   starts only after that planning pass is done; see
   `wiki/github-project-setup.md` for the `gh` commands.
+  **Exception: Phase 8.** It's a trigger-gated menu, not a linear phase —
+  see its intro in `docs/ROADMAP.md` for why. Plan (file issues + a
+  milestone) one sub-area (8a-8g) at a time, only once that sub-area's own
+  trigger fires — never the whole phase's menu upfront.
 - **Every phase's planning batch also includes a "write the engineering
   blog for this phase" issue**, filed alongside the phase's feature issues
   during the same planning pass — but implemented *last*, once every other
