@@ -1,5 +1,6 @@
 import { Provider } from '@nestjs/common';
 import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { localstackAwsClientConfig } from './aws-client-config.util';
 
 export const SECRETS_MANAGER_CLIENT = 'SECRETS_MANAGER_CLIENT';
 
@@ -10,14 +11,5 @@ export const SECRETS_MANAGER_CLIENT = 'SECRETS_MANAGER_CLIENT';
 // docs/DECISIONS.md D20).
 export const secretsManagerClientProvider: Provider = {
   provide: SECRETS_MANAGER_CLIENT,
-  useFactory: () =>
-    new SecretsManagerClient({
-      region: process.env.AWS_REGION ?? 'us-east-1',
-      ...(process.env.AWS_ENDPOINT_URL
-        ? {
-            endpoint: process.env.AWS_ENDPOINT_URL,
-            credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
-          }
-        : {}),
-    }),
+  useFactory: () => new SecretsManagerClient(localstackAwsClientConfig()),
 };

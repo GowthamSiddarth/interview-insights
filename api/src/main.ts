@@ -2,8 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
+import { bootstrapSecretsFromLocalStack } from './secrets/localstack-secrets-bootstrap';
 
 async function bootstrap() {
+  // Must happen before NestFactory.create: PrismaService reads DATABASE_URL
+  // from env at construction time, which happens as soon as Nest wires up
+  // the module tree. No-op unless SECRETS_SOURCE=localstack is set (GitHub
+  // issue #79, Phase 11).
+  await bootstrapSecretsFromLocalStack();
+
   const app = await NestFactory.create(AppModule);
 
   // web/ runs on a different origin/port — without this, every browser
