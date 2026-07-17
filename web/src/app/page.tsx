@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError, Company, InterviewProcess, Round, RoundRating } from '@/lib/api';
+import { Button } from '@/components/Button';
+import { PageContainer } from '@/components/PageContainer';
+
+const linkClass =
+  'text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 
 function ErrorBanner({ message }: { message: string | null }) {
   if (!message) return null;
@@ -113,7 +118,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
+    <PageContainer>
       <header>
         <h1 className="text-2xl font-semibold">Interview Insights</h1>
         <p className="text-sm text-gray-500">
@@ -167,22 +172,17 @@ export default function HomePage() {
                 <option value="enterprise">Enterprise</option>
               </select>
             </label>
-            <button
-              type="submit"
-              className="rounded bg-black px-3 py-1 text-sm text-white dark:bg-white dark:text-black"
-            >
-              Create company
-            </button>
+            <Button type="submit">Create company</Button>
           </form>
         )}
         {company && (
           <p className="text-sm text-green-700 dark:text-green-400">
             Using {company.name}.{' '}
-            <Link href={`/companies/${company.id}/analytics`} className="underline">
+            <Link href={`/companies/${company.id}/analytics`} className={linkClass}>
               View analytics dashboard
             </Link>{' '}
             ·{' '}
-            <button type="button" onClick={handleChangeCompany} className="underline">
+            <button type="button" onClick={handleChangeCompany} className={linkClass}>
               Change company
             </button>
           </p>
@@ -224,12 +224,7 @@ export default function HomePage() {
                   <option value="ghosted">Ghosted</option>
                 </select>
               </label>
-              <button
-                type="submit"
-                className="rounded bg-black px-3 py-1 text-sm text-white dark:bg-white dark:text-black"
-              >
-                Create process
-              </button>
+              <Button type="submit">Create process</Button>
             </form>
           )}
           {process && (
@@ -269,12 +264,7 @@ export default function HomePage() {
                   <option value="other">Other</option>
                 </select>
               </label>
-              <button
-                type="submit"
-                className="rounded bg-black px-3 py-1 text-sm text-white dark:bg-white dark:text-black"
-              >
-                Add round
-              </button>
+              <Button type="submit">Add round</Button>
             </form>
           )}
           {round && (
@@ -306,12 +296,9 @@ export default function HomePage() {
                   </label>
                 ),
               )}
-              <button
-                type="submit"
-                className="col-span-full rounded bg-black px-3 py-1 text-sm text-white dark:bg-white dark:text-black"
-              >
+              <Button type="submit" className="col-span-full">
                 Submit rating
-              </button>
+              </Button>
             </form>
           )}
           {rating && (
@@ -333,6 +320,6 @@ export default function HomePage() {
           )}
         </section>
       )}
-    </main>
+    </PageContainer>
   );
 }

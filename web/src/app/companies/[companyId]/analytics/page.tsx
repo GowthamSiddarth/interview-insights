@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { api, ApiError, CompanyAnalytics } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { PageContainer } from '@/components/PageContainer';
 
 function roundTypeLabel(roundType: string): string {
   return roundType
@@ -29,24 +30,24 @@ export default function CompanyAnalyticsPage({
 
   if (error) {
     return (
-      <main className="mx-auto max-w-2xl p-8">
+      <PageContainer>
         <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
-      </main>
+      </PageContainer>
     );
   }
 
   if (!analytics) {
     return (
-      <main className="mx-auto max-w-2xl p-8">
+      <PageContainer>
         <p className="text-sm text-gray-500">Loading…</p>
-      </main>
+      </PageContainer>
     );
   }
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
+    <PageContainer>
       <header>
         <h1 className="text-2xl font-semibold">Company Analytics</h1>
         {/* Scores are shrinkage-adjusted toward the platform-wide average
@@ -151,6 +152,6 @@ export default function CompanyAnalyticsPage({
           <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
         )}
       </section>
-    </main>
+    </PageContainer>
   );
 }

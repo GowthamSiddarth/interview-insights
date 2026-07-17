@@ -282,8 +282,9 @@ planning sequence, same as they always have.
 - [x] Wizard: allow changing the selected company without a page reload
       (GitHub issue #59) — resets every dependent step (candidate,
       process, round, rating) so no stale data references the old company
-- [ ] Visual design pass: layout width and basic branding consistency
-      (GitHub issue #60) — depends on #58
+- [x] Visual design pass: layout width and basic branding consistency
+      (GitHub issue #60) — shared `PageContainer`/`Button` components make
+      the width and accent-color decisions structural, not copy-pasted
 - [ ] Investigate ambiguous loading vs. empty states (GitHub issue #61) —
       investigation first, not a confirmed bug yet
 - [ ] Engineering blog (GitHub issue #68) — `wiki/blog/

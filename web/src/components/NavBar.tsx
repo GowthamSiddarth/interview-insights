@@ -10,7 +10,10 @@ export function NavBar() {
         <Link href="/" className="font-semibold">
           Interview Insights
         </Link>
-        <Link href="/search" className="underline">
+        <Link
+          href="/search"
+          className="text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
           Search companies &amp; reviews
         </Link>
       </div>
