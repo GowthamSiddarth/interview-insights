@@ -114,13 +114,12 @@ single most useful thing to keep current.*
 
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
-discovery), and Phase 7 (Kubernetes) are all done. Phase 6 is done except
-issue #18 (blocked). Phases 1-7 each have a complete engineering blog
-under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not started.
-Phase 9 (UX/UI Polish Pass) and Phase 10 (Cloud-Readiness Practice,
-local/free) are both in progress — issue #57 (Phase 9) and issue #65
-(Phase 10) are done, the rest of each phase's issues (including each
-phase's own engineering-blog issue, #68 and #69) are still open.
+discovery), Phase 7 (Kubernetes), and Phase 10 (Cloud-Readiness Practice,
+local/free) are all done. Phase 6 is done except issue #18 (blocked).
+Phases 1-7 and 10 each have a complete engineering blog under
+`wiki/blog/`. Phase 8 is a trigger-gated backlog, not started. Phase 9
+(UX/UI Polish Pass) is in progress — issue #57 is done, #58-#61 and its
+own engineering-blog issue (#68) are still open.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
