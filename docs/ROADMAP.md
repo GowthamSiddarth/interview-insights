@@ -106,8 +106,8 @@ posts, organized by phase.
       only (separate namespace, 2 replicas for `api`/`web`, real resource
       values, per-environment Ingress hosts + `CORS_ORIGIN`, distinct
       image tags) until a real shared cluster exists (Phase 8 triggers)
-- [ ] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PR #39 covers
-      #27-#28) — issue #29's own post still to be added
+- [x] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PRs #39 and #44)
+      — one post per issue (#27-#29); Phase 7's blog is complete
 
 Moving to Helm is not a to-do here — it's a standing guideline, same
 framing as Phase 8's trigger-gated items below. *Trigger: the
