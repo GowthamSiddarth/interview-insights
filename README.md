@@ -122,8 +122,19 @@ nodes:
         hostPort: 443
 EOF
 kind create cluster --name interview-insights --config /tmp/kind-config.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-kubectl wait --namespace ingress-nginx --for=condition=ready pod \
+
+# ingress-nginx installed via Helm, not raw upstream YAML — it's
+# third-party infra distributed as a chart, unlike our own app manifests
+# (which stay on Kustomize, see docs/DECISIONS.md D19).
+brew install helm
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.hostPort.enabled=true \
+  --set controller.service.type=ClusterIP \
+  --set controller.nodeSelector."kubernetes\.io/os"=linux
+kubectl -n ingress-nginx wait --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller --timeout=180s
 ```
 
