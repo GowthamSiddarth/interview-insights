@@ -170,6 +170,46 @@ gh project item-delete <project-number> --owner <your-github-username> \
 gh project view <project-number> --owner <your-github-username> --web
 ```
 
+## Workflow convention: move an issue to "In Progress" when starting work
+
+The moment work actually starts on an issue (not when it's filed), move
+its board status from "Todo" to "In Progress" — filing an issue during a
+planning pass shouldn't itself flip its status, only starting the real
+work should. Also assign every PR to yourself (`gh pr create --assignee
+<your-github-username>`), same as issues.
+
+This project's concrete IDs (fetched once via the commands below — these
+don't change unless the board itself is rebuilt):
+
+```bash
+# Project node ID
+gh project view 2 --owner GowthamSiddarth --format json --jq '.id'
+# => PVT_kwHOAVBf_84BdhUE
+
+# Status field ID + every option's ID
+gh project field-list 2 --owner GowthamSiddarth --format json \
+  --jq '.fields[] | select(.name=="Status")'
+# => field id PVTSSF_lAHOAVBf_84BdhUEzhYCSEE
+#    options: Backlog=846fd570, Todo=f75ad846,
+#             In Progress=47fc9ee4, Done=98236657
+
+# An issue's own item ID on the board (needed for item-edit)
+gh project item-list 2 --owner GowthamSiddarth --format json --limit 100 \
+  --jq '.items[] | select(.content.number==<issue-number>) | .id'
+```
+
+Putting it together — move issue `<issue-number>` to "In Progress":
+
+```bash
+ITEM_ID=$(gh project item-list 2 --owner GowthamSiddarth --format json \
+  --limit 100 --jq '.items[] | select(.content.number==<issue-number>) | .id')
+
+gh project item-edit --project-id "PVT_kwHOAVBf_84BdhUE" \
+  --id "$ITEM_ID" \
+  --field-id "PVTSSF_lAHOAVBf_84BdhUEzhYCSEE" \
+  --single-select-option-id "47fc9ee4"
+```
+
 ## Gotchas hit while setting this up
 
 - `docker` and `gh` binaries can exist on disk (e.g. `/usr/local/bin`) while
