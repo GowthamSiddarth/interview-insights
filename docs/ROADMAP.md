@@ -279,8 +279,9 @@ planning sequence, same as they always have.
       #58) — `web/src/components/NavBar.tsx`, rendered once from
       `web/src/app/layout.tsx`; every page keeps its own title/
       description, only the home/search links moved into the shared nav
-- [ ] Wizard: allow changing the selected company without a page reload
-      (GitHub issue #59)
+- [x] Wizard: allow changing the selected company without a page reload
+      (GitHub issue #59) — resets every dependent step (candidate,
+      process, round, rating) so no stale data references the old company
 - [ ] Visual design pass: layout width and basic branding consistency
       (GitHub issue #60) — depends on #58
 - [ ] Investigate ambiguous loading vs. empty states (GitHub issue #61) —

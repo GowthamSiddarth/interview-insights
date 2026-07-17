@@ -31,6 +31,18 @@ export default function HomePage() {
     api.listCompanies().then(setCompanies).catch((err: unknown) => setError(errorMessage(err)));
   }, []);
 
+  function handleChangeCompany() {
+    // Reset every step that depended on the previous company — none of
+    // it applies once a different company is selected.
+    setCompany(null);
+    setCandidateId(null);
+    setProcess(null);
+    setRound(null);
+    setRating(null);
+    setApprovedRatings(null);
+    setError(null);
+  }
+
   async function handleCreateCompany(formData: FormData) {
     setError(null);
     try {
@@ -168,7 +180,11 @@ export default function HomePage() {
             Using {company.name}.{' '}
             <Link href={`/companies/${company.id}/analytics`} className="underline">
               View analytics dashboard
-            </Link>
+            </Link>{' '}
+            ·{' '}
+            <button type="button" onClick={handleChangeCompany} className="underline">
+              Change company
+            </button>
           </p>
         )}
       </section>
