@@ -235,11 +235,13 @@ AWS_ENDPOINT_URL=http://localhost:4566 npm run test:e2e -- secrets-provider
 ### LocalStack in the kind cluster (Phase 11)
 
 Extends the practice above into the actually-running `kind` cluster —
-`api`'s pod will (from GitHub issue #79 onward) fetch its real secrets
-from this instance via an assumed IAM role, instead of the plaintext
-`api-secrets` k8s `Secret`. Opt-in: `infra/k8s/base/localstack/` isn't in
-`infra/k8s/base/kustomization.yaml`'s resources list, so the plain `dev`
-overlay is unaffected either way.
+`api`'s pod fetches its real secrets from this instance via an assumed
+IAM role, instead of the plaintext `api-secrets` k8s `Secret` (GitHub
+issue #79). Opt-in: `infra/k8s/base/localstack/` isn't in
+`infra/k8s/base/kustomization.yaml`'s resources list, and the
+`SECRETS_SOURCE=localstack` env var that opts `api` itself in is only set
+by the `dev-localstack` overlay's patch — so the plain `dev` overlay is
+unaffected either way.
 
 **1. Create the auth-token Secret** (same token as above, never committed):
 
@@ -264,6 +266,15 @@ re-run):
 ```bash
 kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
 ./infra/aws/seed-localstack.sh
+```
+
+**4. Restart `api`** to pick up the new `SECRETS_SOURCE=localstack`
+ConfigMap value (`envFrom` doesn't hot-reload) and rebuild/reload its
+image first if you've changed `api/src`:
+
+```bash
+kubectl -n interview-insights rollout restart deployment/api
+kubectl -n interview-insights rollout status deployment/api --timeout=90s
 ```
 
 ## Connecting a database client (DBeaver, etc.)

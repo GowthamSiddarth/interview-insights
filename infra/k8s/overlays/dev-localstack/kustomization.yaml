@@ -11,3 +11,9 @@ kind: Kustomization
 resources:
   - ../dev
   - ../../base/localstack
+
+# Opts api into fetching secrets from the localstack resource above
+# instead of plain env vars (GitHub issue #79) — merges into api-config's
+# existing data, doesn't replace it.
+patches:
+  - path: api-config-patch.yaml
