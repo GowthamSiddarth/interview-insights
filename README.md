@@ -185,6 +185,53 @@ kubectl -n interview-insights port-forward svc/opensearch 9200:9200
 
 Tear down with `kind delete cluster --name interview-insights`.
 
+### Alternative: LocalStack for IAM/Secrets Manager practice (Phase 10)
+
+Local, free-tier practice for AWS-shaped IAM/Secrets Manager integration
+(GitHub issue #66) — not part of the default dev loop, and not used by
+any actually-deployed code path (see `docs/DECISIONS.md` D20).
+
+**1. Get a free LocalStack account and auth token** at
+[app.localstack.cloud](https://app.localstack.cloud) — as of a 2026
+packaging change, even the free/non-commercial tier requires this just
+to start the container. Set it in your shell profile (not committed
+anywhere):
+
+```bash
+echo 'export LOCALSTACK_AUTH_TOKEN="your_token_here"' >> ~/.zshenv
+source ~/.zshenv
+```
+
+**2. Start LocalStack** (only the two services this phase needs):
+
+```bash
+cd infra
+docker compose --profile localstack up -d localstack
+```
+
+**3. Validate the IAM policy** — `infra/aws/api-secrets-access-policy.json`
+scopes `api`'s eventual secrets-reading role to exactly
+`secretsmanager:GetSecretValue` on two named secrets, nothing broader:
+
+```bash
+brew install awscli
+bash infra/aws/verify-iam-policy.sh
+```
+
+(LocalStack's IAM policy *simulation* isn't reliably emulated — the
+script combines a real `create-policy` call, which proves the JSON is
+syntactically valid, with a structural check for the semantic
+properties simulation would otherwise verify. See D20 for what was
+actually tried first.)
+
+**4. Run `SecretsProvider`'s real integration test** against LocalStack
+(skips gracefully if `AWS_ENDPOINT_URL` isn't set):
+
+```bash
+cd api
+AWS_ENDPOINT_URL=http://localhost:4566 npm run test:e2e -- secrets-provider
+```
+
 ## Connecting a database client (DBeaver, etc.)
 
 With Postgres running via the Docker Compose above, connect using the
