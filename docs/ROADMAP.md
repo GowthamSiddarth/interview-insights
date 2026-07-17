@@ -106,10 +106,17 @@ posts, organized by phase.
       only (separate namespace, 2 replicas for `api`/`web`, real resource
       values, per-environment Ingress hosts + `CORS_ORIGIN`, distinct
       image tags) until a real shared cluster exists (Phase 8 triggers)
-- [ ] Move to Helm only if manifests become genuinely repetitive across
-      services/environments
 - [ ] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PR #39 covers
       #27-#28) — issue #29's own post still to be added
+
+Moving to Helm is not a to-do here — it's a standing guideline, same
+framing as Phase 8's trigger-gated items below. *Trigger: the
+`infra/k8s/base/`+overlay manifests becoming genuinely repetitive across
+services/environments — not the case yet with 2 app services (`api`,
+`web`) and 2 stateful deps (Postgres, OpenSearch), and issue #29's
+Kustomize overlays already solve the exact base-vs-environment
+duplication problem Helm would otherwise be reached for.* Revisit only if
+that changes; don't move to Helm speculatively.
 
 ## Phase 8 — Production hardening & platform scale-out
 
