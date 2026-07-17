@@ -281,3 +281,17 @@ item planned the same way.
       (GitHub issue #60) — depends on #58
 - [ ] Investigate ambiguous loading vs. empty states (GitHub issue #61) —
       investigation first, not a confirmed bug yet
+
+## Cloud-Readiness Practice (Local, Free)
+Local, zero-cost practice for cloud-shaped tooling ahead of any real
+Phase 8 trigger firing — doesn't supersede D11 (AWS) and doesn't start
+Phase 8 for real (see docs/DECISIONS.md D19/D20). Milestone:
+"Cloud-Readiness Practice (Local, Free)".
+
+- [x] Install ingress-nginx via Helm instead of raw upstream YAML
+      (GitHub issue #65) — third-party infra only; our own api/web/
+      postgres/opensearch manifests stay on Kustomize, see D19
+- [ ] LocalStack: IAM policy validation + Secrets Manager integration
+      path, not deployed (GitHub issue #66) — confirmed LocalStack's free
+      tier covers IAM/Secrets Manager but not EKS (Ultimate-tier only);
+      `kind` stays the compute layer regardless, see D20

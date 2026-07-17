@@ -287,6 +287,61 @@ there's no reason to special-case it by shell version.
 
 ---
 
+### D19 — Helm for third-party infra only; our own app manifests stay on Kustomize
+**Decision:** `ingress-nginx` (Phase 7 issue #28) is now installed via
+`helm install ingress-nginx ingress-nginx/ingress-nginx`, not the raw
+upstream `kubectl apply -f .../deploy.yaml` it started with. This is
+scoped narrowly: Helm is adopted for *third-party* infrastructure
+components — anything the wider ecosystem distributes primarily as a
+chart (`ingress-nginx`, and later likely `cert-manager`,
+`prometheus`/`grafana`) — not for `interview-insights`' own `api`/`web`/
+`postgres`/`opensearch` manifests, which stay exactly as Kustomize-managed
+as they were after issue #29.
+**Why:** the Helm-trigger note already in `docs/ROADMAP.md` Phase 7 is
+correct and still holds for our *own* manifests — 2 app services and 2
+stateful deps aren't "genuinely repetitive" and issue #29's Kustomize
+overlays already solve the per-environment duplication problem Helm
+would otherwise address. But that reasoning was never about third-party
+components at all — those are versioned, packaged, and upgraded by their
+own maintainers specifically as Helm charts, and `helm upgrade`/
+`helm rollback` are the tools built for tracking someone else's release
+cadence safely. Migrating `ingress-nginx` proved the two tools coexist
+cleanly in the same cluster without conflict: Kustomize's `dev` overlay
+re-applies cleanly after the Helm-managed controller replaced the manual
+one, and the full app is reachable through it with zero regression
+(verified via the same Playwright golden-path check used throughout this
+project).
+**Revisit when:** our own manifests actually become repetitive enough to
+retrigger the original Helm note (unlikely soon) — that would be a
+separate decision from this one, not an extension of it.
+
+### D20 — LocalStack practice is local-only and does not change D11
+**Decision:** LocalStack is used locally (free/Hobby tier) to validate
+IAM policy JSON and to build a `SecretsProvider` integration path in
+`api` that can fetch secrets from a Secrets Manager-shaped API — neither
+is wired into any actually-deployed path (`docker-compose`'s full
+profile and the k8s manifests keep reading secrets from plain env vars/
+a k8s `Secret`, unchanged). Confirmed directly from LocalStack's own docs
+before starting: EKS cluster emulation requires the Ultimate plan
+($89/month) — "Free/Base/Pro tiers are not supported" — so `kind` remains
+the compute layer regardless; only the lighter AWS services (IAM,
+Secrets Manager, S3, etc.) are actually free to use this way.
+**Why:** this lets Phase 8b (secrets)/8d (IAM) integration code get
+written and tested for $0 and with zero real-account risk, without
+either sub-area's trigger actually firing — the same "zero-maintenance
+dry run" carve-out already noted on 8d's own bullet in
+`docs/ROADMAP.md`, just extended to Secrets Manager too. **D11 (AWS as
+target cloud) is unchanged** — this work doesn't require picking AWS
+over OCI or vice versa, since nothing here touches a real account of
+either; that decision is still deferred to the day a real, live,
+internet-reachable deployment is actually wanted.
+**Revisit when:** a real Phase 8b or 8d trigger fires — at that point,
+the actual cloud provider decision (real AWS EKS cost vs. OCI/OKE
+free-forever) has to be made for real, and this LocalStack-tested
+integration code is what gets wired into the real deployed path.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
