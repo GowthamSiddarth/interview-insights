@@ -49,10 +49,13 @@ export default function CompanyAnalyticsPage({
     <main className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
       <header>
         <h1 className="text-2xl font-semibold">Company Analytics</h1>
+        {/* Scores are shrinkage-adjusted toward the platform-wide average
+            (docs/DECISIONS.md D4) rather than shown as a raw average. */}
         <p className="text-sm text-gray-500">
-          All scores are shrinkage-adjusted toward the platform-wide average — see
-          docs/DECISIONS.md D4. Every score shows its sample size alongside it, even when
-          there isn&apos;t enough data to display a number yet.
+          Scores are weighted toward the platform average when a company has few
+          reviews, so a couple of ratings can&apos;t swing the number too far. Every
+          score shows how many reviews it&apos;s based on, even when there isn&apos;t
+          enough data to display one yet.
         </p>
       </header>
 
