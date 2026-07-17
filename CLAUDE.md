@@ -114,12 +114,11 @@ single most useful thing to keep current.*
 
 As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
-discovery), Phase 7 (Kubernetes), and Phase 10 (Cloud-Readiness Practice,
-local/free) are all done. Phase 6 is done except issue #18 (blocked).
-Phases 1-7 and 10 each have a complete engineering blog under
-`wiki/blog/`. Phase 8 is a trigger-gated backlog, not started. Phase 9
-(UX/UI Polish Pass) is in progress — issue #57 is done, #58-#61 and its
-own engineering-blog issue (#68) are still open.
+discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass), and
+Phase 10 (Cloud-Readiness Practice, local/free) are all done. Phase 6 is
+done except issue #18 (blocked). Phases 1-7, 9, and 10 each have a
+complete engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
+backlog, not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -527,8 +526,26 @@ issue's acceptance criteria directly.
 closed via merged PRs (Helm remains explicitly out of scope per
 `docs/ARCHITECTURE.md`, until manifests are "genuinely repetitive," not
 the case with 2-3 services). `wiki/blog/phase-7-kubernetes/` now has a
-post for all three issues — Phase 7's blog is complete, and every phase's
-blog is complete.
+post for all three issues — Phase 7's blog is complete.
+
+**Phase 10 (Cloud-Readiness Practice, local/free)** — both issues (#65,
+#66) closed via merged PRs: Helm-installed `ingress-nginx` on the local
+`kind` cluster, plus LocalStack-backed IAM policy validation and Secrets
+Manager integration, all free/local practice for Phase 8's eventual real
+AWS work (see D19/D20 in `docs/DECISIONS.md`). `wiki/blog/
+phase-10-cloud-readiness-practice/` has a post for both issues — Phase
+10's blog is complete.
+
+**Phase 9 (UX/UI Polish Pass)** — all five issues (#57-#61) closed via
+merged PRs: dev-note/copy cleanup, persistent shared navigation, wizard
+company-change without a reload, a visual design pass (`PageContainer`/
+`Button` components, one indigo accent color), and a loading-vs-empty-
+states investigation that surfaced a real React 19 finding (D21:
+`<form action={fn}>` defers pre-await `setState` calls until an `await`
+resolves; use plain `onSubmit` when an in-flight indicator must render
+before any async work starts). `wiki/blog/phase-9-ux-ui-polish/` has a
+post for all five issues — Phase 9's blog is complete, and every phase
+built so far now has a complete engineering blog.
 - Next step: no explicit next phase requested yet. Phase 8 (production
   hardening menu) is the next unstarted roadmap item, but every one of
   its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for

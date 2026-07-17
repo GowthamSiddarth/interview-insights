@@ -294,9 +294,8 @@ planning sequence, same as they always have.
       stale previous results lingered with no sign a new one was
       running). The analytics dashboard already had a correct, distinct
       "Loading…" state — no fix needed there
-- [ ] Engineering blog (GitHub issue #68) — `wiki/blog/
-      phase-9-ux-ui-polish/`, done last once every other Phase 9 issue
-      is merged
+- [x] Engineering blog (GitHub issue #68) — `wiki/blog/
+      phase-9-ux-ui-polish/`; Phase 9 is now fully done
 
 ## Phase 10 — Cloud-Readiness Practice (Local, Free)
 Local, zero-cost practice for cloud-shaped tooling ahead of any real
