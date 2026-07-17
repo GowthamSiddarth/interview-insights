@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { FormEvent, useState } from 'react';
 import {
   api,
   ApiError,
@@ -27,23 +27,44 @@ export default function SearchPage() {
   const [companyQuery, setCompanyQuery] = useState('');
   // null = haven't searched yet; [] = searched, zero matches.
   const [companyResults, setCompanyResults] = useState<CompanySearchResult[] | null>(null);
+  // A request in flight is a third state, distinct from both of the above
+  // — GitHub issue #61 found that without it, a first search showed
+  // nothing (identical to "haven't searched yet"), and a repeat search
+  // silently kept showing the previous, now-stale results with no
+  // indication a new one was running. Confirmed live against a
+  // deliberately delayed response, not just theorized from the code.
+  const [companySearching, setCompanySearching] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<CompanySearchResult | null>(null);
   const [reviewResults, setReviewResults] = useState<ReviewSearchResult[] | null>(null);
+  const [reviewSearching, setReviewSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleCompanySearch(formData: FormData) {
+  // Plain onSubmit handlers, not <form action={fn}> — React 19 batches a
+  // form action's own synchronous-before-the-first-await state updates
+  // into the action's transition and doesn't flush them until an await
+  // resolves, so a `setSearching(true)` called before `await api...(...)`
+  // never rendered (confirmed live: GitHub issue #61). A normal event
+  // handler's setState calls flush immediately, same as any other click.
+  async function handleCompanySearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
     setError(null);
     const q = String(formData.get('q'));
     setCompanyQuery(q);
+    setCompanySearching(true);
     try {
       setCompanyResults(await api.searchCompanies(q));
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setCompanySearching(false);
     }
   }
 
-  async function handleReviewSearch(formData: FormData) {
+  async function handleReviewSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!selectedCompany) return;
+    const formData = new FormData(event.currentTarget);
     setError(null);
     const roleTitle = String(formData.get('roleTitle') || '') || undefined;
     const roundType = (String(formData.get('roundType') || '') || undefined) as
@@ -51,6 +72,7 @@ export default function SearchPage() {
       | undefined;
     const dateFrom = String(formData.get('dateFrom') || '') || undefined;
     const dateTo = String(formData.get('dateTo') || '') || undefined;
+    setReviewSearching(true);
     try {
       setReviewResults(
         await api.searchReviews({
@@ -63,6 +85,8 @@ export default function SearchPage() {
       );
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setReviewSearching(false);
     }
   }
 
@@ -83,7 +107,7 @@ export default function SearchPage() {
 
       <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
         <h2 className="font-medium">1. Find a company</h2>
-        <form action={handleCompanySearch} className="flex gap-2">
+        <form onSubmit={handleCompanySearch} className="flex gap-2">
           <input
             name="q"
             required
@@ -93,7 +117,10 @@ export default function SearchPage() {
           <Button type="submit">Search</Button>
         </form>
 
-        {companyResults !== null &&
+        {companySearching ? (
+          <p className="text-sm text-gray-500">Searching…</p>
+        ) : (
+          companyResults !== null &&
           (companyResults.length === 0 ? (
             <EmptyState message={`No companies match "${companyQuery}".`} />
           ) : (
@@ -117,13 +144,14 @@ export default function SearchPage() {
                 </li>
               ))}
             </ul>
-          ))}
+          )))
+        }
       </section>
 
       {selectedCompany && (
         <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
           <h2 className="font-medium">2. Browse reviews for {selectedCompany.name}</h2>
-          <form action={handleReviewSearch} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <form onSubmit={handleReviewSearch} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <label className="flex flex-col text-sm">
               Role title
               <input name="roleTitle" className="rounded border px-2 py-1 dark:bg-gray-900" />
@@ -155,7 +183,10 @@ export default function SearchPage() {
             </Button>
           </form>
 
-          {reviewResults !== null &&
+          {reviewSearching ? (
+            <p className="text-sm text-gray-500">Searching…</p>
+          ) : (
+            reviewResults !== null &&
             (reviewResults.length === 0 ? (
               <EmptyState message="No reviews match these filters." />
             ) : (
@@ -177,7 +208,8 @@ export default function SearchPage() {
                   </li>
                 ))}
               </ul>
-            ))}
+            )))
+          }
         </section>
       )}
     </PageContainer>
