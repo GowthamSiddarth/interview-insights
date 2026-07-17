@@ -108,9 +108,6 @@ export default function HomePage() {
           Rate your interview experience, round by round, and see how a
           company&apos;s process compares.
         </p>
-        <Link href="/search" className="text-sm underline">
-          Search companies &amp; reviews
-        </Link>
       </header>
 
       <ErrorBanner message={error} />

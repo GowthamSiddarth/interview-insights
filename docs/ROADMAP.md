@@ -275,10 +275,10 @@ planning sequence, same as they always have.
       (GitHub issue #57) — includes a factually stale claim ("expected to
       be empty until Phase 3's moderation worker exists"), not just
       unpolished text
-- [ ] Add persistent shared navigation across all pages (GitHub issue
-      #58) — `web/src/app/layout.tsx` currently renders nothing but
-      `{children}`; no way back from `/search` or the analytics dashboard
-      to the homepage
+- [x] Add persistent shared navigation across all pages (GitHub issue
+      #58) — `web/src/components/NavBar.tsx`, rendered once from
+      `web/src/app/layout.tsx`; every page keeps its own title/
+      description, only the home/search links moved into the shared nav
 - [ ] Wizard: allow changing the selected company without a page reload
       (GitHub issue #59)
 - [ ] Visual design pass: layout width and basic branding consistency
