@@ -132,6 +132,23 @@ so `api`/CI can point at `http://localhost:4566` instead of real AWS during
 local development — called out again where it's most relevant, but it's
 useful across most of this phase.
 
+**How this phase gets planned — deliberately different from every phase
+before it.** CLAUDE.md's "plan a phase before implementing any of it"
+convention means *file all the issues for a phase before implementing
+any of them* — that's correct for Phases 1-7, where the whole phase's
+scope is already known and worth doing. It does **not** mean file issues
+for all 7 sub-areas below right now: none of their triggers have fired
+(checked directly against this project's actual state as of Phase 7 —
+still solo, still local-only `kind`, no AWS resources, no real traffic,
+no cache reads/writes, no Kafka consumer anywhere). Filing implementation
+issues for infrastructure with nowhere to run and nothing driving it
+would be exactly the premature-infrastructure mistake D9 warns against,
+just moved from code into the issue tracker instead. Instead: each
+sub-area (8a-8g) is planned — issues filed under its own milestone, per
+the normal convention — only once *that sub-area's own trigger* actually
+fires. Until then, this document *is* the plan; there is nothing further
+to plan today.
+
 ### 8a. CI/CD maturity
 *Trigger: more than one contributor, or any deploy target beyond your own
 machine.*
@@ -221,9 +238,13 @@ and one local Postgres doesn't need distributed tracing.*
   locally before this touches cloud billing at all
 
 ### 8g. Distributed systems hardening (Kafka/Redpanda consumers)
-*Trigger: Phase 3's moderation worker and Phase 4's aggregation worker are
-the first real consumers — this isn't new scope, just what "production
-grade" means once they exist.*
+*Trigger: the first real Kafka/Redpanda consumer existing at all — none
+does yet. This section originally assumed Phase 3's moderation queue and
+Phase 4's aggregation views would become event-driven workers; neither
+did (moderation stayed in-process, D12; views refresh on-read, D15), so
+that framing was stale. This isn't new scope, just what "production
+grade" means once *some* consumer exists — not gated on those two
+specific features anymore.*
 - Consumer groups so multiple worker replicas don't double-process the same
   event
 - Idempotent consumers — a redelivered message must not double-count a
