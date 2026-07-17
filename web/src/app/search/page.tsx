@@ -9,6 +9,8 @@ import {
   Round,
 } from '@/lib/api';
 import { EmptyState } from '@/components/EmptyState';
+import { Button } from '@/components/Button';
+import { PageContainer } from '@/components/PageContainer';
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
@@ -65,7 +67,7 @@ export default function SearchPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
+    <PageContainer>
       <header>
         <h1 className="text-2xl font-semibold">Search</h1>
         <p className="text-sm text-gray-500">
@@ -88,12 +90,7 @@ export default function SearchPage() {
             placeholder="Company name"
             className="flex-1 rounded border px-2 py-1 text-sm dark:bg-gray-900"
           />
-          <button
-            type="submit"
-            className="rounded bg-black px-3 py-1 text-sm text-white dark:bg-white dark:text-black"
-          >
-            Search
-          </button>
+          <Button type="submit">Search</Button>
         </form>
 
         {companyResults !== null &&
@@ -110,7 +107,7 @@ export default function SearchPage() {
                     }}
                     className={`w-full rounded border px-3 py-1 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
                       selectedCompany?.id === company.id
-                        ? 'border-black dark:border-white'
+                        ? 'border-indigo-600 dark:border-indigo-400'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}
                   >
@@ -153,12 +150,9 @@ export default function SearchPage() {
               To
               <input type="date" name="dateTo" className="rounded border px-2 py-1 dark:bg-gray-900" />
             </label>
-            <button
-              type="submit"
-              className="col-span-full rounded bg-black px-3 py-1 text-sm text-white dark:bg-white dark:text-black"
-            >
+            <Button type="submit" className="col-span-full">
               Search reviews
-            </button>
+            </Button>
           </form>
 
           {reviewResults !== null &&
@@ -186,6 +180,6 @@ export default function SearchPage() {
             ))}
         </section>
       )}
-    </main>
+    </PageContainer>
   );
 }
