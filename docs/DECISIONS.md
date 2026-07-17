@@ -256,6 +256,37 @@ events, or indexing latency becomes observable enough to matter.
 
 ---
 
+### D18 — Scripted `gh`/git commands with backtick-containing bodies use `--body-file`, never a heredoc nested inside `$(...)`
+**Decision:** Any script that generates a multi-line `gh issue create` /
+`gh pr create` (or similar) body containing backticks writes that body to
+its own file first and passes it via `--body-file <path>` — never via
+`--body "$(cat <<'EOF' ... EOF)"`.
+**Why:** Hit a real, silent bug scripting the creation of one tracking
+issue per phase (linking each phase's `wiki/blog/` post to its feature
+branches). macOS's default bash (3.2.57) mis-parses backticks inside a
+heredoc that's itself nested inside `$(...)` command substitution — even
+with the heredoc delimiter quoted (`<<'EOF'`), which is supposed to
+suppress *all* expansion inside the heredoc body, backtick pairs included.
+In practice, some backtick-quoted substrings (e.g. `` `blog-phase-1-foundation` ``)
+were interpreted as command substitutions, executed as literal shell
+commands (failing with "command not found"), and silently stripped from
+the resulting issue body — corrupting the output without the script
+itself stopping, since the failures happened inside a subshell and
+`set -e` doesn't propagate an error from within a command substitution
+the way it does from a top-level command. This created two visibly
+garbled issues (duplicate "Phase 1" tracking issues, both missing chunks
+of their intended body) before being caught from the stray `command not
+found` output and deleted. Writing the body to a real file and passing
+`--body-file` sidesteps the whole nested-heredoc-in-command-substitution
+interaction — there's no quoting ambiguity left to get wrong.
+**Revisit when:** never — this is a permanent scripting habit, not a
+temporary workaround for one bash version. A newer bash (e.g. via
+Homebrew) might not reproduce this specific parsing bug, but
+`--body-file` is strictly safer regardless and costs nothing extra, so
+there's no reason to special-case it by shell version.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
