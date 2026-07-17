@@ -312,3 +312,34 @@ Cloud-Readiness Practice (Local, Free)".
       `kind` stays the compute layer regardless, see D20
 - [x] Engineering blog (GitHub issue #69) — `wiki/blog/
       phase-10-cloud-readiness-practice/`; Phase 10 is now fully done
+
+## Phase 11 — Integrated Prototype: LocalStack Secrets & IAM in `kind`
+
+Filed after auditing the state of everything built so far (user's request,
+2026-07-17): Phase 10's LocalStack work was explicitly practice-only (D20 —
+"neither is wired into any actually-deployed path"), and Phase 7's Helm-
+installed `ingress-nginx` has never run anywhere near LocalStack. Before
+any real Phase 8 planning, this phase actually wires the two together —
+the api pod in the `kind` cluster fetches its real secrets from LocalStack
+Secrets Manager via an assumed IAM role, instead of a plaintext k8s
+`Secret` — so there's one running environment where Helm, Kustomize,
+Postgres, OpenSearch, search, moderation, analytics, and now
+secrets/IAM all genuinely communicate together, not just each verified in
+isolation. This is deliberately still local/free (no real AWS account,
+doesn't retrigger D11) — see the new decision this phase adds in
+`docs/DECISIONS.md`. Milestone: "Phase 11 — Integrated Prototype:
+LocalStack Secrets & IAM in kind".
+
+- [ ] Deploy LocalStack (IAM + Secrets Manager only) into the `kind`
+      cluster and seed the API's two secrets plus the existing
+      `infra/aws/api-secrets-access-policy.json` IAM role — opt-in
+      manifests, not part of the default `dev` overlay's baseline deploy
+- [ ] Wire `api`'s boot path to assume that IAM role via STS and fetch
+      `DATABASE_URL`/`EMAIL_HASH_SECRET` from Secrets Manager before
+      `NestFactory.create` runs — opt-in via config, plain-env-var default
+      unchanged for `docker-compose`/fast local dev
+- [ ] End-to-end verification: redeploy the full `kind` cluster with the
+      LocalStack-backed secrets path live, confirm the api pod boots
+      without the plaintext `Secret`, and re-run the full Playwright
+      golden path through the Helm-ingress-fronted `web` app
+- [ ] Engineering blog (last, once the above three are merged)
