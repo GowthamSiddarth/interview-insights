@@ -1,0 +1,19 @@
+name: Self-hosted runner smoke test
+
+# Manual only, never fires on its own (GitHub issue #88, Phase 12) — this
+# exists purely to check "is the on-demand self-hosted runner alive and
+# correctly configured" independent of the real CD workflow (#89). The
+# runner is deliberately on-demand, not a persistent service: start it
+# with `./run.sh` (or `./run.sh --once` to process a single job and
+# exit) right before dispatching this, per wiki/deployment-guide.md.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  smoke-test:
+    runs-on: self-hosted
+    steps:
+      - run: echo "self-hosted runner is alive"
+      - run: uname -a
+      - run: docker info --format '{{.ServerVersion}}'
+      - run: kubectl config current-context
