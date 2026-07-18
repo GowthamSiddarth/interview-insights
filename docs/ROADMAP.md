@@ -11,21 +11,36 @@ once the rest are merged. See `wiki/blog/README.md` for the resulting
 posts, organized by phase.
 
 ## Phase 1 — Foundation
+
+*Predates the issue/milestone convention introduced in Phase 3 — every
+item below was retroactively given its own closed GitHub issue purely
+for citation consistency (same precedent as the blog issue below), not
+because it was planned that way at the time.*
+
 - [x] Repo scaffold matching the layout in `docs/ARCHITECTURE.md`
+      (GitHub issue #111)
 - [x] Prisma schema + first migration implementing `docs/DATA_MODEL.md`,
-      in the order listed under "Migration ordering"
-- [x] Local Docker Compose (Postgres, Redis, Redpanda)
-- [x] Engineering blog (`wiki/blog/phase-1-foundation/`, PR #33) — written
-      after the fact, since this phase predates the blog-issue convention
+      in the order listed under "Migration ordering" (GitHub issue #112)
+- [x] Local Docker Compose (Postgres, Redis, Redpanda) (GitHub issue #113)
+- [x] Engineering blog (`wiki/blog/phase-1-foundation/`, PR #33, GitHub
+      issue #47) — written after the fact, since this phase predates the
+      blog-issue convention
 
 ## Phase 2 — Thin vertical slice
+
+*Also predates the issue/milestone convention — same retroactive-issue
+note as Phase 1 above.*
+
 - [x] Create + Read for Company → InterviewProcess → Round → RoundRating, API
-      only (Update/Delete intentionally deferred — see CLAUDE.md current status)
+      only (Update/Delete intentionally deferred — see CLAUDE.md current
+      status) (GitHub issue #114)
 - [x] Minimal frontend flow to create/view one full slice end to end
-- [x] Unit tests for validation logic
-- [x] Integration tests against a real test Postgres (Dockerized)
-- [x] Engineering blog (`wiki/blog/phase-2-vertical-slice/`, PR #34) —
-      written after the fact, same reason as Phase 1
+      (GitHub issue #115)
+- [x] Unit tests for validation logic (GitHub issue #116)
+- [x] Integration tests against a real test Postgres (Dockerized) (GitHub
+      issue #117)
+- [x] Engineering blog (`wiki/blog/phase-2-vertical-slice/`, PR #34,
+      GitHub issue #48) — written after the fact, same reason as Phase 1
 
 ## Phase 3 — Trust & moderation
 - [x] Moderation queue (GitHub issue #1) — runs in-process within `api` for
@@ -40,7 +55,8 @@ posts, organized by phase.
       expiring email-verification token flips `unverified` →
       `email_verified`; no actual email is sent yet (the token is returned
       directly), see D14 in `docs/DECISIONS.md`
-- [x] Engineering blog (`wiki/blog/phase-3-trust-moderation/`, PR #35)
+- [x] Engineering blog (`wiki/blog/phase-3-trust-moderation/`, PR #35,
+      GitHub issue #49)
 
 ## Phase 4 — Analytics
 - [x] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
@@ -57,7 +73,8 @@ posts, organized by phase.
 - [x] Dashboard UI (company / round-type / recruiter views) (GitHub
       issue #10) — `web/src/app/companies/[companyId]/analytics/page.tsx`,
       reachable from the Phase 2 wizard once a company is selected
-- [x] Engineering blog (`wiki/blog/phase-4-analytics/`, PR #36)
+- [x] Engineering blog (`wiki/blog/phase-4-analytics/`, PR #36, GitHub
+      issue #50)
 
 ## Phase 5 — Search & discovery
 - [x] OpenSearch indexing for company search (GitHub issue #21) —
@@ -73,12 +90,15 @@ posts, organized by phase.
       `/search/reviews` (role title, round type, date range); explicit empty
       states for zero-match searches on both steps (`EmptyState` component),
       never a silently blank list
-- [x] Engineering blog (`wiki/blog/phase-5-search-discovery/`, PR #37)
+- [x] Engineering blog (`wiki/blog/phase-5-search-discovery/`, PR #37,
+      GitHub issue #51)
 
 ## Phase 6 — CI/CD & containerization
 - [x] GitHub Actions: lint, type-check, test, build on PR (built during
       Phase 1 scaffolding, ahead of sequence — `.github/workflows/ci.yml`)
-- [x] Dockerfile per service (api, web, workers) (ditto)
+      (GitHub issue #118, retroactive — see Phase 1's note)
+- [x] Dockerfile per service (api, web, workers) (ditto) (GitHub issue
+      #119, retroactive — see Phase 1's note)
 - [x] Full-stack Docker Compose profile (GitHub issue #17) — fixed a latent
       `api/Dockerfile` bug (runtime stage relied on npx auto-installing the
       `prisma` CLI over the network) by copying the built `node_modules`
@@ -90,8 +110,9 @@ posts, organized by phase.
       **blocked**: both classic branch protection and repository rulesets
       require GitHub Pro (or a public repo) for private repos on the free
       plan; revisit if/when either changes
-- [x] Engineering blog (`wiki/blog/phase-6-cicd-containerization/`, PR #38)
-      — covers both #17 and #18 (a blocked issue still gets documented)
+- [x] Engineering blog (`wiki/blog/phase-6-cicd-containerization/`, PR #38,
+      GitHub issue #52) — covers both #17 and #18 (a blocked issue still
+      gets documented)
 
 ## Phase 7 — Kubernetes
 - [x] Base manifests for Postgres + OpenSearch (GitHub issue #27) —
@@ -106,8 +127,9 @@ posts, organized by phase.
       only (separate namespace, 2 replicas for `api`/`web`, real resource
       values, per-environment Ingress hosts + `CORS_ORIGIN`, distinct
       image tags) until a real shared cluster exists (Phase 8 triggers)
-- [x] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PRs #39 and #44)
-      — one post per issue (#27-#29); Phase 7's blog is complete
+- [x] Engineering blog (`wiki/blog/phase-7-kubernetes/`, PRs #39 and #44,
+      GitHub issue #53) — one post per issue (#27-#29); Phase 7's blog
+      is complete
 
 Moving to Helm is not a to-do here — it's a standing guideline, same
 framing as Phase 8's trigger-gated items below. *Trigger: the
@@ -389,9 +411,9 @@ semantics with deliberate, session-scoped execution. Milestone: "Phase
 - [x] Wire `infra/k8s/overlays/dev-localstack` into `cd.yml` as the
       default deploy target, so local secrets/IAM (Phase 11) actually
       back every redeploy instead of staying an occasional manual
-      opt-in — not part of the original phase-12 planning batch, filed
-      mid-phase (GitHub issue #99) after the user asked for exactly this
-      (`docs/DECISIONS.md` D23, reversing D22's "CD stays on plain
+      opt-in (GitHub issue #99) — not part of the original phase-12
+      planning batch, filed mid-phase after the user asked for exactly
+      this (`docs/DECISIONS.md` D23, reversing D22's "CD stays on plain
       `dev`" default) — verified with a real merge: the queued job
       provisioned `localstack-credentials` from a new
       `LOCALSTACK_AUTH_TOKEN` repo secret, seeded LocalStack fresh, and a
