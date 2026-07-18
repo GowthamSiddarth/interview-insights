@@ -632,10 +632,20 @@ four feature issues (#88, #89, #90, #99 — #99 wasn't part of the
 original planning batch but got a post alongside the three that were).
 **Phase 12 is now fully done** — issues #88-#91 all closed via merged
 PRs, and every phase built so far now has a complete engineering blog.
-- Next step: no explicit next phase requested yet. Phase 8 (production
-  hardening menu) is the next unstarted roadmap item, but every one of
-  its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
-  a real trigger or explicit direction before planning any of it.
+
+**Phase 13 planning (Local Infra Hardening & Reproducibility)** — filed
+after the user asked, having just finished Phase 12, what other
+infra-side possibilities existed before resuming app-feature work. An
+audit (distinct from Phase 8, which stays trigger-gated and untouched)
+found three real, local-only gaps: CI never validates `infra/k8s/**` or
+either Dockerfile (a broken manifest merges green, only fails later
+against the real cluster); the `kind` cluster has run continuously since
+Phase 7 with nobody proving it still bootstraps cleanly from empty; and
+rebuilding it today means manually replaying several
+`wiki/deployment-guide.md` sections by hand. Milestone "Phase 13 — Local
+Infra Hardening & Reproducibility", issues #106-#109 filed together.
+- Next step: Phase 13 issue #106 (CI validation for infra manifests and
+  Dockerfiles) is up first.
 
 ## Open decisions still to make
 

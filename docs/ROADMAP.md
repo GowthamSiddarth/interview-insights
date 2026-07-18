@@ -404,3 +404,35 @@ semantics with deliberate, session-scoped execution. Milestone: "Phase
       real cluster (GitHub issue #90)
 - [x] Engineering blog (last, once the above four are merged) (GitHub
       issue #91)
+
+## Phase 13 — Local Infra Hardening & Reproducibility
+
+Filed after the user asked, having just finished Phase 12, what other
+infra-side possibilities existed before resuming app-feature work —
+distinct from Phase 8, which is real production hardening gated on
+triggers that haven't fired (a real AWS account, real traffic, more than
+one contributor). This phase is scoped to making the *existing* local
+setup provably solid, not building anything new toward production:
+CI currently never validates `infra/k8s/**` or either Dockerfile (a
+broken manifest merges green and only fails later, against the real
+cluster); the `kind` cluster has been running continuously since Phase 7
+with nobody proving it still bootstraps cleanly from empty; and
+rebuilding it today means manually replaying several sections of
+`wiki/deployment-guide.md` by hand. Milestone: "Phase 13 — Local Infra
+Hardening & Reproducibility".
+
+- [ ] CI job validating `infra/k8s/**` (`kubectl kustomize` against all
+      four overlays) and both Dockerfiles (`docker build`, no push/run)
+      — catches infra regressions at PR time instead of at real-CD time
+      (GitHub issue #106)
+- [ ] `infra/scripts/bootstrap-kind.sh` — one-shot, idempotent script
+      covering `wiki/deployment-guide.md` section 3 end to end (cluster
+      create, Helm installs, image build/load, overlay apply, LocalStack
+      seed) (GitHub issue #107)
+- [ ] Adversarial verification: tear down the real `kind` cluster and
+      rebuild it from scratch using the new bootstrap script, proving
+      every pod reaches `Ready`, PVCs bind cleanly, the full golden path
+      works, and `api` genuinely reads secrets from LocalStack — not
+      just that the script exits 0 (GitHub issue #108)
+- [ ] Engineering blog (last, once the above three are merged) (GitHub
+      issue #109)
