@@ -18,6 +18,13 @@ RUN npm run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# Bakes the deployed commit into the image (GitHub issue #89) — surfaced
+# via GET /health's `version` field, so a deploy can be confirmed by the
+# exact commit running, not just "the rollout reported success". Defaults
+# to "unknown" for anyone building without --build-arg GIT_SHA (native
+# dev, docker-compose) — deliberately not a required arg.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
