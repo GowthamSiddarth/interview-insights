@@ -450,6 +450,42 @@ Manager/IAM instead of LocalStack, per D20's original framing.
 
 ---
 
+### D23 — CD's default deploy target flips to `dev-localstack`; still not a Phase 8 substitute
+**Decision:** GitHub issue #99 (Phase 12) changes `.github/workflows/
+cd.yml` to apply `infra/k8s/overlays/dev-localstack` on every push to
+`main`, not the plain `dev` overlay D22 described as CD's target.
+Concretely reverses D22's "opt-in... `docker-compose` and the plain
+`dev` overlay are unchanged" framing: every automatic local redeploy now
+provisions the `localstack-credentials` Secret (from a new
+`LOCALSTACK_AUTH_TOKEN` GitHub Actions repo secret), applies the
+LocalStack-including overlay, waits for it to be ready, and reseeds its
+secrets/IAM role via `infra/aws/seed-localstack.sh` — all before `api`'s
+rollout, so it always boots reading `DATABASE_URL`/`EMAIL_HASH_SECRET`
+from LocalStack rather than the plaintext k8s `Secret`.
+**Why:** the user explicitly wants secrets/IAM actually exercised on
+every local deploy, not proven-once-then-left-opt-in. D22 already
+established the wiring works; leaving it opt-in meant it would only get
+exercised on the rare occasion someone remembered to apply
+`dev-localstack` by hand — closer to "built and forgotten" than
+"actually used." Making it the default costs one extra ~15s round trip
+per deploy (LocalStack readiness wait + reseed) for a local, free
+cluster where that's a non-issue.
+**Not a Phase 8 trigger:** this is still solo local dev against `kind`
+— no real AWS account, no shared/staging environment, no real candidate
+data. D20/D22's boundary is unchanged: LocalStack's free tier still
+doesn't evaluate IAM policies for real and still doesn't emulate EKS.
+**Ordering note:** the auth-token Secret must be provisioned *before*
+the overlay creates the LocalStack Deployment — its `secretKeyRef` env
+var doesn't hot-reload, so a Secret created after pod creation needs a
+manual pod restart to take effect. CD provisions the Secret first for
+exactly this reason (see `cd.yml`'s own step comment).
+**Revisit when:** same as D22 — a real Phase 8b/8d trigger against a
+real AWS account, at which point this same sequencing (provision
+credentials → deploy → wait → seed/verify → roll out `api`) points at
+real AWS Secrets Manager/IAM instead of LocalStack.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

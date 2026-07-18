@@ -1,10 +1,15 @@
-# Opt-in variant of `dev` (GitHub issue #78, Phase 11) — composes the
-# existing `dev` overlay with one extra resource (LocalStack) that isn't
-# in base/kustomization.yaml's resources list, so plain `dev` stays
-# unaffected. Apply with:
-#   kubectl apply -k infra/k8s/overlays/dev-localstack
-# after creating the localstack-credentials Secret (see
-# infra/k8s/base/08-localstack.yaml's comment).
+# Variant of `dev` (GitHub issue #78, Phase 11) — composes the existing
+# `dev` overlay with one extra resource (LocalStack) that isn't in
+# base/kustomization.yaml's resources list, so plain `dev` stays
+# unaffected if ever applied directly. This is now .github/workflows/
+# cd.yml's actual deploy target (GitHub issue #99, docs/DECISIONS.md D23)
+# — every automatic redeploy backs api's secrets with LocalStack, not
+# just an occasional manual walkthrough. Still opt-in relative to `dev`
+# itself (someone could `kubectl apply -k infra/k8s/overlays/dev` and get
+# the plaintext-Secret behavior back), and still requires the
+# localstack-credentials Secret to exist first — CD provisions it from
+# the LOCALSTACK_AUTH_TOKEN repo secret; a manual apply needs the
+# out-of-band step in wiki/deployment-guide.md section 5 instead.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
