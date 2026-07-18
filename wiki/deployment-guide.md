@@ -304,7 +304,66 @@ gh run watch --exit-status $(gh run list --workflow=self-hosted-smoke-test.yml -
 is running — expected between sessions; that's the intended state for
 an on-demand runner, not a problem to fix.
 
-## 8. Tearing down
+## 8. CD workflow: from merge to redeploy (Phase 12)
+
+What actually happens between a PR landing on `main` and the `kind`
+cluster running the new code, step by step:
+
+1. **A PR is merged to `main`** (`gh pr merge --squash`, or the GitHub
+   UI) — a normal push to `main`.
+2. **GitHub evaluates `.github/workflows/cd.yml`'s trigger.** It's a real
+   `push: branches: [main]` trigger (not `workflow_dispatch` — a
+   deliberate choice, see the workflow's own header comment), scoped
+   with a `paths` filter to `api/**`, `web/**`, `infra/k8s/**`. A merge
+   that only touches docs/wiki/blog content doesn't queue a job at all.
+3. **The job queues, it doesn't run yet.** `runs-on: self-hosted` with
+   no runner currently listening means the job sits `Queued` on GitHub's
+   side — nothing executes on this machine until the runner is started
+   (section 7).
+4. **Concurrency control:** the job runs under `concurrency: group: cd,
+   cancel-in-progress: true`. A second qualifying push to `main` while
+   an earlier CD run is still queued or in progress cancels the earlier
+   one outright — only the latest `main` is ever worth deploying to a
+   single local cluster.
+5. **The runner is started on-demand** (section 7):
+   ```bash
+   cd ~/workspace/actions-runner-interview-insights && ./run.sh --once
+   ```
+   This is the deliberate manual gate from issue #88 — nothing
+   repo-triggered executes here until this command runs. `--once` picks
+   up exactly one queued job then exits on its own.
+6. **The runner executes the queued job's steps, in order:**
+   - `actions/checkout@v4` checks out the merged `main` commit.
+   - **Build `api` image** — `docker build -f api/Dockerfile`, tagged
+     `interview-insights-api:k8s`, with the short commit SHA baked in
+     via `--build-arg GIT_SHA` (surfaced later at `GET /health`).
+   - **Build `web` image** — `docker build -f web/Dockerfile`, tagged
+     `interview-insights-web:k8s`, with `NEXT_PUBLIC_API_URL` passed as
+     a build arg — it has to be set at build time, not runtime, per the
+     Next.js inlining bug fixed in Phase 7 issue #28.
+   - **Load images into kind** — `kind load docker-image ... --name
+     interview-insights` pushes both images straight into the cluster's
+     node containers, no registry involved.
+   - **Apply the dev overlay** — `kubectl apply -k
+     infra/k8s/overlays/dev` reconciles every manifest (namespace,
+     secrets, configmaps, both Deployments/Services, the Ingress, the
+     Postgres/OpenSearch StatefulSets) declaratively.
+   - **Roll out `api`** — `kubectl rollout restart deployment/api` (the
+     image tag string is unchanged even though its content is new, so a
+     restart is what actually forces new pods to pull the freshly-loaded
+     image) then `rollout status --timeout=90s` blocks until the new pod
+     is `Ready` and the old one is gone.
+   - **Roll out `web`** — same restart + status-wait for
+     `deployment/web`.
+7. **Job reports success**, `run.sh --once` exits on its own, and the
+   runner goes back to `offline` — expected steady state, not a problem
+   (section 7).
+8. The new code is live behind the existing Ingress hosts
+   (`app.interview-insights.local`, `api.interview-insights.local`) with
+   no further manual step. Confirm exactly which commit is live via
+   `curl http://api.interview-insights.local/health`'s `version` field.
+
+## 9. Tearing down
 
 ```bash
 # Docker Compose (sections 1-2)
