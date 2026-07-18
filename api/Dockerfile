@@ -21,9 +21,14 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+COPY scripts ./scripts
 COPY package.json ./
 EXPOSE 3001
-# Applies any pending migrations against DATABASE_URL before starting —
-# the prisma CLI is available here because node_modules was copied
-# wholesale above, not reinstalled with --omit=dev.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# scripts/entrypoint.js runs the LocalStack secrets bootstrap (if
+# SECRETS_SOURCE=localstack) exactly once, then applies pending
+# migrations and starts the app — both see the same resulting env
+# (GitHub issue #80; see that script's own comment for why the previous
+# `sh -c "npx prisma migrate deploy && node dist/main.js"` silently
+# didn't do this). The prisma CLI is available here because node_modules
+# was copied wholesale above, not reinstalled with --omit=dev.
+CMD ["node", "scripts/entrypoint.js"]

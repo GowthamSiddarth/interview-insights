@@ -402,6 +402,54 @@ an await resolves, or that don't need an in-flight indicator at all.
 
 ---
 
+### D22 — LocalStack secrets/IAM now back a real deployed path (locally); still not a Phase 8 substitute
+**Decision:** Phase 11 (issues #78-#80) wires D20's practice-only
+LocalStack integration into the local `kind` cluster for real: `api`'s
+pod assumes an IAM role via STS and fetches `DATABASE_URL`/
+`EMAIL_HASH_SECRET` from LocalStack Secrets Manager at boot, opt-in via
+`SECRETS_SOURCE=localstack` (only set by `infra/k8s/overlays/
+dev-localstack`'s patch — `docker-compose` and the plain `dev` overlay
+are unchanged). This is D20's own "Revisit when: a real Phase 8b or 8d
+trigger fires" — except the trigger here was the user explicitly asking
+for one running environment where every tool built so far (Helm,
+Kustomize, Postgres, OpenSearch, search, moderation, analytics, and now
+secrets/IAM) genuinely communicates together, not a real production
+need. Also fixed a real bug found by this phase's own adversarial
+verification (issue #80): the api container's `CMD` ran `npx prisma
+migrate deploy` as its own shell step *before* `node dist/main.js`,
+reading `DATABASE_URL` straight from the OS environment — invisible to
+`main.ts`'s in-process secrets bootstrap, since that mutation happens in
+a different, not-yet-started process. Migrations were silently still
+keyed off the plaintext k8s Secret the whole time; only the app's own
+runtime queries used the LocalStack-fetched value. Fixed with
+`api/scripts/entrypoint.js`, which runs the bootstrap exactly once and
+spawns both the migration and the app from the same (correctly mutated)
+`process.env`.
+**Why:** proving "wired" and "actually used, everywhere it matters" are
+different claims — issue #79's own verification (creating a candidate
+and comparing the stored `email_hash` against each possible secret)
+already proved the app's runtime path was correct, but didn't touch the
+migration step at all, so the gap survived one full issue undetected.
+Issue #80 closed it by being adversarial on purpose: corrupting the
+plaintext `api-secrets` k8s Secret with obviously-wrong values and
+confirming the pod still boots and behaves correctly without it — which
+only started passing once the entrypoint fix landed.
+**Known boundary, unchanged from D20:** LocalStack's free tier still
+doesn't evaluate IAM policies (confirmed again in `seed-localstack.sh`'s
+own verification step, which proves the AssumeRole → temporary-
+credentials → `GetSecretValue` chain works, not that the attached policy
+is what's gating it) and still doesn't emulate EKS. This stays a local,
+free prototype — it does not retrigger D11 (AWS provider choice) or
+start Phase 8 for real; that remains gated on an actual production
+trigger, per Phase 8's own intro in `docs/ROADMAP.md`.
+**Revisit when:** a real Phase 8b/8d trigger fires against a real AWS
+account — at that point the same `bootstrapSecretsFromLocalStack`/
+`entrypoint.js` shape (assume role, fetch secrets, mutate env before
+migrate + app both start) is what gets pointed at real AWS Secrets
+Manager/IAM instead of LocalStack, per D20's original framing.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

@@ -330,16 +330,21 @@ doesn't retrigger D11) — see the new decision this phase adds in
 `docs/DECISIONS.md`. Milestone: "Phase 11 — Integrated Prototype:
 LocalStack Secrets & IAM in kind".
 
-- [ ] Deploy LocalStack (IAM + Secrets Manager only) into the `kind`
+- [x] Deploy LocalStack (IAM + Secrets Manager only) into the `kind`
       cluster and seed the API's two secrets plus the existing
-      `infra/aws/api-secrets-access-policy.json` IAM role — opt-in
-      manifests, not part of the default `dev` overlay's baseline deploy
-- [ ] Wire `api`'s boot path to assume that IAM role via STS and fetch
+      `infra/aws/api-secrets-access-policy.json` IAM role (GitHub issue
+      #78) — opt-in manifests, not part of the default `dev` overlay's
+      baseline deploy
+- [x] Wire `api`'s boot path to assume that IAM role via STS and fetch
       `DATABASE_URL`/`EMAIL_HASH_SECRET` from Secrets Manager before
-      `NestFactory.create` runs — opt-in via config, plain-env-var default
-      unchanged for `docker-compose`/fast local dev
-- [ ] End-to-end verification: redeploy the full `kind` cluster with the
+      `NestFactory.create` runs (GitHub issue #79) — opt-in via config,
+      plain-env-var default unchanged for `docker-compose`/fast local dev
+- [x] End-to-end verification: redeploy the full `kind` cluster with the
       LocalStack-backed secrets path live, confirm the api pod boots
       without the plaintext `Secret`, and re-run the full Playwright
-      golden path through the Helm-ingress-fronted `web` app
+      golden path through the Helm-ingress-fronted `web` app (GitHub
+      issue #80) — the adversarial check (corrupting the plaintext
+      Secret) caught a real bug: the container's `CMD` ran migrations as
+      a separate shell step that never saw the bootstrapped secrets;
+      fixed with `api/scripts/entrypoint.js`, see D22
 - [ ] Engineering blog (last, once the above three are merged)
