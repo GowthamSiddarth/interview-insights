@@ -258,11 +258,21 @@ persistent service (`svc.sh install`), so nothing on this machine
 executes repo-triggered code unless a session explicitly turned the
 runner on.
 
+Installed as a sibling of the repo (`~/workspace/actions-runner-interview-insights`),
+never inside `interview-insights` itself: the runner's own `_work/`
+directory does its own `git checkout` of this repo per job, so nesting
+the runner inside the repo it serves would put a git checkout inside
+another git working tree. The install also carries credential files
+(`.credentials`, `.credentials_rsaparams`) — keeping them outside any
+tracked tree makes it structurally impossible for a stray `git add -A`
+to pick them up. Same reasoning GitHub's own runner docs give for always
+installing to a dedicated directory outside any repo checkout.
+
 **One-time registration** (re-run only if re-registering, e.g. after a
 token expires or on a new machine):
 
 ```bash
-mkdir -p ~/actions-runner-interview-insights && cd ~/actions-runner-interview-insights
+mkdir -p ~/workspace/actions-runner-interview-insights && cd ~/workspace/actions-runner-interview-insights
 RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
 curl -o runner.tar.gz -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
 tar xzf runner.tar.gz
@@ -278,7 +288,7 @@ is expected — `--once` processes a single queued job then exits on its
 own:
 
 ```bash
-cd ~/actions-runner-interview-insights
+cd ~/workspace/actions-runner-interview-insights
 ./run.sh --once
 ```
 
