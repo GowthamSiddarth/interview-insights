@@ -115,15 +115,11 @@ single most useful thing to keep current.*
 As of 2026-07-18: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
-Phase 10 (Cloud-Readiness Practice, local/free), and Phase 11
-(Integrated Prototype: LocalStack Secrets & IAM in kind) are all done.
-Phase 6 is done except issue #18 (blocked). Phase 12 (Local CD &
-Cluster Observability) is in progress: issues #88, #89, #99, and #90
-done (self-hosted runner, CD workflow, dev-localstack wired in as CD's
-default deploy target, k9s + metrics-server); only #91 (blog, last)
-remains open. Phases 1-7 and 9-11 each have a complete engineering blog
-under `wiki/blog/`; Phase 12's blog is pending its own issue (#91).
-Phase 8 is a trigger-gated backlog, not started.
+Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
+Prototype: LocalStack Secrets & IAM in kind), and Phase 12 (Local CD &
+Cluster Observability) are all done. Phase 6 is done except issue #18
+(blocked). Phases 1-7 and 9-12 each have a complete engineering blog
+under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -630,8 +626,16 @@ both return real CPU/memory numbers, and `k9s` itself confirms
 `wiki/deployment-guide.md` section 3.6. Explicitly not a full
 observability stack (Prometheus/Grafana/Loki/Jaeger stay gated on
 Phase 8f's own trigger) — scoped to lightweight local tooling only.
-- Next step: Phase 12 issue #91 (blog, last, once #88/#89/#99/#90 are
-  all merged) is the only remaining open item.
+
+`wiki/blog/phase-12-local-cd-cluster-observability/` has a post for all
+four feature issues (#88, #89, #90, #99 — #99 wasn't part of the
+original planning batch but got a post alongside the three that were).
+**Phase 12 is now fully done** — issues #88-#91 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+- Next step: no explicit next phase requested yet. Phase 8 (production
+  hardening menu) is the next unstarted roadmap item, but every one of
+  its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
+  a real trigger or explicit direction before planning any of it.
 
 ## Open decisions still to make
 

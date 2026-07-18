@@ -402,5 +402,5 @@ semantics with deliberate, session-scoped execution. Milestone: "Phase
       `--kubelet-insecure-tls` patch for kind's self-signed kubelet
       certs), `kubectl top` and `k9s` both confirmed working against the
       real cluster (GitHub issue #90)
-- [ ] Engineering blog (last, once the above four are merged) (GitHub
+- [x] Engineering blog (last, once the above four are merged) (GitHub
       issue #91)
