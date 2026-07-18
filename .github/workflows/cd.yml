@@ -7,6 +7,14 @@ name: CD
 # deliberate, session-scoped execution on a personal machine. Only
 # triggers on changes that actually affect what's deployed; docs/blog-only
 # merges don't queue a rebuild.
+#
+# Targets infra/k8s/overlays/dev-localstack, not the plain dev overlay
+# (GitHub issue #99, docs/DECISIONS.md D23) — every redeploy now backs
+# api's secrets with LocalStack Secrets Manager/IAM via an assumed role,
+# reseeded fresh each run since LocalStack keeps no state across pod
+# restarts. Requires the LOCALSTACK_AUTH_TOKEN repo secret to be set
+# (`gh secret set LOCALSTACK_AUTH_TOKEN`) — a one-time manual step, since
+# the token itself can't be provisioned by this workflow.
 on:
   push:
     branches: [main]
@@ -42,8 +50,39 @@ jobs:
           kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
             --name interview-insights
 
-      - name: Apply the dev overlay
-        run: kubectl apply -k infra/k8s/overlays/dev
+      - name: Ensure namespace exists
+        run: kubectl apply -f infra/k8s/base/00-namespace.yaml
+
+      - name: Provision LocalStack auth token secret
+        # Must land before the overlay below creates the LocalStack pod —
+        # same order as the manual walkthrough (wiki/deployment-guide.md
+        # section 5): the Deployment reads this via secretKeyRef, which
+        # doesn't hot-reload, so if the Secret didn't exist yet at pod
+        # creation the pod would need a manual restart to pick it up.
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        run: |
+          kubectl create secret generic localstack-credentials \
+            --namespace interview-insights \
+            --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply the dev-localstack overlay
+        run: kubectl apply -k infra/k8s/overlays/dev-localstack
+
+      - name: Wait for LocalStack
+        run: kubectl wait --for=condition=ready pod -l app=localstack -n interview-insights --timeout=120s
+
+      - name: Seed LocalStack secrets + IAM
+        run: |
+          kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
+          PF_PID=$!
+          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:4566/_localstack/health > /dev/null && break
+            sleep 2
+          done
+          ./infra/aws/seed-localstack.sh
 
       - name: Roll out api
         run: |

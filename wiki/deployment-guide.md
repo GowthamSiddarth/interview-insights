@@ -164,37 +164,56 @@ from section 3.3 if it changed.
 A ConfigMap/Secret value change alone (no image change) still needs the
 `rollout restart` — `envFrom` doesn't hot-reload into a running pod.
 
-**This is now automated** (`.github/workflows/cd.yml`, GitHub issue #89)
-— every one of these exact steps runs on a push to `main` that touches
-`api/**`, `web/**`, or `infra/k8s/**`, on the self-hosted runner from
-section 7. Since that runner is on-demand, the job just queues until
-`./run.sh` is next started — start it whenever a merge should actually
-reach the cluster. `GET /health`'s `version` field (the short commit
-SHA, baked in at build time via `--build-arg GIT_SHA`) confirms exactly
-which commit is live after a deploy — `curl http://api.interview-insights.local/health`.
+**This is now automated** (`.github/workflows/cd.yml`, GitHub issues
+#89/#99) — every one of these exact steps, plus the full LocalStack
+provisioning/seeding sequence from section 5 below, runs on a push to
+`main` that touches `api/**`, `web/**`, or `infra/k8s/**`, on the
+self-hosted runner from section 7. Since that runner is on-demand, the
+job just queues until `./run.sh` is next started — start it whenever a
+merge should actually reach the cluster. `GET /health`'s `version`
+field (the short commit SHA, baked in at build time via `--build-arg
+GIT_SHA`) confirms exactly which commit is live after a deploy —
+`curl http://api.interview-insights.local/health`.
 
-## 5. LocalStack secrets/IAM integration (Phase 11, opt-in)
+## 5. LocalStack secrets/IAM integration (Phase 11-12)
 
 Extends section 3 so `api` fetches its real secrets from LocalStack via
 an assumed IAM role, instead of the plaintext `api-secrets` k8s
-`Secret`. Structurally opt-in — none of this is in the base
-`kustomization.yaml` or the plain `dev` overlay (`docs/DECISIONS.md`
-D20/D22).
+`Secret`. As of GitHub issue #99 (`docs/DECISIONS.md` D23), this is
+CD's actual deploy target (`infra/k8s/overlays/dev-localstack`) — not
+just an occasional manual walkthrough. It's still structurally opt-in
+relative to the plain `dev` overlay (`docs/DECISIONS.md` D20/D22):
+nothing here is in base `kustomization.yaml`'s resources list, and
+`kubectl apply -k infra/k8s/overlays/dev` still gets the plaintext-Secret
+behavior back if ever applied directly.
+
+**One-time setup, only needed once per cluster** (CD handles all of this
+itself on every run afterward — see below):
 
 ```bash
 # 1. Auth token (LocalStack requires one to start, even free tier) —
-#    get one at app.localstack.cloud, then:
-export LOCALSTACK_AUTH_TOKEN="your_token_here"   # put in ~/.zshenv to persist
+#    get one at app.localstack.cloud, then set it as the repo secret CD
+#    reads (LOCALSTACK_AUTH_TOKEN in cd.yml):
+gh secret set LOCALSTACK_AUTH_TOKEN
 
+# Only needed if you also want to apply this overlay manually, outside
+# CD (e.g. testing a change to infra/k8s/base/localstack/ before pushing):
+export LOCALSTACK_AUTH_TOKEN="your_token_here"   # put in ~/.zshenv to persist
 kubectl create secret generic localstack-credentials \
   --namespace interview-insights \
   --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN"
+```
 
+**What CD does on every push** (same steps, runnable by hand too):
+
+```bash
 # 2. Apply the overlay that adds LocalStack + opts api's ConfigMap in
 kubectl apply -k infra/k8s/overlays/dev-localstack
 kubectl wait --for=condition=ready pod -l app=localstack -n interview-insights --timeout=120s
 
-# 3. Seed the two secrets api needs + the IAM role/policy (idempotent)
+# 3. Seed the two secrets api needs + the IAM role/policy (idempotent —
+#    CD reseeds fresh on every run, since LocalStack keeps no state
+#    across pod restarts, see the gotcha below)
 kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
 ./infra/aws/seed-localstack.sh
 
@@ -213,12 +232,13 @@ should match. See `wiki/blog/phase-11-integrated-prototype/
 issue-79-secrets-boot-wiring/README.md` for the full worked example.
 
 **Gotcha: `api` crash-loops with `ResourceNotFoundException` after a
-`docker stop`/`docker start` of the `kind` node.** LocalStack's
-Deployment has no PVC by design (it's a practice tool, not a source of
-truth, see `infra/k8s/base/localstack/08-localstack.yaml`'s own
-comment) — its in-memory secrets/IAM state doesn't survive the pod
-restarting alongside the node. Fix: re-run step 3 above
-(`seed-localstack.sh`) against the restarted LocalStack pod, then
+`docker stop`/`docker start` of the `kind` node, outside of a CD run.**
+LocalStack's Deployment has no PVC by design (it's a practice tool, not
+a source of truth, see `infra/k8s/base/localstack/08-localstack.yaml`'s
+own comment) — its in-memory secrets/IAM state doesn't survive the pod
+restarting alongside the node. A CD run fixes this on its own (step 3
+above reseeds unconditionally); if you need it fixed before the next
+push, re-run step 3 by hand against the restarted LocalStack pod, then
 `rollout restart deployment/api` again.
 
 ## 6. Smoke-testing the whole stack end to end
@@ -344,10 +364,24 @@ cluster running the new code, step by step:
    - **Load images into kind** — `kind load docker-image ... --name
      interview-insights` pushes both images straight into the cluster's
      node containers, no registry involved.
-   - **Apply the dev overlay** — `kubectl apply -k
-     infra/k8s/overlays/dev` reconciles every manifest (namespace,
-     secrets, configmaps, both Deployments/Services, the Ingress, the
-     Postgres/OpenSearch StatefulSets) declaratively.
+   - **Ensure the namespace exists** — `kubectl apply -f
+     infra/k8s/base/00-namespace.yaml`, idempotent, mostly relevant to a
+     truly fresh cluster.
+   - **Provision the LocalStack auth token Secret** — upserts
+     `localstack-credentials` from the `LOCALSTACK_AUTH_TOKEN` repo
+     secret, before the overlay below ever creates the LocalStack pod
+     (GitHub issue #99, `docs/DECISIONS.md` D23).
+   - **Apply the dev-localstack overlay** — `kubectl apply -k
+     infra/k8s/overlays/dev-localstack` reconciles every manifest
+     (namespace, secrets, configmaps, both Deployments/Services, the
+     Ingress, the Postgres/OpenSearch StatefulSets, and now LocalStack)
+     declaratively.
+   - **Wait for LocalStack, then seed it** — `kubectl wait
+     --for=condition=ready pod -l app=localstack`, then a backgrounded
+     `port-forward` + `infra/aws/seed-localstack.sh` (idempotent — see
+     section 5) recreates the two secrets `api` needs plus the IAM
+     role/policy, fresh every run, since LocalStack keeps no state
+     across pod restarts.
    - **Roll out `api`** — `kubectl rollout restart deployment/api` (the
      image tag string is unchanged even though its content is new, so a
      restart is what actually forces new pods to pull the freshly-loaded

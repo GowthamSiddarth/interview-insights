@@ -1,17 +1,19 @@
-# Opt-in (GitHub issue #78, Phase 11) — NOT in kustomization.yaml's
-# resources list, so it's never part of the default `dev` overlay's
-# baseline deploy (same "don't force premature infra into the default
-# path" reasoning as docs/DECISIONS.md D9/D20). Apply via
-# infra/k8s/overlays/dev-localstack instead, which composes `../dev` with
-# this one extra manifest. Scoped to just IAM + Secrets Manager, matching
-# infra/docker-compose.yml's existing `localstack` profile (GitHub issue
-# #66, Phase 10) — that profile stays the fast/no-cluster way to exercise
-# the same two services; this is the in-cluster equivalent so `api`'s pod
-# can actually reach it.
+# NOT in base/kustomization.yaml's resources list — only
+# infra/k8s/overlays/dev-localstack composes `../dev` with this extra
+# manifest, so a direct `kubectl apply -k infra/k8s/base` (or the plain
+# `dev` overlay) never picks this up. As of GitHub issue #99
+# (docs/DECISIONS.md D23), dev-localstack is .github/workflows/cd.yml's
+# actual deploy target — this isn't a rarely-touched side path anymore,
+# every automatic redeploy applies it. Scoped to just IAM + Secrets
+# Manager, matching infra/docker-compose.yml's existing `localstack`
+# profile (GitHub issue #66, Phase 10) — that profile stays the
+# fast/no-cluster way to exercise the same two services; this is the
+# in-cluster equivalent so `api`'s pod can actually reach it.
 #
 # LocalStack now requires a free-tier auth token just to start (see
-# infra/docker-compose.yml's comment) — never committed here. Before
-# applying this overlay, create the Secret out-of-band:
+# infra/docker-compose.yml's comment) — never committed here. CD
+# provisions the Secret itself from the LOCALSTACK_AUTH_TOKEN repo
+# secret; for a manual apply, create it out-of-band first:
 #   kubectl create secret generic localstack-credentials \
 #     --namespace interview-insights \
 #     --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN"
