@@ -386,9 +386,20 @@ semantics with deliberate, session-scoped execution. Milestone: "Phase
       new `version` field matched the merge commit SHA exactly after
       the rollout, confirming the cluster ran the new code, not just
       that the workflow reported success
+- [x] Wire `infra/k8s/overlays/dev-localstack` into `cd.yml` as the
+      default deploy target, so local secrets/IAM (Phase 11) actually
+      back every redeploy instead of staying an occasional manual
+      opt-in — not part of the original phase-12 planning batch, filed
+      mid-phase (GitHub issue #99) after the user asked for exactly this
+      (`docs/DECISIONS.md` D23, reversing D22's "CD stays on plain
+      `dev`" default) — verified with a real merge: the queued job
+      provisioned `localstack-credentials` from a new
+      `LOCALSTACK_AUTH_TOKEN` repo secret, seeded LocalStack fresh, and a
+      test candidate's stored `email_hash` matched the LocalStack-seeded
+      secret's value, not the plaintext k8s Secret's
 - [ ] k9s + metrics-server for local cluster monitoring/management —
       `metrics-server` deployed into `kind` (needs the well-known
       `--kubelet-insecure-tls` patch for kind's self-signed kubelet
       certs), `kubectl top` and `k9s` both confirmed working against the
       real cluster
-- [ ] Engineering blog (last, once the above three are merged)
+- [ ] Engineering blog (last, once the above four are merged)

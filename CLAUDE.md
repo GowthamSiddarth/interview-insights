@@ -569,10 +569,53 @@ Helm-ingress-fronted `web` app with zero console errors.
 `wiki/blog/phase-11-integrated-prototype/` has a post for all three
 issues — Phase 11's blog is complete, and every phase built so far now
 has a complete engineering blog.
-- Next step: no explicit next phase requested yet. Phase 8 (production
-  hardening menu) is the next unstarted roadmap item, but every one of
-  its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
-  a real trigger or explicit direction before planning any of it.
+
+**Phase 12 planning (Local CD & Cluster Observability)** — filed after
+the user asked how to get real CD and cluster visibility given the
+local machine is the only hosting target right now: a self-hosted
+runner + CD workflow, plus k9s/metrics-server for cluster monitoring.
+Distinct from Phase 8a/8f (neither of those triggers has fired) — see
+`docs/ROADMAP.md` Phase 12 intro. Milestone "Phase 12 — Local CD &
+Cluster Observability", issues #88-#91 filed together.
+
+**Phase 12, issue #88 (self-hosted runner)** — registered on-demand
+(`./run.sh`, not a persistent service — smaller standing attack surface
+since nothing repo-triggered executes on this machine unless a session
+explicitly starts the runner). Verified with a manual
+`workflow_dispatch` smoke test (`.github/workflows/self-hosted-smoke-test.yml`);
+also fixed an unrelated pre-existing local kubeconfig issue
+(`current-context` was unset) the verification happened to surface.
+
+**Phase 12, issue #89 (CD workflow)** — `.github/workflows/cd.yml`:
+real `on: push: branches: [main]` trigger (not `workflow_dispatch`),
+scoped to `api/**`/`web/**`/`infra/k8s/**` via a `paths` filter, `runs-on:
+self-hosted`, executing the build → `kind load` → `kubectl apply -k` →
+`rollout restart` sequence from `wiki/deployment-guide.md` section 4.
+Verified with a real merge (#95): the push queued the job automatically,
+starting the on-demand runner picked it up, and `GET /health`'s `version`
+field matched the merge commit SHA exactly after rollout — confirming
+the cluster ran the new code, not just that the workflow reported
+success.
+
+**Phase 12, issue #99 (dev-localstack wired into CD)** — not part of
+the original four-issue planning batch; filed mid-phase after the user
+asked to have local secrets/IAM (Phase 11) actually back every local
+deploy, not stay an occasional manual opt-in. `cd.yml` now targets
+`infra/k8s/overlays/dev-localstack`: provisions the
+`localstack-credentials` k8s Secret from a new `LOCALSTACK_AUTH_TOKEN`
+GitHub Actions repo secret (before the overlay creates the LocalStack
+pod, since its `secretKeyRef` env var doesn't hot-reload), waits for
+LocalStack ready, reseeds its secrets/IAM role via the existing
+idempotent `infra/aws/seed-localstack.sh`, then rolls out `api`/`web` as
+before. Reverses D22's "CD stays on plain `dev`" default — recorded as
+D23, including why this doesn't retrigger a real Phase 8b/8d trigger
+(still solo local `kind`, no real AWS account). Verified with a real
+merge: every step ran clean, and a test candidate's stored `email_hash`
+matched an HMAC computed with the LocalStack-seeded secret value, not
+the plaintext k8s Secret's — proving `api` is genuinely reading from
+LocalStack, not just reachable-but-unused.
+- Next step: Phase 12 issues #90 (k9s + metrics-server) and #91 (blog,
+  last, once #88/#89/#99/#90 are all merged) remain open.
 
 ## Open decisions still to make
 
