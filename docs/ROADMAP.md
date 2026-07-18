@@ -397,7 +397,7 @@ semantics with deliberate, session-scoped execution. Milestone: "Phase
       `LOCALSTACK_AUTH_TOKEN` repo secret, seeded LocalStack fresh, and a
       test candidate's stored `email_hash` matched the LocalStack-seeded
       secret's value, not the plaintext k8s Secret's
-- [ ] k9s + metrics-server for local cluster monitoring/management —
+- [x] k9s + metrics-server for local cluster monitoring/management —
       `metrics-server` deployed into `kind` (needs the well-known
       `--kubelet-insecure-tls` patch for kind's self-signed kubelet
       certs), `kubectl top` and `k9s` both confirmed working against the
