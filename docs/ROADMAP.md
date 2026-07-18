@@ -377,11 +377,15 @@ semantics with deliberate, session-scoped execution. Milestone: "Phase
       it (GitHub issue #88) — verified with a manual `workflow_dispatch`
       smoke test; also fixed an unrelated pre-existing local kubeconfig
       issue (`current-context` was unset) it happened to surface
-- [ ] `.github/workflows/cd.yml`: triggers on push to `main`, runs on
+- [x] `.github/workflows/cd.yml`: triggers on push to `main`, runs on
       the self-hosted runner, executes the build → `kind load` →
       `kubectl apply -k` → `rollout restart` sequence from
-      `wiki/deployment-guide.md` section 4 — verified with a real merge
-      that ends in the `kind` cluster actually running the new code
+      `wiki/deployment-guide.md` section 4 (GitHub issue #89) — verified
+      with a real merge (#95): the push queued the job automatically,
+      starting the on-demand runner picked it up, and `GET /health`'s
+      new `version` field matched the merge commit SHA exactly after
+      the rollout, confirming the cluster ran the new code, not just
+      that the workflow reported success
 - [ ] k9s + metrics-server for local cluster monitoring/management —
       `metrics-server` deployed into `kind` (needs the well-known
       `--kubelet-insecure-tls` patch for kind's self-signed kubelet
