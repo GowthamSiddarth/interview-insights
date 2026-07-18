@@ -112,14 +112,18 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-17: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+As of 2026-07-18: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), and Phase 11
 (Integrated Prototype: LocalStack Secrets & IAM in kind) are all done.
-Phase 6 is done except issue #18 (blocked). Phases 1-7 and 9-11 each
-have a complete engineering blog under `wiki/blog/`. Phase 8 is a
-trigger-gated backlog, not started.
+Phase 6 is done except issue #18 (blocked). Phase 12 (Local CD &
+Cluster Observability) is in progress: issues #88, #89, and #99 done
+(self-hosted runner, CD workflow, dev-localstack wired in as CD's
+default deploy target); #90 (k9s + metrics-server) and #91 (blog, last)
+remain open. Phases 1-7 and 9-11 each have a complete engineering blog
+under `wiki/blog/`; Phase 12's blog is pending its own issue (#91).
+Phase 8 is a trigger-gated backlog, not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
