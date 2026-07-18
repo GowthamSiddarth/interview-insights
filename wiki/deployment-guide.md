@@ -145,6 +145,50 @@ kubectl -n interview-insights port-forward svc/postgres 5432:5432
 kubectl -n interview-insights port-forward svc/opensearch 9200:9200
 ```
 
+### 3.6 k9s + metrics-server (cluster monitoring, Phase 12)
+
+Lightweight local tooling only — not a full observability stack
+(Prometheus/Grafana/Loki/Jaeger stay gated on Phase 8f's own "local
+equivalent" bullet, for a real shared/staging trigger). GitHub issue
+#90.
+
+**`metrics-server`** — third-party infra, so it's Helm-installed like
+`ingress-nginx` (`docs/DECISIONS.md` D19), not a Kustomize-managed
+manifest of our own. `kind`'s kubelet certs aren't set up for
+`metrics-server`'s default TLS verification against a real CA, hence
+the well-known `--kubelet-insecure-tls` patch:
+
+```bash
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+helm repo update
+helm install metrics-server metrics-server/metrics-server \
+  --namespace kube-system \
+  --set args={--kubelet-insecure-tls}
+kubectl -n kube-system wait --for=condition=ready pod \
+  --selector=app.kubernetes.io/name=metrics-server --timeout=120s
+```
+
+Verify against the real cluster (takes ~30-60s after install before
+the API is warm):
+
+```bash
+kubectl top nodes
+kubectl top pods -n interview-insights
+```
+
+**`k9s`** — terminal UI for navigating the cluster (pods, logs,
+describe, exec, live resource usage from `metrics-server` above). Zero
+footprint, no manifests of its own:
+
+```bash
+brew install k9s
+k9s -n interview-insights
+```
+
+`k9s`'s Pods view shows the same CPU/memory columns `kubectl top pods`
+does, sourced from the same `metrics-server` — if `kubectl top` errors,
+`k9s`'s resource columns will be blank too; fix `metrics-server` first.
+
 ## 4. Redeploying after a code change
 
 Rebuild the image, reload it into `kind` (same tag, so `kind load`

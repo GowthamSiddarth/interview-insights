@@ -118,10 +118,10 @@ discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), and Phase 11
 (Integrated Prototype: LocalStack Secrets & IAM in kind) are all done.
 Phase 6 is done except issue #18 (blocked). Phase 12 (Local CD &
-Cluster Observability) is in progress: issues #88, #89, and #99 done
-(self-hosted runner, CD workflow, dev-localstack wired in as CD's
-default deploy target); #90 (k9s + metrics-server) and #91 (blog, last)
-remain open. Phases 1-7 and 9-11 each have a complete engineering blog
+Cluster Observability) is in progress: issues #88, #89, #99, and #90
+done (self-hosted runner, CD workflow, dev-localstack wired in as CD's
+default deploy target, k9s + metrics-server); only #91 (blog, last)
+remains open. Phases 1-7 and 9-11 each have a complete engineering blog
 under `wiki/blog/`; Phase 12's blog is pending its own issue (#91).
 Phase 8 is a trigger-gated backlog, not started.
 
@@ -618,8 +618,20 @@ merge: every step ran clean, and a test candidate's stored `email_hash`
 matched an HMAC computed with the LocalStack-seeded secret value, not
 the plaintext k8s Secret's — proving `api` is genuinely reading from
 LocalStack, not just reachable-but-unused.
-- Next step: Phase 12 issues #90 (k9s + metrics-server) and #91 (blog,
-  last, once #88/#89/#99/#90 are all merged) remain open.
+
+**Phase 12, issue #90 (k9s + metrics-server)** — `metrics-server`
+Helm-installed into `kube-system` (third-party infra, same D19 pattern
+as `ingress-nginx`), with the well-known `--kubelet-insecure-tls` patch
+`kind`'s self-signed kubelet certs need. `k9s` installed locally via
+`brew install k9s`, no manifests of its own. Verified against the real
+cluster: `kubectl top nodes`/`kubectl top pods -n interview-insights`
+both return real CPU/memory numbers, and `k9s` itself confirms
+"Kubernetes connectivity OK" against the live cluster. Documented in
+`wiki/deployment-guide.md` section 3.6. Explicitly not a full
+observability stack (Prometheus/Grafana/Loki/Jaeger stay gated on
+Phase 8f's own trigger) — scoped to lightweight local tooling only.
+- Next step: Phase 12 issue #91 (blog, last, once #88/#89/#99/#90 are
+  all merged) is the only remaining open item.
 
 ## Open decisions still to make
 
