@@ -349,3 +349,39 @@ LocalStack Secrets & IAM in kind".
       fixed with `api/scripts/entrypoint.js`, see D22
 - [x] Engineering blog (GitHub issue #81) — `wiki/blog/
       phase-11-integrated-prototype/`; Phase 11 is now fully done
+
+## Phase 12 — Local CD & Cluster Observability
+
+Filed after discussing, with the user, how to get real CD and cluster
+visibility given the local machine is the only hosting target right
+now (2026-07-17) — a distinct, narrower need from Phase 8a (CI/CD
+maturity, gated on "more than one contributor or a deploy target beyond
+your own machine") and 8f (observability, gated on "first shared/
+staging deployment with real traffic"). Neither of those triggers has
+fired; this phase doesn't start Phase 8, the same way Phase 10 didn't —
+it's local practice/tooling scoped to what a solo, single-machine setup
+actually needs. Two user decisions set this phase's scope precisely:
+the self-hosted runner runs **on-demand** (started manually right
+before a deploy, not a persistent always-on service — smaller standing
+attack surface, since nothing executes repo-triggered code on the
+machine unless a session explicitly turned the runner on), and the CD
+workflow triggers **automatically on push to `main`** (a real `on:
+push` trigger, not `workflow_dispatch`) — the job simply queues until
+the on-demand runner is next started, reconciling "real" automatic CD
+semantics with deliberate, session-scoped execution. Milestone: "Phase
+12 — Local CD & Cluster Observability".
+
+- [ ] Register a self-hosted GitHub Actions runner for this repo,
+      on-demand mode (`./run.sh`, not installed as a persistent service)
+      — verify it picks up a real queued job before anything depends on it
+- [ ] `.github/workflows/cd.yml`: triggers on push to `main`, runs on
+      the self-hosted runner, executes the build → `kind load` →
+      `kubectl apply -k` → `rollout restart` sequence from
+      `wiki/deployment-guide.md` section 4 — verified with a real merge
+      that ends in the `kind` cluster actually running the new code
+- [ ] k9s + metrics-server for local cluster monitoring/management —
+      `metrics-server` deployed into `kind` (needs the well-known
+      `--kubelet-insecure-tls` patch for kind's self-signed kubelet
+      certs), `kubectl top` and `k9s` both confirmed working against the
+      real cluster
+- [ ] Engineering blog (last, once the above three are merged)
