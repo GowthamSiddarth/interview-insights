@@ -23,6 +23,12 @@ for what was last verified working.
 - Optional: a Postgres client (DBeaver, TablePlus, `psql`) for poking at the
   database directly
 
+See `wiki/deployment-guide.md` for a single, consolidated command-by-
+command reference across every environment below (native dev, full
+Docker Compose, full Kubernetes on `kind`, and the Phase 11 LocalStack
+secrets/IAM integration) — this section covers the same ground with
+more explanation, that one is just the commands in order.
+
 ## Quick start
 
 **1. Start Postgres + OpenSearch**
