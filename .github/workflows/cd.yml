@@ -1,0 +1,56 @@
+name: CD
+
+# Real, automatic trigger (user's explicit decision, Phase 12) — not
+# workflow_dispatch. Combined with the self-hosted runner being on-demand
+# (issue #88), a push to main just queues this job until the runner is
+# next started with `./run.sh` — reconciling "real" CD semantics with
+# deliberate, session-scoped execution on a personal machine. Only
+# triggers on changes that actually affect what's deployed; docs/blog-only
+# merges don't queue a rebuild.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'web/**'
+      - 'infra/k8s/**'
+
+# A second push while an earlier deploy is still queued/running should
+# win outright — only the latest main matters for a single local cluster.
+concurrency:
+  group: cd
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build api image
+        run: |
+          docker build -t interview-insights-api:k8s -f api/Dockerfile \
+            --build-arg GIT_SHA=$(git rev-parse --short HEAD) api
+
+      - name: Build web image
+        run: |
+          docker build -t interview-insights-web:k8s -f web/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local web
+
+      - name: Load images into kind
+        run: |
+          kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
+            --name interview-insights
+
+      - name: Apply the dev overlay
+        run: kubectl apply -k infra/k8s/overlays/dev
+
+      - name: Roll out api
+        run: |
+          kubectl -n interview-insights rollout restart deployment/api
+          kubectl -n interview-insights rollout status deployment/api --timeout=90s
+
+      - name: Roll out web
+        run: |
+          kubectl -n interview-insights rollout restart deployment/web
+          kubectl -n interview-insights rollout status deployment/web --timeout=90s

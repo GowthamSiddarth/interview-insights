@@ -20,6 +20,16 @@ describe('HealthController', () => {
   });
 
   it('reports ok when the database responds', async () => {
-    await expect(controller.check()).resolves.toEqual({ status: 'ok' });
+    await expect(controller.check()).resolves.toEqual({ status: 'ok', version: 'unknown' });
+  });
+
+  it('reports the deployed commit when GIT_SHA is set', async () => {
+    const original = process.env.GIT_SHA;
+    process.env.GIT_SHA = 'abc1234';
+    try {
+      await expect(controller.check()).resolves.toEqual({ status: 'ok', version: 'abc1234' });
+    } finally {
+      process.env.GIT_SHA = original;
+    }
   });
 });

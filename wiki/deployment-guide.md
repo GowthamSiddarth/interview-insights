@@ -164,6 +164,15 @@ from section 3.3 if it changed.
 A ConfigMap/Secret value change alone (no image change) still needs the
 `rollout restart` — `envFrom` doesn't hot-reload into a running pod.
 
+**This is now automated** (`.github/workflows/cd.yml`, GitHub issue #89)
+— every one of these exact steps runs on a push to `main` that touches
+`api/**`, `web/**`, or `infra/k8s/**`, on the self-hosted runner from
+section 7. Since that runner is on-demand, the job just queues until
+`./run.sh` is next started — start it whenever a merge should actually
+reach the cluster. `GET /health`'s `version` field (the short commit
+SHA, baked in at build time via `--build-arg GIT_SHA`) confirms exactly
+which commit is live after a deploy — `curl http://api.interview-insights.local/health`.
+
 ## 5. LocalStack secrets/IAM integration (Phase 11, opt-in)
 
 Extends section 3 so `api` fetches its real secrets from LocalStack via
