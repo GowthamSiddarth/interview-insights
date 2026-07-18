@@ -371,9 +371,12 @@ the on-demand runner is next started, reconciling "real" automatic CD
 semantics with deliberate, session-scoped execution. Milestone: "Phase
 12 — Local CD & Cluster Observability".
 
-- [ ] Register a self-hosted GitHub Actions runner for this repo,
+- [x] Register a self-hosted GitHub Actions runner for this repo,
       on-demand mode (`./run.sh`, not installed as a persistent service)
-      — verify it picks up a real queued job before anything depends on it
+      — verify it picks up a real queued job before anything depends on
+      it (GitHub issue #88) — verified with a manual `workflow_dispatch`
+      smoke test; also fixed an unrelated pre-existing local kubeconfig
+      issue (`current-context` was unset) it happened to surface
 - [ ] `.github/workflows/cd.yml`: triggers on push to `main`, runs on
       the self-hosted runner, executes the build → `kind load` →
       `kubectl apply -k` → `rollout restart` sequence from

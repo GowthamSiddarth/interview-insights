@@ -203,6 +203,15 @@ plaintext k8s Secret's value (`dev-only-change-me`) — only the former
 should match. See `wiki/blog/phase-11-integrated-prototype/
 issue-79-secrets-boot-wiring/README.md` for the full worked example.
 
+**Gotcha: `api` crash-loops with `ResourceNotFoundException` after a
+`docker stop`/`docker start` of the `kind` node.** LocalStack's
+Deployment has no PVC by design (it's a practice tool, not a source of
+truth, see `infra/k8s/base/localstack/08-localstack.yaml`'s own
+comment) — its in-memory secrets/IAM state doesn't survive the pod
+restarting alongside the node. Fix: re-run step 3 above
+(`seed-localstack.sh`) against the restarted LocalStack pod, then
+`rollout restart deployment/api` again.
+
 ## 6. Smoke-testing the whole stack end to end
 
 Whichever environment from sections 1-5 is up, the same golden path
@@ -232,7 +241,51 @@ curl "http://localhost:3001/search/reviews?companyId=<company-id>"
 Swap `localhost:3001` for `http://api.interview-insights.local` when
 running against `kind` (section 3).
 
-## 7. Tearing down
+## 7. Self-hosted GitHub Actions runner (on-demand, Phase 12)
+
+Registered once; started manually whenever a workflow needs to run on
+this machine (e.g. the CD workflow, issue #89) — deliberately **not** a
+persistent service (`svc.sh install`), so nothing on this machine
+executes repo-triggered code unless a session explicitly turned the
+runner on.
+
+**One-time registration** (re-run only if re-registering, e.g. after a
+token expires or on a new machine):
+
+```bash
+mkdir -p ~/actions-runner-interview-insights && cd ~/actions-runner-interview-insights
+RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
+curl -o runner.tar.gz -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
+tar xzf runner.tar.gz
+
+TOKEN=$(gh api -X POST repos/GowthamSiddarth/interview-insights/actions/runners/registration-token --jq '.token')
+./config.sh --url https://github.com/GowthamSiddarth/interview-insights \
+  --token "$TOKEN" --name "interview-insights-local" \
+  --labels "self-hosted,macOS,local-kind" --work "_work" --unattended
+```
+
+**Start it (on-demand)** right before a run you want executed locally
+is expected — `--once` processes a single queued job then exits on its
+own:
+
+```bash
+cd ~/actions-runner-interview-insights
+./run.sh --once
+```
+
+Verify it's alive with `.github/workflows/self-hosted-smoke-test.yml`
+(`workflow_dispatch` only, never fires on its own):
+
+```bash
+gh workflow run self-hosted-smoke-test.yml --ref main
+gh run watch --exit-status $(gh run list --workflow=self-hosted-smoke-test.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+```
+
+`gh api repos/:owner/:repo/actions/runners` shows `offline` when nothing
+is running — expected between sessions; that's the intended state for
+an on-demand runner, not a problem to fix.
+
+## 8. Tearing down
 
 ```bash
 # Docker Compose (sections 1-2)
@@ -244,4 +297,7 @@ docker start interview-insights-control-plane   # resumes exactly where it left 
 
 # kind cluster — fully destroy (irreversible, loses all in-cluster data):
 kind delete cluster --name interview-insights
+
+# self-hosted runner (section 7) — nothing to stop if using --once (it
+# already exited); Ctrl+C if run without --once
 ```
