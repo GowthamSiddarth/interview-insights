@@ -347,4 +347,5 @@ LocalStack Secrets & IAM in kind".
       Secret) caught a real bug: the container's `CMD` ran migrations as
       a separate shell step that never saw the bootstrapped secrets;
       fixed with `api/scripts/entrypoint.js`, see D22
-- [ ] Engineering blog (last, once the above three are merged)
+- [x] Engineering blog (GitHub issue #81) — `wiki/blog/
+      phase-11-integrated-prototype/`; Phase 11 is now fully done

@@ -112,13 +112,14 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-16: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+As of 2026-07-17: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
-discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass), and
-Phase 10 (Cloud-Readiness Practice, local/free) are all done. Phase 6 is
-done except issue #18 (blocked). Phases 1-7, 9, and 10 each have a
-complete engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
-backlog, not started.
+discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
+Phase 10 (Cloud-Readiness Practice, local/free), and Phase 11
+(Integrated Prototype: LocalStack Secrets & IAM in kind) are all done.
+Phase 6 is done except issue #18 (blocked). Phases 1-7 and 9-11 each
+have a complete engineering blog under `wiki/blog/`. Phase 8 is a
+trigger-gated backlog, not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -544,8 +545,30 @@ states investigation that surfaced a real React 19 finding (D21:
 `<form action={fn}>` defers pre-await `setState` calls until an `await`
 resolves; use plain `onSubmit` when an in-flight indicator must render
 before any async work starts). `wiki/blog/phase-9-ux-ui-polish/` has a
-post for all five issues — Phase 9's blog is complete, and every phase
-built so far now has a complete engineering blog.
+post for all five issues — Phase 9's blog is complete.
+
+**Phase 11 (Integrated Prototype: LocalStack Secrets & IAM in kind)** —
+filed after the user asked, before any Phase 8 planning, whether
+everything built so far (Helm, Kustomize, Postgres, OpenSearch, search,
+moderation, analytics, secrets/IAM) actually runs together anywhere, or
+just each in isolation. An audit found the honest answer was no —
+Phase 10's LocalStack work was practice-only (D20) and had never run
+near the `kind` cluster. All three issues (#78-#80) closed via merged
+PRs: LocalStack (IAM + Secrets Manager) now deploys into `kind` via an
+opt-in `dev-localstack` overlay (#78); `api`'s boot path assumes an IAM
+role via STS and fetches its real secrets from LocalStack before
+`NestFactory.create` runs, opt-in and otherwise unchanged (#79); and an
+adversarial end-to-end verification (#80) — deliberately corrupting the
+plaintext k8s Secret to prove `api` doesn't silently still depend on it
+— caught a real bug: the container's `CMD` ran `prisma migrate deploy`
+as a separate shell step that never saw the bootstrapped secrets, fixed
+with `api/scripts/entrypoint.js` and documented as D22. That same issue
+re-ran the full golden path (company → process → round → rating →
+moderation approve → analytics → search) through the real
+Helm-ingress-fronted `web` app with zero console errors.
+`wiki/blog/phase-11-integrated-prototype/` has a post for all three
+issues — Phase 11's blog is complete, and every phase built so far now
+has a complete engineering blog.
 - Next step: no explicit next phase requested yet. Phase 8 (production
   hardening menu) is the next unstarted roadmap item, but every one of
   its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
