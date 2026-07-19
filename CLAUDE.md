@@ -758,8 +758,24 @@ Postgres per D24 (port-forward + `interview_insights_test`), and the
 live curl golden path (submit → 409 duplicate → empty public read →
 approve → visible) was confirmed landing in kind's `postgres-0` via
 `kubectl exec` psql directly.
-- Next step: Phase 14, issue #127 (wizard: submit recruiter interaction
-  + overall review), per `docs/ROADMAP.md`.
+**Phase 14, issue #127 (wizard: recruiter + overall review steps)** —
+two new sections on the Phase 2 wizard (`web/src/app/page.tsx`), gated
+on a round existing: "5. Recruiter experience" (identifier + 4 rating
+fields + optional free text — creates the interaction then the rating
+in sequence; the identifier field says explicitly it's never shown
+publicly) and "6. Overall review" (experience 1-5, would-recommend
+checkbox, optional text — form disappears after submission, matching
+`UNIQUE(process_id)`). Both confirmations show the real `pending`
+status, mirroring the round-rating step. `web/src/lib/api.ts` gained
+the three types + client methods. 3 new component tests
+(`recruiter-overall-steps.spec.tsx`, route-based fetch mock driving
+the full wizard; 14 web tests total). Verified in a real headless
+browser (Playwright) against the api dev server backed by kind's
+Postgres per D24: full 6-step flow, both submissions confirmed
+`pending` in the moderation queue via direct API check, zero console
+errors.
+- Next step: Phase 14, issue #128 (moderation admin UI), per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
