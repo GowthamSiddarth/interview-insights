@@ -693,10 +693,19 @@ Documented as a gotcha in `wiki/deployment-guide.md` section 3.
 feature issues (#106, #107, #108). **Phase 13 is now fully done** —
 issues #106-#109 all closed via merged PRs, and every phase built so
 far now has a complete engineering blog.
-- Next step: no explicit next phase requested yet. Phase 8 (production
-  hardening menu) is the next unstarted roadmap item, but every one of
-  its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
-  a real trigger or explicit direction before planning any of it.
+
+**Phase 14 planning (Recruiter & Overall Reviews + Moderation Admin
+UI)** — filed after the user asked to resume app-feature development
+now that infra is stable, and to brainstorm ideas first. Recommended
+closing the biggest known app-side gap (`RecruiterRating`/
+`OverallReview` have had schema since Phase 1 but zero write path,
+leaving two-thirds of the Phase 4 analytics dashboard permanently
+empty) bundled with a moderation admin UI (moderation is curl-only
+today, even for `round_rating`) — user agreed. Milestone "Phase 14 —
+Recruiter & Overall Reviews + Moderation Admin UI", issues #125-#129
+filed together per the "plan a phase before implementing" convention.
+- Next step: Phase 14, issue #125 (`RecruiterInteraction`/
+  `RecruiterRating` write path), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
