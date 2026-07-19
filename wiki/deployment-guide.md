@@ -62,6 +62,22 @@ Builds and runs `api`+`web` as containers alongside `postgres`+
 
 ## 3. Full Kubernetes deployment on `kind`
 
+**Fast path:** `infra/scripts/bootstrap-kind.sh` (Phase 13 issue #107)
+runs every step below (3.1-3.4, plus provisioning/seeding LocalStack
+from section 5) in one shot, and is idempotent — safe to re-run against
+an already-running cluster; every step either skips or upgrades in
+place rather than erroring. Requires `LOCALSTACK_AUTH_TOKEN` set in the
+environment first (see section 5):
+
+```bash
+export LOCALSTACK_AUTH_TOKEN="your_token_here"   # put in ~/.zshenv to persist
+./infra/scripts/bootstrap-kind.sh
+```
+
+The rest of this section is the manual walkthrough the script
+automates — useful for understanding what each step actually does, or
+for running a single step in isolation while debugging.
+
 ### 3.1 Create an Ingress-ready cluster
 
 A plain `kind create cluster` doesn't route external traffic in — the
