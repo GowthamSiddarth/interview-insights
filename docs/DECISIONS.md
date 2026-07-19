@@ -538,11 +538,14 @@ kind's `postgres-0` already has its own independent history from every
 manual golden-path verification since Phase 7. Decommissioning the other
 two loses nothing worth keeping.
 
-**Follow-up, on the user's own timeline:** deleting Postgres.app and
-removing the `postgres` service from `infra/docker-compose.yml` (the
-`opensearch` service stays) — not done as part of this decision, since
-the user asked for the pointer/workflow change now and will retire the
-old instances separately.
+**`infra/docker-compose.yml`'s `postgres` service is kept, deliberately
+unused:** the user is deleting Postgres.app directly, but chose to leave
+the Compose file's `postgres` service definition in place rather than
+remove it — it now serves purely as a documented reference/alternative
+local-dev path (e.g. for a future project cloning this repo's patterns,
+or a quick non-`kind` sanity check), not something anyone should actually
+point `api` at day to day. `kind` is the only Postgres genuinely in use
+going forward; the Compose service stays present but inert.
 
 **Revisit when:** if OpenSearch's identical split (Compose container vs.
 kind's StatefulSet) ever causes the same kind of silent-wrong-target
