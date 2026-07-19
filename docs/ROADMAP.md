@@ -458,3 +458,38 @@ Hardening & Reproducibility".
       just that the script exits 0 (GitHub issue #108)
 - [x] Engineering blog (last, once the above three are merged) (GitHub
       issue #109)
+
+## Phase 14 — Recruiter & Overall Reviews + Moderation Admin UI
+
+Filed after resuming app-feature work post-Phase-13, following a brainstorm
+with the user on where to point development next. `RecruiterInteraction`/
+`RecruiterRating`/`OverallReview` have had schema + migrations since Phase 1
+but zero write path — `ModerationService` throws `NotImplementedException`
+for either entity type, and `company_recruiter_aggregates`/
+`company_overall_aggregates` (Phase 4 issue #7) have been permanently empty
+since they were built, since nothing has ever written a row into either
+underlying table. This is the single biggest remaining gap in the core
+entity hierarchy (`docs/ARCHITECTURE.md`'s "Known gaps" section flagged it
+first) — closing it finishes what Phases 1-4 started and makes two-thirds
+of the Phase 4 analytics dashboard real instead of permanently "not enough
+reviews yet." Bundled alongside it: a moderation admin UI, since even the
+one entity type with a write path today (`round_rating`) is moderated only
+via raw `curl` — adding two more entity types onto a curl-only moderation
+queue would only compound that gap. Milestone: "Phase 14 — Recruiter &
+Overall Reviews + Moderation Admin UI".
+
+- [ ] `RecruiterInteraction` + `RecruiterRating` write path (GitHub issue
+      #125) — same pattern as Phase 3 issue #1 (moderation-gated,
+      `UNIQUE(recruiter_interaction_id, candidate_id)`); review search
+      indexing stays out of scope
+- [ ] `OverallReview` write path (GitHub issue #126) — same pattern,
+      `UNIQUE(process_id)` per `docs/DATA_MODEL.md`
+- [ ] Wizard: submit recruiter interaction + overall review (GitHub issue
+      #127) — closes the same class of gap as the never-wired candidate
+      email verification UI (Phase 3 issue #3)
+- [ ] Moderation admin UI (GitHub issue #128) — replaces curl-only
+      moderation across all three entity types; no new auth introduced,
+      same trust model as the rest of `web/` today (auth is Phase 8's
+      concern, not this one)
+- [ ] Engineering blog (last, once the above four are merged) (GitHub
+      issue #129)
