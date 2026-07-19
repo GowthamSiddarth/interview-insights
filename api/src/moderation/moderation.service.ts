@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotImplementedException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -75,14 +70,11 @@ export class ModerationService {
       throw new ConflictException('This item has already been reviewed.');
     }
 
-    if (entry.entityType !== 'round_rating' && entry.entityType !== 'recruiter_rating') {
-      // overall_review has no write path yet. Extend this once it does
-      // (docs/ROADMAP.md Phase 14).
-      throw new NotImplementedException(
-        `Moderation for entityType "${entry.entityType}" isn't implemented yet.`,
-      );
-    }
-
+    // Every ModerationEntityType now has a write path (round_rating since
+    // Phase 3, recruiter_rating/overall_review since Phase 14) — the
+    // NotImplementedException guard that used to live here is gone because
+    // there's nothing left to guard against; the switch is exhaustive over
+    // the enum.
     const updatedEntry = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.moderationQueueEntry.update({
         where: { id },
@@ -92,13 +84,17 @@ export class ModerationService {
           flagReason,
         },
       });
-      if (entry.entityType === 'round_rating') {
-        await tx.roundRating.update({ where: { id: entry.entityId }, data: { status: decision } });
-      } else {
-        await tx.recruiterRating.update({
-          where: { id: entry.entityId },
-          data: { status: decision },
-        });
+      const statusUpdate = { where: { id: entry.entityId }, data: { status: decision } };
+      switch (entry.entityType) {
+        case 'round_rating':
+          await tx.roundRating.update(statusUpdate);
+          break;
+        case 'recruiter_rating':
+          await tx.recruiterRating.update(statusUpdate);
+          break;
+        case 'overall_review':
+          await tx.overallReview.update(statusUpdate);
+          break;
       }
       return updated;
     });
