@@ -112,13 +112,14 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-18: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+As of 2026-07-19: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
-Prototype: LocalStack Secrets & IAM in kind), and Phase 12 (Local CD &
-Cluster Observability) are all done. Phase 6 is done except issue #18
-(blocked). Phases 1-7 and 9-12 each have a complete engineering blog
+Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
+Cluster Observability), and Phase 13 (Local Infra Hardening &
+Reproducibility) are all done. Phase 6 is done except issue #18
+(blocked). Phases 1-7 and 9-13 each have a complete engineering blog
 under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
@@ -644,8 +645,58 @@ Phase 7 with nobody proving it still bootstraps cleanly from empty; and
 rebuilding it today means manually replaying several
 `wiki/deployment-guide.md` sections by hand. Milestone "Phase 13 — Local
 Infra Hardening & Reproducibility", issues #106-#109 filed together.
-- Next step: Phase 13 issue #106 (CI validation for infra manifests and
-  Dockerfiles) is up first.
+
+**Phase 13, issue #106 (CI validation for infra manifests and
+Dockerfiles)** — a new `infra` job in `.github/workflows/ci.yml`
+(GitHub-hosted, no cluster or self-hosted runner needed): `kubectl
+kustomize` against all four overlays (`dev`, `dev-localstack`,
+`staging`, `prod`), plus a build-only `docker build` for both
+Dockerfiles. Previously a broken manifest or Dockerfile merged with a
+green CI check and only failed later, against the real cluster — this
+catches both classes of regression at PR time. Verified directly: this
+issue's own PR was the first real run of the new job, and it passed.
+Documented in `wiki/deployment-guide.md` section 8.
+
+**Phase 13, issue #107 (one-shot local bootstrap script)** —
+`infra/scripts/bootstrap-kind.sh` covers `wiki/deployment-guide.md`
+section 3 end to end (cluster create, Helm installs for `ingress-nginx`
++ `metrics-server`, image build/load, namespace + LocalStack secret,
+overlay apply, seed, roll out `api`), idempotent throughout (cluster-
+exists guard, `helm upgrade --install`, `kubectl apply`). Verified by
+running it twice back to back against the real already-running
+cluster — both runs succeeded, exercising the skip/upgrade paths
+directly, with the app confirmed reachable and healthy afterward.
+Documented as section 3's new fast path, manual walkthrough kept
+underneath as reference.
+
+**Phase 13, issue #108 (adversarial verification: rebuild from
+scratch)** — deleted the real, multi-day-old `kind` cluster
+(`kind delete cluster`) and rebuilt it from nothing using issue #107's
+script — not just re-testing against an already-running cluster, the
+way every earlier Phase 11/12 verification had. Found a real bug: on a
+genuinely fresh cluster, `api` crash-looped with
+`ResourceNotFoundException` because the script waited on every pod
+(including `api`) before LocalStack was seeded, but `api`'s entrypoint
+needs LocalStack's secrets to boot at all — a deadlock invisible in
+every prior test since none of them ever restarted `api` from zero.
+Fixed by waiting only on `postgres`/`opensearch`/`localstack`/`web`
+before seeding, then explicitly rolling `api` out after — matching the
+ordering `cd.yml` already had right. Re-ran the full rebuild after the
+fix: all 5 pods `Ready`, both PVCs `Bound`, the complete golden path
+(company → candidate → process → round → rating → moderation approve
+→ analytics → search) verified through the real Ingress-fronted
+`web`/`api`, and the same `email_hash` HMAC comparison from issue #99
+confirming `api` genuinely reads from LocalStack post-rebuild.
+Documented as a gotcha in `wiki/deployment-guide.md` section 3.
+
+`wiki/blog/phase-13-local-infra-hardening/` has a post for all three
+feature issues (#106, #107, #108). **Phase 13 is now fully done** —
+issues #106-#109 all closed via merged PRs, and every phase built so
+far now has a complete engineering blog.
+- Next step: no explicit next phase requested yet. Phase 8 (production
+  hardening menu) is the next unstarted roadmap item, but every one of
+  its sub-items is trigger-gated (see docs/ROADMAP.md Phase 8) — wait for
+  a real trigger or explicit direction before planning any of it.
 
 ## Open decisions still to make
 

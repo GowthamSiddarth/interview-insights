@@ -456,5 +456,5 @@ Hardening & Reproducibility".
       every pod reaches `Ready`, PVCs bind cleanly, the full golden path
       works, and `api` genuinely reads secrets from LocalStack — not
       just that the script exits 0 (GitHub issue #108)
-- [ ] Engineering blog (last, once the above three are merged) (GitHub
+- [x] Engineering blog (last, once the above three are merged) (GitHub
       issue #109)
