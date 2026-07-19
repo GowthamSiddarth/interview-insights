@@ -118,9 +118,9 @@ step; `cd.yml` already had this right (it only waits on `localstack`,
 then seeds, then explicitly rolls `api` out afterward) — the bootstrap
 script just hadn't matched that ordering yet.
 
-**Gotcha: `api` can start crash-looping hours or days after a clean
-deploy, with no code change involved.** Symptom: `kubectl -n
-interview-insights logs -l app=api` shows the same
+**Gotcha (now self-healing): `api` could start crash-looping hours or days
+after a clean deploy, with no code change involved.** Symptom: `kubectl -n
+interview-insights logs -l app=api` shows
 `ResourceNotFoundException: Secrets Manager can't find the specified
 secret` as the issue #108 gotcha above, but on a cluster that's been
 running fine for a while. Root cause: LocalStack's Deployment
@@ -128,11 +128,22 @@ running fine for a while. Root cause: LocalStack's Deployment
 — it's a practice/prototype tool, not a source of truth, so its Secrets
 Manager/IAM state is `emptyDir`-backed and disappears whenever the
 container itself restarts for *any* reason (OOM, node hiccup, `docker
-system prune`, etc.), independent of any deploy or `kubectl apply`. Check
-`kubectl -n interview-insights get pod -l app=localstack` for a restart
-count — if it's nonzero and `api`'s crash loop started around the same
-time, this is almost certainly why. Recovery is the same seed-then-roll
-sequence `cd.yml`/`bootstrap-kind.sh` already do, just run by hand:
+system prune`, etc.), independent of any deploy or `kubectl apply`.
+
+This used to require noticing and re-seeding by hand. It no longer does:
+`infra/k8s/base/localstack/init/seed.sh` is mounted into the container at
+`/etc/localstack/init/ready.d/` via LocalStack's own
+[lifecycle-hooks](https://docs.localstack.cloud/user-guide/lifecycle-hooks/)
+mechanism, which runs it automatically every time LocalStack finishes
+starting — including after an unplanned restart — so the secrets/IAM
+role always exist again before `api`'s own next boot needs them. Verified
+by deleting the LocalStack pod directly (not just re-running a script)
+and confirming `api` came up clean on its very next `rollout restart`
+with zero manual seeding.
+
+If it somehow still happens (e.g. the init-hook itself failed — check
+`kubectl -n interview-insights logs deploy/localstack | grep init-hook`),
+the same manual recovery still works as a fallback:
 
 ```bash
 kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
@@ -141,10 +152,10 @@ kubectl -n interview-insights rollout restart deployment/api
 kubectl -n interview-insights rollout status deployment/api --timeout=90s
 ```
 
-Not treated as a bug to fix with a PVC — that would undo the deliberate
-"not a source of truth" tradeoff issue #78 already made for this
-practice-tier tool. It's an operational gotcha to recognize and recover
-from quickly, not infrastructure to harden.
+Not fixed with a PVC — that would undo the deliberate "not a source of
+truth" tradeoff issue #78 already made for this practice-tier tool. The
+init-hook makes the existing "reseed on start" behavior automatic instead
+of manual; it doesn't make LocalStack's state durable.
 
 ### 3.1 Create an Ingress-ready cluster
 
