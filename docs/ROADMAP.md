@@ -447,7 +447,7 @@ Hardening & Reproducibility".
       four overlays) and both Dockerfiles (`docker build`, no push/run)
       — catches infra regressions at PR time instead of at real-CD time
       (GitHub issue #106)
-- [ ] `infra/scripts/bootstrap-kind.sh` — one-shot, idempotent script
+- [x] `infra/scripts/bootstrap-kind.sh` — one-shot, idempotent script
       covering `wiki/deployment-guide.md` section 3 end to end (cluster
       create, Helm installs, image build/load, overlay apply, LocalStack
       seed) (GitHub issue #107)
