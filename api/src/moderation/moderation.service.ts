@@ -75,11 +75,9 @@ export class ModerationService {
       throw new ConflictException('This item has already been reviewed.');
     }
 
-    if (entry.entityType !== 'round_rating') {
-      // recruiter_rating / overall_review have no write path yet (Phase 2
-      // only built Company -> InterviewProcess -> Round -> RoundRating), so
-      // there's nothing to flip their status on. Extend this once those
-      // entities exist.
+    if (entry.entityType !== 'round_rating' && entry.entityType !== 'recruiter_rating') {
+      // overall_review has no write path yet. Extend this once it does
+      // (docs/ROADMAP.md Phase 14).
       throw new NotImplementedException(
         `Moderation for entityType "${entry.entityType}" isn't implemented yet.`,
       );
@@ -94,17 +92,23 @@ export class ModerationService {
           flagReason,
         },
       });
-      await tx.roundRating.update({
-        where: { id: entry.entityId },
-        data: { status: decision },
-      });
+      if (entry.entityType === 'round_rating') {
+        await tx.roundRating.update({ where: { id: entry.entityId }, data: { status: decision } });
+      } else {
+        await tx.recruiterRating.update({
+          where: { id: entry.entityId },
+          data: { status: decision },
+        });
+      }
       return updated;
     });
 
     // Outside the transaction, best-effort — search indexing is derived
     // (docs/DECISIONS.md D16/D17), never allowed to fail the moderation
     // decision itself, which is already committed at this point.
-    if (decision === 'approved') {
+    // recruiter_rating isn't indexed — review search stays round_rating-only
+    // (docs/ROADMAP.md Phase 14, issue #125's explicit scope note).
+    if (decision === 'approved' && entry.entityType === 'round_rating') {
       await this.indexApprovedReview(entry.entityId);
     }
 

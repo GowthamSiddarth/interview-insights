@@ -163,6 +163,9 @@ model Recruiter {
   company               Company                @relation(fields: [companyId], references: [id])
   recruiterInteractions RecruiterInteraction[]
 
+  // Lets recruiter identity resolution be a safe upsert (same pattern as
+  // Candidate.emailHash) instead of a racy find-then-create.
+  @@unique([companyId, internalIdentifierHash])
   @@map("recruiters")
 }
 

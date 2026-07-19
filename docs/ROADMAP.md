@@ -478,10 +478,14 @@ via raw `curl` — adding two more entity types onto a curl-only moderation
 queue would only compound that gap. Milestone: "Phase 14 — Recruiter &
 Overall Reviews + Moderation Admin UI".
 
-- [ ] `RecruiterInteraction` + `RecruiterRating` write path (GitHub issue
+- [x] `RecruiterInteraction` + `RecruiterRating` write path (GitHub issue
       #125) — same pattern as Phase 3 issue #1 (moderation-gated,
       `UNIQUE(recruiter_interaction_id, candidate_id)`); review search
-      indexing stays out of scope
+      indexing stays out of scope. Recruiter identity resolution
+      (find-or-create by a hashed candidate-supplied identifier, generating
+      a sequential "Recruiter A"/"Recruiter B" label per company) needed a
+      new `@@unique([companyId, internalIdentifierHash])` constraint on
+      `recruiters`, not present since Phase 1
 - [ ] `OverallReview` write path (GitHub issue #126) — same pattern,
       `UNIQUE(process_id)` per `docs/DATA_MODEL.md`
 - [ ] Wizard: submit recruiter interaction + overall review (GitHub issue
