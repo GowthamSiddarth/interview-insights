@@ -486,6 +486,71 @@ real AWS Secrets Manager/IAM instead of LocalStack.
 
 ---
 
+### D24 — Postgres consolidates to a single instance: kind's, not Docker Compose's
+
+**Decision:** Native local `api` dev (`npm run start:dev`) and local
+`npm run test:e2e` now point at kind's `postgres-0` StatefulSet (Phase 7
+issue #27) via `kubectl -n interview-insights port-forward svc/postgres
+5432:5432`, not `infra/docker-compose.yml`'s Postgres container. Local
+e2e runs specifically target a second database on that same instance —
+`interview_insights_test` — created once (`CREATE DATABASE
+interview_insights_test;` against `postgres-0`) and kept schema-current
+via `prisma migrate deploy`, invoked via a `DATABASE_URL` override rather
+than a separate `.env` file:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npm run test:e2e
+```
+
+OpenSearch is explicitly **not** part of this change — `docker compose up
+-d opensearch` still runs it, same as before; only Postgres consolidates.
+
+**Why:** investigating a live-verification discrepancy (issue #125's
+manual golden-path check) surfaced that this machine also runs Postgres.app
+(a standalone macOS GUI Postgres, unrelated to this repo) bound to the same
+`127.0.0.1:5432` that `infra/docker-compose.yml` publishes to — and macOS
+silently routed connections to Postgres.app instead of the Compose
+container. That meant "the Postgres `api` is talking to" was ambiguous
+depending on what else happened to be running on the host, with no error
+or warning either way. Rather than just fix the immediate collision, the
+user chose to remove the ambiguity structurally: one Postgres, period —
+kind's, since it's already the closest thing to a real deployment and
+every other environment (CD, the golden-path verifications from Phases
+7-13) already depends on it being correct.
+
+A separate `interview_insights_test` database (not a separate server) on
+that same instance matters because local e2e runs create real rows
+(companies, candidates, ratings) — pointing them at the same database
+used for manual dev/verification would litter it with disposable test
+data, the identical class of problem that caused Phase 3 issue #3's
+fraud-checks e2e flakiness (leftover rows in a persistent volume). Same
+server, isolated database — satisfies "one Postgres" without polluting
+real data.
+
+**Not touched by this decision:** CI's `api` job already runs its own
+fully ephemeral Postgres service container per workflow run
+(`.github/workflows/ci.yml`), entirely unrelated to local dev or kind —
+unaffected either way.
+
+**No data migration needed:** everything previously in Postgres.app and
+Compose's Postgres was disposable dev/test churn, not canonical data —
+kind's `postgres-0` already has its own independent history from every
+manual golden-path verification since Phase 7. Decommissioning the other
+two loses nothing worth keeping.
+
+**Follow-up, on the user's own timeline:** deleting Postgres.app and
+removing the `postgres` service from `infra/docker-compose.yml` (the
+`opensearch` service stays) — not done as part of this decision, since
+the user asked for the pointer/workflow change now and will retire the
+old instances separately.
+
+**Revisit when:** if OpenSearch's identical split (Compose container vs.
+kind's StatefulSet) ever causes the same kind of silent-wrong-target
+confusion — deliberately out of scope for this decision, see the note
+above.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
