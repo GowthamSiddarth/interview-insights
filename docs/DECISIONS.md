@@ -554,6 +554,62 @@ above.
 
 ---
 
+### D25 — LocalStack self-reseeds via its own init-hook, not a PVC
+
+**Decision:** `infra/k8s/base/localstack/init/seed.sh` is mounted into the
+LocalStack container at `/etc/localstack/init/ready.d/` (LocalStack's own
+[lifecycle-hooks](https://docs.localstack.cloud/user-guide/lifecycle-hooks/)
+mechanism, via a `configMapGenerator`-produced ConfigMap in
+`infra/k8s/base/localstack/kustomization.yaml`) so it runs automatically
+every time LocalStack finishes starting — including after an *unplanned*
+restart, not just a deliberate `kubectl apply`/CD run.
+
+**Why:** discovered live, not hypothetically — while investigating D24's
+Postgres confusion, `api` turned out to have been crash-looping for ~9
+hours with the same `ResourceNotFoundException` issue #108 already fixed
+once, but for a new reason: LocalStack's pod itself had restarted (exit
+code 255, cause unrelated to this app) and, having no PVC by design
+(issue #78 — "not a source of truth"), lost all its seeded Secrets
+Manager/IAM state. Nothing noticed or re-seeded it, so `api` sat broken
+until this investigation found it. The manual recovery
+(`infra/aws/seed-localstack.sh` + `rollout restart deployment/api`) still
+works and is documented in `wiki/deployment-guide.md` section 3 as a
+fallback, but requires a human to notice first — this closes that gap
+structurally instead.
+
+**Not the same script as `infra/aws/seed-localstack.sh`:** that one runs
+*outside* the container (CD, `bootstrap-kind.sh`, a human) and needs an
+explicit `--endpoint-url`/region/fake credentials plus a human-facing
+assumed-role verification step; the init-hook runs *inside* the
+container, where the bundled `awslocal` wrapper needs none of that.
+They're coupled by convention (same secret/role/policy names and
+values), not by shared code — if one changes, update the other.
+
+**Deliberately not a PVC:** persisting LocalStack's actual state would
+also work, but would reverse issue #78's explicit "not a source of
+truth" tradeoff for what both the CLAUDE.md and D20 already frame as a
+free/local practice tool, not infrastructure worth hardening. Automating
+the existing "reseed on start" behavior closes the real gap (nobody
+noticing) without taking on that tradeoff.
+
+**Gotcha hit building this:** `configMapGenerator`'s output doesn't
+inherit a namespace the way resources with their own hardcoded
+`metadata.namespace` do — the first apply attempt silently created the
+ConfigMap in the `default` namespace instead of `interview-insights`,
+which the Deployment's volume mount then failed to find
+(`FailedMount: configmap ... not found`). Fixed by adding an explicit
+`namespace: interview-insights` to
+`infra/k8s/base/localstack/kustomization.yaml` (a no-op for
+`08-localstack.yaml`'s own resources, which already hardcoded it).
+
+**Verified live, adversarially:** deleted the running LocalStack pod
+directly (not just re-running a script), confirmed the init-hook logged
+`[init-hook] seeding Secrets Manager + IAM` / `[init-hook] done` on the
+replacement pod's own startup, then rolled `api` out with *no* manual
+seed step — it came up clean on the first try.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

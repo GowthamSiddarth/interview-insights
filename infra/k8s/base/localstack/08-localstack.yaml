@@ -59,10 +59,18 @@ spec:
                   key: LOCALSTACK_AUTH_TOKEN
           # No PVC — this is a practice/prototype tool, not a source of
           # truth (unlike postgres/opensearch's StatefulSets); losing its
-          # state on pod restart just means re-running the seed step.
+          # state on pod restart is expected. The init-hook mount below
+          # (not a PVC) is what actually recovers from that automatically.
           volumeMounts:
             - name: localstack-data
               mountPath: /var/lib/localstack
+            # LocalStack's init-hook mechanism: any script under
+            # /etc/localstack/init/ready.d/ runs automatically every time
+            # LocalStack finishes starting, including after an unplanned
+            # restart — see kustomization.yaml + init/seed.sh's own
+            # comments for why this exists instead of a PVC.
+            - name: localstack-init-seed
+              mountPath: /etc/localstack/init/ready.d
           readinessProbe:
             httpGet:
               path: /_localstack/health
@@ -89,3 +97,7 @@ spec:
       volumes:
         - name: localstack-data
           emptyDir: {}
+        - name: localstack-init-seed
+          configMap:
+            name: localstack-init-seed
+            defaultMode: 0755
