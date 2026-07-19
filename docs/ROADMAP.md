@@ -451,7 +451,7 @@ Hardening & Reproducibility".
       covering `wiki/deployment-guide.md` section 3 end to end (cluster
       create, Helm installs, image build/load, overlay apply, LocalStack
       seed) (GitHub issue #107)
-- [ ] Adversarial verification: tear down the real `kind` cluster and
+- [x] Adversarial verification: tear down the real `kind` cluster and
       rebuild it from scratch using the new bootstrap script, proving
       every pod reaches `Ready`, PVCs bind cleanly, the full golden path
       works, and `api` genuinely reads secrets from LocalStack — not

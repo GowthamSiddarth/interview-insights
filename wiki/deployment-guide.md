@@ -78,6 +78,19 @@ The rest of this section is the manual walkthrough the script
 automates — useful for understanding what each step actually does, or
 for running a single step in isolation while debugging.
 
+**Gotcha found by adversarially rebuilding the cluster from scratch**
+(GitHub issue #108): on a genuinely fresh cluster, `api` crash-loops
+with `ResourceNotFoundException` if anything waits on `api` reaching
+`Ready` before LocalStack has been seeded — `api/scripts/entrypoint.js`
+fetches its secrets from LocalStack at boot, and there's nothing to
+fetch yet on a cold start. This stayed invisible for a long time because
+testing against an already-running cluster never actually restarted
+`api` from zero — the bug only surfaced once the cluster was destroyed
+and rebuilt for real. Fixed by never waiting on `api` before the seed
+step; `cd.yml` already had this right (it only waits on `localstack`,
+then seeds, then explicitly rolls `api` out afterward) — the bootstrap
+script just hadn't matched that ordering yet.
+
 ### 3.1 Create an Ingress-ready cluster
 
 A plain `kind create cluster` doesn't route external traffic in — the

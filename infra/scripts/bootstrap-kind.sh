@@ -84,8 +84,21 @@ kubectl create secret generic localstack-credentials \
 echo "== 7. Apply the dev-localstack overlay =="
 kubectl apply -k "$REPO_ROOT/infra/k8s/overlays/dev-localstack"
 
-echo "== 8. Wait for every pod ready =="
-kubectl -n "$NAMESPACE" wait --for=condition=ready pod --all --timeout=180s
+echo "== 8. Wait for LocalStack + its non-api dependents ready =="
+# Deliberately excludes api: on a truly fresh cluster api's entrypoint
+# fetches its secrets from LocalStack at boot (api/scripts/entrypoint.js)
+# and crash-loops with ResourceNotFoundException until LocalStack is
+# seeded below - it can never reach Ready before step 9 runs. Found by
+# this issue's own adversarial rebuild (GitHub issue #108): earlier
+# testing against an already-running cluster never restarted api from
+# zero, so this ordering bug stayed invisible until a truly fresh boot
+# forced api through its real first-start path. Same reason cd.yml only
+# waits on localstack here, then seeds, then explicitly rolls out api
+# afterward instead of waiting on every pod up front.
+kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=postgres --timeout=180s
+kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=opensearch --timeout=180s
+kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=localstack --timeout=180s
+kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=web --timeout=180s
 
 echo "== 9. Seed LocalStack secrets + IAM =="
 kubectl -n "$NAMESPACE" port-forward svc/localstack 4566:4566 &
