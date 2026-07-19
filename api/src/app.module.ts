@@ -6,6 +6,9 @@ import { CompaniesModule } from './companies/companies.module';
 import { InterviewProcessesModule } from './interview-processes/interview-processes.module';
 import { RoundsModule } from './rounds/rounds.module';
 import { RoundRatingsModule } from './round-ratings/round-ratings.module';
+import { RecruitersModule } from './recruiters/recruiters.module';
+import { RecruiterInteractionsModule } from './recruiter-interactions/recruiter-interactions.module';
+import { RecruiterRatingsModule } from './recruiter-ratings/recruiter-ratings.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { CandidateVerificationModule } from './candidate-verification/candidate-verification.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -20,6 +23,9 @@ import { SearchModule } from './search/search.module';
     InterviewProcessesModule,
     RoundsModule,
     RoundRatingsModule,
+    RecruitersModule,
+    RecruiterInteractionsModule,
+    RecruiterRatingsModule,
     ModerationModule,
     CandidateVerificationModule,
     AnalyticsModule,

@@ -14,6 +14,7 @@ describe('ModerationService', () => {
       update: jest.Mock;
     };
     roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock };
+    recruiterRating: { update: jest.Mock };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
@@ -27,6 +28,7 @@ describe('ModerationService', () => {
         update: jest.fn(),
       },
       roundRating: { update: jest.fn(), findUniqueOrThrow: jest.fn() },
+      recruiterRating: { update: jest.fn() },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
@@ -193,13 +195,50 @@ describe('ModerationService', () => {
     it('throws NotImplemented for entity types with no write path yet', async () => {
       prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
         id: 'queue-1',
-        entityType: 'recruiter_rating',
-        entityId: 'rating-1',
+        entityType: 'overall_review',
+        entityId: 'review-1',
         reviewedAt: null,
       });
 
       await expect(service.approve('queue-1', {})).rejects.toThrow(NotImplementedException);
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    function mockPendingRecruiterRatingEntry() {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-2',
+        entityType: 'recruiter_rating',
+        entityId: 'rating-2',
+        reviewedAt: null,
+        flagReason: null,
+      });
+      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
+        Promise.resolve({ id: 'queue-2', ...args.data }),
+      );
+      prisma.recruiterRating.update.mockResolvedValue({ id: 'rating-2', status: 'approved' });
+    }
+
+    it('approve() flips a recruiter rating to approved and does not attempt search indexing', async () => {
+      mockPendingRecruiterRatingEntry();
+
+      await service.approve('queue-2', { reviewedBy: 'gowtham' });
+
+      expect(prisma.recruiterRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-2' },
+        data: { status: 'approved' },
+      });
+      expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
+    });
+
+    it('reject() flips a recruiter rating to rejected', async () => {
+      mockPendingRecruiterRatingEntry();
+
+      await service.reject('queue-2', {});
+
+      expect(prisma.recruiterRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-2' },
+        data: { status: 'rejected' },
+      });
     });
   });
 });
