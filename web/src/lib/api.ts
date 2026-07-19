@@ -64,6 +64,37 @@ export interface RoundRating {
   createdAt: string;
 }
 
+export interface RecruiterInteraction {
+  id: string;
+  processId: string;
+  recruiterId: string;
+  createdAt: string;
+}
+
+export interface RecruiterRating {
+  id: string;
+  recruiterInteractionId: string;
+  candidateId: string;
+  approachability: number;
+  responseTime: number;
+  timeliness: number;
+  communicationQuality: number;
+  freeText: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'flagged';
+  createdAt: string;
+}
+
+export interface OverallReview {
+  id: string;
+  processId: string;
+  candidateId: string;
+  overallExperience: number;
+  wouldRecommend: boolean;
+  reviewText: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'flagged';
+  createdAt: string;
+}
+
 export interface RoundTypeAnalytics {
   roundType: Round['roundType'];
   sampleSize: number;
@@ -204,6 +235,42 @@ export const api = {
 
   listApprovedRatingsForRound: (roundId: string) =>
     request<RoundRating[]>(`/rounds/${roundId}/ratings`),
+
+  createRecruiterInteraction: (processId: string, input: { recruiterIdentifier: string }) =>
+    request<RecruiterInteraction>(`/processes/${processId}/recruiter-interactions`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  createRecruiterRating: (
+    recruiterInteractionId: string,
+    input: {
+      candidateId: string;
+      approachability: number;
+      responseTime: number;
+      timeliness: number;
+      communicationQuality: number;
+      freeText?: string;
+    },
+  ) =>
+    request<RecruiterRating>(`/recruiter-interactions/${recruiterInteractionId}/ratings`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  createOverallReview: (
+    processId: string,
+    input: {
+      candidateId: string;
+      overallExperience: number;
+      wouldRecommend: boolean;
+      reviewText?: string;
+    },
+  ) =>
+    request<OverallReview>(`/processes/${processId}/overall-review`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   getCompanyAnalytics: (companyId: string) =>
     request<CompanyAnalytics>(`/companies/${companyId}/analytics`),

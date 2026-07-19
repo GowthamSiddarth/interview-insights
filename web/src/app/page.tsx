@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiError, Company, InterviewProcess, Round, RoundRating } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  Company,
+  InterviewProcess,
+  OverallReview,
+  RecruiterRating,
+  Round,
+  RoundRating,
+} from '@/lib/api';
 import { Button } from '@/components/Button';
 import { PageContainer } from '@/components/PageContainer';
 
@@ -30,6 +39,8 @@ export default function HomePage() {
   const [round, setRound] = useState<Round | null>(null);
   const [rating, setRating] = useState<RoundRating | null>(null);
   const [approvedRatings, setApprovedRatings] = useState<RoundRating[] | null>(null);
+  const [recruiterRating, setRecruiterRating] = useState<RecruiterRating | null>(null);
+  const [overallReview, setOverallReview] = useState<OverallReview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +56,8 @@ export default function HomePage() {
     setRound(null);
     setRating(null);
     setApprovedRatings(null);
+    setRecruiterRating(null);
+    setOverallReview(null);
     setError(null);
   }
 
@@ -112,6 +125,49 @@ export default function HomePage() {
       setRating(created);
       const approved = await api.listApprovedRatingsForRound(round.id);
       setApprovedRatings(approved);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }
+
+  async function handleCreateRecruiterRating(formData: FormData) {
+    if (!process || !candidateId) return;
+    setError(null);
+    const field = (name: string) => Number(formData.get(name));
+    try {
+      // Two writes in sequence: the interaction resolves the recruiter's
+      // internal identity server-side (the identifier is hashed, never
+      // stored raw), then the rating attaches to that interaction.
+      const interaction = await api.createRecruiterInteraction(process.id, {
+        recruiterIdentifier: String(formData.get('recruiterIdentifier')),
+      });
+      const freeText = String(formData.get('freeText') ?? '').trim();
+      const created = await api.createRecruiterRating(interaction.id, {
+        candidateId,
+        approachability: field('approachability'),
+        responseTime: field('responseTime'),
+        timeliness: field('timeliness'),
+        communicationQuality: field('communicationQuality'),
+        ...(freeText ? { freeText } : {}),
+      });
+      setRecruiterRating(created);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }
+
+  async function handleCreateOverallReview(formData: FormData) {
+    if (!process || !candidateId) return;
+    setError(null);
+    try {
+      const reviewText = String(formData.get('reviewText') ?? '').trim();
+      const created = await api.createOverallReview(process.id, {
+        candidateId,
+        overallExperience: Number(formData.get('overallExperience')),
+        wouldRecommend: formData.get('wouldRecommend') === 'on',
+        ...(reviewText ? { reviewText } : {}),
+      });
+      setOverallReview(created);
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -319,6 +375,120 @@ export default function HomePage() {
                     "0"), verified live against a deliberately delayed
                     response. */}
                 <strong>{approvedRatings === null ? '…' : approvedRatings.length}</strong>
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {round && (
+        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+          <h2 className="font-medium">5. Recruiter experience</h2>
+          {!recruiterRating && (
+            <form action={handleCreateRecruiterRating} className="flex flex-col gap-2">
+              <label className="flex flex-col text-sm">
+                Recruiter name or email
+                <input
+                  name="recruiterIdentifier"
+                  required
+                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                />
+                <span className="text-xs text-gray-500">
+                  Used only to tell recruiters apart — never shown publicly.
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(['approachability', 'responseTime', 'timeliness', 'communicationQuality'] as const).map(
+                  (field) => (
+                    <label key={field} className="flex flex-col text-sm capitalize">
+                      {field.replace(/([A-Z])/g, ' $1')}
+                      <input
+                        name={field}
+                        type="number"
+                        min={1}
+                        max={5}
+                        required
+                        defaultValue={3}
+                        className="rounded border px-2 py-1 dark:bg-gray-900"
+                      />
+                    </label>
+                  ),
+                )}
+              </div>
+              <label className="flex flex-col text-sm">
+                Anything else about the recruiter experience? (optional)
+                <textarea
+                  name="freeText"
+                  rows={2}
+                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                />
+              </label>
+              <Button type="submit" className="self-start">
+                Submit recruiter rating
+              </Button>
+            </form>
+          )}
+          {recruiterRating && (
+            <div className="flex flex-col gap-2 text-sm">
+              <p className="text-green-700 dark:text-green-400">
+                Recruiter rating submitted — status: <strong>{recruiterRating.status}</strong>.
+              </p>
+              <p className="text-gray-500">
+                Like round ratings, recruiter ratings are reviewed before they become
+                public.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {round && (
+        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+          <h2 className="font-medium">6. Overall review</h2>
+          {!overallReview && (
+            <form action={handleCreateOverallReview} className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-end gap-4">
+                <label className="flex flex-col text-sm">
+                  Overall experience (1–5)
+                  <input
+                    name="overallExperience"
+                    type="number"
+                    min={1}
+                    max={5}
+                    required
+                    defaultValue={3}
+                    className="rounded border px-2 py-1 dark:bg-gray-900"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input name="wouldRecommend" type="checkbox" />
+                  I&apos;d recommend interviewing here
+                </label>
+              </div>
+              <label className="flex flex-col text-sm">
+                Summary of the whole process (optional)
+                <textarea
+                  name="reviewText"
+                  rows={2}
+                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                />
+              </label>
+              {/* One overall review per process (schema-enforced) — the form
+                  disappears after submission, and a duplicate attempt from a
+                  stale tab surfaces the API's 409 in the error banner. */}
+              <Button type="submit" className="self-start">
+                Submit overall review
+              </Button>
+            </form>
+          )}
+          {overallReview && (
+            <div className="flex flex-col gap-2 text-sm">
+              <p className="text-green-700 dark:text-green-400">
+                Overall review submitted — status: <strong>{overallReview.status}</strong>.
+              </p>
+              <p className="text-gray-500">
+                Reviewed before it becomes public, same as your ratings. That&apos;s the
+                whole flow — thanks for sharing your experience.
               </p>
             </div>
           )}

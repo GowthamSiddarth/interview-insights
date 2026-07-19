@@ -494,9 +494,12 @@ Overall Reviews + Moderation Admin UI".
       gone entirely — the status flip is now an exhaustive switch over
       the enum. No new migration: the table and constraint have existed
       since Phase 1
-- [ ] Wizard: submit recruiter interaction + overall review (GitHub issue
+- [x] Wizard: submit recruiter interaction + overall review (GitHub issue
       #127) — closes the same class of gap as the never-wired candidate
-      email verification UI (Phase 3 issue #3)
+      email verification UI (Phase 3 issue #3). Two new wizard sections
+      gated on a round existing; both confirmations show the real
+      `pending` status (never a fake "published" message), and the
+      recruiter-identifier field states it's never shown publicly
 - [ ] Moderation admin UI (GitHub issue #128) — replaces curl-only
       moderation across all three entity types; no new auth introduced,
       same trust model as the rest of `web/` today (auth is Phase 8's
