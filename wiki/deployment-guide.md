@@ -118,6 +118,34 @@ step; `cd.yml` already had this right (it only waits on `localstack`,
 then seeds, then explicitly rolls `api` out afterward) — the bootstrap
 script just hadn't matched that ordering yet.
 
+**Gotcha: `api` can start crash-looping hours or days after a clean
+deploy, with no code change involved.** Symptom: `kubectl -n
+interview-insights logs -l app=api` shows the same
+`ResourceNotFoundException: Secrets Manager can't find the specified
+secret` as the issue #108 gotcha above, but on a cluster that's been
+running fine for a while. Root cause: LocalStack's Deployment
+(`infra/k8s/base/localstack/08-localstack.yaml`) deliberately has no PVC
+— it's a practice/prototype tool, not a source of truth, so its Secrets
+Manager/IAM state is `emptyDir`-backed and disappears whenever the
+container itself restarts for *any* reason (OOM, node hiccup, `docker
+system prune`, etc.), independent of any deploy or `kubectl apply`. Check
+`kubectl -n interview-insights get pod -l app=localstack` for a restart
+count — if it's nonzero and `api`'s crash loop started around the same
+time, this is almost certainly why. Recovery is the same seed-then-roll
+sequence `cd.yml`/`bootstrap-kind.sh` already do, just run by hand:
+
+```bash
+kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
+LOCALSTACK_ENDPOINT=http://localhost:4566 ./infra/aws/seed-localstack.sh
+kubectl -n interview-insights rollout restart deployment/api
+kubectl -n interview-insights rollout status deployment/api --timeout=90s
+```
+
+Not treated as a bug to fix with a PVC — that would undo the deliberate
+"not a source of truth" tradeoff issue #78 already made for this
+practice-tier tool. It's an operational gotcha to recognize and recover
+from quickly, not infrastructure to harden.
+
 ### 3.1 Create an Ingress-ready cluster
 
 A plain `kind create cluster` doesn't route external traffic in — the
