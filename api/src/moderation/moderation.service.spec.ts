@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotImplementedException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -15,6 +15,7 @@ describe('ModerationService', () => {
     };
     roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock };
     recruiterRating: { update: jest.Mock };
+    overallReview: { update: jest.Mock };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
@@ -29,6 +30,7 @@ describe('ModerationService', () => {
       },
       roundRating: { update: jest.fn(), findUniqueOrThrow: jest.fn() },
       recruiterRating: { update: jest.fn() },
+      overallReview: { update: jest.fn() },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
@@ -192,18 +194,6 @@ describe('ModerationService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('throws NotImplemented for entity types with no write path yet', async () => {
-      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
-        id: 'queue-1',
-        entityType: 'overall_review',
-        entityId: 'review-1',
-        reviewedAt: null,
-      });
-
-      await expect(service.approve('queue-1', {})).rejects.toThrow(NotImplementedException);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
-
     function mockPendingRecruiterRatingEntry() {
       prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
         id: 'queue-2',
@@ -237,6 +227,43 @@ describe('ModerationService', () => {
 
       expect(prisma.recruiterRating.update).toHaveBeenCalledWith({
         where: { id: 'rating-2' },
+        data: { status: 'rejected' },
+      });
+    });
+
+    function mockPendingOverallReviewEntry() {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-3',
+        entityType: 'overall_review',
+        entityId: 'review-1',
+        reviewedAt: null,
+        flagReason: null,
+      });
+      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
+        Promise.resolve({ id: 'queue-3', ...args.data }),
+      );
+      prisma.overallReview.update.mockResolvedValue({ id: 'review-1', status: 'approved' });
+    }
+
+    it('approve() flips an overall review to approved and does not attempt search indexing', async () => {
+      mockPendingOverallReviewEntry();
+
+      await service.approve('queue-3', { reviewedBy: 'gowtham' });
+
+      expect(prisma.overallReview.update).toHaveBeenCalledWith({
+        where: { id: 'review-1' },
+        data: { status: 'approved' },
+      });
+      expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
+    });
+
+    it('reject() flips an overall review to rejected', async () => {
+      mockPendingOverallReviewEntry();
+
+      await service.reject('queue-3', {});
+
+      expect(prisma.overallReview.update).toHaveBeenCalledWith({
+        where: { id: 'review-1' },
         data: { status: 'rejected' },
       });
     });

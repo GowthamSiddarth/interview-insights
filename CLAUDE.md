@@ -704,8 +704,62 @@ empty) bundled with a moderation admin UI (moderation is curl-only
 today, even for `round_rating`) — user agreed. Milestone "Phase 14 —
 Recruiter & Overall Reviews + Moderation Admin UI", issues #125-#129
 filed together per the "plan a phase before implementing" convention.
-- Next step: Phase 14, issue #125 (`RecruiterInteraction`/
-  `RecruiterRating` write path), per `docs/ROADMAP.md`.
+
+**Phase 14, issue #125 (RecruiterInteraction + RecruiterRating write
+path)** — three new `api` modules mirroring the Phase 3 pattern:
+`recruiters/` (no controller — `RecruitersService.findOrCreate()`
+resolves a recruiter by HMAC-hashing a candidate-supplied identifier
+with the existing `EMAIL_HASH_SECRET` pepper, generating a sequential
+per-company "Recruiter A"/"Recruiter B" label; raw identifier never
+persisted, hard constraint #1), `recruiter-interactions/` (`POST
+/processes/:processId/recruiter-interactions`), and
+`recruiter-ratings/` (`POST /recruiter-interactions/:id/ratings`,
+moderation-gated in the same transaction, plus the approved-only public
+GET). `ModerationService.review()` extended to flip `recruiter_rating`
+status. New migration adds `@@unique([companyId,
+internalIdentifierHash])` on `recruiters` so identity resolution is a
+safe upsert. Fraud checks and review-search indexing explicitly out of
+scope (D13's checks are round_rating-specific). 15 new unit tests + 7
+e2e tests (`recruiter-ratings.e2e-spec.ts`); verified live end to end
+via curl (submit → pending → approve → publicly visible) including
+confirming in Postgres that only the hash + label are stored.
+
+**Interlude: two real incidents found while verifying #125.** (1) The
+manual verification's psql check went to the wrong database — the
+machine also ran Postgres.app, a standalone macOS Postgres bound to the
+same `127.0.0.1:5432` the Compose Postgres published, silently
+intercepting connections. User decision: one Postgres only — kind's.
+Native dev + local e2e now port-forward to `postgres-0`; local e2e
+targets a separate `interview_insights_test` database on that instance;
+Compose's `postgres` service stays in the file as inert reference only;
+user deleted Postgres.app (D24). (2) `api` had been crash-looping for
+~9h: LocalStack's pod restarted and, having no PVC by design (#78),
+lost all seeded secrets — fixed structurally by mounting a seed script
+into `/etc/localstack/init/ready.d/` (LocalStack's lifecycle-hooks
+mechanism) so it self-reseeds on every start, including unplanned
+restarts; verified adversarially by deleting the LocalStack pod and
+rolling `api` with zero manual seeding (D25). Gotcha recorded in D25:
+Kustomize `configMapGenerator` output doesn't inherit a namespace —
+without an explicit `namespace:` in the localstack kustomization the
+ConfigMap silently landed in `default` and the volume mount failed.
+
+**Phase 14, issue #126 (OverallReview write path)** — a new
+`overall-reviews/` module, same shape: `POST
+/processes/:processId/overall-review` (singular path — one review per
+process, the schema's `UNIQUE(process_id)` surfaces duplicates as 409
+via `PrismaExceptionFilter`, no app logic) plus an approved-only public
+GET returning the single review or empty. No migration needed — table
+and constraint have existed since Phase 1. With all three entity types
+now writable, `ModerationService.review()`'s `NotImplementedException`
+guard is deleted; the status flip is an exhaustive switch over
+`ModerationEntityType`. 12 new unit tests + 7 e2e tests
+(`overall-reviews.e2e-spec.ts`, 57 e2e total); e2e ran against kind's
+Postgres per D24 (port-forward + `interview_insights_test`), and the
+live curl golden path (submit → 409 duplicate → empty public read →
+approve → visible) was confirmed landing in kind's `postgres-0` via
+`kubectl exec` psql directly.
+- Next step: Phase 14, issue #127 (wizard: submit recruiter interaction
+  + overall review), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

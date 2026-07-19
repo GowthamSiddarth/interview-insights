@@ -486,8 +486,14 @@ Overall Reviews + Moderation Admin UI".
       a sequential "Recruiter A"/"Recruiter B" label per company) needed a
       new `@@unique([companyId, internalIdentifierHash])` constraint on
       `recruiters`, not present since Phase 1
-- [ ] `OverallReview` write path (GitHub issue #126) — same pattern,
-      `UNIQUE(process_id)` per `docs/DATA_MODEL.md`
+- [x] `OverallReview` write path (GitHub issue #126) — same pattern,
+      `UNIQUE(process_id)` per `docs/DATA_MODEL.md` (enforced by the
+      schema, surfaced as a 409 via `PrismaExceptionFilter` — no app
+      logic needed). With this, every `ModerationEntityType` has a write
+      path, so `ModerationService`'s `NotImplementedException` guard is
+      gone entirely — the status flip is now an exhaustive switch over
+      the enum. No new migration: the table and constraint have existed
+      since Phase 1
 - [ ] Wizard: submit recruiter interaction + overall review (GitHub issue
       #127) — closes the same class of gap as the never-wired candidate
       email verification UI (Phase 3 issue #3)
