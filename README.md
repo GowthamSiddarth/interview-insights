@@ -33,16 +33,20 @@ more explanation, that one is just the commands in order.
 
 **1. Start Postgres + OpenSearch**
 
+Postgres now lives in the `kind` cluster only, not Docker Compose (see
+`docs/DECISIONS.md` D24) — this requires the `kind` cluster from
+`wiki/deployment-guide.md` section 3 to already be up:
+
 ```bash
+kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
+
 cd infra
-docker compose up -d
+docker compose up -d opensearch   # opensearch:9200 — Postgres's compose service is unused
 ```
 
-This starts `postgres` (`localhost:5432`) and `opensearch`
-(`localhost:9200`) — see `infra/docker-compose.yml`. Nothing else runs in
-Docker by default — `api`/`web` don't yet depend on Redis or Kafka, so
-those aren't started until something actually needs them
-(docs/DECISIONS.md D9).
+Nothing else runs in Docker by default — `api`/`web` don't yet depend on
+Redis or Kafka, so those aren't started until something actually needs
+them (docs/DECISIONS.md D9).
 
 **2. Set up and run the API**
 
@@ -285,9 +289,8 @@ kubectl -n interview-insights rollout status deployment/api --timeout=90s
 
 ## Connecting a database client (DBeaver, etc.)
 
-With Postgres running via the Docker Compose above, connect using the
-credentials from `infra/docker-compose.yml` (same values are in
-`api/.env.example`'s `DATABASE_URL`):
+With the port-forward from "Quick start" step 1 running (Postgres lives in
+`kind`, not Docker Compose — see `docs/DECISIONS.md` D24), connect using:
 
 | Field    | Value                |
 | -------- | -------------------- |
@@ -303,17 +306,21 @@ credentials from `infra/docker-compose.yml` (same values are in
 # api — unit tests (no DB needed)
 cd api && npm test
 
-# api — integration/e2e tests (needs the Postgres container up and migrated)
-npm run test:e2e
+# api — integration/e2e tests: needs the same port-forward above, but
+# targets a separate interview_insights_test database on that same
+# Postgres instance (see docs/DECISIONS.md D24 and
+# wiki/deployment-guide.md section 1) so test runs never litter the real
+# interview_insights data:
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npm run test:e2e
 
 # web — unit tests
 cd web && npm test
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint, build, and both test suites for
-`api`, `web`, and `workers` on every PR against a real Postgres service
-container — it doesn't use `infra/docker-compose.yml` directly, but the same
-schema/migrations apply.
+`api`, `web`, and `workers` on every PR against its own fully ephemeral
+Postgres service container — entirely unrelated to local dev or `kind`,
+unaffected by D24.
 
 ## API endpoints (Phase 2 slice)
 

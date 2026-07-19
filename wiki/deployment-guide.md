@@ -25,14 +25,23 @@ node --version                # need 22+
 
 ## 1. Native dev loop (fastest — no containers for api/web)
 
-Postgres + OpenSearch in Docker; `api`/`web` run directly on the host.
+`api`/`web` run directly on the host. **Postgres now lives in kind
+only** (D24 in `docs/DECISIONS.md`) — reached via port-forward, not
+`infra/docker-compose.yml`'s Postgres container. This requires the
+`kind` cluster from section 3 to already be up. OpenSearch is
+unaffected — still runs from Docker Compose.
 
 ```bash
+# 1. kind cluster must already exist (section 3) — Postgres lives there now
+kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
+
+# 2. OpenSearch only, from Compose (Postgres's compose service is unused —
+#    see D24; not yet removed from infra/docker-compose.yml)
 cd infra
-docker compose up -d                     # postgres:5432, opensearch:9200
+docker compose up -d opensearch
 
 cd ../api
-cp .env.example .env                     # defaults already match the compose Postgres
+cp .env.example .env                     # DATABASE_URL already points at localhost:5432
 npm install
 npx prisma migrate deploy
 npm run start:dev                        # http://localhost:3001
@@ -46,7 +55,25 @@ npm run dev                              # http://localhost:3000
 
 Verify: `curl http://localhost:3001/health` → `{"status":"ok"}`.
 
-Stop: `docker compose down` (add `-v` in `infra/` to also wipe data).
+Stop: kill the port-forward, `docker compose stop opensearch`.
+
+### Running `api`'s tests locally
+
+```bash
+# unit tests — no DB needed
+npm test
+
+# e2e tests — needs the same port-forward above, but targets a separate
+# interview_insights_test database on kind's Postgres (created once via
+# `kubectl -n interview-insights exec postgres-0 -- psql -U postgres -c
+# "CREATE DATABASE interview_insights_test;"`, kept current via
+# `prisma migrate deploy` against it) so test runs never litter the real
+# interview_insights data used for manual verification. See D24.
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npm run test:e2e
+```
+
+CI (`.github/workflows/ci.yml`) is unaffected by any of this — its `api`
+job runs its own fully ephemeral Postgres service container per run.
 
 ## 2. Full-stack Docker Compose (prod-like images, still no Kubernetes)
 
@@ -167,7 +194,9 @@ curl --resolve app.interview-insights.local:80:127.0.0.1 http://app.interview-in
 curl --resolve api.interview-insights.local:80:127.0.0.1 http://api.interview-insights.local/health
 ```
 
-To reach Postgres/OpenSearch directly (e.g. a DB client):
+To reach Postgres/OpenSearch directly (e.g. a DB client) — the Postgres
+one is also section 1's actual local-dev Postgres access path now, not
+just an ad hoc DB-client shortcut (D24):
 
 ```bash
 kubectl -n interview-insights port-forward svc/postgres 5432:5432
