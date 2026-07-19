@@ -370,6 +370,17 @@ an on-demand runner, not a problem to fix.
 
 ## 8. CD workflow: from merge to redeploy (Phase 12)
 
+Before any of this runs, `.github/workflows/ci.yml`'s `infra` job
+(GitHub-hosted, no cluster needed, Phase 13 issue #106) already
+validated the PR: `kubectl kustomize` against all four overlays
+(`dev`, `dev-localstack`, `staging`, `prod`) to catch a broken Kustomize
+edit, and a build-only `docker build` for both `api/Dockerfile` and
+`web/Dockerfile` to catch a Dockerfile regression — both at PR time,
+on every PR, regardless of whether the self-hosted runner is ever
+started. Previously, a broken manifest or Dockerfile would merge with
+a green CI check and only fail later, when the real CD job tried to
+build/apply it against the live cluster.
+
 What actually happens between a PR landing on `main` and the `kind`
 cluster running the new code, step by step:
 

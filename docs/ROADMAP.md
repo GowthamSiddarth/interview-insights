@@ -443,7 +443,7 @@ rebuilding it today means manually replaying several sections of
 `wiki/deployment-guide.md` by hand. Milestone: "Phase 13 — Local Infra
 Hardening & Reproducibility".
 
-- [ ] CI job validating `infra/k8s/**` (`kubectl kustomize` against all
+- [x] CI job validating `infra/k8s/**` (`kubectl kustomize` against all
       four overlays) and both Dockerfiles (`docker build`, no push/run)
       — catches infra regressions at PR time instead of at real-CD time
       (GitHub issue #106)
