@@ -873,8 +873,25 @@ overall-experience section correctly showed "Not enough reviews yet"
 with its real `1 review` sample size (n=1, below the shrinkage floor —
 exactly hard constraint #3's transparency rule), navigated to the
 slug-based analytics link and back, zero console errors throughout.
-- Next step: Phase 15, issue #142 (entry points: link search results,
-  wizard, and analytics to profile pages), per `docs/ROADMAP.md`.
+**Phase 15, issue #142 (entry points to the profile page)** — the
+wizard link had already landed as a side effect of issue #141 (same
+file touched for the analytics slug-rename); this issue added the
+remaining two. `web/src/app/search/page.tsx`: each company search
+result row gets a "View profile" link alongside its existing
+select-for-filtering button (kept as two separate affordances, not
+merged, since selecting a company is a different action from leaving
+the page), and the review-filtering step's header gets a "(view
+profile)" link once a company is selected. The analytics page gets a
+"Back to company profile" link, closing the loop issue #141 opened
+one-directionally. 3 new component tests (2 in
+`search-page.spec.tsx`, 1 new `company-analytics-page.spec.tsx` file —
+the analytics page had never had one; 29 web tests total). Verified in
+a real browser (Playwright): full loop search → profile (via the
+result-row link) → analytics (via the profile link) → back to profile
+(via the new back-link), zero console errors. Phase 15 is now fully
+done — all three feature issues (#140-#142) merged.
+- Next step: Phase 15's blog (issue #143), then Phase 16 (Candidate
+  Accounts & Auth), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

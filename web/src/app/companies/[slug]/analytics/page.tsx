@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { api, ApiError, CompanyAnalytics } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { PageContainer } from '@/components/PageContainer';
@@ -63,6 +64,12 @@ export default function CompanyAnalyticsPage() {
           score shows how many reviews it&apos;s based on, even when there isn&apos;t
           enough data to display one yet.
         </p>
+        <Link
+          href={`/companies/${slug}`}
+          className="text-sm text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
+          Back to company profile
+        </Link>
       </header>
 
       <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">

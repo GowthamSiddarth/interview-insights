@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import {
   api,
   ApiError,
@@ -126,21 +127,33 @@ export default function SearchPage() {
           ) : (
             <ul className="flex flex-col gap-1">
               {companyResults.map((company) => (
-                <li key={company.id}>
+                <li
+                  key={company.id}
+                  className={`flex items-center justify-between gap-2 rounded border px-3 py-1 text-sm ${
+                    selectedCompany?.id === company.id
+                      ? 'border-indigo-600 dark:border-indigo-400'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                >
                   <button
                     onClick={() => {
                       setSelectedCompany(company);
                       setReviewResults(null);
                     }}
-                    className={`w-full rounded border px-3 py-1 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                      selectedCompany?.id === company.id
-                        ? 'border-indigo-600 dark:border-indigo-400'
-                        : 'border-gray-300 dark:border-gray-600'
-                    }`}
+                    className="flex-1 text-left hover:underline"
                   >
                     {company.name}{' '}
                     <span className="text-gray-500">({company.sizeBucket})</span>
                   </button>
+                  {/* The public profile page (Phase 15) — distinct from the
+                      button above, which only selects the company for
+                      step 2's review filtering below. */}
+                  <Link
+                    href={`/companies/${company.slug}`}
+                    className="shrink-0 text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    View profile
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -150,7 +163,15 @@ export default function SearchPage() {
 
       {selectedCompany && (
         <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
-          <h2 className="font-medium">2. Browse reviews for {selectedCompany.name}</h2>
+          <h2 className="font-medium">
+            2. Browse reviews for {selectedCompany.name}{' '}
+            <Link
+              href={`/companies/${selectedCompany.slug}`}
+              className="text-sm font-normal text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+            >
+              (view profile)
+            </Link>
+          </h2>
           <form onSubmit={handleReviewSearch} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <label className="flex flex-col text-sm">
               Role title

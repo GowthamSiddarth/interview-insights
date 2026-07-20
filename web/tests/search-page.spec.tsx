@@ -48,4 +48,29 @@ describe('SearchPage', () => {
     await waitFor(() => expect(screen.getByText('No companies match "Acme".')).toBeInTheDocument());
     expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
   });
+
+  it('links each company result to its public profile page (Phase 15 issue #142)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          { id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', industry: null, sizeBucket: 'mid' },
+        ]),
+    }) as jest.Mock;
+
+    const user = userEvent.setup();
+    render(<SearchPage />);
+
+    await user.type(screen.getByPlaceholderText('Company name'), 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    const profileLink = await screen.findByRole('link', { name: 'View profile' });
+    expect(profileLink).toHaveAttribute('href', '/companies/acme-corp');
+
+    // Selecting the company for step 2 also surfaces a profile link in its
+    // header, distinct from the select button.
+    await user.click(screen.getByRole('button', { name: /Acme Corp/ }));
+    const headerLink = await screen.findByRole('link', { name: '(view profile)' });
+    expect(headerLink).toHaveAttribute('href', '/companies/acme-corp');
+  });
 });

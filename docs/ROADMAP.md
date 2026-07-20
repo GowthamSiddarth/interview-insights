@@ -550,8 +550,13 @@ endpoint, Phase 5 search, unique slugs since Phase 1). Milestone:
       `use()` pattern to `useParams()` (synchronous, no Suspense
       boundary needed) along the way — simpler, and the only way to
       unit-test the page at all
-- [ ] Entry points: link search results, wizard, and analytics to
-      profile pages (GitHub issue #142)
+- [x] Entry points: link search results, wizard, and analytics to
+      profile pages (GitHub issue #142) — the wizard link landed as
+      part of issue #141 (touched the same file for the analytics
+      slug-rename); this issue added the remaining two: each search
+      result row and the review-filtering header both link to
+      `/companies/[slug]`, and the analytics page links back to its
+      profile
 - [ ] Engineering blog (last) (GitHub issue #143)
 
 ## Phase 16 — Candidate Accounts & Auth
