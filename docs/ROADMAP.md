@@ -500,9 +500,14 @@ Overall Reviews + Moderation Admin UI".
       gated on a round existing; both confirmations show the real
       `pending` status (never a fake "published" message), and the
       recruiter-identifier field states it's never shown publicly
-- [ ] Moderation admin UI (GitHub issue #128) — replaces curl-only
+- [x] Moderation admin UI (GitHub issue #128) — replaces curl-only
       moderation across all three entity types; no new auth introduced,
       same trust model as the rest of `web/` today (auth is Phase 8's
-      concern, not this one)
+      concern, not this one). `GET /moderation/queue` now enriches each
+      entry with its entity's own fields + display context server-side —
+      pending entities are deliberately unreadable via every public
+      endpoint, so the UI had no other way to show what it's moderating.
+      Only generated labels cross the wire, never
+      `internal_identifier_hash` (and `candidateId` is omitted too)
 - [ ] Engineering blog (last, once the above four are merged) (GitHub
       issue #129)

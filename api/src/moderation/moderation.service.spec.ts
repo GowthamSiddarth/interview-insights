@@ -13,9 +13,9 @@ describe('ModerationService', () => {
       findUniqueOrThrow: jest.Mock;
       update: jest.Mock;
     };
-    roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock };
-    recruiterRating: { update: jest.Mock };
-    overallReview: { update: jest.Mock };
+    roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock; findMany: jest.Mock };
+    recruiterRating: { update: jest.Mock; findMany: jest.Mock };
+    overallReview: { update: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
@@ -28,9 +28,13 @@ describe('ModerationService', () => {
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
       },
-      roundRating: { update: jest.fn(), findUniqueOrThrow: jest.fn() },
-      recruiterRating: { update: jest.fn() },
-      overallReview: { update: jest.fn() },
+      roundRating: {
+        update: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      recruiterRating: { update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      overallReview: { update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
@@ -77,6 +81,82 @@ describe('ModerationService', () => {
         where: { reviewedAt: null },
         orderBy: { createdAt: 'asc' },
       });
+    });
+
+    it('enriches each entry with its entity, using only generated labels — never the identifier hash', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },
+        { id: 'q2', entityType: 'recruiter_rating', entityId: 'cr1', reviewedAt: null },
+        { id: 'q3', entityType: 'overall_review', entityId: 'ov1', reviewedAt: null },
+      ]);
+      prisma.roundRating.findMany.mockResolvedValue([
+        {
+          id: 'rr1',
+          difficulty: 3,
+          fairness: 4,
+          communicationFluency: 4,
+          attentiveness: 4,
+          biasSignal: 5,
+          technicalDepth: null,
+          freeText: 'tough but fair',
+          round: {
+            title: 'Screen',
+            roundType: 'coding',
+            process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+          },
+        },
+      ]);
+      prisma.recruiterRating.findMany.mockResolvedValue([
+        {
+          id: 'cr1',
+          approachability: 5,
+          responseTime: 4,
+          timeliness: 5,
+          communicationQuality: 5,
+          freeText: null,
+          recruiterInteraction: {
+            recruiter: { displayLabel: 'Recruiter A', internalIdentifierHash: 'deadbeef' },
+            process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+          },
+        },
+      ]);
+      prisma.overallReview.findMany.mockResolvedValue([
+        {
+          id: 'ov1',
+          overallExperience: 4,
+          wouldRecommend: true,
+          reviewText: 'good loop',
+          process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+        },
+      ]);
+
+      const result = await service.listPending();
+
+      expect(result[0].entity).toMatchObject({
+        companyName: 'Acme',
+        roundTitle: 'Screen',
+        difficulty: 3,
+        freeText: 'tough but fair',
+      });
+      expect(result[1].entity).toMatchObject({
+        recruiterLabel: 'Recruiter A',
+        approachability: 5,
+      });
+      expect(JSON.stringify(result)).not.toContain('deadbeef');
+      expect(result[2].entity).toMatchObject({
+        overallExperience: 4,
+        wouldRecommend: true,
+      });
+    });
+
+    it('attaches entity: null when the underlying row is missing', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'round_rating', entityId: 'gone', reviewedAt: null },
+      ]);
+
+      const result = await service.listPending();
+
+      expect(result[0].entity).toBeNull();
     });
   });
 

@@ -27,6 +27,7 @@ interface QueueEntryBody {
   reviewedAt: string | null;
   reviewedBy: string | null;
   flagReason: string | null;
+  entity: Record<string, unknown> | null;
 }
 
 function body<T>(res: request.Response): T {
@@ -117,6 +118,14 @@ describe('Moderation (e2e)', () => {
     const entry = await findQueueEntryFor(ratingId);
     expect(entry.entityType).toBe('round_rating');
     expect(entry.reviewedAt).toBeNull();
+    // Enriched for the moderation UI (Phase 14 issue #128): the entity's
+    // own fields plus display context, no second lookup needed.
+    expect(entry.entity).toMatchObject({
+      companyName: 'Acme Corp',
+      roundTitle: 'Technical Screen',
+      roundType: 'coding',
+      difficulty: 3,
+    });
   });
 
   it('approving a pending rating makes it publicly visible', async () => {

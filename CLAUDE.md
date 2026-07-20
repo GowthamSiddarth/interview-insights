@@ -774,8 +774,49 @@ browser (Playwright) against the api dev server backed by kind's
 Postgres per D24: full 6-step flow, both submissions confirmed
 `pending` in the moderation queue via direct API check, zero console
 errors.
-- Next step: Phase 14, issue #128 (moderation admin UI), per
-  `docs/ROADMAP.md`.
+**Interlude: OpenSearch consolidation (D26)** — the user spotted the
+two-OpenSearch split (Compose container + the in-cluster StatefulSet
+inside the kind node container) and asked to consolidate, extending
+D24's "one server only" to OpenSearch. Native dev + local e2e now
+port-forward to kind's `opensearch`; the Compose service stays inert
+reference. The wrinkle Postgres didn't have: OpenSearch has no database
+concept, so a new `OPENSEARCH_INDEX_PREFIX` env var
+(`api/src/search/search-index-name.util.ts`, default empty — CI and
+deployed environments unchanged) isolates local e2e into
+`e2etest-companies`/`e2etest-reviews`. Verified with a before/after doc
+count on the real indices across a full e2e run (2/1 → 2/1, all churn
+in `e2etest-*`). Also that day: two dangling `<none>` Docker images
+explained (untagged old `api:k8s`/`web:k8s` builds) and pruned, and a
+manual CD-equivalent deploy run by hand when a GitHub Actions incident
+(expired TLS cert on the Actions broker host — diagnosed from the
+runner's `_diag` logs + `openssl s_client`, confirmed on
+githubstatus.com) blocked the self-hosted runner from picking up the
+queued job.
+
+**Phase 14, issue #128 (moderation admin UI)** — a new
+`web/src/app/moderation/page.tsx` (linked from the shared NavBar):
+lists pending queue entries across all three entity types with
+approve/reject/flag actions (flag reason selectable per entry, optional
+moderator name applied to all actions), explicit loading vs
+"Queue is clear" empty state (issue #61's rule). API side:
+`ModerationService.listPending()` now enriches each entry with its
+entity's own fields + display context (company, role, round,
+generated recruiter label) server-side — pending entities are
+deliberately unreadable via every public endpoint, so the UI had no
+other way to show what it's moderating; one query per entity type per
+page, never per entry; `internal_identifier_hash` and `candidateId`
+never cross the wire. 2 new unit tests + 5 component tests + an
+enriched-entity e2e assertion (167 api unit / 19 web / 57 e2e, all
+green — e2e stress-run 5x against kind's stores per D24/D26 after one
+non-reproducible first-connection port-forward hiccup). Verified in a
+real browser (Playwright): seeded one pending entry per entity type,
+drove approve (round rating) / reject (recruiter rating) / flag
+(overall review, spam_pattern) through the real page, confirmed all
+three transitions + moderator name + flag reason directly in kind's
+Postgres via `kubectl exec` psql, zero console errors, and asserted the
+raw recruiter identifier appears nowhere in the rendered page.
+- Next step: Phase 14, issue #129 (engineering blog — last, now that
+  all four feature issues are merged), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

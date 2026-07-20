@@ -95,6 +95,48 @@ export interface OverallReview {
   createdAt: string;
 }
 
+// The `entity` payload GET /moderation/queue attaches to each entry —
+// shape varies by entityType; only the fields the moderation page needs.
+export interface ModerationQueueEntity {
+  companyName: string;
+  roleTitle: string;
+  freeText?: string | null;
+  // round_rating
+  roundTitle?: string;
+  roundType?: Round['roundType'];
+  difficulty?: number;
+  fairness?: number;
+  communicationFluency?: number;
+  attentiveness?: number;
+  biasSignal?: number;
+  technicalDepth?: number | null;
+  // recruiter_rating — recruiterLabel is the generated label, never a
+  // real name (CLAUDE.md hard constraint #1)
+  recruiterLabel?: string;
+  approachability?: number;
+  responseTime?: number;
+  timeliness?: number;
+  communicationQuality?: number;
+  // overall_review
+  overallExperience?: number;
+  wouldRecommend?: boolean;
+  reviewText?: string | null;
+}
+
+export type ModerationEntityType = 'round_rating' | 'recruiter_rating' | 'overall_review';
+export type ModerationFlagReason = 'spam_pattern' | 'rate_limit' | 'duplicate' | 'manual_report';
+
+export interface ModerationQueueEntry {
+  id: string;
+  entityType: ModerationEntityType;
+  entityId: string;
+  flagReason: ModerationFlagReason | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  entity: ModerationQueueEntity | null;
+}
+
 export interface RoundTypeAnalytics {
   roundType: Round['roundType'];
   sampleSize: number;
@@ -270,6 +312,26 @@ export const api = {
     request<OverallReview>(`/processes/${processId}/overall-review`, {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+
+  listModerationQueue: () => request<ModerationQueueEntry[]>('/moderation/queue'),
+
+  approveModerationEntry: (id: string, reviewedBy?: string) =>
+    request<ModerationQueueEntry>(`/moderation/queue/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(reviewedBy ? { reviewedBy } : {}),
+    }),
+
+  rejectModerationEntry: (id: string, reviewedBy?: string) =>
+    request<ModerationQueueEntry>(`/moderation/queue/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(reviewedBy ? { reviewedBy } : {}),
+    }),
+
+  flagModerationEntry: (id: string, flagReason: ModerationFlagReason, reviewedBy?: string) =>
+    request<ModerationQueueEntry>(`/moderation/queue/${id}/flag`, {
+      method: 'POST',
+      body: JSON.stringify({ flagReason, ...(reviewedBy ? { reviewedBy } : {}) }),
     }),
 
   getCompanyAnalytics: (companyId: string) =>

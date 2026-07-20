@@ -37,13 +37,86 @@ export class ModerationService {
     return tx.moderationQueueEntry.create({ data: { entityType, entityId, flagReason } });
   }
 
-  // Unreviewed queue entries — no moderator UI yet, so this is the whole
-  // "inbox" for now (docs/ROADMAP.md Phase 3 issue #1 scope).
-  listPending() {
-    return this.prisma.moderationQueueEntry.findMany({
+  // Unreviewed queue entries, each enriched with its underlying entity's
+  // own fields plus display context (company, role, generated labels) —
+  // the moderation UI (Phase 14 issue #128) must be able to review an
+  // entry without a second lookup, and pending entities are deliberately
+  // unreadable through every public endpoint. Only generated labels ever
+  // leave here (CLAUDE.md hard constraint #1) — never
+  // internal_identifier_hash, and candidateId is omitted too since
+  // moderating content doesn't require knowing who wrote it.
+  async listPending() {
+    const entries = await this.prisma.moderationQueueEntry.findMany({
       where: { reviewedAt: null },
       orderBy: { createdAt: 'asc' },
     });
+
+    const idsFor = (type: ModerationEntityType) =>
+      entries.filter((e) => e.entityType === type).map((e) => e.entityId);
+
+    // One query per entity type over the whole page of entries — not one
+    // per entry.
+    const [roundRatings, recruiterRatings, overallReviews] = await Promise.all([
+      this.prisma.roundRating.findMany({
+        where: { id: { in: idsFor('round_rating') } },
+        include: { round: { include: { process: { include: { company: true } } } } },
+      }),
+      this.prisma.recruiterRating.findMany({
+        where: { id: { in: idsFor('recruiter_rating') } },
+        include: {
+          recruiterInteraction: {
+            include: { recruiter: true, process: { include: { company: true } } },
+          },
+        },
+      }),
+      this.prisma.overallReview.findMany({
+        where: { id: { in: idsFor('overall_review') } },
+        include: { process: { include: { company: true } } },
+      }),
+    ]);
+
+    const entityById = new Map<string, unknown>();
+    for (const r of roundRatings) {
+      entityById.set(r.id, {
+        companyName: r.round.process.company.name,
+        roleTitle: r.round.process.roleTitle,
+        roundTitle: r.round.title,
+        roundType: r.round.roundType,
+        difficulty: r.difficulty,
+        fairness: r.fairness,
+        communicationFluency: r.communicationFluency,
+        attentiveness: r.attentiveness,
+        biasSignal: r.biasSignal,
+        technicalDepth: r.technicalDepth,
+        freeText: r.freeText,
+      });
+    }
+    for (const r of recruiterRatings) {
+      entityById.set(r.id, {
+        companyName: r.recruiterInteraction.process.company.name,
+        roleTitle: r.recruiterInteraction.process.roleTitle,
+        recruiterLabel: r.recruiterInteraction.recruiter.displayLabel,
+        approachability: r.approachability,
+        responseTime: r.responseTime,
+        timeliness: r.timeliness,
+        communicationQuality: r.communicationQuality,
+        freeText: r.freeText,
+      });
+    }
+    for (const r of overallReviews) {
+      entityById.set(r.id, {
+        companyName: r.process.company.name,
+        roleTitle: r.process.roleTitle,
+        overallExperience: r.overallExperience,
+        wouldRecommend: r.wouldRecommend,
+        reviewText: r.reviewText,
+      });
+    }
+
+    return entries.map((entry) => ({
+      ...entry,
+      entity: entityById.get(entry.entityId) ?? null,
+    }));
   }
 
   approve(id: string, dto: ModerationActionDto) {
