@@ -829,8 +829,23 @@ verification gap, issues #144-#148), Phase 17 (Candidate Self-Service —
 my-reviews, Update/Delete closing Phase 2's deferral, GDPR erasure
 closing the oldest open decision, issues #149-#152). Implementation
 stays strictly sequential. See docs/ROADMAP.md Phases 15-17.
-- Next step: Phase 15, issue #140 (company read paths: slug lookup +
-  approved reviews list), per `docs/ROADMAP.md`.
+**Phase 15, issue #140 (company read paths)** — `GET
+/companies/by-slug/:slug` (profile pages address companies by slug,
+unique since Phase 1; two-segment route so it can't collide with
+`:id`) and `GET /companies/:id/reviews` (approved-only round ratings
+joined with round title/type + role title, paginated via a
+`page`/`pageSize` query DTO — the codebase's first `@Type()` coercion,
+which needed an explicit `reflect-metadata` import in its bare unit
+test). Reads Postgres, not OpenSearch (D16/D17: derived index, a
+profile page is a source-of-truth read); verifies company existence
+first (404, not an empty page); `candidateId` never included
+(unit-asserted). README's API endpoint table was still labeled "Phase
+2 slice" — refreshed to cover every endpoint through Phase 15. 9 new
+unit tests + 5 e2e tests (`company-reviews.e2e-spec.ts`, 62 e2e
+total) against kind's stores per D24/D26, plus live curl verification
+against real data (slug 200/404, shaped items, no candidateId).
+- Next step: Phase 15, issue #141 (company profile page
+  `/companies/[slug]`), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
