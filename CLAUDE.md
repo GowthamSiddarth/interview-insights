@@ -820,12 +820,17 @@ raw recruiter identifier appears nowhere in the rendered page.
 post for all four feature issues (#125-#128). **Phase 14 is now fully
 done** — issues #125-#129 all closed via merged PRs, and every phase
 built so far has a complete engineering blog.
-- Next step: no explicit next phase requested yet. Phase 8 (production
-  hardening menu) remains trigger-gated (see docs/ROADMAP.md Phase 8) —
-  wait for a real trigger or explicit direction. Natural app-side
-  candidates from the Phase 14 brainstorm, if asked: candidate email
-  verification UI (D14's gap), candidate accounts/auth (unblocks
-  Phase 2's deferred Update/Delete), public company profile pages.
+**Phases 15-17 planning** — at the user's explicit request (a
+deliberate deviation from the one-phase-at-a-time cadence), all three
+next phases were planned in one pass after the post-Phase-14
+brainstorm: Phase 15 (Public Company Profile Pages, issues #140-#143),
+Phase 16 (Candidate Accounts & Auth — magic links subsuming D14's
+verification gap, issues #144-#148), Phase 17 (Candidate Self-Service —
+my-reviews, Update/Delete closing Phase 2's deferral, GDPR erasure
+closing the oldest open decision, issues #149-#152). Implementation
+stays strictly sequential. See docs/ROADMAP.md Phases 15-17.
+- Next step: Phase 15, issue #140 (company read paths: slug lookup +
+  approved reviews list), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
