@@ -15,7 +15,10 @@ posts, organized by phase.
 *Predates the issue/milestone convention introduced in Phase 3 — every
 item below was retroactively given its own closed GitHub issue purely
 for citation consistency (same precedent as the blog issue below), not
-because it was planned that way at the time.*
+because it was planned that way at the time. Retrofitted with an Epic
+issue too once the Epics-vs-Milestones convention was adopted — no
+Milestone exists for this phase (predates that too), just the Epic.
+Epic: GitHub issue #170.*
 
 - [x] Repo scaffold matching the layout in `docs/ARCHITECTURE.md`
       (GitHub issue #111)
@@ -29,7 +32,7 @@ because it was planned that way at the time.*
 ## Phase 2 — Thin vertical slice
 
 *Also predates the issue/milestone convention — same retroactive-issue
-note as Phase 1 above.*
+note as Phase 1 above. Epic: GitHub issue #171.*
 
 - [x] Create + Read for Company → InterviewProcess → Round → RoundRating, API
       only (Update/Delete intentionally deferred — see CLAUDE.md current
@@ -43,6 +46,9 @@ note as Phase 1 above.*
       GitHub issue #48) — written after the fact, same reason as Phase 1
 
 ## Phase 3 — Trust & moderation
+
+Epic: GitHub issue #172.
+
 - [x] Moderation queue (GitHub issue #1) — runs in-process within `api` for
       now, not a separate `workers`/Kafka-consuming service; see D12 in
       `docs/DECISIONS.md` for why, and revisit once there's async load to
@@ -59,6 +65,9 @@ note as Phase 1 above.*
       GitHub issue #49)
 
 ## Phase 4 — Analytics
+
+Epic: GitHub issue #173.
+
 - [x] Materialized views per `docs/DATA_MODEL.md` Aggregation layer section
       (GitHub issue #7) — approved-only, no refresh trigger yet, see D15
 - [x] Shrinkage scoring implemented at the API layer (D4) (GitHub issue #8)
@@ -77,6 +86,9 @@ note as Phase 1 above.*
       issue #50)
 
 ## Phase 5 — Search & discovery
+
+Epic: GitHub issue #174.
+
 - [x] OpenSearch indexing for company search (GitHub issue #21) —
       `infra/docker-compose.yml` default service (first real trigger, per
       D9); synchronous, best-effort indexing on company creation, see D16
@@ -94,6 +106,11 @@ note as Phase 1 above.*
       GitHub issue #51)
 
 ## Phase 6 — CI/CD & containerization
+
+Epic: GitHub issue #175 (spans both the original pre-convention work and
+the later "Phase 6 hardening" milestone — a concrete example of an epic
+not mapping 1:1 to a single milestone, see wiki/github-project-setup.md).
+
 - [x] GitHub Actions: lint, type-check, test, build on PR (built during
       Phase 1 scaffolding, ahead of sequence — `.github/workflows/ci.yml`)
       (GitHub issue #118, retroactive — see Phase 1's note)
@@ -115,6 +132,9 @@ note as Phase 1 above.*
       gets documented)
 
 ## Phase 7 — Kubernetes
+
+Epic: GitHub issue #176.
+
 - [x] Base manifests for Postgres + OpenSearch (GitHub issue #27) —
       `infra/k8s/base/`, StatefulSets + headless Services + PVCs,
       verified against a local `kind` cluster
@@ -286,7 +306,7 @@ notes/placeholder copy, inconsistent styling, and general rough UX edges
 across the Phase 2 wizard, Phase 4 dashboard, and Phase 5 search pages.
 Audited (walked every page, checked the source directly) before filing
 anything, same "plan before implementing" discipline as every other
-phase. Milestone: "Phase 9 — UX/UI Polish Pass".
+phase. Milestone: "Phase 9 — UX/UI Polish Pass". Epic: GitHub issue #177.
 
 Numbered by when it was planned, not by execution order relative to
 Phase 8 — Phase 8 remains trigger-gated (see its own intro) and may well
@@ -323,7 +343,7 @@ planning sequence, same as they always have.
 Local, zero-cost practice for cloud-shaped tooling ahead of any real
 Phase 8 trigger firing — doesn't supersede D11 (AWS) and doesn't start
 Phase 8 for real (see docs/DECISIONS.md D19/D20). Milestone: "Phase 10 —
-Cloud-Readiness Practice (Local, Free)".
+Cloud-Readiness Practice (Local, Free)". Epic: GitHub issue #178.
 
 - [x] Install ingress-nginx via Helm instead of raw upstream YAML
       (GitHub issue #65) — third-party infra only; our own api/web/
@@ -350,7 +370,7 @@ secrets/IAM all genuinely communicate together, not just each verified in
 isolation. This is deliberately still local/free (no real AWS account,
 doesn't retrigger D11) — see the new decision this phase adds in
 `docs/DECISIONS.md`. Milestone: "Phase 11 — Integrated Prototype:
-LocalStack Secrets & IAM in kind".
+LocalStack Secrets & IAM in kind". Epic: GitHub issue #179.
 
 - [x] Deploy LocalStack (IAM + Secrets Manager only) into the `kind`
       cluster and seed the API's two secrets plus the existing
@@ -391,7 +411,7 @@ workflow triggers **automatically on push to `main`** (a real `on:
 push` trigger, not `workflow_dispatch`) — the job simply queues until
 the on-demand runner is next started, reconciling "real" automatic CD
 semantics with deliberate, session-scoped execution. Milestone: "Phase
-12 — Local CD & Cluster Observability".
+12 — Local CD & Cluster Observability". Epic: GitHub issue #180.
 
 - [x] Register a self-hosted GitHub Actions runner for this repo,
       on-demand mode (`./run.sh`, not installed as a persistent service)
@@ -441,7 +461,7 @@ cluster); the `kind` cluster has been running continuously since Phase 7
 with nobody proving it still bootstraps cleanly from empty; and
 rebuilding it today means manually replaying several sections of
 `wiki/deployment-guide.md` by hand. Milestone: "Phase 13 — Local Infra
-Hardening & Reproducibility".
+Hardening & Reproducibility". Epic: GitHub issue #181.
 
 - [x] CI job validating `infra/k8s/**` (`kubectl kustomize` against all
       four overlays) and both Dockerfiles (`docker build`, no push/run)
@@ -476,7 +496,7 @@ reviews yet." Bundled alongside it: a moderation admin UI, since even the
 one entity type with a write path today (`round_rating`) is moderated only
 via raw `curl` — adding two more entity types onto a curl-only moderation
 queue would only compound that gap. Milestone: "Phase 14 — Recruiter &
-Overall Reviews + Moderation Admin UI".
+Overall Reviews + Moderation Admin UI". Epic: GitHub issue #184.
 
 - [x] `RecruiterInteraction` + `RecruiterRating` write path (GitHub issue
       #125) — same pattern as Phase 3 issue #1 (moderation-gated,
@@ -531,7 +551,7 @@ A real public destination per company — today a company is only
 reachable by searching for it, and the analytics dashboard reads like
 an internal tool. Composes mostly-existing pieces (Phase 4 analytics
 endpoint, Phase 5 search, unique slugs since Phase 1). Milestone:
-"Phase 15 — Public Company Profile Pages".
+"Phase 15 — Public Company Profile Pages". Epic: GitHub issue #185.
 
 - [x] Company read paths: lookup by slug + approved reviews list
       (GitHub issue #140) — reviews read from Postgres, not OpenSearch
@@ -569,7 +589,7 @@ time (never persisted, design principle 1), and a clicked login link
 *proves email ownership* — subsuming D14's never-sent verification
 email entirely. Unblocks Phase 2's deferred Update/Delete, my-reviews,
 and the GDPR open decision (all Phase 17). Milestone: "Phase 16 —
-Candidate Accounts & Auth".
+Candidate Accounts & Auth". Epic: GitHub issue #182.
 
 - [ ] Local email delivery foundation (Mailpit or LocalStack SES —
       decide + document) + api mail module (GitHub issue #144)
@@ -585,7 +605,8 @@ Candidate Accounts & Auth".
 
 What auth unblocks — including two debts as old as the project:
 Phase 2's Update/Delete deferral and the GDPR retention/erasure open
-decision. Milestone: "Phase 17 — Candidate Self-Service".
+decision. Milestone: "Phase 17 — Candidate Self-Service". Epic: GitHub
+issue #183.
 
 - [ ] My reviews: own submissions across all entity types, all
       statuses, owner-scoped (GitHub issue #149)
@@ -612,7 +633,8 @@ reachable by anyone else (a cloud staging box, or even a shared demo).
 Deliberately minimal in scope — a single shared admin credential, not a
 multi-user/RBAC system, matching this project's own "don't build for
 hypothetical future requirements" convention; revisit if/when a second
-admin ever exists. Milestone: "Phase 18 — Admin Authentication".
+admin ever exists. Milestone: "Phase 18 — Admin Authentication". Epic:
+GitHub issue #167.
 
 - [ ] Backend: admin login endpoint, JWT session issuance (httpOnly
       cookie), guard applied to every `ModerationController` route, login
@@ -629,7 +651,7 @@ D13's exact-match/full-table-scan duplicate detection limit, the total
 absence of any content-quality signal beyond mechanical fraud checks, and
 `docs/ARCHITECTURE.md`'s cold-start gap (no synthetic data generator
 exists for lower environments). Milestone: "Phase 19 — Content Quality &
-Synthetic Data".
+Synthetic Data". Epic: GitHub issue #168.
 
 - [ ] Near-duplicate review detection: replace `FraudChecksService`'s
       exact-match full-table scan with a similarity-based check

@@ -228,8 +228,24 @@ genuinely separate going forward:
   issues from more than one phase/epic at that point — unlike today's
   strict 1:1 phase-to-milestone mapping).
 
-Phases 1-17 predate this and are left exactly as they are — no
-retroactive epic/sub-issue rewiring, no value in the churn.
+**Update, same day**: the "no value in the churn" call above was
+overridden by the project owner, who wanted full consistency across
+every phase rather than a cutoff at Phase 18. Phases 1-17 were
+retrofitted with epic issues too (#170-185, mapped in
+`docs/ROADMAP.md`'s per-phase "Epic: GitHub issue #N" lines). A phase
+that predates the Milestone convention entirely (Phases 1-2) just gets
+an Epic and no Milestone — the two were never actually coupled, so
+retrofitting one doesn't require inventing the other. Phase 6 is the
+one genuinely interesting case: its epic (#175) spans issues from
+*two* different milestones (the original pre-convention work, no
+milestone, plus the later "Phase 6 hardening" milestone) — concrete
+proof that an epic and a milestone are different axes, not the same
+grouping wearing two names. A phase whose milestone was already
+**closed** (Phase 14, 15) can't be attached via `gh issue create
+--milestone "<title>"` — that flag only resolves open milestones by
+title. Fixed by creating the issue without `--milestone`, then setting
+it directly by number: `gh api repos/<owner>/<repo>/issues/<epic-number>
+-X PATCH -F milestone=<milestone-number>`.
 
 **Checked and ruled out**: GitHub's native "Issue Types" feature (which
 includes a built-in `Epic` type) — confirmed via `gh api
