@@ -123,7 +123,11 @@ Admin UI), and Phase 15 (Public Company Profile Pages) are all done.
 Phase 6 is done except issue #18 (blocked). Phases 1-7 and 9-15 each
 have a complete engineering blog under `wiki/blog/`. Phase 8 is a
 trigger-gated backlog, not started. Phases 16 (Candidate Accounts &
-Auth) and 17 (Candidate Self-Service) are planned but not started.
+Auth), 17 (Candidate Self-Service), 18 (Admin Authentication), and 19
+(Content Quality & Synthetic Data) are all planned but not started.
+Phases 18-19 were filed after Phase 16-17, but per the same non-linear
+precedent Phase 6/8 already set, are intended to be implemented first —
+see the Phase 18 intro in `docs/ROADMAP.md` for why.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -896,8 +900,26 @@ done — all three feature issues (#140-#142) merged.
 feature issues (#140-#142). **Phase 15 is now fully done** —
 issues #140-#143 all closed via merged PRs, and every phase built so
 far has a complete engineering blog.
-- Next step: Phase 16 (Candidate Accounts & Auth), issue #144 (local
-  email delivery foundation + api mail module), per
+
+**Phase 18/19 planning (Admin Authentication; Content Quality &
+Synthetic Data)** — filed 2026-07-20 after a strategic "how do we move
+toward enterprise-grade" review covering infra, CI/CD, security, auth,
+spam control, review-analysis accuracy, synthetic data, and cluster
+hosting options (OCI Always Free considered as a real staging target
+alongside/instead of AWS). The review surfaced that the Phase 14
+moderation admin surface has zero authentication today — both
+`ModerationController` and `web/src/app/moderation/page.tsx` say so in
+their own comments — which is safe only as long as everything stays on
+localhost/kind, and becomes a real hole the moment any environment is
+reachable by anyone else. That's urgent enough to jump ahead of the
+already-planned Phase 16/17, mirroring the non-linear precedent Phase
+6/8 already established (later-numbered phases proceeding while an
+earlier one sits open/gated). Milestones "Phase 18 — Admin
+Authentication" (issues #159-161) and "Phase 19 — Content Quality &
+Synthetic Data" (issues #162-165) filed together per the "plan a phase
+before implementing" convention. See `docs/ROADMAP.md` Phases 18-19 for
+full scope.
+- Next step: Phase 18, issue #159 (admin auth backend), per
   `docs/ROADMAP.md`.
 
 ## Open decisions still to make
