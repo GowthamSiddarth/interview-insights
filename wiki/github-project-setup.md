@@ -210,6 +210,68 @@ gh project item-edit --project-id "PVT_kwHOAVBf_84BdhUE" \
   --single-select-option-id "47fc9ee4"
 ```
 
+## Epics vs Milestones
+
+Adopted from Phase 18 onward (2026-07-20 strategic review) after noticing
+every GitHub Milestone created so far (`due_on: null` on all of them) was
+actually being used to mean "themed body of work," not "date-bound
+checkpoint" — the two got conflated because GitHub doesn't hand a
+personal-account repo a first-class Epic object. Two fixes, kept as
+genuinely separate going forward:
+
+- **Epic** = a phase, tracked as a real parent issue with the phase's
+  feature issues attached as native **sub-issues** (a real GitHub
+  feature — confirmed working on this repo's tier, unlike "Issue Types"
+  below).
+- **Milestone** = demoted back to a flat, date-less grouping; reserved to
+  mean an actual date-bound external commitment once one exists (may span
+  issues from more than one phase/epic at that point — unlike today's
+  strict 1:1 phase-to-milestone mapping).
+
+Phases 1-17 predate this and are left exactly as they are — no
+retroactive epic/sub-issue rewiring, no value in the churn.
+
+**Checked and ruled out**: GitHub's native "Issue Types" feature (which
+includes a built-in `Epic` type) — confirmed via `gh api
+repos/<owner>/<repo>/issue-types` returning 404 on this repo. It's gated
+to Organization-owned repos; this repo is owned by a personal User
+account. Same shape of gap as branch protection (issue #18) — always
+check availability against the actual repo/account tier before assuming
+a GitHub feature applies; don't infer it from GitHub's general docs.
+
+**Create the epic issue** (same milestone as its children, so filtering
+by milestone still works):
+
+```bash
+gh issue create --title "Epic: Phase 18 — Admin Authentication" \
+  --milestone "Phase 18 — Admin Authentication" \
+  --assignee <your-github-username> \
+  --body "Epic issue for Phase 18 — tracks the phase via native sub-issues. See docs/ROADMAP.md Phase 18."
+```
+
+**Attach existing issues as sub-issues** — the API wants the sub-issue's
+numeric database `id` (not its issue *number*), and the `-F` flag (not
+`-f`) so `gh api` sends it as a JSON integer, not a string:
+
+```bash
+# 1. Get each child issue's database id
+gh api repos/<owner>/<repo>/issues/<issue-number> --jq '.id'
+
+# 2. Attach it to the epic (issue-number here is the EPIC's number)
+gh api repos/<owner>/<repo>/issues/<epic-issue-number>/sub_issues \
+  -X POST -F sub_issue_id=<child-issue-database-id>
+```
+
+**Verify** — the epic issue's own object gains a live progress summary:
+
+```bash
+gh api repos/<owner>/<repo>/issues/<epic-issue-number> --jq '.sub_issues_summary'
+# => {"completed":0,"percent_completed":0,"total":3}
+```
+
+Add the epic issue to the Project board the same way as any other issue
+(section 7 above, `gh project item-add` with its URL).
+
 ## Gotchas hit while setting this up
 
 - `docker` and `gh` binaries can exist on disk (e.g. `/usr/local/bin`) while

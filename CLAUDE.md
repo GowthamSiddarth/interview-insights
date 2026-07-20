@@ -95,6 +95,16 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   issues already are. See `wiki/github-project-setup.md`'s "Workflow
   convention" section for this project's concrete `gh project item-edit`
   IDs.
+- **Epics vs Milestones, kept as two distinct concepts from Phase 18
+  onward** (Phases 1-17 predate this and are left as-is — no retroactive
+  rename). A phase is an **Epic**: a themed, date-less body of work,
+  tracked as a real parent issue with the phase's feature issues attached
+  as native GitHub sub-issues. The GitHub **Milestone** stays too, but
+  demoted to what it's actually good at — a flat, date-less grouping —
+  and is reserved to mean a genuine date-bound external commitment only
+  once one actually exists (e.g. a real staging-launch date spanning
+  issues from more than one phase). See `wiki/github-project-setup.md`'s
+  "Epics vs Milestones" section for the concrete sub-issues API commands.
 
 ## Build order (see docs/ROADMAP.md for full detail)
 
