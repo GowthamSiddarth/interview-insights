@@ -112,16 +112,18 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-19: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+As of 2026-07-20: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
 Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
 Cluster Observability), Phase 13 (Local Infra Hardening &
-Reproducibility), and Phase 14 (Recruiter & Overall Reviews +
-Moderation Admin UI) are all done. Phase 6 is done except issue #18
-(blocked). Phases 1-7 and 9-14 each have a complete engineering blog
-under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not started.
+Reproducibility), Phase 14 (Recruiter & Overall Reviews + Moderation
+Admin UI), and Phase 15 (Public Company Profile Pages) are all done.
+Phase 6 is done except issue #18 (blocked). Phases 1-7 and 9-15 each
+have a complete engineering blog under `wiki/blog/`. Phase 8 is a
+trigger-gated backlog, not started. Phases 16 (Candidate Accounts &
+Auth) and 17 (Candidate Self-Service) are planned but not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -890,8 +892,13 @@ a real browser (Playwright): full loop search → profile (via the
 result-row link) → analytics (via the profile link) → back to profile
 (via the new back-link), zero console errors. Phase 15 is now fully
 done — all three feature issues (#140-#142) merged.
-- Next step: Phase 15's blog (issue #143), then Phase 16 (Candidate
-  Accounts & Auth), per `docs/ROADMAP.md`.
+`wiki/blog/phase-15-company-profile-pages/` has a post for all three
+feature issues (#140-#142). **Phase 15 is now fully done** —
+issues #140-#143 all closed via merged PRs, and every phase built so
+far has a complete engineering blog.
+- Next step: Phase 16 (Candidate Accounts & Auth), issue #144 (local
+  email delivery foundation + api mail module), per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

@@ -557,7 +557,9 @@ endpoint, Phase 5 search, unique slugs since Phase 1). Milestone:
       result row and the review-filtering header both link to
       `/companies/[slug]`, and the analytics page links back to its
       profile
-- [ ] Engineering blog (last) (GitHub issue #143)
+- [x] Engineering blog (last) (GitHub issue #143) — `wiki/blog/
+      phase-15-company-profile-pages/`, one post per feature issue;
+      Phase 15 is now fully done
 
 ## Phase 16 — Candidate Accounts & Auth
 
