@@ -288,6 +288,39 @@ gh api repos/<owner>/<repo>/issues/<epic-issue-number> --jq '.sub_issues_summary
 Add the epic issue to the Project board the same way as any other issue
 (section 7 above, `gh project item-add` with its URL).
 
+**Board hygiene, confirmed 2026-07-20: only epics go on the board.**
+Individual feature/sub-issues are filed, milestoned, and attached as
+sub-issues as usual, but are **not** added to the Project board
+individually — only their phase's epic issue is. The epic's own
+sub-issues panel (a live progress bar + checklist, shown on the epic's
+issue page) is what tracks the individual items; a second copy of each
+one as its own board card is redundant clutter, not signal. Retrofitted
+onto the board once by archiving every already-added individual issue
+(`gh project item-archive <project-number> --owner <owner> --id <item-id>`
+— reversible with `--undo`, doesn't touch the underlying issue's open/
+closed state) — 162 completed items and 17 individual sub-issues were
+archived this way, leaving only the 5 phase epics visible.
+
+**Every sub-issue's implementing PR still needs a real closing
+keyword** (`Closes #<number>` in the PR body) — this has been this
+project's convention since Phase 3 and doesn't change just because the
+issue is now also a sub-issue of an epic. Verify a specific PR/issue
+pair actually registers as linked (not just mentioned) via:
+
+```bash
+gh api graphql -f query='
+{ repository(owner: "<owner>", name: "<repo>") {
+    pullRequest(number: <pr-number>) {
+      closingIssuesReferences(first: 10) { nodes { number } }
+    }
+} }'
+```
+
+A PR that only mentions `#<number>` without a closing keyword shows up
+as a "cross-referenced" timeline event on the issue, not a real linked/
+closing PR — worth double-checking on anything that looks unlinked
+rather than assuming the keyword was used.
+
 ## Gotchas hit while setting this up
 
 - `docker` and `gh` binaries can exist on disk (e.g. `/usr/local/bin`) while

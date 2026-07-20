@@ -108,6 +108,15 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   per-phase "Epic: GitHub issue #N" line has the mapping). See
   `wiki/github-project-setup.md`'s
   "Epics vs Milestones" section for the concrete sub-issues API commands.
+- **Only epics go on the Project board, not individual sub-issues** —
+  file/milestone/sub-issue every feature issue as usual, but only
+  `gh project item-add` the phase's epic. Each sub-issue's own
+  implementing PR must still use a real closing keyword (`Closes #N`)
+  so it registers as a linked PR, not just a mention — see
+  `wiki/github-project-setup.md`'s "Board hygiene" note for how to
+  verify that and the archive command used to retrofit this onto the
+  board once (162 completed + 17 individual sub-issues archived,
+  reversible).
 
 ## Build order (see docs/ROADMAP.md for full detail)
 
