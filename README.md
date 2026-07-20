@@ -323,21 +323,35 @@ CI (`.github/workflows/ci.yml`) runs lint, build, and both test suites for
 Postgres service container — entirely unrelated to local dev or `kind`,
 unaffected by D24.
 
-## API endpoints (Phase 2 slice)
+## API endpoints
 
 | Method | Path                                                 | Notes                                                   |
 | ------ | ---------------------------------------------------- | ------------------------------------------------------- |
-| GET    | `/health`                                            | DB connectivity check                                   |
+| GET    | `/health`                                            | DB connectivity check + deployed `version` (git SHA)    |
 | POST   | `/candidates`                                        | Upserts by email (server-side hashed, never stored raw) |
 | GET    | `/candidates/:id`                                    |                                                         |
+| POST   | `/candidates/:id/verification-token`                 | Phase 3 — token returned directly (no email yet, D14)   |
+| POST   | `/candidates/verify`                                 | Consumes a token → `email_verified`                     |
 | POST   | `/companies`                                         |                                                         |
 | GET    | `/companies` / `/companies/:id`                      |                                                         |
+| GET    | `/companies/by-slug/:slug`                           | Phase 15 — profile pages address companies by slug      |
+| GET    | `/companies/:id/reviews`                             | Approved-only, paginated, Postgres-sourced (D16 note)   |
+| GET    | `/companies/:companyId/analytics`                    | Shrinkage-scored aggregates (Phase 4)                   |
 | POST   | `/companies/:companyId/processes`                    |                                                         |
 | GET    | `/companies/:companyId/processes` / `/processes/:id` |                                                         |
 | POST   | `/processes/:processId/rounds`                       |                                                         |
 | GET    | `/processes/:processId/rounds`                       |                                                         |
 | POST   | `/rounds/:roundId/ratings`                           | Always created as `pending`                             |
 | GET    | `/rounds/:roundId/ratings`                           | Only ever returns `approved` ratings                    |
+| POST   | `/processes/:processId/recruiter-interactions`       | Phase 14 — resolves recruiter identity server-side      |
+| POST   | `/recruiter-interactions/:id/ratings`                | Always created as `pending`                             |
+| GET    | `/recruiter-interactions/:id/ratings`                | Approved only                                           |
+| POST   | `/processes/:processId/overall-review`               | One per process (schema-enforced); `pending`            |
+| GET    | `/processes/:processId/overall-review`               | The approved review, or empty                           |
+| GET    | `/moderation/queue`                                  | Pending entries, enriched with entity context           |
+| POST   | `/moderation/queue/:id/{approve,reject,flag}`        | Internal/admin — no auth yet (Phase 8)                  |
+| GET    | `/search/companies?q=`                               | OpenSearch-backed (Phase 5)                             |
+| GET    | `/search/reviews?q=&companyId=&roleTitle=&...`       | Faceted review search (approved only)                   |
 
 ## Project layout
 

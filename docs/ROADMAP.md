@@ -533,10 +533,12 @@ an internal tool. Composes mostly-existing pieces (Phase 4 analytics
 endpoint, Phase 5 search, unique slugs since Phase 1). Milestone:
 "Phase 15 — Public Company Profile Pages".
 
-- [ ] Company read paths: lookup by slug + approved reviews list
+- [x] Company read paths: lookup by slug + approved reviews list
       (GitHub issue #140) — reviews read from Postgres, not OpenSearch
       (the index is derived/best-effort, D16/D17 — a profile page is a
-      source-of-truth read, not a search)
+      source-of-truth read, not a search). `GET /companies/by-slug/:slug`
+      + `GET /companies/:id/reviews` (approved-only, paginated, shaped
+      for display, candidateId never included)
 - [ ] Company profile page `/companies/[slug]` (GitHub issue #141) —
       header + shrinkage-scored aggregates (reusing `ScoreDisplay`,
       hard constraint #3) + approved reviews list

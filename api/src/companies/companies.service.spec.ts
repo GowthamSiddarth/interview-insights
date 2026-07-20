@@ -5,7 +5,10 @@ import { CompanySearchService } from '../search/company-search.service';
 
 describe('CompaniesService', () => {
   let service: CompaniesService;
-  let prisma: { company: { create: jest.Mock } };
+  let prisma: {
+    company: { create: jest.Mock; findUniqueOrThrow: jest.Mock };
+    roundRating: { count: jest.Mock; findMany: jest.Mock };
+  };
   let companySearchService: { indexCompany: jest.Mock };
 
   const dto = { name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' as const };
@@ -20,7 +23,16 @@ describe('CompaniesService', () => {
   };
 
   beforeEach(async () => {
-    prisma = { company: { create: jest.fn().mockResolvedValue(createdCompany) } };
+    prisma = {
+      company: {
+        create: jest.fn().mockResolvedValue(createdCompany),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(createdCompany),
+      },
+      roundRating: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
     companySearchService = { indexCompany: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -46,5 +58,69 @@ describe('CompaniesService', () => {
     const result = await service.create(dto);
 
     expect(result).toEqual(createdCompany);
+  });
+
+  describe('findBySlug', () => {
+    it('looks the company up by its unique slug', async () => {
+      await service.findBySlug('acme-corp');
+
+      expect(prisma.company.findUniqueOrThrow).toHaveBeenCalledWith({
+        where: { slug: 'acme-corp' },
+      });
+    });
+  });
+
+  describe('findApprovedReviews', () => {
+    it('verifies the company exists before querying (404 rather than an empty page)', async () => {
+      await service.findApprovedReviews('company-1', 1, 10);
+
+      expect(prisma.company.findUniqueOrThrow).toHaveBeenCalledWith({
+        where: { id: 'company-1' },
+      });
+    });
+
+    it('queries approved ratings for the company with pagination applied', async () => {
+      await service.findApprovedReviews('company-1', 3, 10);
+
+      expect(prisma.roundRating.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'approved', round: { process: { companyId: 'company-1' } } },
+          skip: 20,
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
+
+    it('shapes items for public display without candidateId', async () => {
+      prisma.roundRating.count.mockResolvedValue(1);
+      prisma.roundRating.findMany.mockResolvedValue([
+        {
+          id: 'rating-1',
+          candidateId: 'candidate-1',
+          difficulty: 3,
+          fairness: 4,
+          communicationFluency: 4,
+          attentiveness: 4,
+          biasSignal: 5,
+          technicalDepth: null,
+          freeText: 'solid round',
+          createdAt: new Date('2026-01-01'),
+          round: { title: 'Screen', roundType: 'coding', process: { roleTitle: 'Engineer' } },
+        },
+      ]);
+
+      const result = await service.findApprovedReviews('company-1', 1, 10);
+
+      expect(result).toMatchObject({ total: 1, page: 1, pageSize: 10 });
+      expect(result.items[0]).toMatchObject({
+        id: 'rating-1',
+        roundTitle: 'Screen',
+        roundType: 'coding',
+        roleTitle: 'Engineer',
+        freeText: 'solid round',
+      });
+      expect(JSON.stringify(result)).not.toContain('candidate-1');
+    });
   });
 });
