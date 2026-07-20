@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { api, ApiError, CompanyAnalytics } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { PageContainer } from '@/components/PageContainer';
@@ -12,21 +13,25 @@ function roundTypeLabel(roundType: string): string {
     .join(' ');
 }
 
-export default function CompanyAnalyticsPage({
-  params,
-}: {
-  params: Promise<{ companyId: string }>;
-}) {
-  const { companyId } = use(params);
+export default function CompanyAnalyticsPage() {
+  // useParams() over the params-prop-as-Promise pattern: synchronous, no
+  // Suspense boundary required — simpler here and in every test of this
+  // page (a bare RTL render() doesn't get App Router's automatic Suspense
+  // wrapper, which the Promise+use() pattern needs).
+  const { slug } = useParams<{ slug: string }>();
   const [analytics, setAnalytics] = useState<CompanyAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Profile pages address companies by slug (Phase 15) — this route
+    // matches that scheme too, resolving to the id the analytics endpoint
+    // itself still takes.
     api
-      .getCompanyAnalytics(companyId)
+      .getCompanyBySlug(slug)
+      .then((company) => api.getCompanyAnalytics(company.id))
       .then(setAnalytics)
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Something went wrong.'));
-  }, [companyId]);
+  }, [slug]);
 
   if (error) {
     return (

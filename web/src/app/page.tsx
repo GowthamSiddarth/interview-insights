@@ -234,7 +234,11 @@ export default function HomePage() {
         {company && (
           <p className="text-sm text-green-700 dark:text-green-400">
             Using {company.name}.{' '}
-            <Link href={`/companies/${company.id}/analytics`} className={linkClass}>
+            <Link href={`/companies/${company.slug}`} className={linkClass}>
+              View company profile
+            </Link>{' '}
+            ·{' '}
+            <Link href={`/companies/${company.slug}/analytics`} className={linkClass}>
               View analytics dashboard
             </Link>{' '}
             ·{' '}
