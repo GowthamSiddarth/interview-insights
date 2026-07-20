@@ -595,3 +595,53 @@ decision. Milestone: "Phase 17 — Candidate Self-Service".
 - [ ] GDPR erasure path: `DELETE /me` + retention policy decided and
       documented (GitHub issue #151)
 - [ ] Engineering blog (last) (GitHub issue #152)
+
+## Phase 18 — Admin Authentication
+
+Numbered after Phase 17 in planning order, but intended to be
+**implemented before** Phases 16-17 — the same non-linear precedent
+already set by Phase 6/8 sitting aside while Phases 9-15 proceeded around
+them. Filed after a strategic infra/security review (2026-07-20) surfaced
+that the moderation admin surface built in Phase 14
+(`ModerationController`, `web/src/app/moderation/page.tsx`) has zero
+authentication — both files say so directly in their own comments.
+Anyone who can reach the URL can approve, reject, or flag any pending
+rating/review. This stayed low-risk only because every environment has
+been localhost/kind so far; it becomes a real hole the moment anything is
+reachable by anyone else (a cloud staging box, or even a shared demo).
+Deliberately minimal in scope — a single shared admin credential, not a
+multi-user/RBAC system, matching this project's own "don't build for
+hypothetical future requirements" convention; revisit if/when a second
+admin ever exists. Milestone: "Phase 18 — Admin Authentication".
+
+- [ ] Backend: admin login endpoint, JWT session issuance (httpOnly
+      cookie), guard applied to every `ModerationController` route, login
+      endpoint rate-limited (GitHub issue #159)
+- [ ] Frontend: login page + route gating for `/moderation` + logout
+      (GitHub issue #160)
+- [ ] Engineering blog (last) (GitHub issue #161)
+
+## Phase 19 — Content Quality & Synthetic Data
+
+Filed alongside Phase 18 from the same 2026-07-20 strategic review. Three
+independent issues (any order) closing gaps already documented elsewhere:
+D13's exact-match/full-table-scan duplicate detection limit, the total
+absence of any content-quality signal beyond mechanical fraud checks, and
+`docs/ARCHITECTURE.md`'s cold-start gap (no synthetic data generator
+exists for lower environments). Milestone: "Phase 19 — Content Quality &
+Synthetic Data".
+
+- [ ] Near-duplicate review detection: replace `FraudChecksService`'s
+      exact-match full-table scan with a similarity-based check
+      (`pg_trgm` or embeddings, decide at implementation time and record
+      as a new `docs/DECISIONS.md` entry) (GitHub issue #162)
+- [ ] LLM-assisted moderation triage: advisory spam/toxicity/
+      rating-text-mismatch signal surfaced in the Phase 14 moderation UI —
+      never auto-approves or auto-rejects, hard constraint #2 stays intact
+      (GitHub issue #163)
+- [ ] Synthetic data generator for lower environments: `@faker-js/faker`,
+      walks the real create → moderate-approve → index path (not raw
+      SQL/Prisma, avoiding the Phase 5 seed-script indexing bug),
+      parameterized with deliberately uneven distribution to exercise the
+      shrinkage floor on purpose (GitHub issue #164)
+- [ ] Engineering blog (last) (GitHub issue #165)
