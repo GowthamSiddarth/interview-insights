@@ -576,3 +576,97 @@ kind delete cluster --name interview-insights
 # self-hosted runner (section 7) — nothing to stop if using --once (it
 # already exited); Ctrl+C if run without --once
 ```
+
+## 10. Migrating to a new machine
+
+Everything in this repo is designed to be rebuilt from nothing (Phase 13
+issue #108 proved it), which makes a machine migration mostly a matter of
+following that same discipline rather than trying to carry over live
+state. **Don't try to preserve the running `kind` cluster or Docker
+Desktop's state across a migration** — both are notoriously fragile
+across a fresh install, and this repo has a one-shot script built for
+exactly this situation.
+
+**What never needs migrating**: GitHub itself (repo, issues, PRs, project
+board, milestones), the `LOCALSTACK_AUTH_TOKEN` GitHub Actions repo
+secret CD reads, and LocalStack's own secrets/IAM state (ephemeral by
+design, D25 — it self-seeds on any fresh cluster via its init-hook).
+
+1. **Verify what actually transferred** before doing anything else:
+
+   ```bash
+   ls ~/workspace/interview-insights ~/workspace/actions-runner-interview-insights
+   cd ~/workspace/interview-insights && git status && git remote -v && git fetch
+   ssh -T git@github.com                          # SSH key for pushing
+   grep LOCALSTACK_AUTH_TOKEN ~/.zshenv ~/.zshrc   # confirm the line came over (don't print the value)
+   ```
+
+2. **Reinstall tooling fresh** — don't trust a migrated Docker Desktop
+   install:
+
+   ```bash
+   brew install --cask docker   # open once to init the daemon
+   brew install kind kubectl helm awscli gh k9s
+   node --version                # need 22+; brew install node if missing
+   ```
+
+3. **Re-auth `gh`** (a bare `gh auth login` omits the `project` scope —
+   see `wiki/github-project-setup.md`'s own gotcha):
+
+   ```bash
+   gh auth login --scopes "repo,project"
+   gh auth status   # must show 'project' in Token scopes
+   ```
+
+4. **Rebuild the cluster from scratch** (section 3's fast path):
+
+   ```bash
+   cd ~/workspace/interview-insights
+   export LOCALSTACK_AUTH_TOKEN="..."   # same token; add to ~/.zshenv to persist
+   ./infra/scripts/bootstrap-kind.sh
+   ```
+
+5. **Recreate `api/.env` / `web/.env.local`** if the gitignored files
+   didn't survive the transfer (`cp api/.env.example api/.env`,
+   `cp web/.env.example web/.env.local`).
+
+6. **Register a fresh self-hosted runner — don't copy the old one's
+   credentials.** A runner's `.credentials` file is tied to its
+   registration; the supported path is retiring the old one and
+   registering a new one, not copying files across:
+   - Old machine (or GitHub's web UI): Settings → Actions → Runners →
+     remove `interview-insights-local`.
+   - New machine: follow section 7 above verbatim (fresh download + a
+     new registration token via `gh api`).
+
+7. **Do not reinstall Postgres.app.** D24 documents exactly why — it
+   silently intercepted connections meant for this project's Postgres
+   on the old machine. The convention now is `kind`-only Postgres (and
+   OpenSearch, D26); skip installing it on the new machine entirely.
+
+8. **Full verification pass** — build/test both apps, then the golden
+   path through the real Ingress-fronted app (same as section 6's
+   smoke test):
+
+   ```bash
+   cd api && npm install && npm run build && npm test
+   cd ../web && npm install && npm run build && npm test
+
+   # one-time: the isolated e2e test database (D24)
+   kubectl -n interview-insights exec postgres-0 -- psql -U postgres -c "CREATE DATABASE interview_insights_test;"
+   cd ../api && DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npx prisma migrate deploy
+
+   kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
+   kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+   OPENSEARCH_INDEX_PREFIX="e2etest-" npm run test:e2e
+
+   curl --resolve app.interview-insights.local:80:127.0.0.1 http://app.interview-insights.local/
+   ```
+
+**If the data in the old cluster's Postgres actually matters** (it
+normally doesn't — every verification in this project's history has
+been disposable dev/test data): `pg_dump` it from the old machine before
+decommissioning, then restore into the new cluster's `postgres-0` after
+step 4. Not documented step-by-step here since it's never actually been
+needed yet — revisit if that changes.
