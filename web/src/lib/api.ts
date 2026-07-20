@@ -174,6 +174,31 @@ export interface CompanyAnalytics {
   overall: OverallAnalytics | null;
 }
 
+// Public display shape for GET /companies/:id/reviews — no candidateId,
+// read from Postgres, not OpenSearch (D16/D17: a profile page is a
+// source-of-truth read, not a search).
+export interface CompanyReviewItem {
+  id: string;
+  createdAt: string;
+  roundTitle: string;
+  roundType: Round['roundType'];
+  roleTitle: string;
+  difficulty: number;
+  fairness: number;
+  communicationFluency: number;
+  attentiveness: number;
+  biasSignal: number;
+  technicalDepth: number | null;
+  freeText: string | null;
+}
+
+export interface CompanyReviewsPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: CompanyReviewItem[];
+}
+
 export interface CompanySearchResult {
   id: string;
   name: string;
@@ -333,6 +358,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ flagReason, ...(reviewedBy ? { reviewedBy } : {}) }),
     }),
+
+  getCompanyBySlug: (slug: string) =>
+    request<Company>(`/companies/by-slug/${encodeURIComponent(slug)}`),
+
+  listCompanyReviews: (companyId: string, page: number, pageSize: number) =>
+    request<CompanyReviewsPage>(
+      `/companies/${companyId}/reviews?page=${page}&pageSize=${pageSize}`,
+    ),
 
   getCompanyAnalytics: (companyId: string) =>
     request<CompanyAnalytics>(`/companies/${companyId}/analytics`),

@@ -539,9 +539,17 @@ endpoint, Phase 5 search, unique slugs since Phase 1). Milestone:
       source-of-truth read, not a search). `GET /companies/by-slug/:slug`
       + `GET /companies/:id/reviews` (approved-only, paginated, shaped
       for display, candidateId never included)
-- [ ] Company profile page `/companies/[slug]` (GitHub issue #141) —
+- [x] Company profile page `/companies/[slug]` (GitHub issue #141) —
       header + shrinkage-scored aggregates (reusing `ScoreDisplay`,
-      hard constraint #3) + approved reviews list
+      hard constraint #3) + paginated approved reviews list. The
+      existing analytics dashboard moved from `/companies/[companyId]/
+      analytics` to `/companies/[slug]/analytics` in the same issue —
+      Next.js's App Router doesn't allow two differently-named dynamic
+      segments at the same path level, so the two routes had to agree
+      on `[slug]`. Both pages switched from the `params`-as-Promise +
+      `use()` pattern to `useParams()` (synchronous, no Suspense
+      boundary needed) along the way — simpler, and the only way to
+      unit-test the page at all
 - [ ] Entry points: link search results, wizard, and analytics to
       profile pages (GitHub issue #142)
 - [ ] Engineering blog (last) (GitHub issue #143)

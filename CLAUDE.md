@@ -844,8 +844,37 @@ first (404, not an empty page); `candidateId` never included
 unit tests + 5 e2e tests (`company-reviews.e2e-spec.ts`, 62 e2e
 total) against kind's stores per D24/D26, plus live curl verification
 against real data (slug 200/404, shaped items, no candidateId).
-- Next step: Phase 15, issue #141 (company profile page
-  `/companies/[slug]`), per `docs/ROADMAP.md`.
+**Phase 15, issue #141 (company profile page)** — a new
+`web/src/app/companies/[slug]/page.tsx`: header (name, industry, size
+bucket) + shrinkage-scored aggregates (overall experience, by-round-
+type breakdown, reusing `ScoreDisplay`) + a paginated approved-reviews
+list, with loading/empty states distinguished throughout (Phase 9
+issue #61). Real routing constraint hit immediately: the pre-existing
+analytics dashboard lived at `/companies/[companyId]/analytics`, and
+Next.js's App Router refuses two differently-named dynamic segments at
+the same path level (`companyId` vs `slug`) — confirmed via `next dev`
+actually erroring at startup, even though `next build` stayed silent
+about it. Fixed by moving analytics to `/companies/[slug]/analytics`
+too (resolving slug → id client-side before calling the existing
+analytics endpoint) and updating the wizard's link
+(`company.id` → `company.slug`). Both pages also switched from the
+`params`-as-Promise + `use()` pattern to `useParams()` — synchronous,
+no Suspense boundary needed, and the change that actually made the new
+page's component tests possible (a bare RTL `render()` doesn't get App
+Router's automatic Suspense wrapper the Promise pattern depends on).
+5 new component tests (`company-profile-page.spec.tsx`, 24 web tests
+total). Verified in a real browser (Playwright) against dev servers
+backed by kind's stores per D24/D26: seeded a company with 3 approved
+round ratings + 1 approved overall review, confirmed the round-type
+breakdown showed real shrinkage-scored numbers once
+`REFRESH MATERIALIZED VIEW` ran (D15 — no auto-refresh trigger exists
+yet, a pre-existing, already-documented gap, not new), confirmed the
+overall-experience section correctly showed "Not enough reviews yet"
+with its real `1 review` sample size (n=1, below the shrinkage floor —
+exactly hard constraint #3's transparency rule), navigated to the
+slug-based analytics link and back, zero console errors throughout.
+- Next step: Phase 15, issue #142 (entry points: link search results,
+  wizard, and analytics to profile pages), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
