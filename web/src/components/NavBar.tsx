@@ -16,6 +16,15 @@ export function NavBar() {
         >
           Search companies &amp; reviews
         </Link>
+        {/* Internal/admin page — unauthenticated for now, same trust model
+            as the API endpoints it fronts (Phase 14 issue #128; real auth
+            is Phase 8's concern). */}
+        <Link
+          href="/moderation"
+          className="text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
+          Moderation
+        </Link>
       </div>
     </nav>
   );
