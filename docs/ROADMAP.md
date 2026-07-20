@@ -513,3 +513,68 @@ Overall Reviews + Moderation Admin UI".
       issue #129) — `wiki/blog/
       phase-14-recruiter-overall-reviews-moderation-ui/`, one post per
       feature issue; Phase 14 is now fully done
+
+## Phases 15-17 — planned together (user's call, 2026-07-19)
+
+Deviation from the usual one-phase-at-a-time planning cadence, at the
+user's explicit request after the post-Phase-14 brainstorm: all three
+phases below were planned (milestones + issues) in one pass. They form
+one deliberate arc — finish the public face of what Phase 14 made
+writable (15), then the auth foundation (16), then everything auth
+unblocks (17). Numbering still tracks planning order, as always.
+Implementation stays strictly sequential: a later phase's issues don't
+start until the earlier phase is done.
+
+## Phase 15 — Public Company Profile Pages
+
+A real public destination per company — today a company is only
+reachable by searching for it, and the analytics dashboard reads like
+an internal tool. Composes mostly-existing pieces (Phase 4 analytics
+endpoint, Phase 5 search, unique slugs since Phase 1). Milestone:
+"Phase 15 — Public Company Profile Pages".
+
+- [ ] Company read paths: lookup by slug + approved reviews list
+      (GitHub issue #140) — reviews read from Postgres, not OpenSearch
+      (the index is derived/best-effort, D16/D17 — a profile page is a
+      source-of-truth read, not a search)
+- [ ] Company profile page `/companies/[slug]` (GitHub issue #141) —
+      header + shrinkage-scored aggregates (reusing `ScoreDisplay`,
+      hard constraint #3) + approved reviews list
+- [ ] Entry points: link search results, wizard, and analytics to
+      profile pages (GitHub issue #142)
+- [ ] Engineering blog (last) (GitHub issue #143)
+
+## Phase 16 — Candidate Accounts & Auth
+
+Passwordless magic-link auth, chosen because it fits the email-hash
+model unusually well: raw emails are used only transiently at request
+time (never persisted, design principle 1), and a clicked login link
+*proves email ownership* — subsuming D14's never-sent verification
+email entirely. Unblocks Phase 2's deferred Update/Delete, my-reviews,
+and the GDPR open decision (all Phase 17). Milestone: "Phase 16 —
+Candidate Accounts & Auth".
+
+- [ ] Local email delivery foundation (Mailpit or LocalStack SES —
+      decide + document) + api mail module (GitHub issue #144)
+- [ ] Magic-link authentication: request + consume + session issuance;
+      first login flips `verificationStatus` (GitHub issue #145)
+- [ ] Sessions on the write path: candidateId from the session, not
+      the request body (GitHub issue #146) — closes today's
+      anyone-can-write-as-anyone gap
+- [ ] Login/logout UI + wizard integration (GitHub issue #147)
+- [ ] Engineering blog (last) (GitHub issue #148)
+
+## Phase 17 — Candidate Self-Service
+
+What auth unblocks — including two debts as old as the project:
+Phase 2's Update/Delete deferral and the GDPR retention/erasure open
+decision. Milestone: "Phase 17 — Candidate Self-Service".
+
+- [ ] My reviews: own submissions across all entity types, all
+      statuses, owner-scoped (GitHub issue #149)
+- [ ] Update/Delete under moderation-safe rules: edits reset to
+      `pending` and re-enqueue, never modify public content in place
+      (GitHub issue #150)
+- [ ] GDPR erasure path: `DELETE /me` + retention policy decided and
+      documented (GitHub issue #151)
+- [ ] Engineering blog (last) (GitHub issue #152)
