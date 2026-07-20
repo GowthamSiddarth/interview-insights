@@ -118,3 +118,13 @@ this phase's blog is complete.
 1. [Issue #106 — CI validation for infra/k8s manifests and Dockerfiles](phase-13-local-infra-hardening/issue-106-ci-infra-validation/README.md)
 2. [Issue #107 — One-shot local bootstrap script for the full kind environment](phase-13-local-infra-hardening/issue-107-bootstrap-script/README.md)
 3. [Issue #108 — Adversarial verification: rebuild the kind cluster from scratch](phase-13-local-infra-hardening/issue-108-adversarial-rebuild/README.md)
+
+## Phase 14 — Recruiter & Overall Reviews + Moderation Admin UI
+
+See `docs/ROADMAP.md` Phase 14. All four feature issues are done —
+this phase's blog is complete.
+
+1. [Issue #125 — RecruiterInteraction + RecruiterRating write path](phase-14-recruiter-overall-reviews-moderation-ui/issue-125-recruiter-rating-write-path/README.md)
+2. [Issue #126 — OverallReview write path](phase-14-recruiter-overall-reviews-moderation-ui/issue-126-overall-review-write-path/README.md)
+3. [Issue #127 — Wizard steps for recruiter experience + overall review](phase-14-recruiter-overall-reviews-moderation-ui/issue-127-wizard-steps/README.md)
+4. [Issue #128 — Moderation admin UI](phase-14-recruiter-overall-reviews-moderation-ui/issue-128-moderation-admin-ui/README.md)

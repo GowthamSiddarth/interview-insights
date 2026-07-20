@@ -117,9 +117,10 @@ Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
 Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
-Cluster Observability), and Phase 13 (Local Infra Hardening &
-Reproducibility) are all done. Phase 6 is done except issue #18
-(blocked). Phases 1-7 and 9-13 each have a complete engineering blog
+Cluster Observability), Phase 13 (Local Infra Hardening &
+Reproducibility), and Phase 14 (Recruiter & Overall Reviews +
+Moderation Admin UI) are all done. Phase 6 is done except issue #18
+(blocked). Phases 1-7 and 9-14 each have a complete engineering blog
 under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not started.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
@@ -815,8 +816,16 @@ drove approve (round rating) / reject (recruiter rating) / flag
 three transitions + moderator name + flag reason directly in kind's
 Postgres via `kubectl exec` psql, zero console errors, and asserted the
 raw recruiter identifier appears nowhere in the rendered page.
-- Next step: Phase 14, issue #129 (engineering blog — last, now that
-  all four feature issues are merged), per `docs/ROADMAP.md`.
+`wiki/blog/phase-14-recruiter-overall-reviews-moderation-ui/` has a
+post for all four feature issues (#125-#128). **Phase 14 is now fully
+done** — issues #125-#129 all closed via merged PRs, and every phase
+built so far has a complete engineering blog.
+- Next step: no explicit next phase requested yet. Phase 8 (production
+  hardening menu) remains trigger-gated (see docs/ROADMAP.md Phase 8) —
+  wait for a real trigger or explicit direction. Natural app-side
+  candidates from the Phase 14 brainstorm, if asked: candidate email
+  verification UI (D14's gap), candidate accounts/auth (unblocks
+  Phase 2's deferred Update/Delete), public company profile pages.
 
 ## Open decisions still to make
 
