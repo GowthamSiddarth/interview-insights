@@ -33,20 +33,19 @@ more explanation, that one is just the commands in order.
 
 **1. Start Postgres + OpenSearch**
 
-Postgres now lives in the `kind` cluster only, not Docker Compose (see
-`docs/DECISIONS.md` D24) — this requires the `kind` cluster from
+Both now live in the `kind` cluster only, not Docker Compose (see
+`docs/DECISIONS.md` D24/D26) — this requires the `kind` cluster from
 `wiki/deployment-guide.md` section 3 to already be up:
 
 ```bash
 kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
-
-cd infra
-docker compose up -d opensearch   # opensearch:9200 — Postgres's compose service is unused
+kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
 ```
 
-Nothing else runs in Docker by default — `api`/`web` don't yet depend on
-Redis or Kafka, so those aren't started until something actually needs
-them (docs/DECISIONS.md D9).
+`infra/docker-compose.yml`'s service definitions stay in the repo as
+documented reference only — nothing should point at them day to day
+(and don't run its OpenSearch alongside the port-forward: both can bind
+9200 at once and `localhost:9200` becomes ambiguous).
 
 **2. Set up and run the API**
 
@@ -306,12 +305,14 @@ With the port-forward from "Quick start" step 1 running (Postgres lives in
 # api — unit tests (no DB needed)
 cd api && npm test
 
-# api — integration/e2e tests: needs the same port-forward above, but
-# targets a separate interview_insights_test database on that same
-# Postgres instance (see docs/DECISIONS.md D24 and
-# wiki/deployment-guide.md section 1) so test runs never litter the real
-# interview_insights data:
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npm run test:e2e
+# api — integration/e2e tests: needs both port-forwards above, with two
+# isolation knobs so test runs never litter the real data (a separate
+# interview_insights_test Postgres database, and an OpenSearch index
+# prefix — see docs/DECISIONS.md D24/D26 and wiki/deployment-guide.md
+# section 1):
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+OPENSEARCH_INDEX_PREFIX="e2etest-" \
+npm run test:e2e
 
 # web — unit tests
 cd web && npm test

@@ -136,9 +136,9 @@ diagram said so.
 ## Deployment shape (current)
 
 - **Local dev, native (fastest):** `api`/`web` run directly with `npm
-  run start:dev`, against kind's Postgres (via port-forward — D24, not
-  Docker Compose's Postgres) and Compose's OpenSearch — no containers for
-  the app code itself. See `wiki/deployment-guide.md` §1.
+  run start:dev`, against kind's Postgres and OpenSearch (both via
+  port-forward — D24/D26, not Docker Compose's containers) — no
+  containers for the app code itself. See `wiki/deployment-guide.md` §1.
 - **Local dev, full Docker Compose:** `docker compose --profile full up
   --build` — Postgres, OpenSearch, LocalStack, `api`, `web`, all
   containerized. §2.
@@ -183,7 +183,7 @@ interview-insights/
 │   └── src/app/                # wizard, search, analytics pages
 ├── workers/                    # placeholder — no logic (D12)
 ├── infra/
-│   ├── docker-compose.yml      # opensearch (default, postgres unused — D24) / --profile full / --profile localstack
+│   ├── docker-compose.yml      # inert reference only (D24/D26 — kind runs both stores) / --profile full / --profile localstack
 │   ├── aws/                    # seed-localstack.sh, IAM policy JSON
 │   ├── k8s/
 │   │   ├── base/                # numbered manifests + localstack/ subdir

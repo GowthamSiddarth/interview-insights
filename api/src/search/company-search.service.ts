@@ -2,8 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from '@opensearch-project/opensearch';
 import { OPENSEARCH_CLIENT } from './opensearch-client.provider';
 import { isIndexAlreadyExistsError } from './opensearch-errors.util';
-
-const COMPANIES_INDEX = 'companies';
+import { searchIndexName } from './search-index-name.util';
 
 export interface IndexableCompany {
   id: string;
@@ -29,6 +28,9 @@ export interface CompanySearchResult {
 @Injectable()
 export class CompanySearchService implements OnModuleInit {
   private readonly logger = new Logger(CompanySearchService.name);
+  // Resolved at construction, not module load, so a test-set
+  // OPENSEARCH_INDEX_PREFIX is honored (see search-index-name.util.ts).
+  private readonly index = searchIndexName('companies');
 
   constructor(@Inject(OPENSEARCH_CLIENT) private readonly client: Client) {}
 
@@ -42,7 +44,7 @@ export class CompanySearchService implements OnModuleInit {
   async onModuleInit() {
     try {
       await this.client.indices.create({
-        index: COMPANIES_INDEX,
+        index: this.index,
         body: {
           mappings: {
             properties: {
@@ -65,7 +67,7 @@ export class CompanySearchService implements OnModuleInit {
   // request cycle (issue #21 acceptance criteria), not eventually.
   async indexCompany(company: IndexableCompany): Promise<void> {
     await this.client.index({
-      index: COMPANIES_INDEX,
+      index: this.index,
       id: company.id,
       body: {
         name: company.name,
@@ -79,7 +81,7 @@ export class CompanySearchService implements OnModuleInit {
 
   async search(query: string): Promise<CompanySearchResult[]> {
     const { body } = await this.client.search({
-      index: COMPANIES_INDEX,
+      index: this.index,
       body: {
         query: {
           // No fuzziness: AUTO's edit-distance tolerance is meant for

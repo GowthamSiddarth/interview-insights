@@ -610,6 +610,47 @@ seed step — it came up clean on the first try.
 
 ---
 
+### D26 — OpenSearch consolidates to kind too; local e2e isolates via an index prefix
+
+**Decision:** D24's "one server only" now covers OpenSearch as well:
+native local `api` dev and local `npm run test:e2e` point at kind's
+`opensearch` StatefulSet via `kubectl port-forward svc/opensearch
+9200:9200`, and `infra/docker-compose.yml`'s `opensearch` service joins
+its `postgres` service as inert, documented reference only. This
+resolves D24's own "revisit when" clause, which had scoped OpenSearch
+out at the time (user's call — "Postgres only for now").
+
+**Why now:** the user spotted the split directly (two OpenSearch
+containers visible in Docker — the Compose one, plus the in-cluster one
+inside the `kind` node container) and asked to consolidate. It was also
+already exhibiting the exact D24 failure mode: Docker publishes the
+Compose OpenSearch on `0.0.0.0:9200` while `kubectl port-forward` binds
+`127.0.0.1:9200`, and both can coexist — so with both running,
+`localhost:9200` was ambiguous about which store it hit, silently.
+
+**The isolation wrinkle Postgres didn't have:** Postgres gave local e2e
+a free isolation boundary — a second database
+(`interview_insights_test`) on the same server. OpenSearch has no
+database concept; indices are the only namespace, and the index names
+(`companies`/`reviews`) were hardcoded. Pointing e2e at kind's
+OpenSearch unmodified would have written test companies straight into
+the indices the deployed app's real search reads from. Fixed with a
+minimal `OPENSEARCH_INDEX_PREFIX` env var
+(`api/src/search/search-index-name.util.ts`, default empty — CI and
+every deployed environment keep the bare names unchanged): local e2e
+sets `e2etest-`, so test documents land in
+`e2etest-companies`/`e2etest-reviews`. Those indices are disposable —
+delete anytime with `curl -X DELETE http://localhost:9200/e2etest-*`.
+
+**Verified:** full e2e suite (57 tests) against kind's OpenSearch +
+kind's Postgres test database with the prefix set — the deployed app's
+real `companies`/`reviews` doc counts were captured before and after
+the run and were byte-identical (2/1 → 2/1), with all test churn
+confirmed in `e2etest-*` (38/10 docs). CI unaffected (its own ephemeral
+OpenSearch service container, empty prefix).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

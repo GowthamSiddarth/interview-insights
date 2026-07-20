@@ -3,8 +3,7 @@ import { Client } from '@opensearch-project/opensearch';
 import { RoundType } from '@prisma/client';
 import { OPENSEARCH_CLIENT } from './opensearch-client.provider';
 import { isIndexAlreadyExistsError } from './opensearch-errors.util';
-
-const REVIEWS_INDEX = 'reviews';
+import { searchIndexName } from './search-index-name.util';
 
 export interface IndexableReview {
   id: string;
@@ -46,12 +45,16 @@ interface OpenSearchQueryClause {
 // Postgres is the source of truth, this index is derived.
 @Injectable()
 export class ReviewSearchService implements OnModuleInit {
+  // Resolved at construction, not module load — same reasoning as
+  // CompanySearchService.
+  private readonly index = searchIndexName('reviews');
+
   constructor(@Inject(OPENSEARCH_CLIENT) private readonly client: Client) {}
 
   async onModuleInit() {
     try {
       await this.client.indices.create({
-        index: REVIEWS_INDEX,
+        index: this.index,
         body: {
           mappings: {
             properties: {
@@ -78,7 +81,7 @@ export class ReviewSearchService implements OnModuleInit {
   // rating, then search for it, should work within the same request cycle.
   async indexReview(review: IndexableReview): Promise<void> {
     await this.client.index({
-      index: REVIEWS_INDEX,
+      index: this.index,
       id: review.id,
       body: {
         companyId: review.companyId,
@@ -125,7 +128,7 @@ export class ReviewSearchService implements OnModuleInit {
         : { match_all: {} };
 
     const { body } = await this.client.search({
-      index: REVIEWS_INDEX,
+      index: this.index,
       body: { query },
     });
 
