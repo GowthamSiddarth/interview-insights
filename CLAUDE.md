@@ -149,8 +149,10 @@ follow-up issues (#192 credential rotation, #193 mid-session-expiry
 redirect, both now done). Phases 1-7, 9-15, and 18 each have a complete
 engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
 backlog, not started. Phase 16 (Candidate Accounts & Auth) is in
-progress — issue #144 (mail foundation) done, #145-148 not started yet.
-Phases 17 (Candidate Self-Service) and 19 (Content Quality & Synthetic
+progress — issues #144 (mail foundation) and #145 (magic-link auth,
+supersedes and removes Phase 3's standalone verification endpoints,
+D30) done, #146-148 not started yet. Phases 17 (Candidate Self-Service)
+and 19 (Content Quality & Synthetic
 Data) are planned but not started. Phase 18 was filed after Phase
 16-17, but per the same non-linear precedent Phase 6/8 already set,
 was implemented first — see the Phase 18 intro in `docs/ROADMAP.md`
@@ -1182,7 +1184,66 @@ both natively (local Docker) and in-cluster (`kubectl apply` directly
 against the live `kind` cluster, port-forwarded, before the PR even
 merged). `.github/workflows/ci.yml`'s `api` job gained a `mailpit`
 service container. Decision documented in `docs/DECISIONS.md` D29.
-- Next step: Phase 16, issue #145 (magic-link authentication), per
+
+**Found and fixed while verifying #144's live rollout (no dedicated
+issue)** — `infra/k8s/base/05-api.yaml`'s `api-config` ConfigMap never
+got `MAIL_SMTP_HOST`/`MAIL_SMTP_PORT` pointing at `mailpit`'s in-cluster
+Service DNS name (the same pattern `OPENSEARCH_URL` already used) —
+currently inert (no consumer yet), but would have silently fallen back
+to `MailService`'s `localhost` default the moment a consumer existed.
+Fixed immediately rather than left for issue #145 to rediscover.
+
+**Phase 16, issue #145 (magic-link authentication)** — a new
+`api/src/candidate-auth/` module **replaces** the Phase 3
+`candidate-verification/` module entirely (removed, not deprecated
+alongside — see D30 for why leaving the old, actually-insecure
+endpoints live next to a secure replacement wouldn't have been a real
+fix). `POST /auth/request-link` upserts the candidate (reusing
+`CandidatesService.create()`), issues a single-use 15-minute token
+(the same `CandidateVerificationToken` table/utilities, moved not
+duplicated), and emails a real link via `MailService` — rate-limited
+from the start (`MagicLinkThrottleService`, decided during the Phase 16
+brainstorm) and never discloses whether the email was known.
+`GET`/`POST /auth/verify?token=` consumes it, starts a
+`candidate_session` httpOnly JWT cookie (mirroring Phase 18's
+`admin_session` exactly), and flips `verificationStatus` to
+`email_verified` on *first* login only (a repeat login doesn't
+overwrite `verifiedAt`). `POST /auth/logout` clears it.
+
+Two pieces of admin-auth's own logic were extracted to
+`api/src/common/` this time, rather than risk a second copy silently
+drifting the way the brainstorm flagged: `session-cookie-options.util.ts`
+(the `COOKIE_SECURE` cookie-options object) and `ip-throttle.ts` (the
+per-IP attempt-counting core both `LoginThrottleService` and the new
+`MagicLinkThrottleService` now wrap). `CandidateJwtStrategy`/
+`CandidateJwtAuthGuard` are built and exported now too, ready for issue
+#146 to apply to write-path controllers, even though nothing consumes
+them yet.
+
+21 new unit tests (service, throttle, strategy, shared utils) + a new
+9-test e2e suite (`candidate-auth.e2e-spec.ts`) proving the full
+request-link → real Mailpit email → extract token via Mailpit's REST
+API → verify → session cookie loop against real Postgres — reuse/
+unknown-token rejection, first-login-only `verifiedAt`, supersession of
+a prior unconsumed token, and the request-link throttle all covered.
+Each test boots its own fresh app instance (`beforeEach`/`afterEach`,
+not a shared `beforeAll`) — a first pass shared one app across the file
+and several tests' cumulative `/auth/request-link` calls tripped the
+throttle before reaching later tests, the same class of issue
+admin-auth's e2e suite hit once already.
+
+**Also found and fixed while wiring this up:** Docker Compose's `full`
+profile had been unable to boot `api` at all since Phase 18 shipped —
+`ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`/
+`COOKIE_SECURE` were never added to its environment block, and
+`AdminAuthModule` throws synchronously at boot if any are unset. Fixed
+alongside adding `CANDIDATE_JWT_SECRET` to the same block; confirmed
+(not assumed) that the bcrypt hash's `$` characters survive Compose's
+own variable interpolation intact by checking a real container's env
+var directly.
+
+- Next step: Phase 16, issue #146 (sessions on the write path —
+  candidateId from the session, not the request body), per
   `docs/ROADMAP.md`.
 
 ## Open decisions still to make

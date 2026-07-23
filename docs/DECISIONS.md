@@ -781,6 +781,81 @@ whichever cloud (AWS vs OCI, D11's still-open question) is chosen then.
 
 ---
 
+### D30 — Magic-link login supersedes D14's standalone verification flow; session logic shared, not duplicated, between admin and candidate auth
+
+**Decision:** GitHub issue #145's candidate magic-link auth
+(`api/src/candidate-auth/`) replaces the Phase 3 `candidate-verification/`
+module entirely — `POST /candidates/:id/verification-token` and
+`POST /candidates/verify` are removed, not just deprecated alongside the
+new flow. The underlying `CandidateVerificationToken` table and its
+generate/hash utilities are reused as-is (moved into `candidate-auth/`,
+no migration needed) — only the module built on top of them changed.
+
+**Why remove, not just add alongside:** D14 explicitly named the old
+flow's security gap — "anyone who can call the API on a candidate's
+behalf can verify them without proving email ownership," acceptable
+only because no email was ever actually sent. Leaving the old endpoints
+live after the new, actually-secure flow existed would mean that gap
+still fully applies via the old route — building a secure front door
+next to a door with no lock isn't a fix. Confirmed safe to remove by
+checking `web/`'s own code first: no page ever called either old
+endpoint (`docs/ARCHITECTURE.md`'s own "Known gaps" section said so —
+that bullet is now removed too, the gap it named no longer exists).
+
+**Session mechanism:** stateless signed JWT httpOnly cookie
+(`candidate_session`), the same shape as Phase 18's `admin_session` —
+decided during Phase 16's kickoff brainstorm, before any code was
+written (see the issue #144/#145 bodies for the full reasoning: no
+current requirement needs server-side revocation, so a DB-backed
+sessions table would be complexity without a concrete need). A
+**distinct** signing secret (`CANDIDATE_JWT_SECRET`, separate from
+`ADMIN_JWT_SECRET`) — compromising one session type shouldn't let
+anyone forge the other.
+
+**Shared, not duplicated, this time:** two pieces of admin-auth's own
+logic were extracted to `api/src/common/` so a second consumer
+(candidate-auth) can't silently drift from a fix the first one already
+needed:
+- `session-cookie-options.util.ts` — the `COOKIE_SECURE`-driven cookie
+  options object (the Secure-cookie-over-plain-HTTP bug fix). Both
+  `admin-auth.controller.ts` and `candidate-auth.controller.ts` now call
+  the same function instead of each hardcoding their own copy.
+- `ip-throttle.ts` — the per-IP attempt-counting core
+  `LoginThrottleService` already had. `admin-auth`'s and
+  `candidate-auth`'s throttle services are now both thin wrappers over
+  one shared `IpThrottle` class, each with their own instance/window
+  (an IP throttled on admin login isn't also blocked from requesting a
+  candidate magic link) — only the counting logic itself is shared.
+
+**Verified:** the full request-link → email → extract token from
+Mailpit's REST API → verify → session cookie loop, run against real
+Postgres and a real Mailpit instance (not mocks) — reuse/unknown-token
+rejection, first-login-only `verifiedAt`, and the request-link
+throttle all covered by e2e tests using per-test-fresh app instances
+(cumulative throttle state across tests sharing one instance tripped
+the limit early in a first pass — same class of issue admin-auth's e2e
+suite hit once already, fixed the same way).
+
+**Also found and fixed while wiring this up:** Docker Compose's `full`
+profile (`docker compose --profile full up`) never received
+`ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`/
+`COOKIE_SECURE` when Phase 18 shipped — `AdminAuthModule` throws
+synchronously at boot if any are unset, so that profile's `api`
+container has been unable to start at all since. Fixed alongside adding
+`CANDIDATE_JWT_SECRET` to the same block. Confirmed the bcrypt hash's
+`$` characters survive Compose's own `$VAR`-style interpolation intact
+(`docker compose run --rm --no-deps --entrypoint printenv api
+ADMIN_PASSWORD_HASH` against a real container) rather than assumed —
+Compose's variable-name pattern doesn't match `$2b`/`$10`-shaped
+sequences, so they pass through as literal text.
+
+**Revisit when:** a second admin (Phase 18's own scope note) or a
+requirement for server-side session revocation ever arrives — either
+would reopen the "stateless JWT is enough" call this D30 and Phase
+18's D-something both made independently, for the same reasons.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

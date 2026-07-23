@@ -60,7 +60,11 @@ Epic: GitHub issue #172.
 - [x] Candidate verification flow (GitHub issue #3) — single-use,
       expiring email-verification token flips `unverified` →
       `email_verified`; no actual email is sent yet (the token is returned
-      directly), see D14 in `docs/DECISIONS.md`
+      directly), see D14 in `docs/DECISIONS.md`. **Superseded by Phase 16
+      issue #145** — the standalone endpoints this issue built
+      (`POST /candidates/:id/verification-token`, `POST /candidates/verify`)
+      were removed once magic-link login did the same job more securely
+      (an actual email, a real session) — see D30.
 - [x] Engineering blog (`wiki/blog/phase-3-trust-moderation/`, PR #35,
       GitHub issue #49)
 
@@ -593,8 +597,10 @@ Candidate Accounts & Auth". Epic: GitHub issue #182.
 
 - [x] Local email delivery foundation — Mailpit, not LocalStack SES
       (decided + documented, D29) + api mail module (GitHub issue #144)
-- [ ] Magic-link authentication: request + consume + session issuance;
-      first login flips `verificationStatus` (GitHub issue #145)
+- [x] Magic-link authentication: request + consume + session issuance;
+      first login flips `verificationStatus` (GitHub issue #145) —
+      supersedes and removes Phase 3 issue #3's standalone verification
+      endpoints, see D30
 - [ ] Sessions on the write path: candidateId from the session, not
       the request body (GitHub issue #146) — closes today's
       anyone-can-write-as-anyone gap

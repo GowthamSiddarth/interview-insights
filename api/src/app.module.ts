@@ -12,7 +12,7 @@ import { RecruiterInteractionsModule } from './recruiter-interactions/recruiter-
 import { RecruiterRatingsModule } from './recruiter-ratings/recruiter-ratings.module';
 import { OverallReviewsModule } from './overall-reviews/overall-reviews.module';
 import { ModerationModule } from './moderation/moderation.module';
-import { CandidateVerificationModule } from './candidate-verification/candidate-verification.module';
+import { CandidateAuthModule } from './candidate-auth/candidate-auth.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { SearchModule } from './search/search.module';
 
@@ -31,7 +31,7 @@ import { SearchModule } from './search/search.module';
     RecruiterRatingsModule,
     OverallReviewsModule,
     ModerationModule,
-    CandidateVerificationModule,
+    CandidateAuthModule,
     AnalyticsModule,
     SearchModule,
   ],

@@ -336,8 +336,9 @@ unaffected by D24.
 | GET    | `/health`                                            | DB connectivity check + deployed `version` (git SHA)    |
 | POST   | `/candidates`                                        | Upserts by email (server-side hashed, never stored raw) |
 | GET    | `/candidates/:id`                                    |                                                         |
-| POST   | `/candidates/:id/verification-token`                 | Phase 3 — token returned directly (no email yet, D14)   |
-| POST   | `/candidates/verify`                                 | Consumes a token → `email_verified`                     |
+| POST   | `/auth/request-link`                                 | Phase 16 — magic-link email; never discloses if known   |
+| GET/POST | `/auth/verify`                                     | Consumes the link's token → session + `email_verified`  |
+| POST   | `/auth/logout`                                       | Clears the candidate session cookie                     |
 | POST   | `/companies`                                         |                                                         |
 | GET    | `/companies` / `/companies/:id`                      |                                                         |
 | GET    | `/companies/by-slug/:slug`                           | Phase 15 — profile pages address companies by slug      |
