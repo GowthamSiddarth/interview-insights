@@ -15,6 +15,9 @@ data:
   # prod placeholders) is plain HTTP with no TLS termination, so this
   # stays "false" everywhere until a real HTTPS-fronted environment exists.
   COOKIE_SECURE: "false"
+  # Not sensitive on its own (a single shared admin *username*, not the
+  # credential) — GitHub issue #159, Phase 18.
+  ADMIN_USERNAME: admin
 ---
 # Plaintext, same local-only reasoning as 01-postgres-secret.yaml.
 # DATABASE_URL duplicates 01-postgres-secret.yaml's credentials as a single
@@ -30,13 +33,6 @@ type: Opaque
 stringData:
   DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
   EMAIL_HASH_SECRET: dev-only-change-me
-  # bcrypt("dev-only-admin-password") — GitHub issue #159, Phase 18. Not
-  # part of the dev-localstack overlay's secrets bootstrap (that's scoped
-  # to DATABASE_URL/EMAIL_HASH_SECRET only, see localstack-secrets-bootstrap.ts) —
-  # this Secret is the only source for these three keys in every overlay.
-  ADMIN_USERNAME: admin
-  ADMIN_PASSWORD_HASH: $2b$10$5d3GXDikXoI./2wvbNoUIeG2/aoU72AKnueOEYLMYOxoeL8vD5dlG
-  ADMIN_JWT_SECRET: dev-only-change-me-too
 ---
 apiVersion: v1
 kind: Service
@@ -76,6 +72,18 @@ spec:
                 name: api-config
             - secretRef:
                 name: api-secrets
+            # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET live here, deliberately
+            # NOT in api-secrets above (GitHub issue #192) — this whole file
+            # is checked into git, and a "real" rotated credential committed
+            # to it would be exactly as public as the dev-only placeholder
+            # it replaced. admin-credentials is instead provisioned
+            # imperatively from GitHub Actions repo secrets, same pattern as
+            # localstack-credentials/LOCALSTACK_AUTH_TOKEN (D23) — see
+            # cd.yml's "Provision admin credentials secret" step and
+            # infra/scripts/bootstrap-kind.sh, both of which must run before
+            # this Deployment's pod is created (envFrom doesn't hot-reload).
+            - secretRef:
+                name: admin-credentials
           readinessProbe:
             httpGet:
               path: /health

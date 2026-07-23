@@ -5,8 +5,9 @@
 # overlay apply, LocalStack provision + seed. Safe to re-run against an
 # already-running cluster; every step either skips or upgrades in place.
 #
-# Requires: docker, kind, kubectl, helm, and LOCALSTACK_AUTH_TOKEN set in
-# the environment (see wiki/deployment-guide.md section 5).
+# Requires: docker, kind, kubectl, helm, and LOCALSTACK_AUTH_TOKEN,
+# ADMIN_PASSWORD_HASH, ADMIN_JWT_SECRET set in the environment (see
+# wiki/deployment-guide.md sections 5 and 5b).
 set -euo pipefail
 
 CLUSTER_NAME="interview-insights"
@@ -16,6 +17,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [ -z "${LOCALSTACK_AUTH_TOKEN:-}" ]; then
   echo "ERROR: LOCALSTACK_AUTH_TOKEN is not set." >&2
   echo "Get one at app.localstack.cloud, then: export LOCALSTACK_AUTH_TOKEN=..." >&2
+  exit 1
+fi
+
+# GitHub issue #192: the real admin credential is never committed to a
+# manifest — only ever supplied via env var (locally) or a repo secret
+# (CD). No dev-only fallback here on purpose, unlike EMAIL_HASH_SECRET's
+# checked-in placeholder — this Secret's whole point is to not have one.
+if [ -z "${ADMIN_PASSWORD_HASH:-}" ] || [ -z "${ADMIN_JWT_SECRET:-}" ]; then
+  echo "ERROR: ADMIN_PASSWORD_HASH and/or ADMIN_JWT_SECRET is not set." >&2
+  echo "See wiki/deployment-guide.md section 5b." >&2
   exit 1
 fi
 
@@ -79,6 +90,13 @@ echo "== 6. LocalStack auth token secret =="
 kubectl create secret generic localstack-credentials \
   --namespace "$NAMESPACE" \
   --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "== 6b. Admin credentials secret (GitHub issue #192) =="
+kubectl create secret generic admin-credentials \
+  --namespace "$NAMESPACE" \
+  --from-literal=ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
+  --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "== 7. Apply the dev-localstack overlay =="
