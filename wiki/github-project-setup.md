@@ -321,6 +321,40 @@ as a "cross-referenced" timeline event on the issue, not a real linked/
 closing PR — worth double-checking on anything that looks unlinked
 rather than assuming the keyword was used.
 
+**Root cause of the board-hygiene rule getting silently violated, found
+2026-07-23:** individual issues/PRs kept reappearing on the board after
+every archive pass, even with the "only epics" convention followed to
+the letter manually. The actual cause was a built-in GitHub Projects
+**workflow**, not a process mistake: every ProjectV2 board ships with a
+`workflows` set (visible via GraphQL, not the `gh project` CLI, which
+has no subcommand for these) —
+
+```bash
+gh api graphql -f query='
+{ user(login: "<owner>") {
+    projectV2(number: <project-number>) {
+      workflows(first: 10) { nodes { name number enabled } }
+    }
+} }'
+```
+
+**"Auto-add to project" was enabled** and added every new issue/PR in
+the repo to the board automatically, regardless of the manual
+`gh project item-add`-only discipline documented above. Turned off via
+the Project's own UI (**⋯ menu → Workflows → "Auto-add to project"**)
+— there's no safe API mutation to just disable one (`deleteProjectV2Workflow`
+exists but deletes it outright, more permanent than a toggle, so this
+one's a UI-only fix, not a `gh`/script one). Confirmed off afterward via
+the same GraphQL query (`"enabled":false`).
+
+**A second, sibling workflow — "Auto-add sub-issues to project" — is
+still enabled** and is a real remaining leak vector for this same
+problem: it adds any issue to the board the moment it becomes a
+sub-issue of something *already on* the board, which every epic always
+is. If individual sub-issues start reappearing again despite "Auto-add
+to project" being off, this is the next thing to check/toggle the same
+way.
+
 ## Gotchas hit while setting this up
 
 - `docker` and `gh` binaries can exist on disk (e.g. `/usr/local/bin`) while
