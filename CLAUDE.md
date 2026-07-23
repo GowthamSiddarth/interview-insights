@@ -148,12 +148,13 @@ done, once a real login attempt surfaced a Secure-cookie bug and two
 follow-up issues (#192 credential rotation, #193 mid-session-expiry
 redirect, both now done). Phases 1-7, 9-15, and 18 each have a complete
 engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
-backlog, not started. Phases 16 (Candidate Accounts & Auth), 17 (Candidate
-Self-Service), and 19 (Content Quality & Synthetic Data) are all
-planned but not started. Phase 18 was filed after Phase 16-17, but per
-the same non-linear precedent Phase 6/8 already set, was implemented
-first — see the Phase 18 intro in `docs/ROADMAP.md` for why. Phase 19
-remains queued behind it.
+backlog, not started. Phase 16 (Candidate Accounts & Auth) is in
+progress — issue #144 (mail foundation) done, #145-148 not started yet.
+Phases 17 (Candidate Self-Service) and 19 (Content Quality & Synthetic
+Data) are planned but not started. Phase 18 was filed after Phase
+16-17, but per the same non-linear precedent Phase 6/8 already set,
+was implemented first — see the Phase 18 intro in `docs/ROADMAP.md`
+for why. Phase 19 remains queued behind Phase 16/17.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1142,9 +1143,47 @@ exceptions and no leaked "Something went wrong"/"failed with 401" text.
 
 **Phase 18 is now fully done** — issues #159-161 and #192-193 all
 closed via merged PRs.
-- Next step: Phase 19 (Content Quality & Synthetic Data, epic #168,
-  issues #162-165), or resume Phase 16/17 (epics #182/#183) — whichever
-  the project owner picks up next.
+
+**Phase 16 kickoff brainstorm (before implementing)** — issues #144-148
+had already been planned (real acceptance criteria, correct dependency
+chain) but left two decisions open and one gap unaddressed; resolved
+before writing any code: **Mailpit** over LocalStack SES for local mail
+delivery (LocalStack SES would drag in AWS-shaped emulation for a
+feature with no near-term real-sending plan); **stateless JWT cookie**
+for candidate sessions, reusing Phase 18's admin-auth pattern rather
+than a new DB-backed sessions table; and **rate-limit the magic-link
+request endpoint** from the start (folded into issue #145's scope),
+mirroring `LoginThrottleService` — a new public endpoint accepting an
+email is the same class of abuse surface admin login was. Issue bodies
+for #144/#145 updated to record these decisions before implementation
+began. Epic #182 moved to "In Progress".
+
+**Phase 16, issue #144 (mail foundation)** — a new `api` `mail/`
+module: `MailService.send()` over a DI-injected `nodemailer` SMTP
+transport (`mail-transporter.provider.ts`, same provider-token pattern
+as `OPENSEARCH_CLIENT`), configured via `MAIL_SMTP_HOST`/
+`MAIL_SMTP_PORT`/`MAIL_FROM_ADDRESS` env vars — no controller yet, no
+consumer wired into `AppModule` (that's issue #145's job). Mailpit
+added as a core local dependency, not gated behind the
+`dev-localstack` overlay (unrelated to LocalStack/secrets emulation):
+`infra/k8s/base/08-mailpit.yaml` (a stateless Deployment, no PVC —
+losing dev mailbox history on restart is fine) plus an unconditional
+`docker-compose.yml` service, matching Postgres/OpenSearch's standing.
+Mailpit's REST API shape and the absence of a documented health-check
+endpoint were both confirmed by running the real image locally and
+inspecting it directly, not assumed from its docs site (which didn't
+have the exact endpoint/response shape crawlable) — the k8s manifest
+uses a `tcpSocket` probe and CI's service container uses the image's
+own busybox `wget --spider` rather than guessing an HTTP health path.
+4 new unit tests (mocked transporter) + 1 new e2e test
+(`mail.e2e-spec.ts`) proving a message sent through `MailService`
+actually lands in Mailpit's inbox, verified against a real instance
+both natively (local Docker) and in-cluster (`kubectl apply` directly
+against the live `kind` cluster, port-forwarded, before the PR even
+merged). `.github/workflows/ci.yml`'s `api` job gained a `mailpit`
+service container. Decision documented in `docs/DECISIONS.md` D29.
+- Next step: Phase 16, issue #145 (magic-link authentication), per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

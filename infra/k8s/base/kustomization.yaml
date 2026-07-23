@@ -10,3 +10,4 @@ resources:
   - 05-api.yaml
   - 06-web.yaml
   - 07-ingress.yaml
+  - 08-mailpit.yaml

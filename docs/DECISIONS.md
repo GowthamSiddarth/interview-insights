@@ -736,6 +736,51 @@ and patch it out explicitly (as above) if it's still there.
 
 ---
 
+### D29 — Mailpit for local email delivery, not LocalStack SES
+
+**Decision:** Phase 16's magic-link auth (GitHub issue #144) sends
+email through Mailpit — a dedicated local SMTP catcher with a real web
+UI and REST API — rather than LocalStack's SES emulation, despite
+LocalStack already being the established local-practice pattern for
+AWS-shaped services (D20/D23). Added as a core local dependency
+(`infra/k8s/base/08-mailpit.yaml`, unconditional in `docker-compose.yml`)
+the same way Postgres/OpenSearch already are — not gated behind the
+`dev-localstack` overlay, since it has nothing to do with LocalStack or
+secrets emulation.
+
+**Why not LocalStack SES:** LocalStack SES emulation exists to validate
+*real AWS SES integration code* ahead of a real AWS account (D20's
+whole point — free, zero-real-account-risk practice for Phase 8b/8d).
+Phase 16 has no near-term real-sending plan; it just needs a local mail
+transport this project's own code can send through and inspect during
+development and e2e tests. Mailpit is purpose-built for exactly that —
+a real SMTP server plus a queryable REST API
+(`GET /api/v1/search?query=to:...`) — with none of the AWS-shaped
+scaffolding (IAM roles, `SES` service surface, real provider parity)
+that would only matter if this project were actually about to send
+through SES for real. Introducing that scaffolding now, for a feature
+with no concrete AWS-SES plan, would be exactly the kind of ahead-of-
+need complexity this project's conventions warn against.
+
+**Verified, not assumed:** Mailpit's REST API shape (`GET
+/api/v1/messages`, `GET /api/v1/search?query=`, `DELETE
+/api/v1/messages`) was confirmed by running the real `axllent/mailpit`
+image locally and sending a real test message through it — the
+project's own docs site didn't have the exact endpoint/response shape
+crawlable, so guessing was avoided in favor of hitting the real API
+directly. Same reasoning for the k8s manifest's health probes:
+Mailpit's docs don't document a dedicated health-check endpoint (no
+`/readyz`/`/healthz`), so `infra/k8s/base/08-mailpit.yaml` uses a
+`tcpSocket` probe on the web UI port instead of guessing an HTTP path
+that might not exist.
+
+**Revisit when:** a real Phase 8 trigger makes actual email delivery
+(not just local dev/testing) a real requirement — that's the point at
+which a real provider (SES or otherwise) gets wired in, informed by
+whichever cloud (AWS vs OCI, D11's still-open question) is chosen then.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

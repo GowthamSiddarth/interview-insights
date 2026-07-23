@@ -25,16 +25,17 @@ node --version                # need 22+
 
 ## 1. Native dev loop (fastest — no containers for api/web)
 
-`api`/`web` run directly on the host. **Postgres and OpenSearch both
-live in kind only** (D24/D26 in `docs/DECISIONS.md`) — reached via
-port-forward, not `infra/docker-compose.yml`'s containers (those service
-definitions stay in the file as inert reference only). This requires
-the `kind` cluster from section 3 to already be up.
+`api`/`web` run directly on the host. **Postgres, OpenSearch, and
+Mailpit all live in kind only** (D24/D26/D29 in `docs/DECISIONS.md`) —
+reached via port-forward, not `infra/docker-compose.yml`'s containers
+(those service definitions stay in the file as inert reference only).
+This requires the `kind` cluster from section 3 to already be up.
 
 ```bash
-# 1. kind cluster must already exist (section 3) — both stores live there
+# 1. kind cluster must already exist (section 3) — all three live there
 kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
 kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
+kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025 &
 
 cd api
 cp .env.example .env                     # URLs already point at localhost:5432/9200
@@ -53,12 +54,13 @@ Verify: `curl http://localhost:3001/health` → `{"status":"ok"}`.
 
 Stop: kill the port-forwards.
 
-**Gotcha:** if `infra/docker-compose.yml`'s OpenSearch container happens
-to also be running, both it (0.0.0.0:9200 via Docker) and the
-port-forward (127.0.0.1:9200) can coexist on the same port and
-`localhost:9200` becomes ambiguous — the exact silent-wrong-target
-problem D24 hit with Postgres.app. Stop the compose container
-(`docker stop interview-insights-opensearch-1`) before port-forwarding.
+**Gotcha:** if `infra/docker-compose.yml`'s OpenSearch or Mailpit
+containers happen to also be running, both it (`0.0.0.0` via Docker)
+and the port-forward (`127.0.0.1`) can coexist on the same port and
+`localhost` becomes ambiguous — the exact silent-wrong-target problem
+D24 hit with Postgres.app. Stop the compose container(s)
+(`docker stop interview-insights-opensearch-1 interview-insights-mailpit-1`)
+before port-forwarding.
 
 ### Running `api`'s tests locally
 
@@ -77,14 +79,19 @@ npm test
 #   the real companies/reviews indices — D26. The e2etest-* indices are
 #   disposable; delete anytime with
 #   `curl -X DELETE http://localhost:9200/e2etest-*`.
+# Mailpit needs no such knob (GitHub issue #144) — mail.e2e-spec.ts
+# sends a uniquely-marked test message per run instead, since there's no
+# database/index concept to isolate against; messages just accumulate in
+# Mailpit's inbox and can be cleared anytime with
+# `curl -X DELETE http://localhost:8025/api/v1/messages`.
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
 OPENSEARCH_INDEX_PREFIX="e2etest-" \
 npm run test:e2e
 ```
 
 CI (`.github/workflows/ci.yml`) is unaffected by any of this — its `api`
-job runs its own fully ephemeral Postgres and OpenSearch service
-containers per run, and the prefix defaults to empty there.
+job runs its own fully ephemeral Postgres, OpenSearch, and Mailpit
+service containers per run, and the prefix defaults to empty there.
 
 ## 2. Full-stack Docker Compose (prod-like images, still no Kubernetes)
 
@@ -247,13 +254,15 @@ curl --resolve app.interview-insights.local:80:127.0.0.1 http://app.interview-in
 curl --resolve api.interview-insights.local:80:127.0.0.1 http://api.interview-insights.local/health
 ```
 
-To reach Postgres/OpenSearch directly (e.g. a DB client) — the Postgres
-one is also section 1's actual local-dev Postgres access path now, not
-just an ad hoc DB-client shortcut (D24):
+To reach Postgres/OpenSearch/Mailpit directly (e.g. a DB client, or
+Mailpit's web UI at `localhost:8025`) — the Postgres one is also
+section 1's actual local-dev Postgres access path now, not just an ad
+hoc DB-client shortcut (D24):
 
 ```bash
 kubectl -n interview-insights port-forward svc/postgres 5432:5432
 kubectl -n interview-insights port-forward svc/opensearch 9200:9200
+kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025
 ```
 
 ### 3.6 k9s + metrics-server (cluster monitoring, Phase 12)
@@ -726,6 +735,7 @@ fresh cluster via its init-hook).
 
    kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
    kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
+   kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025 &
    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
    OPENSEARCH_INDEX_PREFIX="e2etest-" npm run test:e2e
 

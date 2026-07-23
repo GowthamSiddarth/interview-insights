@@ -1,0 +1,70 @@
+# Mirrors infra/docker-compose.yml's mailpit service. Local SMTP catcher
+# for Phase 16's magic-link auth (GitHub issue #144) — api sends through
+# the smtp port (1025, no auth), and both the mail module's own
+# verification and manual inspection use the http port (8025: web UI at
+# / , REST API at /api/v1/...). Deliberately not in the dev-localstack
+# overlay — unrelated to LocalStack/secrets emulation, this is a core
+# local dependency the same way Postgres/OpenSearch already are, always
+# present regardless of which overlay is applied. No PVC: losing a dev
+# mailbox's history on restart is fine, unlike Postgres/OpenSearch's real
+# data (D24/D26) — a stateless Deployment, not a StatefulSet.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: interview-insights
+spec:
+  selector:
+    app: mailpit
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: 1025
+    - name: http
+      port: 8025
+      targetPort: 8025
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: interview-insights
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailpit
+  template:
+    metadata:
+      labels:
+        app: mailpit
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.21
+          ports:
+            - containerPort: 1025
+            - containerPort: 8025
+          # TCP probes, not an HTTP path — Mailpit's docs don't document a
+          # dedicated /healthz-style endpoint, and guessing one wrong would
+          # leave the pod stuck NotReady. A TCP accept on the web UI port
+          # is a safe, always-correct proxy for "the HTTP server is up."
+          readinessProbe:
+            tcpSocket:
+              port: 8025
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8025
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
