@@ -1,11 +1,12 @@
 name: interview-insights
 
-# Default (`docker compose up`): Postgres + OpenSearch. `api`/`web` run
-# directly on the host via npm for the fast local-dev loop (see README.md)
-# — no code talks to Redis/Kafka yet, so those aren't run either until
-# something actually depends on them (docs/DECISIONS.md D9: avoid
-# premature infrastructure). OpenSearch was added here for Phase 5 (GitHub
-# issue #21) — the first real trigger, per that same D9 reasoning.
+# Default (`docker compose up`): Postgres + OpenSearch + Mailpit. `api`/
+# `web` run directly on the host via npm for the fast local-dev loop (see
+# README.md) — no code talks to Redis/Kafka yet, so those aren't run
+# either until something actually depends on them (docs/DECISIONS.md D9:
+# avoid premature infrastructure). OpenSearch was added here for Phase 5
+# (GitHub issue #21); Mailpit for Phase 16 (GitHub issue #144) — the
+# first real trigger for each, per that same D9 reasoning.
 #
 # `docker compose --profile full up --build`: also builds and runs `api`
 # and `web` as containers, for prod-like local testing of the actual Docker
@@ -46,6 +47,15 @@ services:
       timeout: 5s
       retries: 10
 
+  # No persistence — Mailpit's own mailbox history is fine to lose on
+  # restart, unlike Postgres/OpenSearch's real data (D24/D26); no volume.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   api:
     profiles: ["full"]
     build:
@@ -57,6 +67,8 @@ services:
       EMAIL_HASH_SECRET: dev-only-change-me
       CORS_ORIGIN: http://localhost:3000
       OPENSEARCH_URL: http://opensearch:9200
+      MAIL_SMTP_HOST: mailpit
+      MAIL_SMTP_PORT: "1025"
       PORT: 3001
     ports:
       - "3001:3001"
@@ -65,6 +77,8 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
   web:
     profiles: ["full"]

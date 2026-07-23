@@ -591,8 +591,8 @@ email entirely. Unblocks Phase 2's deferred Update/Delete, my-reviews,
 and the GDPR open decision (all Phase 17). Milestone: "Phase 16 —
 Candidate Accounts & Auth". Epic: GitHub issue #182.
 
-- [ ] Local email delivery foundation (Mailpit or LocalStack SES —
-      decide + document) + api mail module (GitHub issue #144)
+- [x] Local email delivery foundation — Mailpit, not LocalStack SES
+      (decided + documented, D29) + api mail module (GitHub issue #144)
 - [ ] Magic-link authentication: request + consume + session issuance;
       first login flips `verificationStatus` (GitHub issue #145)
 - [ ] Sessions on the write path: candidateId from the session, not

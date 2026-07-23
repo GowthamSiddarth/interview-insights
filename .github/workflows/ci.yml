@@ -35,9 +35,27 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      # GitHub issue #144, Phase 16 — mail.e2e-spec.ts needs a real
+      # instance, not a mock. No documented /healthz-style endpoint (see
+      # docs/DECISIONS.md D29), so the health check uses the image's own
+      # busybox wget against the web UI root path instead of guessing an
+      # API path that might not exist.
+      mailpit:
+        image: axllent/mailpit:v1.21
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "wget --spider -q http://localhost:8025/ || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
       OPENSEARCH_URL: http://localhost:9200
+      MAIL_SMTP_HOST: localhost
+      MAIL_SMTP_PORT: "1025"
+      MAIL_HTTP_URL: http://localhost:8025
       EMAIL_HASH_SECRET: ci-test-secret
       # bcrypt("dev-only-admin-password") — see api/test/support/admin-session.ts,
       # which every moderation-touching e2e spec logs in with (GitHub issue #159).

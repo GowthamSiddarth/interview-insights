@@ -31,21 +31,23 @@ more explanation, that one is just the commands in order.
 
 ## Quick start
 
-**1. Start Postgres + OpenSearch**
+**1. Start Postgres + OpenSearch + Mailpit**
 
-Both now live in the `kind` cluster only, not Docker Compose (see
-`docs/DECISIONS.md` D24/D26) — this requires the `kind` cluster from
+All three now live in the `kind` cluster only, not Docker Compose (see
+`docs/DECISIONS.md` D24/D26/D29) — this requires the `kind` cluster from
 `wiki/deployment-guide.md` section 3 to already be up:
 
 ```bash
 kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
 kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
+kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025 &
 ```
 
 `infra/docker-compose.yml`'s service definitions stay in the repo as
 documented reference only — nothing should point at them day to day
-(and don't run its OpenSearch alongside the port-forward: both can bind
-9200 at once and `localhost:9200` becomes ambiguous).
+(and don't run its OpenSearch/Mailpit alongside the port-forwards: both
+can bind the same ports at once and `localhost` becomes ambiguous about
+which instance you're talking to).
 
 **2. Set up and run the API**
 
@@ -184,12 +186,14 @@ curl --resolve app.interview-insights.local:80:127.0.0.1 http://app.interview-in
 curl --resolve api.interview-insights.local:80:127.0.0.1 http://api.interview-insights.local/health
 ```
 
-To reach Postgres/OpenSearch directly (e.g. for a DB client), port-forward
-the same way as the Docker Compose setup:
+To reach Postgres/OpenSearch/Mailpit directly (e.g. for a DB client, or
+to read a magic-link email in Mailpit's web UI at `localhost:8025`),
+port-forward the same way as the Docker Compose setup:
 
 ```bash
 kubectl -n interview-insights port-forward svc/postgres 5432:5432
 kubectl -n interview-insights port-forward svc/opensearch 9200:9200
+kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025
 ```
 
 Tear down with `kind delete cluster --name interview-insights`.
@@ -305,11 +309,13 @@ With the port-forward from "Quick start" step 1 running (Postgres lives in
 # api — unit tests (no DB needed)
 cd api && npm test
 
-# api — integration/e2e tests: needs both port-forwards above, with two
-# isolation knobs so test runs never litter the real data (a separate
+# api — integration/e2e tests: needs all three port-forwards above, with
+# two isolation knobs so test runs never litter the real data (a separate
 # interview_insights_test Postgres database, and an OpenSearch index
 # prefix — see docs/DECISIONS.md D24/D26 and wiki/deployment-guide.md
-# section 1):
+# section 1). Mailpit needs no such knob — mail.e2e-spec.ts uses a unique
+# marker per run instead, since there's no database/index concept to
+# isolate against:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
 OPENSEARCH_INDEX_PREFIX="e2etest-" \
 npm run test:e2e
