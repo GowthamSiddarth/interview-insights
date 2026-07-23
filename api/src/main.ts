@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 import { bootstrapSecretsFromLocalStack } from './secrets/localstack-secrets-bootstrap';
@@ -16,7 +17,13 @@ async function bootstrap() {
   // web/ runs on a different origin/port — without this, every browser
   // fetch from it fails preflight (caught by driving the app in a real
   // browser; curl doesn't enforce CORS so it doesn't surface this).
-  app.enableCors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000' });
+  // credentials: true is required for the admin_session cookie (GitHub
+  // issue #159) to be sent/received cross-origin at all.
+  app.enableCors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000', credentials: true });
+
+  // AdminJwtStrategy reads the session token from a cookie, not a header —
+  // needs req.cookies populated before passport ever sees the request.
+  app.use(cookieParser());
 
   // Every new endpoint validates input — see CLAUDE.md conventions.
   app.useGlobalPipes(

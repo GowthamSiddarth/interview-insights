@@ -39,6 +39,11 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
       OPENSEARCH_URL: http://localhost:9200
       EMAIL_HASH_SECRET: ci-test-secret
+      # bcrypt("dev-only-admin-password") — see api/test/support/admin-session.ts,
+      # which every moderation-touching e2e spec logs in with (GitHub issue #159).
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD_HASH: '$2b$10$5d3GXDikXoI./2wvbNoUIeG2/aoU72AKnueOEYLMYOxoeL8vD5dlG'
+      ADMIN_JWT_SECRET: ci-test-jwt-secret
     defaults:
       run:
         working-directory: api

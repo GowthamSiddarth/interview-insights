@@ -348,8 +348,10 @@ unaffected by D24.
 | GET    | `/recruiter-interactions/:id/ratings`                | Approved only                                           |
 | POST   | `/processes/:processId/overall-review`               | One per process (schema-enforced); `pending`            |
 | GET    | `/processes/:processId/overall-review`               | The approved review, or empty                           |
-| GET    | `/moderation/queue`                                  | Pending entries, enriched with entity context           |
-| POST   | `/moderation/queue/:id/{approve,reject,flag}`        | Internal/admin — no auth yet (Phase 8)                  |
+| GET    | `/moderation/queue`                                  | Pending entries, enriched with entity context — admin auth required |
+| POST   | `/moderation/queue/:id/{approve,reject,flag}`        | Admin auth required (Phase 18 issue #159)               |
+| POST   | `/auth/admin/login`                                  | Sets an httpOnly session cookie; rate-limited            |
+| POST   | `/auth/admin/logout`                                 | Clears the session cookie                               |
 | GET    | `/search/companies?q=`                               | OpenSearch-backed (Phase 5)                             |
 | GET    | `/search/reviews?q=&companyId=&roleTitle=&...`       | Faceted review search (approved only)                   |
 

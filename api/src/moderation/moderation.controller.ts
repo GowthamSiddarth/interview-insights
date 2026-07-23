@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
+import { AdminJwtAuthGuard } from '../admin-auth/guards/admin-jwt-auth.guard';
 
-// Internal/admin surface — no auth yet (same gap as the rest of the API).
-// Not meant for public consumption; there's no moderator UI in front of
-// this yet either, see docs/ROADMAP.md Phase 3.
+// Internal/admin surface — gated on a valid admin_session cookie (GitHub
+// issue #159, Phase 18). Every route 401s without one.
+@UseGuards(AdminJwtAuthGuard)
 @Controller('moderation/queue')
 export class ModerationController {
   constructor(private readonly moderationService: ModerationService) {}
