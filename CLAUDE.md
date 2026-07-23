@@ -940,9 +940,56 @@ earlier one sits open/gated). Milestones "Phase 18 — Admin
 Authentication" (issues #159-161) and "Phase 19 — Content Quality &
 Synthetic Data" (issues #162-165) filed together per the "plan a phase
 before implementing" convention. See `docs/ROADMAP.md` Phases 18-19 for
-full scope.
-- Next step: Phase 18, issue #159 (admin auth backend), per
-  `docs/ROADMAP.md`.
+full scope. Epics vs Milestones (see Conventions) then got adopted from
+this planning pass onward and retrofitted onto every earlier phase the
+same day — Phase 18 → epic #167, Phase 19 → epic #168.
+
+**Phase 18, issue #159 (admin auth backend)** — a new `admin-auth/`
+module in `api` (`@nestjs/passport` + `passport-local` + `passport-jwt`
++ `@nestjs/jwt`, `bcryptjs` for the credential hash — pure-JS, not
+native `bcrypt`, so the existing `node:22-slim` Dockerfile stages don't
+need build tooling added just for this). Single shared admin credential
+via `ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH` env vars, same plain-env-var
+pattern as `EMAIL_HASH_SECRET` (dev k8s Secret; not wired into the
+LocalStack secrets bootstrap, which stays scoped to
+`DATABASE_URL`/`EMAIL_HASH_SECRET` only). `POST /auth/admin/login` sets
+a short-lived (1h) JWT as an httpOnly `admin_session` cookie — never
+returned in the JSON body; `POST /auth/admin/logout` clears it,
+deliberately left unauthenticated itself since its only effect is
+clearing a cookie and gating it would break clearing an
+already-expired session. `AdminJwtAuthGuard` applied at the controller
+level on `ModerationController` — every route (list/approve/reject/flag)
+401s without a valid session. Login is throttled by a new
+`LoginThrottleService` (in-memory, per-IP, 5 attempts/15min) sitting in
+front of the credential check via guard ordering
+(`@UseGuards(LoginThrottleGuard, AdminLocalAuthGuard)`), so a throttled
+IP never reaches `bcrypt.compare()` — same category of known
+single-instance limitation as D13's fraud-check scaling caveat, fine at
+today's solo-`kind` scale. `main.ts` gained `cookie-parser` middleware
+(needed for the JWT strategy to read the session cookie) and
+`app.enableCors({ credentials: true })` (needed for the cookie to
+survive cross-origin at all) — both required updating every e2e spec
+that calls a moderation route (`moderation`, `fraud-checks`,
+`overall-reviews`, `recruiter-ratings`, `review-search`,
+`company-reviews`), via a new shared `api/test/support/admin-session.ts`
+helper (`loginAsAdmin()`) rather than duplicating login logic six times.
+21 new unit tests (service/guard/strategy, mocked) + 8 new e2e tests
+(`admin-auth.e2e-spec.ts`, 73 e2e total now) prove: valid/invalid
+login, cookie-gated moderation access, logout actually invalidates
+(re-attaching the cleared cookie still 401s), and the rate limit trips
+— that last one against its own freshly-booted app instance so its
+attempt count doesn't compete with the file's earlier login calls.
+Manually verified live via curl against a locally-run `api` (kind's
+Postgres/OpenSearch via port-forward, per D24/D26): no cookie → 401,
+wrong credentials → 401, correct login → 200 + `Set-Cookie` with
+`HttpOnly`, authenticated call → 200, logout → 200, reused
+post-logout cookie → 401, and 3 wrong-password attempts followed by a
+429. `web/src/app/moderation/page.tsx` is now broken against a real
+deployment until issue #160 (frontend login + route gating) lands —
+expected and in scope for that issue, not this one; it still works
+fine locally since nothing has redeployed it yet.
+- Next step: Phase 18, issue #160 (admin auth frontend: login page +
+  route gating for `/moderation` + logout), per `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 

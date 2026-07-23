@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
+import { loginAsAdmin } from './support/admin-session';
 
 interface CandidateBody {
   id: string;
@@ -41,6 +43,7 @@ function body<T>(res: request.Response): T {
 // forever.
 describe('Moderation (e2e)', () => {
   let app: INestApplication;
+  let adminCookie: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -52,7 +55,9 @@ describe('Moderation (e2e)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
     app.useGlobalFilters(new PrismaExceptionFilter());
+    app.use(cookieParser());
     await app.init();
+    adminCookie = await loginAsAdmin(app);
   });
 
   afterAll(async () => {
@@ -106,7 +111,7 @@ describe('Moderation (e2e)', () => {
   }
 
   async function findQueueEntryFor(ratingId: string): Promise<QueueEntryBody> {
-    const queueRes = await server().get('/moderation/queue').expect(200);
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
     const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === ratingId);
     if (!entry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
     return entry;
@@ -134,6 +139,7 @@ describe('Moderation (e2e)', () => {
 
     await server()
       .post(`/moderation/queue/${entry.id}/approve`)
+      .set('Cookie', adminCookie)
       .send({ reviewedBy: 'test-moderator' })
       .expect(201);
 
@@ -145,7 +151,11 @@ describe('Moderation (e2e)', () => {
     const { roundId, ratingId } = await submitRating();
     const entry = await findQueueEntryFor(ratingId);
 
-    await server().post(`/moderation/queue/${entry.id}/reject`).send({}).expect(201);
+    await server()
+      .post(`/moderation/queue/${entry.id}/reject`)
+      .set('Cookie', adminCookie)
+      .send({})
+      .expect(201);
 
     const publicRatings = await server().get(`/rounds/${roundId}/ratings`).expect(200);
     expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).not.toContain(ratingId);
@@ -157,6 +167,7 @@ describe('Moderation (e2e)', () => {
 
     const flagRes = await server()
       .post(`/moderation/queue/${entry.id}/flag`)
+      .set('Cookie', adminCookie)
       .send({ flagReason: 'spam_pattern' })
       .expect(201);
     expect(body<QueueEntryBody>(flagRes).flagReason).toBe('spam_pattern');
@@ -169,14 +180,28 @@ describe('Moderation (e2e)', () => {
     const { ratingId } = await submitRating();
     const entry = await findQueueEntryFor(ratingId);
 
-    await server().post(`/moderation/queue/${entry.id}/approve`).send({}).expect(201);
-    await server().post(`/moderation/queue/${entry.id}/approve`).send({}).expect(409);
+    await server()
+      .post(`/moderation/queue/${entry.id}/approve`)
+      .set('Cookie', adminCookie)
+      .send({})
+      .expect(201);
+    await server()
+      .post(`/moderation/queue/${entry.id}/approve`)
+      .set('Cookie', adminCookie)
+      .send({})
+      .expect(409);
   });
 
   it('returns 404 for a non-existent queue entry', async () => {
     await server()
       .post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/approve')
+      .set('Cookie', adminCookie)
       .send({})
       .expect(404);
+  });
+
+  it('rejects an unauthenticated request with 401', async () => {
+    await server().get('/moderation/queue').expect(401);
+    await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/approve').send({}).expect(401);
   });
 });

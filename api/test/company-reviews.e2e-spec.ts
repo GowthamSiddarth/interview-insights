@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
+import { loginAsAdmin } from './support/admin-session';
 
 interface IdBody {
   id: string;
@@ -39,6 +41,7 @@ function body<T>(res: request.Response): T {
 // D16/D17).
 describe('Company read paths: slug + reviews (e2e)', () => {
   let app: INestApplication;
+  let adminCookie: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -50,7 +53,9 @@ describe('Company read paths: slug + reviews (e2e)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
     app.useGlobalFilters(new PrismaExceptionFilter());
+    app.use(cookieParser());
     await app.init();
+    adminCookie = await loginAsAdmin(app);
   });
 
   afterAll(async () => {
@@ -108,10 +113,14 @@ describe('Company read paths: slug + reviews (e2e)', () => {
       const ratingId = body<IdBody>(ratingRes).id;
 
       if (i < counts.approved) {
-        const queueRes = await server().get('/moderation/queue').expect(200);
+        const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
         const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === ratingId);
         if (!entry) throw new Error(`no queue entry for ${ratingId}`);
-        await server().post(`/moderation/queue/${entry.id}/approve`).send({}).expect(201);
+        await server()
+          .post(`/moderation/queue/${entry.id}/approve`)
+          .set('Cookie', adminCookie)
+          .send({})
+          .expect(201);
         approvedIds.push(ratingId);
       }
     }

@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
+import { loginAsAdmin } from './support/admin-session';
 
 interface CandidateBody {
   id: string;
@@ -37,6 +39,7 @@ function body<T>(res: request.Response): T {
 // recruiter_rating threw NotImplementedException until now.
 describe('Recruiter interactions + ratings (e2e)', () => {
   let app: INestApplication;
+  let adminCookie: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -48,7 +51,9 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
     app.useGlobalFilters(new PrismaExceptionFilter());
+    app.use(cookieParser());
     await app.init();
+    adminCookie = await loginAsAdmin(app);
   });
 
   afterAll(async () => {
@@ -112,7 +117,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
   }
 
   async function findQueueEntryFor(ratingId: string): Promise<QueueEntryBody> {
-    const queueRes = await server().get('/moderation/queue').expect(200);
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
     const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === ratingId);
     if (!entry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
     return entry;
@@ -154,6 +159,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
 
     await server()
       .post(`/moderation/queue/${entry.id}/approve`)
+      .set('Cookie', adminCookie)
       .send({ reviewedBy: 'test-moderator' })
       .expect(201);
 
@@ -167,7 +173,11 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     const { interactionId, ratingId } = await submitRating();
     const entry = await findQueueEntryFor(ratingId);
 
-    await server().post(`/moderation/queue/${entry.id}/reject`).send({}).expect(201);
+    await server()
+      .post(`/moderation/queue/${entry.id}/reject`)
+      .set('Cookie', adminCookie)
+      .send({})
+      .expect(201);
 
     const publicRatings = await server()
       .get(`/recruiter-interactions/${interactionId}/ratings`)
