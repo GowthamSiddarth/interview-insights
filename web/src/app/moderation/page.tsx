@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   api,
   ApiError,
@@ -88,6 +89,11 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
 }
 
 export default function ModerationPage() {
+  const router = useRouter();
+  // 'checking' never renders the queue (or the login redirect race) — a
+  // 401 here always means "go to /moderation/login", never "show an error
+  // inline," unlike the entries/actions error state below.
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [entries, setEntries] = useState<ModerationQueueEntry[] | null>(null);
   const [reviewedBy, setReviewedBy] = useState('');
   const [flagReasonById, setFlagReasonById] = useState<Record<string, ModerationFlagReason>>({});
@@ -95,10 +101,23 @@ export default function ModerationPage() {
 
   useEffect(() => {
     api
+      .getAdminSession()
+      .then(() => setSessionChecked(true))
+      .catch(() => router.push('/moderation/login'));
+  }, [router]);
+
+  useEffect(() => {
+    if (!sessionChecked) return;
+    api
       .listModerationQueue()
       .then(setEntries)
       .catch((err: unknown) => setError(errorMessage(err)));
-  }, []);
+  }, [sessionChecked]);
+
+  async function logout(): Promise<void> {
+    await api.adminLogout().catch(() => undefined);
+    router.push('/moderation/login');
+  }
 
   async function act(
     entry: ModerationQueueEntry,
@@ -121,16 +140,23 @@ export default function ModerationPage() {
     }
   }
 
+  // Session check hasn't resolved (or is redirecting to login) — render
+  // nothing rather than a flash of the queue UI.
+  if (!sessionChecked) return null;
+
   return (
     <PageContainer>
-      <header>
-        <h1 className="text-2xl font-semibold">Moderation queue</h1>
-        {/* Internal page, no auth yet — same trust model as the rest of the
-            app today; gating it is Phase 8's concern (issue #128 scope). */}
-        <p className="text-sm text-gray-500">
-          Pending ratings and reviews across all entity types. Approving makes an
-          item publicly visible; rejecting and flagging keep it hidden.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Moderation queue</h1>
+          <p className="text-sm text-gray-500">
+            Pending ratings and reviews across all entity types. Approving makes an
+            item publicly visible; rejecting and flagging keep it hidden.
+          </p>
+        </div>
+        <Button type="button" onClick={() => void logout()} className="bg-gray-600 hover:bg-gray-700">
+          Log out
+        </Button>
       </header>
 
       {error && (

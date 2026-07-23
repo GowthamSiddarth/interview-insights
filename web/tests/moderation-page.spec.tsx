@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ModerationPage from '../src/app/moderation/page';
 
+const push = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+}));
+
 const queueEntries = [
   {
     id: 'q-round',
@@ -67,6 +72,12 @@ function mockFetch() {
   global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
+    if (url.endsWith('/auth/admin/me') && method === 'GET') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+    }
+    if (url.endsWith('/auth/admin/logout') && method === 'POST') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) });
+    }
     if (url.endsWith('/moderation/queue') && method === 'GET') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(queueEntries) });
     }
@@ -77,9 +88,41 @@ function mockFetch() {
   }) as jest.Mock;
 }
 
-describe('ModerationPage (Phase 14 issue #128)', () => {
+describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #160)', () => {
   beforeEach(() => {
+    push.mockClear();
     mockFetch();
+  });
+
+  it('redirects to the login page when the session check 401s', async () => {
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/auth/admin/me')) {
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
+      }
+      throw new Error(`Unmocked fetch: ${url}`);
+    }) as jest.Mock;
+
+    render(<ModerationPage />);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/moderation/login'));
+    // Never falls through to rendering the queue while unauthenticated.
+    expect(screen.queryByText('Moderation queue')).not.toBeInTheDocument();
+  });
+
+  it('logs out and redirects to the login page', async () => {
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/admin/logout'),
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    expect(push).toHaveBeenCalledWith('/moderation/login');
   });
 
   it('renders all three entity types with their context, generated labels only', async () => {

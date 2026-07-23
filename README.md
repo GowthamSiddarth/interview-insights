@@ -352,6 +352,7 @@ unaffected by D24.
 | POST   | `/moderation/queue/:id/{approve,reject,flag}`        | Admin auth required (Phase 18 issue #159)               |
 | POST   | `/auth/admin/login`                                  | Sets an httpOnly session cookie; rate-limited            |
 | POST   | `/auth/admin/logout`                                 | Clears the session cookie                               |
+| GET    | `/auth/admin/me`                                     | Session check for `web`'s `/moderation` gate (#160)      |
 | GET    | `/search/companies?q=`                               | OpenSearch-backed (Phase 5)                             |
 | GET    | `/search/reviews?q=&companyId=&roleTitle=&...`       | Faceted review search (approved only)                   |
 

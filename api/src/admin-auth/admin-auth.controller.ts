@@ -1,6 +1,7 @@
-import { Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AdminAuthService, AdminSessionPayload } from './admin-auth.service';
+import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
 import { AdminLocalAuthGuard } from './guards/admin-local-auth.guard';
 import { LoginThrottleGuard } from './login-throttle.guard';
 import { ADMIN_SESSION_COOKIE } from './strategies/admin-jwt.strategy';
@@ -39,5 +40,15 @@ export class AdminAuthController {
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(ADMIN_SESSION_COOKIE);
     return { status: 'ok' };
+  }
+
+  // Lightweight session check (GitHub issue #160): lets web's /moderation
+  // page ask "am I logged in?" up front and redirect to the login page
+  // before rendering anything, instead of rendering the queue and only
+  // then discovering it via a failed 401 on the real data call.
+  @Get('me')
+  @UseGuards(AdminJwtAuthGuard)
+  me(@Req() req: Request): AdminSessionPayload {
+    return req.user as AdminSessionPayload;
   }
 }
