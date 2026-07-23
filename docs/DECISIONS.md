@@ -651,6 +651,42 @@ OpenSearch service container, empty prefix).
 
 ---
 
+### D27 — Admin session CSRF stance, and a flag to remember for Phase 8
+
+**Decision:** `admin_session`'s `SameSite=Lax` is treated as sufficient
+CSRF protection for now — no separate CSRF token. Every modern browser
+withholds a `SameSite=Lax` cookie from a cross-site `POST` (the classic
+CSRF vector against `ModerationController`'s approve/reject/flag
+routes), so a foreign page can't ride the admin's session to call those
+endpoints. This is a considered, written-down acceptance, not an
+oversight surfaced by omission.
+
+**Why not a token too:** defense in depth is real, but a CSRF token
+needs somewhere to live that a form can read it from — the standard
+answer is a second, non-httpOnly cookie or a value baked into
+server-rendered HTML, neither of which this app has today (the
+moderation page is a client-rendered SPA route with no server-rendered
+form). Building that scaffolding for a single-admin, `SameSite=Lax`-
+already-covered surface is exactly the kind of ahead-of-need complexity
+this project's own conventions warn against.
+
+**Also flagged here so it isn't forgotten:** `COOKIE_SECURE` (added
+alongside this decision, see the admin-auth bugfix PR) defaults to
+`false` in every overlay today, matching the plain-HTTP reality of
+local `kind`. The moment a real TLS-terminated environment exists —
+Phase 8's eventual staging trigger — that overlay's `api-config`
+ConfigMap needs `COOKIE_SECURE: "true"` explicitly; nothing enforces
+this automatically, and forgetting it means the session cookie is sent
+in the clear over a connection that has TLS available.
+
+**Revisit when:** this surface stops being a single-admin,
+same-origin-only, client-rendered SPA route — e.g. if a second admin,
+a server-rendered form, or a non-cookie API client is ever added, the
+CSRF answer above no longer holds and needs re-deriving, not assumed
+to still apply.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
