@@ -687,6 +687,55 @@ to still apply.
 
 ---
 
+### D28 — `kubectl apply` doesn't reliably prune keys removed from a Secret's `stringData`
+
+**Found while rotating the admin credential (GitHub issue #192):**
+`infra/k8s/base/05-api.yaml`'s `api-secrets` Secret had `ADMIN_USERNAME`/
+`ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` removed from its `stringData`
+(moved to the new `admin-credentials` Secret and the `api-config`
+ConfigMap). After `kubectl apply -k` ran via CD, the live Secret's
+`.data` still had all three old keys, with their old dev-only values —
+confirmed directly with `kubectl get secret api-secrets -o
+jsonpath='{.data}'`, not assumed. The `kubectl.kubernetes.io/last-
+applied-configuration` annotation was correctly updated to the new,
+smaller `stringData`; the live `.data` just never caught up.
+
+**Why:** a `Secret`'s `stringData` field is write-only — the API server
+converts it into `.data` (base64) on write and never persists
+`stringData` itself on the stored object. `kubectl apply`'s 3-way merge
+diffs the previous `last-applied-configuration` against the new one to
+compute which keys were removed, but the live object it compares
+against has no `.stringData` to reconcile against (only `.data`) — so a
+key removed from `stringData` doesn't reliably turn into a deletion of
+the corresponding `.data` key. This is a known class of `kubectl
+apply`/`stringData` interaction, not something specific to this repo's
+manifests.
+
+**Did this cause a real bug here?** No — `envFrom` merges multiple
+sources additively, and duplicate keys resolve to whichever source is
+listed last; `admin-credentials` is listed after `api-secrets` in
+`05-api.yaml`'s Deployment, so the pod's actual env vars were already
+correct (verified: `kubectl exec deploy/api -- printenv` showed the new
+rotated values, and a live login test confirmed the old dev-only
+password no longer authenticates while the new one does). The stale
+keys were inert — but silently wrong data sitting in a Secret is still
+worth not shipping, especially since a future reordering of `envFrom`
+would have silently resurrected the old dev-only credential.
+
+**Fix applied:** `kubectl patch secret api-secrets --type=json -p='[...
+"op":"remove" ...]'` to explicitly strip the three stale keys from
+`.data`. This was a one-time manual cleanup of the already-live
+cluster, not a code change — `kubectl apply` going forward won't
+recreate this specific problem since the keys are gone from every
+future desired-state manifest too.
+
+**Revisit when:** removing a key from any other Secret's `stringData`
+in this repo — don't assume `kubectl apply` alone cleans it up; verify
+with `kubectl get secret <name> -o jsonpath='{.data}'` after applying,
+and patch it out explicitly (as above) if it's still there.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

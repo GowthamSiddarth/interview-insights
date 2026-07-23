@@ -141,11 +141,14 @@ Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
 Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
 Cluster Observability), Phase 13 (Local Infra Hardening &
 Reproducibility), Phase 14 (Recruiter & Overall Reviews + Moderation
-Admin UI), Phase 15 (Public Company Profile Pages), and Phase 18
-(Admin Authentication) are all done. Phase 6 is done except issue #18
-(blocked). Phases 1-7, 9-15, and 18 each have a complete engineering
-blog under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not
-started. Phases 16 (Candidate Accounts & Auth), 17 (Candidate
+Admin UI), and Phase 15 (Public Company Profile Pages) are all done.
+Phase 6 is done except issue #18 (blocked). Phase 18 (Admin
+Authentication) is done except issue #193 (mid-session-expiry
+redirect) — reopened the same day it was first declared done, once a
+real login attempt surfaced a Secure-cookie bug and the need to rotate
+the admin credential (issue #192, done). Phases 1-7, 9-15, and 18 each
+have a complete engineering blog under `wiki/blog/`. Phase 8 is a
+trigger-gated backlog, not started. Phases 16 (Candidate Accounts & Auth), 17 (Candidate
 Self-Service), and 19 (Content Quality & Synthetic Data) are all
 planned but not started. Phase 18 was filed after Phase 16-17, but per
 the same non-linear precedent Phase 6/8 already set, was implemented
@@ -1042,12 +1045,83 @@ strategy leaking `iat`/`exp` into `req.user`), and the full Playwright
 verification of the login → queue → logout → re-redirect loop.
 `wiki/blog/README.md`'s index updated to match.
 
-**Phase 18 is now fully done** — issues #159-161 all closed via merged
-PRs, and every phase built so far now has a complete engineering blog.
-- Next step: Phase 19 (Content Quality & Synthetic Data, epic #168,
-  issues #162-165) — the next queued phase now that Phase 18 has closed
-  — or resume Phase 16/17 (epics #182/#183), whichever the project
-  owner picks up next.
+**Phase 18 was declared fully done, then reopened the same day** —
+issues #159-161 all closed via merged PRs, and every phase built so far
+had a complete engineering blog. It didn't stay closed: the first real
+login attempt against the actual `kind`-deployed app failed, which led
+to a bugfix and two new sub-issues.
+
+**Real login-bug fix (no dedicated issue — found and fixed directly,
+same session)**: `AdminAuthController.login()`'s cookie used `secure:
+process.env.NODE_ENV === 'production'`. Every deployed container always
+runs with `NODE_ENV=production` (baked into the Dockerfile) regardless
+of whether it's actually served over HTTPS — and every environment this
+project runs in today (local `kind`) is plain HTTP with no TLS
+anywhere. Every browser silently refuses a `Secure` cookie over plain
+HTTP, so login returned 200 with a valid `Set-Cookie` header but the
+browser never stored it — `/moderation` just bounced back to its own
+login page with no visible error. Fixed with an explicit `COOKIE_SECURE`
+env var (default `false`), matching the `SECRETS_SOURCE`/`CORS_ORIGIN`
+precedent of explicit config over inferring behavior from `NODE_ENV`;
+also fixed `logout()`'s `clearCookie()` to use the same options the
+cookie was set with. Verified directly against the live cluster before
+and after (curl through the Ingress showed the bare `Secure` attribute
+beforehand, confirmed gone and login actually working afterward).
+Documented in `docs/DECISIONS.md` D27 alongside the CSRF stance
+(`SameSite=Lax` accepted as sufficient, no separate token) and a
+flagged reminder that `COOKIE_SECURE` must be explicitly flipped to
+`true` once a real TLS-terminated environment exists (Phase 8) — nothing
+does this automatically.
+
+**Phase 18, issue #192 (rotate admin credentials)** — filed once the
+login-bug investigation also surfaced that every environment shared the
+exact same public dev-only `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`
+values checked into `api/.env.example`/`infra/k8s/base/05-api.yaml` —
+`ADMIN_JWT_SECRET` arguably the more urgent half, since it's the HMAC
+key signing every session JWT and being public means anyone could forge
+a valid session without ever guessing the password. Real values
+generated (`openssl rand`, bcrypt cost 10) and set only as
+`ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` GitHub Actions repo secrets —
+never committed to any manifest (verified by grepping the diff for the
+actual values before committing). Structurally: `ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET` moved out of the git-tracked `api-secrets` Secret
+entirely into a new `admin-credentials` Secret, provisioned
+imperatively by both `cd.yml` (new "Provision admin credentials secret"
+step) and `infra/scripts/bootstrap-kind.sh`, mirroring the existing
+`localstack-credentials`/`LOCALSTACK_AUTH_TOKEN` pattern (D23) exactly
+— a real rotated credential committed to a manifest would be exactly as
+public as the dev-only placeholder it replaced. `ADMIN_USERNAME` moved
+to the non-secret `api-config` ConfigMap (it's a username, not a
+credential). `wiki/deployment-guide.md` gained section 5b and updates
+to sections 3/8/10.
+
+**Found while verifying the live rollout — a real `kubectl apply` gotcha,
+documented as D28:** after CD ran, `api-secrets`' live `.data` still had
+the three old keys (`ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET`) with their stale dev-only values, even though the
+`last-applied-configuration` annotation correctly showed them removed —
+`kubectl apply`'s 3-way merge doesn't reliably prune a key removed from
+a Secret's `stringData`, since the live object never persists
+`stringData` itself (only the converted `.data`) for the diff to
+reconcile against. Confirmed directly with `kubectl get secret
+api-secrets -o jsonpath='{.data}'`, not assumed. Didn't cause a live bug
+— `envFrom`'s last-source-wins merge order meant the pod's actual env
+vars were already correct (verified via `kubectl exec ... printenv` and
+a live login test: new credential works, old dev-only one now 401s) —
+but the stale keys were cleaned up directly with `kubectl patch secret
+api-secrets --type=json -p='[...remove...]'` rather than left sitting
+in the live cluster.
+
+**Phase 18, issue #193 (moderation page: redirect to login on a
+mid-session 401)** — filed alongside #192 from the same brainstorm, not
+yet implemented: today only the initial page-load session check
+redirects to login on 401; an already-open queue page whose session
+expires mid-use just shows a generic inline error on the next
+approve/reject/flag instead of bouncing back to login.
+
+- Next step: Phase 18, issue #193, or Phase 19/16/17 if the project
+  owner wants to leave #193 for later and move on — epic #167 is back
+  to "Todo" on the board either way.
 
 ## Open decisions still to make
 
