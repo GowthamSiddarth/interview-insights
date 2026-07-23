@@ -59,6 +59,15 @@ describe('Admin auth (e2e)', () => {
     const sessionCookie = cookies.find((c) => c.startsWith('admin_session='));
     expect(sessionCookie).toBeDefined();
     expect(sessionCookie).toMatch(/httponly/i);
+    // Regression test: a Secure cookie is silently refused by every
+    // browser over plain HTTP, which every environment this project runs
+    // in today is (no COOKIE_SECURE env var set here == unset == false).
+    // A prior version keyed this off NODE_ENV === 'production' instead,
+    // which is true in every deployed container regardless of whether
+    // it's actually served over HTTPS — that bug made login look broken
+    // through the real kind-deployed app (200 response, cookie silently
+    // dropped) despite every curl-based/mocked-fetch test passing.
+    expect(sessionCookie).not.toMatch(/secure/i);
     // Never returned in the JSON body — web never handles the raw token in JS.
     expect(JSON.stringify(res.body)).not.toMatch(/admin_session|eyJ/i);
 

@@ -10,6 +10,11 @@ data:
   PORT: "3001"
   OPENSEARCH_URL: http://opensearch:9200
   CORS_ORIGIN: http://app.interview-insights.local
+  # Explicit, not inferred from NODE_ENV — see admin-auth.controller.ts's
+  # comment for why. Every overlay today (dev, dev-localstack, staging,
+  # prod placeholders) is plain HTTP with no TLS termination, so this
+  # stays "false" everywhere until a real HTTPS-fronted environment exists.
+  COOKIE_SECURE: "false"
 ---
 # Plaintext, same local-only reasoning as 01-postgres-secret.yaml.
 # DATABASE_URL duplicates 01-postgres-secret.yaml's credentials as a single
