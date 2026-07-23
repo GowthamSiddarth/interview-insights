@@ -40,6 +40,13 @@ type: Opaque
 stringData:
   DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
   EMAIL_HASH_SECRET: dev-only-change-me
+  # Candidate magic-link session signing secret (GitHub issue #145,
+  # Phase 16) — a brand-new dev-only placeholder, not yet a "real"
+  # rotated value, so it stays here rather than in a separate
+  # imperative Secret the way ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET do
+  # (issue #192) — that move only happens once/if this value is ever
+  # rotated to something real.
+  CANDIDATE_JWT_SECRET: dev-only-change-me-candidate
 ---
 apiVersion: v1
 kind: Service

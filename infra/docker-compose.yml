@@ -70,6 +70,16 @@ services:
       MAIL_SMTP_HOST: mailpit
       MAIL_SMTP_PORT: "1025"
       PORT: 3001
+      # Found missing while adding CANDIDATE_JWT_SECRET below (GitHub
+      # issue #145) — without these, AdminAuthModule's env-var checks
+      # throw synchronously at boot (Phase 18) and this profile's api
+      # container has been unable to start since, for anyone who
+      # actually tried `docker compose --profile full up`.
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD_HASH: '$2b$10$5d3GXDikXoI./2wvbNoUIeG2/aoU72AKnueOEYLMYOxoeL8vD5dlG'
+      ADMIN_JWT_SECRET: dev-only-change-me-too
+      COOKIE_SECURE: "false"
+      CANDIDATE_JWT_SECRET: dev-only-change-me-candidate
     ports:
       - "3001:3001"
     depends_on:

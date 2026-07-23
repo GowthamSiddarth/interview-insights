@@ -212,9 +212,6 @@ interview-insights/
   will show "Not enough reviews yet" indefinitely until this is built.
   This is a real, sizeable feature gap — building it out is a scoped
   decision for a future planning pass, not something implied by this doc.
-- **Candidate email verification (Phase 3, issue #3) has no UI trigger.**
-  The token issue/verify endpoints are fully built and tested but no page
-  in `web/` calls either one — only reachable via direct API calls today.
 - **Fraud/spam volume growth** — the moderation service will need real ML
   scoring (not just rules) once volume grows; revisit as a dedicated
   workstream, don't bolt it onto the write path later.

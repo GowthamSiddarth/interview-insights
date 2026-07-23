@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
-export class VerifyCandidateDto {
+export class VerifyMagicLinkDto {
   @IsString()
   @IsNotEmpty()
   token!: string;
