@@ -12,9 +12,16 @@ describe('AdminJwtStrategy', () => {
     expect(() => new AdminJwtStrategy()).toThrow('ADMIN_JWT_SECRET');
   });
 
-  it('passes the decoded payload through unchanged', () => {
+  it('passes the session payload through', () => {
     process.env.ADMIN_JWT_SECRET = 'test-secret';
     const strategy = new AdminJwtStrategy();
     expect(strategy.validate({ username: 'admin' })).toEqual({ username: 'admin' });
+  });
+
+  it('strips jwt.sign()-added claims like iat/exp, keeping only username', () => {
+    process.env.ADMIN_JWT_SECRET = 'test-secret';
+    const strategy = new AdminJwtStrategy();
+    const decoded = { username: 'admin', iat: 1700000000, exp: 1700003600 };
+    expect(strategy.validate(decoded)).toEqual({ username: 'admin' });
   });
 });

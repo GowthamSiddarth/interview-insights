@@ -6,6 +6,10 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { ADMIN_TEST_PASSWORD, ADMIN_TEST_USERNAME } from './support/admin-session';
 
+function body<T>(res: request.Response): T {
+  return res.body as T;
+}
+
 async function bootApp(): Promise<INestApplication> {
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],
@@ -22,7 +26,8 @@ async function bootApp(): Promise<INestApplication> {
 // Proves GitHub issue #159's acceptance criteria end to end: login issues
 // an httpOnly session cookie, every ModerationController route 401s
 // without one, a valid session unlocks them, logout clears the cookie,
-// and the login endpoint itself trips its own rate limit.
+// and the login endpoint itself trips its own rate limit. Also covers
+// GET /auth/admin/me (issue #160's session-check endpoint for web).
 describe('Admin auth (e2e)', () => {
   let app: INestApplication;
   // Captured once from the first successful login below and reused by the
@@ -84,6 +89,13 @@ describe('Admin auth (e2e)', () => {
 
   it('accepts a moderation route request with a valid session cookie', async () => {
     await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+  });
+
+  it('GET /auth/admin/me reflects session state', async () => {
+    await server().get('/auth/admin/me').expect(401);
+
+    const res = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
+    expect(body<{ username: string }>(res)).toEqual({ username: ADMIN_TEST_USERNAME });
   });
 
   it('logout clears the session cookie', async () => {

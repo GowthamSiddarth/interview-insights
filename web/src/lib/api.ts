@@ -230,6 +230,10 @@ export interface ReviewSearchFilters {
   dateTo?: string;
 }
 
+export interface AdminSession {
+  username: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -242,6 +246,10 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
+    // Required for the admin_session cookie (GitHub issue #159/#160) to be
+    // sent/received at all — api and web run on different origins, and
+    // fetch() drops cookies cross-origin by default without this.
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
   if (!res.ok) {
@@ -338,6 +346,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  adminLogin: (username: string, password: string) =>
+    request<{ status: string }>('/auth/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+
+  adminLogout: () => request<{ status: string }>('/auth/admin/logout', { method: 'POST' }),
+
+  getAdminSession: () => request<AdminSession>('/auth/admin/me'),
 
   listModerationQueue: () => request<ModerationQueueEntry[]>('/moderation/queue'),
 

@@ -988,8 +988,55 @@ post-logout cookie → 401, and 3 wrong-password attempts followed by a
 deployment until issue #160 (frontend login + route gating) lands —
 expected and in scope for that issue, not this one; it still works
 fine locally since nothing has redeployed it yet.
-- Next step: Phase 18, issue #160 (admin auth frontend: login page +
-  route gating for `/moderation` + logout), per `docs/ROADMAP.md`.
+**Phase 18, issue #160 (admin auth frontend)** — a small backend
+addition first: `GET /auth/admin/me` (guarded by `AdminJwtAuthGuard`,
+returns the session payload or 401), giving `web` a lightweight way to
+ask "am I logged in?" up front rather than discovering it via a failed
+data call. Along the way, fixed a real bug the strategy hadn't hit
+until something actually read its return value end to end:
+`AdminJwtStrategy.validate()` was passing through the decoded JWT
+payload unchanged, which includes `jwt.sign()`'s own `iat`/`exp`
+claims — harmless for the guard itself (only used for pass/fail) but
+wrong for `/me`, which returns that value directly and should match
+`AdminSessionPayload` exactly. Now narrowed to `{ username }` only.
+On `web`: a new `web/src/app/moderation/login/page.tsx` (username/
+password form, posts to issue #159's login endpoint, redirects to
+`/moderation` on success, shows a status-specific error — "incorrect
+username or password" for 401, "too many attempts" for 429 — and
+stays put on failure). `web/src/app/moderation/page.tsx` now checks
+`GET /auth/admin/me` before rendering anything and redirects to the
+login page on 401, rather than rendering the queue and then failing
+individual calls; gained a "Log out" button in its header (calls
+`POST /auth/admin/logout`, then redirects to login regardless of
+whether that call itself succeeds — the goal is always getting back
+to the login screen). Fixed a real bug in `web/src/lib/api.ts`'s
+shared `request()` helper while wiring this up: it never set
+`credentials: 'include'` on `fetch()`, so the `admin_session` cookie
+would have been silently dropped on every cross-origin call between
+`web` and `api` — issue #159's `enableCors({ credentials: true })`
+alone isn't sufficient, the client has to opt in too. 6 new unit tests
+(3 login-page, 2 moderation-page session-gating/logout, 1 backend
+`/auth/admin/me` strategy stripping) + 1 new e2e test
+(`GET /auth/admin/me`, 10 admin-auth e2e tests / 74 total now) — all
+existing moderation-page tests updated to mock the new session-check
+call and `next/navigation`'s `useRouter`. Manually verified in a real
+headless browser (Playwright, installed ad hoc via `npx playwright
+install chromium` — not added as a project dependency) against `api`/
+`web` dev servers backed by kind's Postgres/OpenSearch per D24/D26:
+fresh `/moderation` → redirected to login; wrong credentials → error
+shown, stays on login; correct credentials → reaches the queue;
+logout → back to login; back-navigation to `/moderation` after
+logout → bounced to login again (no stale client-side state serving
+cached data) — zero uncaught JS exceptions and zero console errors
+beyond the three expected 401s the auth-check/login flow itself
+deliberately triggers.
+
+**Phase 18 is now fully done for its feature scope** — issues #159-160
+merged; only issue #161 (engineering blog, written last per convention)
+remains before the epic (#167) closes.
+- Next step: Phase 18, issue #161 (engineering blog for Phase 18), per
+  `docs/ROADMAP.md` — or Phase 19 if the blog is deferred until Phase 18's
+  epic is otherwise ready to close.
 
 ## Open decisions still to make
 

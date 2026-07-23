@@ -24,7 +24,11 @@ export class AdminJwtStrategy extends PassportStrategy(Strategy, 'admin-jwt') {
     });
   }
 
+  // passport-jwt's decoded payload also carries jwt.sign()'s own iat/exp
+  // claims — narrowed back down to just the session payload so req.user
+  // (and GET /auth/admin/me, which returns it directly) matches
+  // AdminSessionPayload exactly, not "that plus whatever jsonwebtoken adds."
   validate(payload: AdminSessionPayload): AdminSessionPayload {
-    return payload;
+    return { username: payload.username };
   }
 }
