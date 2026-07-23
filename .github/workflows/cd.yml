@@ -14,7 +14,10 @@ name: CD
 # reseeded fresh each run since LocalStack keeps no state across pod
 # restarts. Requires the LOCALSTACK_AUTH_TOKEN repo secret to be set
 # (`gh secret set LOCALSTACK_AUTH_TOKEN`) — a one-time manual step, since
-# the token itself can't be provisioned by this workflow.
+# the token itself can't be provisioned by this workflow. Also requires
+# ADMIN_PASSWORD_HASH and ADMIN_JWT_SECRET repo secrets (`gh secret set
+# ADMIN_PASSWORD_HASH` / `gh secret set ADMIN_JWT_SECRET`, GitHub issue
+# #192) — the real admin credential, never committed to a manifest.
 on:
   push:
     branches: [main]
@@ -52,6 +55,22 @@ jobs:
 
       - name: Ensure namespace exists
         run: kubectl apply -f infra/k8s/base/00-namespace.yaml
+
+      - name: Provision admin credentials secret
+        # Must land before api's Deployment (created by the overlay apply
+        # below) picks up its envFrom — same "doesn't hot-reload" ordering
+        # requirement as the LocalStack step right after this one. Real
+        # rotated values (GitHub issue #192) live only as repo secrets —
+        # never in a git-tracked manifest, see 05-api.yaml's own comment.
+        env:
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
+        run: |
+          kubectl create secret generic admin-credentials \
+            --namespace interview-insights \
+            --from-literal=ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
+            --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Provision LocalStack auth token secret
         # Must land before the overlay below creates the LocalStack pod —

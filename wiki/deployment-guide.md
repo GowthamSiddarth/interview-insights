@@ -104,11 +104,14 @@ Builds and runs `api`+`web` as containers alongside `postgres`+
 runs every step below (3.1-3.4, plus provisioning/seeding LocalStack
 from section 5) in one shot, and is idempotent — safe to re-run against
 an already-running cluster; every step either skips or upgrades in
-place rather than erroring. Requires `LOCALSTACK_AUTH_TOKEN` set in the
-environment first (see section 5):
+place rather than erroring. Requires `LOCALSTACK_AUTH_TOKEN`,
+`ADMIN_PASSWORD_HASH`, and `ADMIN_JWT_SECRET` set in the environment
+first (see sections 5 and 5b):
 
 ```bash
 export LOCALSTACK_AUTH_TOKEN="your_token_here"   # put in ~/.zshenv to persist
+export ADMIN_PASSWORD_HASH='the bcrypt hash'     # single-quoted, it contains $
+export ADMIN_JWT_SECRET="your_jwt_secret_here"
 ./infra/scripts/bootstrap-kind.sh
 ```
 
@@ -393,6 +396,57 @@ above reseeds unconditionally); if you need it fixed before the next
 push, re-run step 3 by hand against the restarted LocalStack pod, then
 `rollout restart deployment/api` again.
 
+## 5b. Admin credential rotation (GitHub issue #192, Phase 18)
+
+`ADMIN_PASSWORD_HASH` and `ADMIN_JWT_SECRET` are deliberately **not** in
+any git-tracked manifest — `infra/k8s/base/05-api.yaml`'s `api-secrets`
+Secret only ever holds `DATABASE_URL`/`EMAIL_HASH_SECRET` now. A "real"
+rotated admin credential committed to a manifest would be exactly as
+public as the dev-only placeholder it replaced (`bcrypt("dev-only-admin-
+password")`, `"dev-only-change-me-too"` — both still fine to use in
+`api/.env` for native local dev, which never leaves `localhost`). Both
+keys instead live in a separate `admin-credentials` Secret, provisioned
+imperatively — same pattern as `localstack-credentials`/
+`LOCALSTACK_AUTH_TOKEN` above (`docs/DECISIONS.md` D23).
+
+**One-time setup:**
+
+```bash
+# Generate real values — never reuse the dev-only ones above for
+# anything actually deployed:
+NEW_PASSWORD=$(openssl rand -base64 24)
+NEW_JWT_SECRET=$(openssl rand -hex 32)
+node -e "require('bcryptjs').hash(process.argv[1], 10).then(h => console.log(h))" "$NEW_PASSWORD"
+# Save NEW_PASSWORD and the printed hash somewhere outside git (a
+# password manager entry is sufficient at today's single-admin scale)
+
+gh secret set ADMIN_PASSWORD_HASH   # paste the bcrypt hash, not the password
+gh secret set ADMIN_JWT_SECRET      # paste NEW_JWT_SECRET
+
+# Only needed to apply this manually, outside CD (e.g. testing before
+# pushing, or infra/scripts/bootstrap-kind.sh's own use of these same vars):
+export ADMIN_PASSWORD_HASH="the bcrypt hash, single-quoted — it contains \$"
+export ADMIN_JWT_SECRET="NEW_JWT_SECRET's value"
+kubectl create secret generic admin-credentials \
+  --namespace interview-insights \
+  --from-literal=ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
+  --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET"
+```
+
+**What CD does on every push** (`cd.yml`'s "Provision admin credentials
+secret" step, right before the LocalStack one): upserts
+`admin-credentials` from the two repo secrets, before the overlay apply
+that (re)creates `deployment/api`'s pod — same "doesn't hot-reload"
+ordering requirement LocalStack's own credential has.
+
+**To rotate again later:** repeat the one-time setup with fresh values,
+then either push anything that triggers CD, or run
+`kubectl -n interview-insights rollout restart deployment/api` by hand
+after re-running the `kubectl create secret` command above. The *old*
+password stops working the moment the new Secret is live and `api`
+restarts — there's no overlap window, matching this project's single-
+admin, single-credential scope (`docs/ROADMAP.md` Phase 18).
+
 ## 6. Smoke-testing the whole stack end to end
 
 Whichever environment from sections 1-5 is up, the same golden path
@@ -530,6 +584,11 @@ cluster running the new code, step by step:
    - **Ensure the namespace exists** — `kubectl apply -f
      infra/k8s/base/00-namespace.yaml`, idempotent, mostly relevant to a
      truly fresh cluster.
+   - **Provision the admin credentials Secret** — upserts
+     `admin-credentials` from the `ADMIN_PASSWORD_HASH`/
+     `ADMIN_JWT_SECRET` repo secrets, before the overlay below ever
+     (re)creates api's Deployment (GitHub issue #192, section 5b) — same
+     ordering requirement as the LocalStack step right after this one.
    - **Provision the LocalStack auth token Secret** — upserts
      `localstack-credentials` from the `LOCALSTACK_AUTH_TOKEN` repo
      secret, before the overlay below ever creates the LocalStack pod
@@ -588,9 +647,10 @@ across a fresh install, and this repo has a one-shot script built for
 exactly this situation.
 
 **What never needs migrating**: GitHub itself (repo, issues, PRs, project
-board, milestones), the `LOCALSTACK_AUTH_TOKEN` GitHub Actions repo
-secret CD reads, and LocalStack's own secrets/IAM state (ephemeral by
-design, D25 — it self-seeds on any fresh cluster via its init-hook).
+board, milestones), the `LOCALSTACK_AUTH_TOKEN`/`ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET` GitHub Actions repo secrets CD reads, and LocalStack's
+own secrets/IAM state (ephemeral by design, D25 — it self-seeds on any
+fresh cluster via its init-hook).
 
 1. **Verify what actually transferred** before doing anything else:
 
@@ -623,8 +683,16 @@ design, D25 — it self-seeds on any fresh cluster via its init-hook).
    ```bash
    cd ~/workspace/interview-insights
    export LOCALSTACK_AUTH_TOKEN="..."   # same token; add to ~/.zshenv to persist
+   export ADMIN_PASSWORD_HASH='...'     # same hash — single-quoted, it contains $
+   export ADMIN_JWT_SECRET="..."        # same secret
    ./infra/scripts/bootstrap-kind.sh
    ```
+
+   The values are the same ones already in the `ADMIN_PASSWORD_HASH`/
+   `ADMIN_JWT_SECRET` GitHub Actions repo secrets (section 5b) — CD
+   itself doesn't need re-configuring, only this machine's local
+   bootstrap run does, since `bootstrap-kind.sh` reads from the
+   environment rather than from GitHub.
 
 5. **Recreate `api/.env` / `web/.env.local`** if the gitignored files
    didn't survive the transfer (`cp api/.env.example api/.env`,
