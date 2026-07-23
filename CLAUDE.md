@@ -141,14 +141,14 @@ Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
 Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
 Cluster Observability), Phase 13 (Local Infra Hardening &
 Reproducibility), Phase 14 (Recruiter & Overall Reviews + Moderation
-Admin UI), and Phase 15 (Public Company Profile Pages) are all done.
-Phase 6 is done except issue #18 (blocked). Phase 18 (Admin
-Authentication) is done except issue #193 (mid-session-expiry
-redirect) — reopened the same day it was first declared done, once a
-real login attempt surfaced a Secure-cookie bug and the need to rotate
-the admin credential (issue #192, done). Phases 1-7, 9-15, and 18 each
-have a complete engineering blog under `wiki/blog/`. Phase 8 is a
-trigger-gated backlog, not started. Phases 16 (Candidate Accounts & Auth), 17 (Candidate
+Admin UI), Phase 15 (Public Company Profile Pages), and Phase 18
+(Admin Authentication) are all done. Phase 6 is done except issue #18
+(blocked). Phase 18 was reopened the same day it was first declared
+done, once a real login attempt surfaced a Secure-cookie bug and two
+follow-up issues (#192 credential rotation, #193 mid-session-expiry
+redirect, both now done). Phases 1-7, 9-15, and 18 each have a complete
+engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
+backlog, not started. Phases 16 (Candidate Accounts & Auth), 17 (Candidate
 Self-Service), and 19 (Content Quality & Synthetic Data) are all
 planned but not started. Phase 18 was filed after Phase 16-17, but per
 the same non-linear precedent Phase 6/8 already set, was implemented
@@ -1113,15 +1113,38 @@ api-secrets --type=json -p='[...remove...]'` rather than left sitting
 in the live cluster.
 
 **Phase 18, issue #193 (moderation page: redirect to login on a
-mid-session 401)** — filed alongside #192 from the same brainstorm, not
-yet implemented: today only the initial page-load session check
-redirects to login on 401; an already-open queue page whose session
-expires mid-use just shows a generic inline error on the next
-approve/reject/flag instead of bouncing back to login.
+mid-session 401)** — a new module-level `isSessionExpired(err)` predicate
+in `web/src/app/moderation/page.tsx` (`err instanceof ApiError &&
+err.status === 401`), checked in both the queue-load effect's catch
+block and `act()`'s catch block — a 401 anywhere now redirects to
+`/moderation/login` instead of rendering through the generic `error`
+state, matching what the initial-load session gate already did one
+level up. Deliberately a plain module-level function, not a
+component-scoped closure — the natural first attempt (a `handleActionError`
+helper closing over `router`) triggered `react-hooks/exhaustive-deps`,
+and fixing that by adding `router` to the queue-load effect's
+dependency array combined with the test file's mock `useRouter()`
+returning a fresh object literal on every call (not a stable reference,
+unlike real Next.js) caused the effect to re-fire on every render in
+tests — refetching the queue and silently clobbering an approve/reject/
+flag action's optimistic local removal. Fixed at the root: the test
+mock now returns one stable `mockRouter` object, matching real Next.js's
+actual (memoized) `useRouter()` behavior, which was the more accurate
+mock regardless of this bug. 2 new component tests (queue-load 401,
+action 401 — both assert the redirect *and* that no generic error text
+ever renders) plus the existing suite fixed by the mock change; `web`
+build/lint clean. Manually verified in a real headless browser
+(Playwright, kind's stores per D24/D26): logged in for real, corrupted
+the session cookie in place (simulating the 1h JWT expiring mid-use
+without waiting an hour), clicked Approve on a real pending rating —
+redirected straight to `/moderation/login` with zero uncaught JS
+exceptions and no leaked "Something went wrong"/"failed with 401" text.
 
-- Next step: Phase 18, issue #193, or Phase 19/16/17 if the project
-  owner wants to leave #193 for later and move on — epic #167 is back
-  to "Todo" on the board either way.
+**Phase 18 is now fully done** — issues #159-161 and #192-193 all
+closed via merged PRs.
+- Next step: Phase 19 (Content Quality & Synthetic Data, epic #168,
+  issues #162-165), or resume Phase 16/17 (epics #182/#183) — whichever
+  the project owner picks up next.
 
 ## Open decisions still to make
 

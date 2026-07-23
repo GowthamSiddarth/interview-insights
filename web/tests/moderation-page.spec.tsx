@@ -4,8 +4,15 @@ import '@testing-library/jest-dom';
 import ModerationPage from '../src/app/moderation/page';
 
 const push = jest.fn();
+// A single stable object, not a fresh literal per call — matches real
+// Next.js's useRouter() (a memoized, stable reference across renders).
+// An unstable mock here previously caused the queue-load effect (which
+// now depends on `router` too, for the mid-session-401 redirect) to
+// re-fire on every render, refetching and clobbering an optimistic
+// client-side removal from an approve/reject/flag action.
+const mockRouter = { push };
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => mockRouter,
 }));
 
 const queueEntries = [
@@ -108,6 +115,54 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     await waitFor(() => expect(push).toHaveBeenCalledWith('/moderation/login'));
     // Never falls through to rendering the queue while unauthenticated.
     expect(screen.queryByText('Moderation queue')).not.toBeInTheDocument();
+  });
+
+  it('redirects to the login page when the queue load itself 401s (session expired after the initial check passed)', async () => {
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/auth/admin/me') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+      }
+      if (url.endsWith('/moderation/queue') && method === 'GET') {
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
+      }
+      throw new Error(`Unmocked fetch: ${method} ${url}`);
+    }) as jest.Mock;
+
+    render(<ModerationPage />);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/moderation/login'));
+    // A distinct code path from the session-check 401 above — this one
+    // passed the initial gate and only failed on the queue fetch itself.
+    expect(screen.queryByText(/failed with 401/)).not.toBeInTheDocument();
+  });
+
+  it('redirects to the login page when a moderation action 401s mid-session', async () => {
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/auth/admin/me') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+      }
+      if (url.endsWith('/moderation/queue') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(queueEntries) });
+      }
+      if (/\/moderation\/queue\/.+\/approve$/.test(url) && method === 'POST') {
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
+      }
+      throw new Error(`Unmocked fetch: ${method} ${url}`);
+    }) as jest.Mock;
+
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    const approveButtons = await screen.findAllByRole('button', { name: 'Approve' });
+    await user.click(approveButtons[0]);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/moderation/login'));
+    // Not shown as a generic inline error — this is a redirect, not a failure.
+    expect(screen.queryByText(/failed with 401/)).not.toBeInTheDocument();
   });
 
   it('logs out and redirects to the login page', async () => {

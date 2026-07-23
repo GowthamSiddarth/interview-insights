@@ -30,6 +30,14 @@ function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
+// A 401 here always means the session expired mid-use (the initial-load
+// gate already handled "never had one") — the caller should redirect back
+// to login, not render it through the generic `error` state, which would
+// just look like a confusing, unrelated failure.
+function isSessionExpired(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 401;
+}
+
 // The per-type score fields, rendered generically — the entity payload only
 // carries the fields that exist for its type, so undefined ones just don't
 // appear.
@@ -111,8 +119,11 @@ export default function ModerationPage() {
     api
       .listModerationQueue()
       .then(setEntries)
-      .catch((err: unknown) => setError(errorMessage(err)));
-  }, [sessionChecked]);
+      .catch((err: unknown) => {
+        if (isSessionExpired(err)) router.push('/moderation/login');
+        else setError(errorMessage(err));
+      });
+  }, [sessionChecked, router]);
 
   async function logout(): Promise<void> {
     await api.adminLogout().catch(() => undefined);
@@ -136,7 +147,8 @@ export default function ModerationPage() {
         );
       setEntries((prev) => prev?.filter((e) => e.id !== entry.id) ?? null);
     } catch (err) {
-      setError(errorMessage(err));
+      if (isSessionExpired(err)) router.push('/moderation/login');
+      else setError(errorMessage(err));
     }
   }
 
