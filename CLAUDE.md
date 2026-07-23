@@ -134,22 +134,23 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-20: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+As of 2026-07-23: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
 Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
 Cluster Observability), Phase 13 (Local Infra Hardening &
 Reproducibility), Phase 14 (Recruiter & Overall Reviews + Moderation
-Admin UI), and Phase 15 (Public Company Profile Pages) are all done.
-Phase 6 is done except issue #18 (blocked). Phases 1-7 and 9-15 each
-have a complete engineering blog under `wiki/blog/`. Phase 8 is a
-trigger-gated backlog, not started. Phases 16 (Candidate Accounts &
-Auth), 17 (Candidate Self-Service), 18 (Admin Authentication), and 19
-(Content Quality & Synthetic Data) are all planned but not started.
-Phases 18-19 were filed after Phase 16-17, but per the same non-linear
-precedent Phase 6/8 already set, are intended to be implemented first —
-see the Phase 18 intro in `docs/ROADMAP.md` for why.
+Admin UI), Phase 15 (Public Company Profile Pages), and Phase 18
+(Admin Authentication) are all done. Phase 6 is done except issue #18
+(blocked). Phases 1-7, 9-15, and 18 each have a complete engineering
+blog under `wiki/blog/`. Phase 8 is a trigger-gated backlog, not
+started. Phases 16 (Candidate Accounts & Auth), 17 (Candidate
+Self-Service), and 19 (Content Quality & Synthetic Data) are all
+planned but not started. Phase 18 was filed after Phase 16-17, but per
+the same non-linear precedent Phase 6/8 already set, was implemented
+first — see the Phase 18 intro in `docs/ROADMAP.md` for why. Phase 19
+remains queued behind it.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1031,12 +1032,22 @@ cached data) — zero uncaught JS exceptions and zero console errors
 beyond the three expected 401s the auth-check/login flow itself
 deliberately triggers.
 
-**Phase 18 is now fully done for its feature scope** — issues #159-160
-merged; only issue #161 (engineering blog, written last per convention)
-remains before the epic (#167) closes.
-- Next step: Phase 18, issue #161 (engineering blog for Phase 18), per
-  `docs/ROADMAP.md` — or Phase 19 if the blog is deferred until Phase 18's
-  epic is otherwise ready to close.
+**Phase 18, issue #161 (engineering blog)** —
+`wiki/blog/phase-18-admin-authentication/` gained one post per feature
+issue (#159, #160), covering why the phase jumped ahead of Phase 16/17,
+the backend session/guard/throttle design, the two real bugs the
+frontend work surfaced (`fetch()` needing `credentials: 'include'`
+alongside the server's `credentials: true` CORS config; the JWT
+strategy leaking `iat`/`exp` into `req.user`), and the full Playwright
+verification of the login → queue → logout → re-redirect loop.
+`wiki/blog/README.md`'s index updated to match.
+
+**Phase 18 is now fully done** — issues #159-161 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+- Next step: Phase 19 (Content Quality & Synthetic Data, epic #168,
+  issues #162-165) — the next queued phase now that Phase 18 has closed
+  — or resume Phase 16/17 (epics #182/#183), whichever the project
+  owner picks up next.
 
 ## Open decisions still to make
 

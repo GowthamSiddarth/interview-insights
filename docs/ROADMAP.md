@@ -636,12 +636,13 @@ hypothetical future requirements" convention; revisit if/when a second
 admin ever exists. Milestone: "Phase 18 — Admin Authentication". Epic:
 GitHub issue #167.
 
-- [ ] Backend: admin login endpoint, JWT session issuance (httpOnly
+- [x] Backend: admin login endpoint, JWT session issuance (httpOnly
       cookie), guard applied to every `ModerationController` route, login
-      endpoint rate-limited (GitHub issue #159)
-- [ ] Frontend: login page + route gating for `/moderation` + logout
-      (GitHub issue #160)
-- [ ] Engineering blog (last) (GitHub issue #161)
+      endpoint rate-limited (PR #188, GitHub issue #159)
+- [x] Frontend: login page + route gating for `/moderation` + logout
+      (PR #189, GitHub issue #160)
+- [x] Engineering blog (`wiki/blog/phase-18-admin-authentication/`,
+      GitHub issue #161) — one post per feature issue (#159, #160)
 
 ## Phase 19 — Content Quality & Synthetic Data
 

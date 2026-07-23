@@ -137,3 +137,13 @@ this phase's blog is complete.
 1. [Issue #140 — Company read paths: slug lookup + approved reviews list](phase-15-company-profile-pages/issue-140-company-read-paths/README.md)
 2. [Issue #141 — Company profile page (/companies/[slug])](phase-15-company-profile-pages/issue-141-company-profile-page/README.md)
 3. [Issue #142 — Entry points: link search, wizard, and analytics to profile pages](phase-15-company-profile-pages/issue-142-profile-page-entry-points/README.md)
+
+## Phase 18 — Admin Authentication
+
+See `docs/ROADMAP.md` Phase 18. Both feature issues are done — this
+phase's blog is complete. Numbered after Phases 16/17 in planning order
+but implemented first, the same non-linear precedent Phase 6/8 already
+set.
+
+1. [Issue #159 — Admin auth backend](phase-18-admin-authentication/issue-159-admin-auth-backend/README.md)
+2. [Issue #160 — Admin auth frontend](phase-18-admin-authentication/issue-160-admin-auth-frontend/README.md)
