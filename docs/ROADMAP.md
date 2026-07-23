@@ -643,6 +643,13 @@ GitHub issue #167.
       (PR #189, GitHub issue #160)
 - [x] Engineering blog (`wiki/blog/phase-18-admin-authentication/`,
       GitHub issue #161) — one post per feature issue (#159, #160)
+- [x] Rotate admin credentials: real bcrypt hash + JWT signing secret,
+      taken out of the git-tracked manifest entirely (PR #195, GitHub
+      issue #192) — filed after a real login attempt surfaced both a
+      Secure-cookie-over-plain-HTTP bug (fixed directly) and the fact
+      every environment still shared the same dev-only credential
+- [ ] Moderation page: redirect to login on a mid-session 401, not just
+      at initial load (GitHub issue #193)
 
 ## Phase 19 — Content Quality & Synthetic Data
 
