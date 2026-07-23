@@ -648,7 +648,7 @@ GitHub issue #167.
       issue #192) — filed after a real login attempt surfaced both a
       Secure-cookie-over-plain-HTTP bug (fixed directly) and the fact
       every environment still shared the same dev-only credential
-- [ ] Moderation page: redirect to login on a mid-session 401, not just
+- [x] Moderation page: redirect to login on a mid-session 401, not just
       at initial load (GitHub issue #193)
 
 ## Phase 19 — Content Quality & Synthetic Data
