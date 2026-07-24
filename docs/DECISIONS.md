@@ -916,6 +916,68 @@ email inline."
 
 ---
 
+### D32 — Candidate session state in `web`: a non-httpOnly hint cookie, not a `GET /auth/me` poll; a hard navigation after magic-link verify
+
+**Context:** issue #147 added `GET /auth/me` (mirroring admin's
+`GET /auth/admin/me`, #160) and had `NavBar` — rendered on every route,
+for every anonymous visitor too, unlike the moderation page's own
+session-check gate which only ever runs for someone already trying to
+moderate — call it on mount to decide "Log in" vs. "Log out". Live
+Playwright verification caught two real problems this surfaced, neither
+visible from unit/component tests alone:
+
+1. **A `GET /auth/me` call from every anonymous page view produces a
+   401, and Chromium logs every non-2xx fetch response to the console
+   as "Failed to load resource" — regardless of whether the app's own
+   `.catch()` handles it.** That's a real console error on the
+   platform's single most common page view (an anonymous candidate
+   browsing before ever logging in), not a false positive: it fails
+   this project's own "zero console errors" verification bar the
+   moment more than one page is visited anonymously in a row.
+2. **After a successful `/auth/verify`, using `router.push('/')`
+   (client-side navigation) left `NavBar` stuck showing "Log in" even
+   though the session cookie was just set** — `NavBar` is mounted once
+   in the root layout and persists across client-side route changes
+   inside the same session, so its own `useEffect([])` session check
+   never re-runs just because the URL changed underneath it.
+
+**Decision:**
+- `candidate-auth.controller.ts`'s `verify()` now sets a second cookie,
+  `candidate_logged_in=1` — a plain, non-httpOnly companion to the real
+  `candidate_session` JWT cookie, carrying no secret, set/cleared in
+  lockstep with it (same `verify()`/`logout()` calls, same `maxAge`).
+  `web`'s `NavBar` and the wizard's step-2 gate read this via
+  `document.cookie` (`api.hasCandidateSessionHint()`) synchronously, no
+  network call, to decide "show Log in" vs. "show the logged-in state" —
+  eliminating the doomed-to-401 request entirely for the common case.
+  `GET /auth/me` itself is unchanged (still 401s on a missing/invalid
+  session, same as admin's) and stays the real source of truth for
+  anything that needs the actual `candidateId` — nothing in `web` does
+  yet, so it's currently only exercised by its own e2e test, kept for
+  parity with the admin pattern and for whatever needs it next.
+- `web/src/app/auth/verify/page.tsx` uses `window.location.href = '/'`
+  after a successful verify, not `router.push`. A hard reload remounts
+  `NavBar` (and every other client component on the page) fresh, so it
+  picks up the just-set cookies honestly instead of showing stale state
+  until the next full navigation.
+
+**Why not fix this by making `GET /auth/me` return 200 with a null body
+instead of 401 on a missing session?** That would special-case
+candidate's endpoint away from the mirrored admin pattern
+(`GET /auth/admin/me` intentionally 401s — `admin-auth.e2e-spec.ts`
+asserts it) for a problem that isn't really about the endpoint's
+contract — it's about *how often* something calls it. The hint-cookie
+fix addresses the actual cause (a passive, page-view-scoped check has
+no business making a network call at all) without changing an endpoint
+whose contract other tests already depend on.
+
+**Revisit when:** anything in `web` actually needs the real
+`candidateId` value (not just a yes/no) — at that point call
+`GET /auth/me` once, on demand, at the point of need, rather than
+reintroducing a passive poll.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

@@ -3,12 +3,23 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import HomePage from '../src/app/page';
 
+function mockFetch(companies: unknown[]) {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(companies),
+  }) as jest.Mock;
+}
+
+function setLoggedInCookie(loggedIn: boolean) {
+  document.cookie = loggedIn
+    ? 'candidate_logged_in=1'
+    : 'candidate_logged_in=; expires=Thu, 01 Jan 1970 00:00:00 UTC';
+}
+
 describe('HomePage', () => {
   beforeEach(() => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
-    }) as jest.Mock;
+    mockFetch([]);
+    setLoggedInCookie(false);
   });
 
   it('renders the platform name and loads the (empty) company list', async () => {
@@ -22,13 +33,7 @@ describe('HomePage', () => {
   });
 
   it('lets you change the selected company without a page reload', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve([
-          { id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' },
-        ]),
-    }) as jest.Mock;
+    mockFetch([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
 
     const user = userEvent.setup();
     render(<HomePage />);
@@ -40,5 +45,28 @@ describe('HomePage', () => {
 
     expect(screen.queryByText(/Using Acme Corp/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Acme Corp' })).toBeInTheDocument();
+  });
+
+  it('prompts to log in instead of collecting an email, when there is no candidate session', async () => {
+    mockFetch([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
+
+    const user = userEvent.setup();
+    render(<HomePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
+    expect(await screen.findByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
+    expect(screen.queryByLabelText('Role title')).not.toBeInTheDocument();
+  });
+
+  it('shows the process form directly (no email field) when a candidate session exists', async () => {
+    setLoggedInCookie(true);
+    mockFetch([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
+
+    const user = userEvent.setup();
+    render(<HomePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
+    expect(await screen.findByLabelText('Role title')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
   });
 });

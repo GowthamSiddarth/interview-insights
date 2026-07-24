@@ -608,7 +608,17 @@ Candidate Accounts & Auth". Epic: GitHub issue #182.
       see D31); `POST /candidates` removed entirely, not just gated;
       `web`'s wizard is broken until issue #147 picks it back up, by
       design
-- [ ] Login/logout UI + wizard integration (GitHub issue #147)
+- [x] Login/logout UI + wizard integration (GitHub issue #147) — magic-
+      link login page + verify-landing route, session state in the
+      shared NavBar, wizard's step 2 gated on a real session instead of
+      an inline email field. Found and fixed two real bugs live: a
+      passive per-page-view `GET /auth/me` call 401s (and Chromium logs
+      that as a console error) on every anonymous page view, fixed with
+      a non-httpOnly session-hint cookie NavBar reads directly instead
+      of polling the network; and `router.push` after verify left
+      NavBar stuck showing "Log in" since it's mounted once in the root
+      layout and doesn't remount on client-side navigation, fixed with
+      a hard `window.location.href` redirect instead — see D32
 - [ ] Engineering blog (last) (GitHub issue #148)
 
 ## Phase 17 — Candidate Self-Service

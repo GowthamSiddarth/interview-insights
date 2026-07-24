@@ -151,10 +151,11 @@ engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
 backlog, not started. Phase 16 (Candidate Accounts & Auth) is in
 progress — issues #144 (mail foundation), #145 (magic-link auth,
 supersedes and removes Phase 3's standalone verification endpoints,
-D30), and #146 (sessions on the write path, four candidateId-bearing
-writes now session-gated, `POST /candidates` removed, D31) done,
-#147-148 not started yet — `web`'s wizard is broken by design until
-#147. Phases 17 (Candidate Self-Service) and 19 (Content Quality & Synthetic
+D30), #146 (sessions on the write path, four candidateId-bearing
+writes now session-gated, `POST /candidates` removed, D31), and #147
+(login/logout UI + wizard integration — session-hint cookie instead of
+a passive `GET /auth/me` poll, hard navigation after verify, D32) done,
+#148 (blog) not started yet. Phases 17 (Candidate Self-Service) and 19 (Content Quality & Synthetic
 Data) are planned but not started. Phase 18 was filed after Phase
 16-17, but per the same non-linear precedent Phase 6/8 already set,
 was implemented first — see the Phase 18 intro in `docs/ROADMAP.md`
@@ -1299,9 +1300,73 @@ decorator, extracted separately from its `createParamDecorator` wrapper
 for testability). Full e2e suite (83 tests) run twice back to back to
 confirm the per-test-app fix wasn't a lucky pass.
 
-- Next step: Phase 16, issue #147 (login/logout UI + wizard
-  integration), per `docs/ROADMAP.md` — the fix for the wizard breakage
-  this issue caused on purpose.
+**Phase 16, issue #147 (login/logout UI + wizard integration)** — the
+fix for #146's deliberate wizard breakage. A new `GET /auth/me`
+(`candidate-auth.controller.ts`, mirroring admin's `GET /auth/admin/me`
+from #160) gives web a session-check endpoint. New pages:
+`web/src/app/login/page.tsx` (email-only, no password — requests a
+magic link and shows the same honest "if an account exists…"
+confirmation regardless of whether the email is known, matching
+`CandidateAuthService.requestLink()`'s own non-enumerating behavior)
+and `web/src/app/auth/verify/page.tsx` (the landing route the emailed
+link itself points at — its URL is built from `CORS_ORIGIN`, i.e.
+`web`'s own origin, so this path had to be exactly `/auth/verify`;
+consumes the token, then redirects home on success or shows an
+expired/already-used/not-found message with a link back to `/login` on
+failure). `web/src/components/NavBar.tsx` now surfaces session state
+("Log in" link vs. "Log out" button); the wizard's step 2 drops its
+inline "candidate email" field entirely and instead gates the
+process-creation form on a real session, showing a "Log in to submit a
+review" prompt otherwise; `api.ts`'s four write-path client methods
+(`createProcess`/`createRoundRating`/`createRecruiterRating`/
+`createOverallReview`) dropped the now-rejected `candidateId` field
+from their request bodies (the wizard had been silently broken by
+issue #146's whitelist validation until this fix); `createCandidate()`
+and the dead `POST /candidates` call are gone, per D31's own "revisit
+when" note.
+
+**Two real bugs found and fixed during live Playwright verification,
+neither visible from component tests alone** — see `docs/DECISIONS.md`
+D32 for the full reasoning:
+- **A passive `GET /auth/me` call from `NavBar` on every anonymous page
+  view 401s, and Chromium logs every non-2xx fetch response to the
+  console** — a real "zero console errors" failure the moment more
+  than one page is visited anonymously, i.e. the platform's single most
+  common case. Fixed with a non-httpOnly `candidate_logged_in` hint
+  cookie, set/cleared in lockstep with the real session cookie, that
+  `NavBar` and the wizard read directly via `document.cookie`
+  (`api.hasCandidateSessionHint()`) instead of ever calling the network
+  endpoint just to render a nav link. `GET /auth/me` itself is
+  unchanged and still 401s on a missing session, same as admin's —
+  kept for parity and for whatever future need actually wants the real
+  `candidateId`.
+- **`router.push('/')` after a successful verify left `NavBar` stuck
+  showing "Log in"** even though the session cookie was just set —
+  `NavBar` is mounted once in the root layout and persists across
+  client-side route changes, so its mount-time session check never
+  re-ran. Fixed with a hard `window.location.href = '/'` redirect
+  instead, which remounts everything fresh.
+
+3 new component test files (`login-page.spec.tsx`, `verify-page.spec.tsx`,
+plus `nav-bar.spec.tsx` extended) and 2 existing files updated
+(`page.spec.tsx`, `recruiter-overall-steps.spec.tsx`) to drive the
+session-hint cookie instead of the removed email step — 42 web tests
+total. `GET /auth/me` covered by 1 new e2e assertion
+(`candidate-auth.e2e-spec.ts`, 84 e2e tests total). Verified live end
+to end (real `kind` Postgres/OpenSearch/Mailpit via port-forward, real
+dev servers, headless Chromium): request a link from `/login` → fetch
+it from Mailpit's REST API → land on `/auth/verify` → redirected home,
+logged in → create a company → create a process with no email field →
+add a round → submit a rating — confirmed the row landed in kind's
+Postgres via `kubectl exec psql`, zero console errors throughout.
+
+**Phase 16 is now fully done for its feature scope** — issues #144-147
+all closed via merged PRs; #148 (engineering blog) remains, to be
+written last per convention once every other Phase 16 issue is merged.
+
+- Next step: Phase 16, issue #148 (engineering blog for the whole
+  phase), per `docs/ROADMAP.md` — the last item in Phase 16, written
+  only now that #144-147 are all done.
 
 ## Open decisions still to make
 

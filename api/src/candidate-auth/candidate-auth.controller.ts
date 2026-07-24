@@ -1,13 +1,25 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Res, UseGuards } from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { getSessionCookieOptions } from '../common/session-cookie-options.util';
-import { CandidateAuthService } from './candidate-auth.service';
+import { CandidateAuthService, CandidateSessionPayload } from './candidate-auth.service';
 import { RequestLinkDto } from './dto/request-link.dto';
 import { VerifyMagicLinkDto } from './dto/verify-magic-link.dto';
+import { CandidateJwtAuthGuard } from './guards/candidate-jwt-auth.guard';
 import { MagicLinkThrottleGuard } from './magic-link-throttle.guard';
 import { CANDIDATE_SESSION_COOKIE } from './strategies/candidate-jwt.strategy';
 
 const SESSION_MAX_AGE_MS = 60 * 60 * 1000; // 1h, matches JwtModule's signOptions.expiresIn
+
+// A plain, non-httpOnly companion to CANDIDATE_SESSION_COOKIE — carries no
+// secret, just a hint web's NavBar (rendered on every page, for every
+// anonymous visitor too) can read synchronously via document.cookie to
+// decide whether to call GET /auth/me at all. Without it, every single
+// anonymous page view would issue a doomed-to-401 fetch purely to render
+// "Log in" — harmless functionally, but the browser logs that as a console
+// error on every page, defeating the "zero console errors" verification
+// bar for what's actually the platform's single most common page view.
+// Set/cleared in lockstep with the real session cookie.
+export const CANDIDATE_SESSION_HINT_COOKIE = 'candidate_logged_in';
 
 @Controller('auth')
 export class CandidateAuthController {
@@ -47,6 +59,11 @@ export class CandidateAuthController {
       ...getSessionCookieOptions(),
       maxAge: SESSION_MAX_AGE_MS,
     });
+    res.cookie(CANDIDATE_SESSION_HINT_COOKIE, '1', {
+      ...getSessionCookieOptions(),
+      httpOnly: false,
+      maxAge: SESSION_MAX_AGE_MS,
+    });
     return { status: 'ok' };
   }
 
@@ -57,6 +74,20 @@ export class CandidateAuthController {
   @HttpCode(HttpStatus.OK)
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(CANDIDATE_SESSION_COOKIE, getSessionCookieOptions());
+    res.clearCookie(CANDIDATE_SESSION_HINT_COOKIE, {
+      ...getSessionCookieOptions(),
+      httpOnly: false,
+    });
     return { status: 'ok' };
+  }
+
+  // Lightweight session check (GitHub issue #147, mirroring admin-auth's
+  // GET /auth/admin/me from issue #160): lets web's NavBar and the wizard
+  // ask "am I logged in?" up front, before rendering the email-collection
+  // step or an inline login prompt.
+  @Get('me')
+  @UseGuards(CandidateJwtAuthGuard)
+  me(@Req() req: Request): CandidateSessionPayload {
+    return req.user as CandidateSessionPayload;
   }
 }
