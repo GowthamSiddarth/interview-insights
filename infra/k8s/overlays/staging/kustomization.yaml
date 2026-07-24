@@ -88,7 +88,9 @@ patches:
         path: /spec/rules/1/host
         value: api.staging.interview-insights.local
   # CORS_ORIGIN has to track the Ingress host above, or the deployed api
-  # would reject its own staging frontend's requests.
+  # would reject its own staging frontend's requests. COOKIE_DOMAIN has to
+  # track it too, or session cookies stay invisible to web's own JS (see
+  # base's api-config comment).
   - target:
       kind: ConfigMap
       name: api-config
@@ -96,3 +98,6 @@ patches:
       - op: replace
         path: /data/CORS_ORIGIN
         value: http://app.staging.interview-insights.local
+      - op: replace
+        path: /data/COOKIE_DOMAIN
+        value: .staging.interview-insights.local

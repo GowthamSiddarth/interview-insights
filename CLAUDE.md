@@ -1689,6 +1689,36 @@ green; live-verified in a real browser (anonymous visit shows a
 creating a company succeeds, and a direct unauthenticated
 `POST /companies` gets 401) — zero console errors.
 
+**Phase 20 was declared fully done, then reopened the same day** — a
+user report ("nav bar shows log in even after login") led to a real
+bug (GitHub issue #222, D39): `getSessionCookieOptions()` never set a
+`Domain` attribute, so every session cookie (`admin_session`,
+`candidate_session`, `candidate_logged_in`) was host-only — invisible
+to `web`'s JS on any deployed environment, since `web`/`api` are served
+from genuinely different hostnames there (`app.*` vs `api.*`). Never
+caught before because nearly every prior "verified live in a real
+browser" pass used local dev servers on `localhost` (same host,
+different port — cookies scope by host, not port). Blast radius was
+bigger than the NavBar label: the wizard's `candidateSession &&` gates
+(issue #217) read the same hint cookie, so a real login looked logged-
+out throughout the app on any deployed environment, even though
+authenticated API calls themselves worked fine. Fixed with a new
+`COOKIE_DOMAIN` env var (default unset, preserving today's `localhost`
+behavior) — set to `.interview-insights.local` in `dev`/`dev-localstack`,
+patched per-environment in `staging`/`prod`, mirroring the existing
+`CORS_ORIGIN` pattern exactly. 260 api unit tests, 105 e2e tests, and
+the golden-path smoke test (13 steps) all green. Live-verified two ways: `curl`
+through the real Ingress confirms `Set-Cookie` now carries
+`Domain=.interview-insights.local`, and a headless-browser (Playwright)
+run through the actual `app.interview-insights.local` (not a dev
+server) confirms NavBar shows "Log out" both right after login and
+after a hard reload, zero console errors. Epic #214 and milestone #17
+reopened, same precedent Phase 18 already set.
+
+**Phase 20 is now fully done** — issues #215-218, #212, and #222 all
+closed via merged PRs, and every phase built so far has a complete
+engineering blog.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162

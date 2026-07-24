@@ -1371,6 +1371,65 @@ threshold introduced this way in this codebase.
 
 ---
 
+### D39 — Session cookies need an explicit shared `Domain`, or `web`'s JS can't see them on any deployed environment (GitHub issue #222)
+
+**Context:** a user report — "nav bar shows log in even after login" —
+traced back to `getSessionCookieOptions()` never setting a `Domain`
+attribute on any session cookie. Without one, a cookie is host-only:
+visible solely to the exact hostname whose response set it. Every
+deployed environment serves `web` and `api` from genuinely different
+hostnames (`app.interview-insights.local` vs
+`api.interview-insights.local` in dev, matching `.staging.*`/`.prod.*`
+patterns in the other overlays) — `POST /auth/verify`'s response comes
+from `api`'s origin, so both `candidate_session` and D32's
+`candidate_logged_in` hint cookie were scoped to `api`'s hostname only,
+invisible to `document.cookie` reads from JS running on `web`'s
+hostname. This was never caught by any prior "verified live in a real
+browser" pass because nearly all of them ran against local `npm run
+dev` servers on `localhost:3000`/`3001` — same hostname, different
+port, and browsers scope cookies by host, not port. It only reproduces
+against the real Ingress-fronted app.
+
+The blast radius was larger than a cosmetic NavBar glitch: the
+wizard's `candidateSession &&` gates (issue #217's create-company form,
+the process-creation step) read the same hint cookie, so a genuinely
+logged-in candidate on any deployed environment saw "Log in to submit"
+prompts throughout the app — even though authenticated API calls
+themselves worked fine (the browser attaches `candidate_session`
+correctly on same-origin requests to `api` regardless of which host
+the calling JS runs on; only the client-side JS *read* of the cookie
+was broken).
+
+**Decision:**
+- `SessionCookieOptions` (`api/src/common/session-cookie-options.util.ts`)
+  gained an optional `domain` field, sourced from a new `COOKIE_DOMAIN`
+  env var. Default unset → today's host-only behavior, correct for
+  local dev where `web`/`api` share the `localhost` hostname.
+- `infra/k8s/base/05-api.yaml`'s `api-config` ConfigMap sets
+  `COOKIE_DOMAIN: .interview-insights.local` (the shared parent of
+  `app.*`/`api.*`), inherited by `dev`/`dev-localstack`; `staging`/`prod`
+  overlays patch it to their own per-environment parent domain, mirroring
+  the existing `CORS_ORIGIN` patch pattern exactly.
+- Applies to every session cookie sharing this util — `admin_session`,
+  `candidate_session`, and `candidate_logged_in` — not a candidate-auth-
+  specific fix, since all three had the identical host-only gap.
+
+**Verification:** 3 new unit tests for the domain behavior (unset,
+empty string, explicit value); full 260-test unit suite, 105-test e2e
+suite, and the golden-path smoke test all re-run clean; rebuilt and
+rolled out the real `api` image against the live `kind` cluster and
+confirmed via `curl` through the actual Ingress that `Set-Cookie` now
+carries `Domain=.interview-insights.local`; a live headless-browser
+(Playwright) run through `app.interview-insights.local` — real
+magic-link request, fetched via Mailpit's REST API, verified — confirms
+NavBar shows "Log out" both immediately after login and after a hard
+reload, zero console errors.
+
+**Revisit when:** never, structurally — this is a correctness fix, not
+a placeholder pending tuning.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

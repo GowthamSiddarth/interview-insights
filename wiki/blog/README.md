@@ -171,13 +171,14 @@ set.
 
 See `docs/ROADMAP.md` Phase 20. Filed retroactively — cross-cutting
 fixes and tooling discovered via live verification, stress-testing, and
-product review rather than planned feature work. All four feature
-issues are done — this phase's blog is complete. Numbered after Phase
-19 in filing order but implemented first, the same non-linear precedent
-Phase 6/8/18 already set — Phase 19 (Content Quality & Synthetic Data)
-remains queued behind it.
+product review rather than planned feature work. Declared fully done,
+then reopened the same day issue #222 surfaced — the same non-linear
+precedent Phase 6/8/18 already set. All five feature issues are now
+done — this phase's blog is complete. Phase 19 (Content Quality &
+Synthetic Data) remains queued behind it.
 
 1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20-operational-hardening/issue-215-cd-artifact-pruning/README.md)
 2. [Issue #216 — Full golden-path smoke test (D36)](phase-20-operational-hardening/issue-216-golden-path-smoke-test/README.md)
 3. [Issue #212 — `GET /moderation/queue` isolates each entity type's enrichment (D37)](phase-20-operational-hardening/issue-212-moderation-queue-race-fix/README.md)
 4. [Issue #217 — Honest login-page copy + lock down `POST /companies` (D38)](phase-20-operational-hardening/issue-217-login-copy-company-lockdown/README.md)
+5. [Issue #222 — Session cookies need a shared `Domain`, or `web` never sees a real login (D39)](phase-20-operational-hardening/issue-222-session-cookie-domain/README.md)

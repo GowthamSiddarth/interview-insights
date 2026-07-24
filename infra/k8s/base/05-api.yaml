@@ -15,6 +15,15 @@ data:
   # prod placeholders) is plain HTTP with no TLS termination, so this
   # stays "false" everywhere until a real HTTPS-fronted environment exists.
   COOKIE_SECURE: "false"
+  # web/api are served from genuinely different hostnames in every
+  # deployed environment (app.* vs api.*), so a host-only session cookie
+  # set by api's response is invisible to web's own JS — this is what
+  # broke the candidate_logged_in hint cookie's NavBar check the moment
+  # anyone used the real Ingress-fronted app instead of local dev servers.
+  # Widens every session cookie (admin, candidate, hint) to the shared
+  # parent domain instead. staging/prod patch this to their own per-
+  # environment parent domain (see those overlays' kustomization.yaml).
+  COOKIE_DOMAIN: .interview-insights.local
   # Not sensitive on its own (a single shared admin *username*, not the
   # credential) — GitHub issue #159, Phase 18.
   ADMIN_USERNAME: admin

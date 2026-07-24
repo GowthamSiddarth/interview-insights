@@ -758,5 +758,17 @@ GitHub issue #214.
       nor rate limiting, an anonymous-write gap predating Phase 16
       entirely since `Company` has no `candidateId` (PR #219, GitHub
       issue #217, D38)
-- [x] Engineering blog (last) (GitHub issue #218) — Phase 20 is now
-      fully done
+- [x] Engineering blog (last) (GitHub issue #218) — Phase 20 declared
+      fully done, then reopened the same day: a user-reported bug ("nav
+      bar shows log in even after login") traced to session cookies
+      being host-only, invisible to `web`'s JS on any deployed
+      environment where `web`/`api` don't share a hostname (issue #222,
+      D39). Epic #214 and milestone #17 reopened, same precedent
+      Phase 18 already set.
+- [x] Session cookies gain an explicit shared `Domain` (`COOKIE_DOMAIN`)
+      so `web`'s NavBar/wizard session checks actually see a real login
+      on any deployed environment — verified via `Set-Cookie` through
+      the real Ingress and a live headless-browser run confirming
+      "Log out" renders correctly (GitHub issue #222, D39)
+- [ ] Engineering blog update for issue #222 — Phase 20 is fully done
+      once this lands

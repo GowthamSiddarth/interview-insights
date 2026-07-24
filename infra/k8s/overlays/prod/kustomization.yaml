@@ -68,3 +68,6 @@ patches:
       - op: replace
         path: /data/CORS_ORIGIN
         value: http://app.prod.interview-insights.local
+      - op: replace
+        path: /data/COOKIE_DOMAIN
+        value: .prod.interview-insights.local
