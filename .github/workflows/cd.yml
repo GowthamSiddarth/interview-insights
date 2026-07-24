@@ -112,3 +112,24 @@ jobs:
         run: |
           kubectl -n interview-insights rollout restart deployment/web
           kubectl -n interview-insights rollout status deployment/web --timeout=90s
+
+      # Every run's "Build api/web image" step leaves the previous build's
+      # now-untagged layers behind — `kind load docker-image` re-tags the
+      # new one but never removes the old. On a persistent self-hosted
+      # runner (issue #88 — this box, not a fresh GitHub-hosted VM per
+      # run), that's cumulative: real incident, 2026-07-24 — five days of
+      # untouched dangling images/build cache pushed the shared Docker
+      # Desktop disk to 96% full, which tripped OpenSearch's flood-stage
+      # watermark and crash-looped the next api pod on a completely
+      # unrelated PR. `if: always()` so a failed deploy still gets cleaned
+      # up — that's exactly the case most likely to leave extra dangling
+      # layers behind. Deliberately not `docker system prune --volumes` or
+      # `crictl rmi --prune` on the kind node itself: both risk touching
+      # images/data still needed by already-running pods (confirmed the
+      # hard way while fixing the 2026-07-24 incident manually) — plain
+      # host-level image/build-cache pruning was sufficient and safe.
+      - name: Prune stale Docker artifacts
+        if: always()
+        run: |
+          docker image prune -f
+          docker builder prune -f --filter until=48h

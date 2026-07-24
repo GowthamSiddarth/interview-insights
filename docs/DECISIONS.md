@@ -1116,6 +1116,70 @@ the natural next step, not reverting the check.
 
 ---
 
+### D35 — CD prunes stale Docker artifacts after every deploy (real incident, 2026-07-24)
+
+**Context:** the PR #208 merge (GDPR erasure, unrelated to this incident
+itself) triggered CD as usual, and `cd.yml`'s "Roll out api" step timed
+out — the new pod crash-looped instead of becoming ready. The crash was
+OpenSearch refusing index operations: first `index_create_block_exception`
+(a cluster-wide block), then, after that was cleared, `cluster_block_exception`
+with `disk usage exceeded flood-stage watermark`. Direct investigation
+found the actual cause several layers removed from the app: the shared
+Docker Desktop disk `kind`'s node draws from was at 96% (only 2.6GB
+free of 59GB), almost entirely from build cache (24.6GB) and dangling,
+untagged images accumulated over roughly five days of CD runs. Every
+run's "Build api/web image" step produces a new image under the same
+`interview-insights-{api,web}:k8s` tag, leaving the *previous* run's
+now-untagged layers as dangling images — `kind load docker-image`
+retags forward, it never removes what it's replacing. On a persistent
+self-hosted runner (issue #88 — this is a standing local machine, not a
+fresh disk per run the way a GitHub-hosted runner would be), that's
+pure cumulative growth with nothing to bound it. `api`/`web` themselves
+were never actually down during this — the old pod kept serving the
+whole time the new one crash-looped — but the deploy was stuck and a
+few more days at this rate would have made the node unusable.
+
+**A costly near-miss while diagnosing this manually, worth recording so
+it isn't repeated:** the first cleanup attempt ran `crictl rmi --prune`
+*inside* the kind node's containerd directly. That briefly deleted the
+image backing the then-currently-running `web` Deployment
+(`interview-insights-web:k8s`) and the live `ingress-nginx-controller`
+pod's image, neither one caught by `--prune`'s "unreferenced" logic
+because Kubernetes tracks a running container by digest, not by the
+tag `crictl` was pruning. Neither caused an actual outage (an
+already-running container keeps running once started, regardless of
+whether its image is still tagged) — but either would have failed to
+restart from that point on. Both were restored immediately (rebuild +
+`kind load` for the app image; `crictl pull` from `registry.k8s.io` for
+the addon image) before any pod actually needed to restart. The lesson
+kept here deliberately: node-internal image surgery (`crictl`/`ctr`) is
+riskier than it looks, because it can't see "is this the image a live
+Deployment/Pod spec currently points at" — a plain host-level `docker
+image prune`/`docker builder prune` turned out to be both sufficient
+(96% → 49% disk) and safe, since Docker Desktop's build cache and
+genuinely-dangling images were the real source of the growth, not
+anything the kind node's own containerd store needed to keep.
+
+**Decision:** `cd.yml` gained a `Prune stale Docker artifacts` step
+(`docker image prune -f` + `docker builder prune -f --filter
+until=48h`) after the two rollout steps, with `if: always()` so a
+*failed* deploy still gets cleaned up — that's exactly the run most
+likely to leave extra dangling layers behind (a half-finished build, an
+image tagged but never successfully rolled out). Deliberately scoped to
+host-level Docker cleanup only, never `crictl`/`ctr` inside the kind
+node — see the near-miss above. The `until=48h` filter on build-cache
+pruning keeps roughly the last day or two of layers for build-speed
+reuse rather than forcing every run back to a fully cold build, while
+still bounding growth to a couple of days' worth instead of five.
+
+**Revisit when:** if disk pressure recurs even with this step in place
+(e.g. if the 48h cache window still isn't tight enough, or if Postgres/
+OpenSearch's own data volumes grow enough to matter) — at that point
+consider a stricter cache TTL or moving stateful data off the shared
+disk entirely, not just tightening the prune step further.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
