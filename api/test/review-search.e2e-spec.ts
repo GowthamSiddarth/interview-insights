@@ -5,10 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
+import { loginAsCandidate } from './support/candidate-session';
 
-interface CandidateBody {
-  id: string;
-}
 interface CompanyBody {
   id: string;
 }
@@ -41,12 +39,18 @@ const unique = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 // Proves GitHub issue #22's acceptance criteria: an approved round rating
 // becomes searchable/filterable; a pending/rejected/flagged one never
 // appears; filtering by roleTitle/roundType/date range narrows results
-// correctly, individually and combined.
+// correctly, individually and combined. Rating creation is
+// candidate-session-gated since GitHub issue #146.
 describe('Review search (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
 
-  beforeAll(async () => {
+  // A fresh app per test — see overall-reviews.e2e-spec.ts's comment for
+  // why a shared beforeAll instance is fragile; this file's tests call
+  // createRating() (and therefore loginAsCandidate) up to twice each,
+  // which would exceed the 5-per-window throttle across the whole file
+  // if shared.
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -61,7 +65,7 @@ describe('Review search (e2e)', () => {
     adminCookie = await loginAsAdmin(app);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -73,11 +77,7 @@ describe('Review search (e2e)', () => {
     roundType: 'coding' | 'behavioral',
     freeText: string,
   ): Promise<{ companyId: string; ratingId: string }> {
-    const candidateRes = await server()
-      .post('/candidates')
-      .send({ email: `candidate-${unique()}@example.com` })
-      .expect(200);
-    const candidateId = body<CandidateBody>(candidateRes).id;
+    const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
 
     const companyRes = await server()
       .post('/companies')
@@ -87,7 +87,8 @@ describe('Review search (e2e)', () => {
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
-      .send({ candidateId, roleTitle, outcome: 'in_progress' })
+      .set('Cookie', cookie)
+      .send({ roleTitle, outcome: 'in_progress' })
       .expect(201);
     const processId = body<ProcessBody>(processRes).id;
 
@@ -99,8 +100,8 @@ describe('Review search (e2e)', () => {
 
     const ratingRes = await server()
       .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', cookie)
       .send({
-        candidateId,
         difficulty: 3,
         fairness: 4,
         communicationFluency: 4,
@@ -153,7 +154,7 @@ describe('Review search (e2e)', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe(ratingId);
-  });
+  }, 15000);
 
   it('never surfaces a rejected review', async () => {
     const marker = unique();
@@ -166,7 +167,7 @@ describe('Review search (e2e)', () => {
 
     const res = await server().get('/search/reviews').query({ companyId }).expect(200);
     expect(body<ReviewSearchResultBody[]>(res)).toEqual([]);
-  });
+  }, 15000);
 
   it('never surfaces a still-pending review', async () => {
     const marker = unique();
@@ -179,7 +180,7 @@ describe('Review search (e2e)', () => {
 
     const res = await server().get('/search/reviews').query({ companyId }).expect(200);
     expect(body<ReviewSearchResultBody[]>(res)).toEqual([]);
-  });
+  }, 15000);
 
   it('filters by roleTitle', async () => {
     const marker = unique();
@@ -196,7 +197,7 @@ describe('Review search (e2e)', () => {
 
     expect(results.some((r) => r.id === matching.ratingId)).toBe(true);
     expect(results.some((r) => r.id === nonMatching.ratingId)).toBe(false);
-  });
+  }, 20000);
 
   it('filters by roundType', async () => {
     const marker = unique();
@@ -217,7 +218,7 @@ describe('Review search (e2e)', () => {
 
     expect(results.some((r) => r.id === coding.ratingId)).toBe(true);
     expect(results.every((r) => r.roundType === 'coding')).toBe(true);
-  });
+  }, 20000);
 
   it('filters by date range', async () => {
     const marker = unique();
@@ -239,7 +240,7 @@ describe('Review search (e2e)', () => {
       .query({ companyId, dateFrom: '2100-01-01' })
       .expect(200);
     expect(body<ReviewSearchResultBody[]>(outsideRange)).toEqual([]);
-  });
+  }, 15000);
 
   it('narrows results with combined filters', async () => {
     const marker = unique();
@@ -263,7 +264,7 @@ describe('Review search (e2e)', () => {
     const results = body<ReviewSearchResultBody[]>(res);
 
     expect(results.map((r) => r.id)).toEqual([target.ratingId]);
-  });
+  }, 20000);
 
   it('rejects an invalid roundType filter', async () => {
     await server().get('/search/reviews').query({ roundType: 'not-a-real-type' }).expect(400);

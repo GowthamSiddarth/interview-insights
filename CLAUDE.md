@@ -149,10 +149,12 @@ follow-up issues (#192 credential rotation, #193 mid-session-expiry
 redirect, both now done). Phases 1-7, 9-15, and 18 each have a complete
 engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
 backlog, not started. Phase 16 (Candidate Accounts & Auth) is in
-progress — issues #144 (mail foundation) and #145 (magic-link auth,
+progress — issues #144 (mail foundation), #145 (magic-link auth,
 supersedes and removes Phase 3's standalone verification endpoints,
-D30) done, #146-148 not started yet. Phases 17 (Candidate Self-Service)
-and 19 (Content Quality & Synthetic
+D30), and #146 (sessions on the write path, four candidateId-bearing
+writes now session-gated, `POST /candidates` removed, D31) done,
+#147-148 not started yet — `web`'s wizard is broken by design until
+#147. Phases 17 (Candidate Self-Service) and 19 (Content Quality & Synthetic
 Data) are planned but not started. Phase 18 was filed after Phase
 16-17, but per the same non-linear precedent Phase 6/8 already set,
 was implemented first — see the Phase 18 intro in `docs/ROADMAP.md`
@@ -1242,9 +1244,64 @@ alongside adding `CANDIDATE_JWT_SECRET` to the same block; confirmed
 own variable interpolation intact by checking a real container's env
 var directly.
 
-- Next step: Phase 16, issue #146 (sessions on the write path —
-  candidateId from the session, not the request body), per
-  `docs/ROADMAP.md`.
+**Phase 16, issue #146 (sessions on the write path)** — every
+`candidateId`-bearing write now derives it from the authenticated
+session (`CurrentCandidateId`, backed by `CandidateJwtAuthGuard`),
+never the request body. Turned out to be **four** write paths, not the
+three named in the issue's own prose — `InterviewProcess` creation
+(`POST /companies/:companyId/processes`) has a `candidateId` column
+too, found by grepping the Prisma schema directly rather than trusting
+the issue text (`RecruiterInteraction` itself has none — only its
+child `RecruiterRating` does, so "recruiter interaction+rating" was
+really one write path, not two). `candidateId` dropped entirely from
+`CreateRoundRatingDto`/`CreateRecruiterRatingDto`/
+`CreateOverallReviewDto`/`CreateInterviewProcessDto`; each service
+takes it as a separate parameter instead.
+
+**`POST /candidates` removed entirely** (not just gated) — candidate
+creation is upsert-by-email logic that now only runs inside
+`POST /auth/request-link`; a parallel public route to mint a candidate
+identity without proving email ownership would have undermined the
+whole point of this issue. `GET /candidates/:id` is unchanged (a read,
+out of scope). See `docs/DECISIONS.md` D31 for the full reasoning,
+including the explicit "unauthenticated write → plain 401, no fallback"
+decision the issue asked to be documented.
+
+**`web`'s wizard is now broken from its very first step** — it called
+`POST /candidates` directly, which no longer exists. Intentional, not a
+regression: the same "frontend catches up in the next issue" sequencing
+Phase 18 used (issue #159 broke the moderation UI on purpose, #160
+fixed it) — issue #147 (login/logout UI + wizard integration) is the
+catch-up here. `README.md`'s Quick Start now says so explicitly, with a
+pointer to `api/test/support/candidate-session.ts` for driving the
+write paths by hand (curl/tests) in the meantime.
+
+A new shared e2e helper, `api/test/support/candidate-session.ts`'s
+`loginAsCandidate()`, drives the real request-link → Mailpit → verify
+→ cookie loop (mirroring `admin-session.ts`'s `loginAsAdmin()`) — used
+by a new dedicated `sessions-on-write-path.e2e-spec.ts` (8 tests
+proving the core guarantee across all four write paths: 401
+unauthenticated, and a client-supplied `candidateId` in the body is
+rejected outright by whitelist validation, never used even if
+supplied) and by every existing e2e spec that touches one of the four
+write paths (`vertical-slice`, `moderation`, `fraud-checks`,
+`overall-reviews`, `recruiter-ratings`, `review-search`,
+`company-reviews` — 7 files). Every one of those was also converted
+from a shared `beforeAll` app to a fresh app per test
+(`beforeEach`/`afterEach`) — a shared instance's cumulative
+`/auth/request-link` calls across a whole file routinely exceeded the
+5-per-window magic-link throttle once several tests each needed their
+own candidate login (`overall-reviews.e2e-spec.ts` hit this directly;
+several others were sitting exactly at the boundary). 4 unit test files
+updated (DTO + service specs for the three ratings/reviews, DTO spec
+for interview-processes) plus 2 new ones (the `CurrentCandidateId`
+decorator, extracted separately from its `createParamDecorator` wrapper
+for testability). Full e2e suite (83 tests) run twice back to back to
+confirm the per-test-app fix wasn't a lucky pass.
+
+- Next step: Phase 16, issue #147 (login/logout UI + wizard
+  integration), per `docs/ROADMAP.md` — the fix for the wizard breakage
+  this issue caused on purpose.
 
 ## Open decisions still to make
 

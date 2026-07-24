@@ -5,10 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
+import { loginAsCandidate } from './support/candidate-session';
 
-interface CandidateBody {
-  id: string;
-}
 interface CompanyBody {
   id: string;
 }
@@ -40,7 +38,14 @@ describe('Overall reviews (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
 
-  beforeAll(async () => {
+  // A fresh app (and therefore fresh admin-login and candidate
+  // magic-link-request throttle state) per test, not a shared beforeAll
+  // one — several tests each need their own candidate login, and a
+  // shared instance's cumulative count across the whole file trips the
+  // 5-per-window throttle before reaching later tests (the same class
+  // of issue admin-auth.e2e-spec.ts's rate-limit test, and now
+  // candidate-auth.e2e-spec.ts's whole file, already had to work around).
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -55,7 +60,7 @@ describe('Overall reviews (e2e)', () => {
     adminCookie = await loginAsAdmin(app);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -64,12 +69,8 @@ describe('Overall reviews (e2e)', () => {
   const uniqueSlug = () => `acme-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-  async function createCandidateAndProcess(): Promise<{ candidateId: string; processId: string }> {
-    const candidateRes = await server()
-      .post('/candidates')
-      .send({ email: uniqueEmail() })
-      .expect(200);
-    const candidateId = body<CandidateBody>(candidateRes).id;
+  async function createCandidateAndProcess(): Promise<{ cookie: string; processId: string }> {
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
     const companyRes = await server()
       .post('/companies')
@@ -79,24 +80,25 @@ describe('Overall reviews (e2e)', () => {
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
-      .send({ candidateId, roleTitle: 'Senior Backend Engineer', outcome: 'offer' })
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'offer' })
       .expect(201);
     const processId = body<ProcessBody>(processRes).id;
 
-    return { candidateId, processId };
+    return { cookie, processId };
   }
 
   async function submitReview(): Promise<{
-    candidateId: string;
+    cookie: string;
     processId: string;
     reviewId: string;
   }> {
-    const { candidateId, processId } = await createCandidateAndProcess();
+    const { cookie, processId } = await createCandidateAndProcess();
 
     const reviewRes = await server()
       .post(`/processes/${processId}/overall-review`)
+      .set('Cookie', cookie)
       .send({
-        candidateId,
         overallExperience: 4,
         wouldRecommend: true,
         reviewText: 'Structured, respectful, and quick to respond.',
@@ -104,7 +106,7 @@ describe('Overall reviews (e2e)', () => {
       .expect(201);
     const reviewId = body<ReviewBody>(reviewRes).id;
 
-    return { candidateId, processId, reviewId };
+    return { cookie, processId, reviewId };
   }
 
   async function findQueueEntryFor(reviewId: string): Promise<QueueEntryBody> {
@@ -160,30 +162,33 @@ describe('Overall reviews (e2e)', () => {
   });
 
   it('rejects a second overall review for the same process', async () => {
-    const { candidateId, processId } = await submitReview();
+    const { cookie, processId } = await submitReview();
 
     await server()
       .post(`/processes/${processId}/overall-review`)
-      .send({ candidateId, overallExperience: 2, wouldRecommend: false })
+      .set('Cookie', cookie)
+      .send({ overallExperience: 2, wouldRecommend: false })
       .expect(409);
   });
 
   it('rejects a review against a non-existent process', async () => {
-    const { candidateId } = await createCandidateAndProcess();
+    const { cookie } = await createCandidateAndProcess();
 
     // FK violation -> 422 via PrismaExceptionFilter, same behavior as the
     // round-ratings write path for a non-existent parent.
     await server()
       .post('/processes/123e4567-e89b-12d3-a456-426614174000/overall-review')
-      .send({ candidateId, overallExperience: 3, wouldRecommend: true })
+      .set('Cookie', cookie)
+      .send({ overallExperience: 3, wouldRecommend: true })
       .expect(422);
   });
 
   it('rejects an invalid payload', async () => {
-    const { processId } = await createCandidateAndProcess();
+    const { cookie, processId } = await createCandidateAndProcess();
 
     await server()
       .post(`/processes/${processId}/overall-review`)
+      .set('Cookie', cookie)
       .send({ overallExperience: 9 })
       .expect(400);
   });

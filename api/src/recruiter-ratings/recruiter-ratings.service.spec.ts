@@ -12,7 +12,6 @@ describe('RecruiterRatingsService', () => {
   let moderationService: { enqueue: jest.Mock };
 
   const dto = {
-    candidateId: 'candidate-1',
     approachability: 4,
     responseTime: 3,
     timeliness: 5,
@@ -40,16 +39,16 @@ describe('RecruiterRatingsService', () => {
     service = module.get(RecruiterRatingsService);
   });
 
-  it('creates the rating scoped to the given recruiter interaction', async () => {
-    await service.create('interaction-1', dto);
+  it('creates the rating scoped to the given recruiter interaction and candidate', async () => {
+    await service.create('interaction-1', 'candidate-1', dto);
 
     expect(prisma.recruiterRating.create).toHaveBeenCalledWith({
-      data: { ...dto, recruiterInteractionId: 'interaction-1' },
+      data: { ...dto, recruiterInteractionId: 'interaction-1', candidateId: 'candidate-1' },
     });
   });
 
   it('enqueues the new rating for moderation', async () => {
-    await service.create('interaction-1', dto);
+    await service.create('interaction-1', 'candidate-1', dto);
 
     expect(moderationService.enqueue).toHaveBeenCalledWith('recruiter_rating', 'rating-1', prisma);
   });

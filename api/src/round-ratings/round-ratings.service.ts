@@ -12,7 +12,7 @@ export class RoundRatingsService {
     private readonly fraudChecksService: FraudChecksService,
   ) {}
 
-  create(roundId: string, dto: CreateRoundRatingDto) {
+  create(roundId: string, candidateId: string, dto: CreateRoundRatingDto) {
     // status defaults to 'pending' (schema default) — every rating starts
     // gated behind moderation, see CLAUDE.md hard constraint #2 and
     // docs/DECISIONS.md D3. The moderation_queue row is created in the same
@@ -22,11 +22,11 @@ export class RoundRatingsService {
       // Runs against pre-existing rows only (before this one is inserted),
       // so it never flags a rating as a duplicate of itself.
       const flagReason = await this.fraudChecksService.detectFlagReason(
-        dto.candidateId,
+        candidateId,
         dto.freeText,
         tx,
       );
-      const rating = await tx.roundRating.create({ data: { ...dto, roundId } });
+      const rating = await tx.roundRating.create({ data: { ...dto, roundId, candidateId } });
       await this.moderationService.enqueue('round_rating', rating.id, tx, flagReason);
       return rating;
     });

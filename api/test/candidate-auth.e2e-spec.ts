@@ -69,13 +69,6 @@ describe('Candidate magic-link auth (e2e)', () => {
     return token;
   }
 
-  async function candidateIdFor(email: string): Promise<string> {
-    // POST /candidates upserts by email — same candidate row request-link
-    // already created, just resolving its id for assertions.
-    const res = await server().post('/candidates').send({ email }).expect(200);
-    return body<CandidateBody>(res).id;
-  }
-
   it('request-link always returns the same shape, whether or not the email is known', async () => {
     const res = await server().post('/auth/request-link').send({ email: uniqueEmail() }).expect(200);
     expect(body<StatusBody>(res)).toEqual({ status: 'ok' });
@@ -95,15 +88,25 @@ describe('Candidate magic-link auth (e2e)', () => {
     expect(sessionCookie).not.toMatch(/secure/i); // COOKIE_SECURE unset in this test env
   }, 15000);
 
-  it('first login flips verificationStatus to email_verified', async () => {
+  it('first login flips verificationStatus to email_verified against real Postgres', async () => {
+    // Unit tests (candidate-auth.service.spec.ts) already cover the
+    // unverified -> email_verified transition logic itself, including the
+    // first-login-only nuance, against a mocked Prisma. This proves the
+    // same real write actually lands in real Postgres — there's no public
+    // way left to inspect the pre-verification state (POST /candidates
+    // was removed by this same issue, #146), so the candidateId is
+    // decoded from the session cookie's JWT payload, only available
+    // *after* verifying.
     const email = uniqueEmail();
     const token = await requestMagicLinkToken(email);
-    const candidateId = await candidateIdFor(email);
 
-    const before = await server().get(`/candidates/${candidateId}`).expect(200);
-    expect(body<CandidateBody>(before).verificationStatus).toBe('unverified');
-
-    await server().get(`/auth/verify?token=${token}`).expect(200);
+    const verifyRes = await server().get(`/auth/verify?token=${token}`).expect(200);
+    const cookies = verifyRes.headers['set-cookie'] as unknown as string[];
+    const sessionCookie = cookies.find((c) => c.startsWith('candidate_session='));
+    const jwt = sessionCookie?.split(';')[0].split('=')[1] ?? '';
+    const candidateId = (
+      JSON.parse(Buffer.from(jwt.split('.')[1], 'base64').toString()) as { candidateId: string }
+    ).candidateId;
 
     const after = await server().get(`/candidates/${candidateId}`).expect(200);
     expect(body<CandidateBody>(after).verificationStatus).toBe('email_verified');

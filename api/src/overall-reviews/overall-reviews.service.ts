@@ -17,10 +17,10 @@ export class OverallReviewsService {
   // submission surfaces as a 409 via PrismaExceptionFilter, not app logic.
   // No fraud-check wiring, same scope note as recruiter ratings (D13's
   // FraudChecksService is round_rating-specific today).
-  create(processId: string, dto: CreateOverallReviewDto) {
+  create(processId: string, candidateId: string, dto: CreateOverallReviewDto) {
     return this.prisma.$transaction(async (tx) => {
       const review = await tx.overallReview.create({
-        data: { ...dto, processId },
+        data: { ...dto, processId, candidateId },
       });
       await this.moderationService.enqueue('overall_review', review.id, tx);
       return review;

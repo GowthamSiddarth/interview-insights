@@ -6,9 +6,9 @@ import { CreateInterviewProcessDto } from './dto/create-interview-process.dto';
 export class InterviewProcessesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(companyId: string, dto: CreateInterviewProcessDto) {
+  create(companyId: string, candidateId: string, dto: CreateInterviewProcessDto) {
     return this.prisma.interviewProcess.create({
-      data: { ...dto, companyId },
+      data: { ...dto, companyId, candidateId },
     });
   }
 

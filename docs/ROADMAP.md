@@ -601,9 +601,13 @@ Candidate Accounts & Auth". Epic: GitHub issue #182.
       first login flips `verificationStatus` (GitHub issue #145) —
       supersedes and removes Phase 3 issue #3's standalone verification
       endpoints, see D30
-- [ ] Sessions on the write path: candidateId from the session, not
+- [x] Sessions on the write path: candidateId from the session, not
       the request body (GitHub issue #146) — closes today's
-      anyone-can-write-as-anyone gap
+      anyone-can-write-as-anyone gap. Four write paths, not three
+      (`InterviewProcess` creation too, found by grepping the schema —
+      see D31); `POST /candidates` removed entirely, not just gated;
+      `web`'s wizard is broken until issue #147 picks it back up, by
+      design
 - [ ] Login/logout UI + wizard integration (GitHub issue #147)
 - [ ] Engineering blog (last) (GitHub issue #148)
 

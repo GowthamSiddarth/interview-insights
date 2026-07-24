@@ -5,10 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
+import { loginAsCandidate } from './support/candidate-session';
 
-interface CandidateBody {
-  id: string;
-}
 interface CompanyBody {
   id: string;
 }
@@ -38,7 +36,12 @@ describe('Fraud checks (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
 
-  beforeAll(async () => {
+  // A fresh app per test — see overall-reviews.e2e-spec.ts's comment for
+  // why a shared beforeAll instance is fragile once several tests each
+  // need their own candidate login (this file stays under the 5-per-
+  // window threshold today, but a fresh instance per test removes the
+  // risk of a future added test tipping it over).
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -53,7 +56,7 @@ describe('Fraud checks (e2e)', () => {
     adminCookie = await loginAsAdmin(app);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -62,12 +65,12 @@ describe('Fraud checks (e2e)', () => {
   const uniqueSlug = () => `acme-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-  async function createCandidate(): Promise<string> {
-    const res = await server().post('/candidates').send({ email: uniqueEmail() }).expect(200);
-    return body<CandidateBody>(res).id;
+  async function loginNewCandidate(): Promise<string> {
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
+    return cookie;
   }
 
-  async function createProcessWithRounds(candidateId: string, roundCount: number): Promise<string[]> {
+  async function createProcessWithRounds(candidateCookie: string, roundCount: number): Promise<string[]> {
     const companyRes = await server()
       .post('/companies')
       .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
@@ -76,7 +79,8 @@ describe('Fraud checks (e2e)', () => {
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
-      .send({ candidateId, roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+      .set('Cookie', candidateCookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
       .expect(201);
     const processId = body<ProcessBody>(processRes).id;
 
@@ -93,13 +97,13 @@ describe('Fraud checks (e2e)', () => {
 
   async function submitRating(
     roundId: string,
-    candidateId: string,
+    candidateCookie: string,
     freeText?: string,
   ): Promise<{ ratingId: string; queueEntry: QueueEntryBody }> {
     const ratingRes = await server()
       .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', candidateCookie)
       .send({
-        candidateId,
         difficulty: 3,
         fairness: 4,
         communicationFluency: 5,
@@ -118,51 +122,51 @@ describe('Fraud checks (e2e)', () => {
   }
 
   it('flags a rating with rate_limit once a candidate exceeds the rolling window threshold, but still creates it', async () => {
-    const candidateId = await createCandidate();
+    const candidateCookie = await loginNewCandidate();
     // 4 rounds: 3 within the limit, the 4th should trip it (threshold is 3 —
     // see FraudChecksService.RATE_LIMIT_MAX_RATINGS).
-    const [round1, round2, round3, round4] = await createProcessWithRounds(candidateId, 4);
+    const [round1, round2, round3, round4] = await createProcessWithRounds(candidateCookie, 4);
 
-    const first = await submitRating(round1, candidateId);
-    const second = await submitRating(round2, candidateId);
-    const third = await submitRating(round3, candidateId);
-    const fourth = await submitRating(round4, candidateId);
+    const first = await submitRating(round1, candidateCookie);
+    const second = await submitRating(round2, candidateCookie);
+    const third = await submitRating(round3, candidateCookie);
+    const fourth = await submitRating(round4, candidateCookie);
 
     expect(first.queueEntry.flagReason).toBeNull();
     expect(second.queueEntry.flagReason).toBeNull();
     expect(third.queueEntry.flagReason).toBeNull();
     expect(fourth.queueEntry.flagReason).toBe('rate_limit');
-  });
+  }, 20000);
 
   it('flags a rating with duplicate when its free_text matches an existing one, but still creates it', async () => {
-    const candidateA = await createCandidate();
-    const candidateB = await createCandidate();
-    const [roundA] = await createProcessWithRounds(candidateA, 1);
-    const [roundB] = await createProcessWithRounds(candidateB, 1);
+    const candidateCookieA = await loginNewCandidate();
+    const candidateCookieB = await loginNewCandidate();
+    const [roundA] = await createProcessWithRounds(candidateCookieA, 1);
+    const [roundB] = await createProcessWithRounds(candidateCookieB, 1);
 
     // Unique per run — the dockerized dev Postgres persists data across
     // test runs (fraud-checks duplicate detection is a full-table scan by
     // design, see D13), so a fixed literal string here would collide with
     // leftover rows from a previous run instead of only this test's data.
     const reviewText = `Great interview, fair and well-structured questions. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
-    const first = await submitRating(roundA, candidateA, reviewText);
+    const first = await submitRating(roundA, candidateCookieA, reviewText);
     // Same text, different case/whitespace, different candidate/round.
-    const second = await submitRating(roundB, candidateB, `  ${reviewText.toUpperCase()}  `);
+    const second = await submitRating(roundB, candidateCookieB, `  ${reviewText.toUpperCase()}  `);
 
     expect(first.queueEntry.flagReason).toBeNull();
     expect(second.queueEntry.flagReason).toBe('duplicate');
-  });
+  }, 20000);
 
   it('does not flag distinct free_text submissions', async () => {
-    const candidateId = await createCandidate();
-    const [roundId] = await createProcessWithRounds(candidateId, 1);
+    const candidateCookie = await loginNewCandidate();
+    const [roundId] = await createProcessWithRounds(candidateCookie, 1);
 
     const { queueEntry } = await submitRating(
       roundId,
-      candidateId,
+      candidateCookie,
       `A genuinely unique review. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`,
     );
 
     expect(queueEntry.flagReason).toBeNull();
-  });
+  }, 15000);
 });

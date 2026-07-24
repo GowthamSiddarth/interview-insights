@@ -3,7 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { CreateRecruiterRatingDto } from './create-recruiter-rating.dto';
 
 const valid = {
-  candidateId: '123e4567-e89b-12d3-a456-426614174000',
   approachability: 4,
   responseTime: 3,
   timeliness: 5,
@@ -28,12 +27,6 @@ describe('CreateRecruiterRatingDto', () => {
     const dto = plainToInstance(CreateRecruiterRatingDto, { ...valid, approachability });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'approachability')).toBe(true);
-  });
-
-  it('rejects a non-UUID candidateId', async () => {
-    const dto = plainToInstance(CreateRecruiterRatingDto, { ...valid, candidateId: 'nope' });
-    const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'candidateId')).toBe(true);
   });
 
   it('rejects a missing required rating field', async () => {

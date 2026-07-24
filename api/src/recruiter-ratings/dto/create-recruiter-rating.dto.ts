@@ -1,9 +1,9 @@
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
+// candidateId is deliberately not a field here (GitHub issue #146) — it
+// comes from the authenticated session (CurrentCandidateId), never from
+// client input, so a candidate can't submit as another.
 export class CreateRecruiterRatingDto {
-  @IsUUID()
-  candidateId!: string;
-
   @IsInt()
   @Min(1)
   @Max(5)

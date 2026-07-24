@@ -79,6 +79,18 @@ is moderation-gated before it's public (see `docs/DECISIONS.md` D3), and
 there's no moderation worker yet (Phase 3), so the public ratings count
 stays at `0` by design.
 
+**Known broken since Phase 16 issue #146:** the wizard's own "candidate
+email" step called `POST /candidates`, which no longer exists as a public
+endpoint (candidate creation is part of the magic-link auth flow now,
+`POST /auth/request-link`) — the every write path from there on also now
+requires a real candidate session, not a `candidateId` typed into a form.
+This is intentional, not a regression: it's deferred to issue #147
+(login/logout UI + wizard integration), the same non-linear "the frontend
+catches up in the next issue" pattern Phase 18 used for the moderation UI.
+Drive the write paths via curl (or the e2e suite) in the meantime — see
+`api/test/support/candidate-session.ts` for the real request-link →
+Mailpit → verify → cookie flow every e2e spec now uses.
+
 **Stopping/resetting:** `docker compose down` stops Postgres and OpenSearch
 (data persists in named volumes). Add `-v` to also wipe the data and start
 fresh next time.
@@ -334,7 +346,6 @@ unaffected by D24.
 | Method | Path                                                 | Notes                                                   |
 | ------ | ---------------------------------------------------- | ------------------------------------------------------- |
 | GET    | `/health`                                            | DB connectivity check + deployed `version` (git SHA)    |
-| POST   | `/candidates`                                        | Upserts by email (server-side hashed, never stored raw) |
 | GET    | `/candidates/:id`                                    |                                                         |
 | POST   | `/auth/request-link`                                 | Phase 16 — magic-link email; never discloses if known   |
 | GET/POST | `/auth/verify`                                     | Consumes the link's token → session + `email_verified`  |
@@ -344,16 +355,16 @@ unaffected by D24.
 | GET    | `/companies/by-slug/:slug`                           | Phase 15 — profile pages address companies by slug      |
 | GET    | `/companies/:id/reviews`                             | Approved-only, paginated, Postgres-sourced (D16 note)   |
 | GET    | `/companies/:companyId/analytics`                    | Shrinkage-scored aggregates (Phase 4)                   |
-| POST   | `/companies/:companyId/processes`                    |                                                         |
+| POST   | `/companies/:companyId/processes`                    | Candidate session required (Phase 16 issue #146); candidateId from session |
 | GET    | `/companies/:companyId/processes` / `/processes/:id` |                                                         |
 | POST   | `/processes/:processId/rounds`                       |                                                         |
 | GET    | `/processes/:processId/rounds`                       |                                                         |
-| POST   | `/rounds/:roundId/ratings`                           | Always created as `pending`                             |
+| POST   | `/rounds/:roundId/ratings`                           | Candidate session required (#146); always created as `pending` |
 | GET    | `/rounds/:roundId/ratings`                           | Only ever returns `approved` ratings                    |
 | POST   | `/processes/:processId/recruiter-interactions`       | Phase 14 — resolves recruiter identity server-side      |
-| POST   | `/recruiter-interactions/:id/ratings`                | Always created as `pending`                             |
+| POST   | `/recruiter-interactions/:id/ratings`                | Candidate session required (#146); always created as `pending` |
 | GET    | `/recruiter-interactions/:id/ratings`                | Approved only                                           |
-| POST   | `/processes/:processId/overall-review`               | One per process (schema-enforced); `pending`            |
+| POST   | `/processes/:processId/overall-review`               | Candidate session required (#146); one per process (schema-enforced); `pending` |
 | GET    | `/processes/:processId/overall-review`               | The approved review, or empty                           |
 | GET    | `/moderation/queue`                                  | Pending entries, enriched with entity context — admin auth required |
 | POST   | `/moderation/queue/:id/{approve,reject,flag}`        | Admin auth required (Phase 18 issue #159)               |

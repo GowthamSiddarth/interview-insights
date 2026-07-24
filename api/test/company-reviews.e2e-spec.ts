@@ -5,6 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
+import { loginAsCandidate } from './support/candidate-session';
 
 interface IdBody {
   id: string;
@@ -38,12 +39,17 @@ function body<T>(res: request.Response): T {
 // Proves the two Phase 15 issue #140 read paths against real Postgres:
 // slug lookup, and the approved-only company reviews list (a
 // source-of-truth read from Postgres, deliberately not OpenSearch —
-// D16/D17).
+// D16/D17). Rating creation is candidate-session-gated since GitHub
+// issue #146.
 describe('Company read paths: slug + reviews (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
 
-  beforeAll(async () => {
+  // A fresh app per test — see overall-reviews.e2e-spec.ts's comment for
+  // why a shared beforeAll instance is fragile; createCompanyWithRatings()
+  // logs in one fresh candidate per rating, and some tests here need
+  // several ratings in one call.
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -58,7 +64,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     adminCookie = await loginAsAdmin(app);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -83,14 +89,11 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     for (let i = 0; i < totalNeeded; i++) {
       // One candidate per rating — sidesteps the one-rating-per-round
       // constraint and the fraud-check rate limit alike.
-      const candidateRes = await server()
-        .post('/candidates')
-        .send({ email: uniqueEmail() })
-        .expect(200);
-      const candidateId = body<IdBody>(candidateRes).id;
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
       const processRes = await server()
         .post(`/companies/${companyId}/processes`)
-        .send({ candidateId, roleTitle: 'Backend Engineer', outcome: 'offer' })
+        .set('Cookie', cookie)
+        .send({ roleTitle: 'Backend Engineer', outcome: 'offer' })
         .expect(201);
       const processId = body<IdBody>(processRes).id;
       const roundRes = await server()
@@ -100,8 +103,8 @@ describe('Company read paths: slug + reviews (e2e)', () => {
       const roundId = body<IdBody>(roundRes).id;
       const ratingRes = await server()
         .post(`/rounds/${roundId}/ratings`)
+        .set('Cookie', cookie)
         .send({
-          candidateId,
           difficulty: 3,
           fairness: 4,
           communicationFluency: 4,
@@ -134,7 +137,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     expect(body<CompanyBody>(found).id).toBe(companyId);
 
     await server().get('/companies/by-slug/does-not-exist-slug').expect(404);
-  });
+  }, 15000);
 
   it('lists only approved reviews, shaped for display, without candidate identity', async () => {
     const { companyId, approvedIds } = await createCompanyWithRatings({
@@ -153,7 +156,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
       roleTitle: 'Backend Engineer',
     });
     expect(JSON.stringify(pageData)).not.toContain('candidateId');
-  });
+  }, 20000);
 
   it('paginates', async () => {
     const { companyId } = await createCompanyWithRatings({ approved: 3 });
@@ -170,7 +173,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     expect(page2.items).toHaveLength(1);
     const allIds = [...page1.items, ...page2.items].map((i) => i.id);
     expect(new Set(allIds).size).toBe(3);
-  });
+  }, 20000);
 
   it('404s reviews for a company that does not exist', async () => {
     await server()
@@ -183,5 +186,5 @@ describe('Company read paths: slug + reviews (e2e)', () => {
 
     await server().get(`/companies/${companyId}/reviews?page=0`).expect(400);
     await server().get(`/companies/${companyId}/reviews?pageSize=51`).expect(400);
-  });
+  }, 15000);
 });
