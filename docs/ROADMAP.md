@@ -647,7 +647,7 @@ a clean 401 instead of a downstream FK/not-found error, and shared
 per-company internal identity, referenced by potentially many
 candidates).
 
-- [ ] My reviews: own submissions across all entity types, all
+- [x] My reviews: own submissions across all entity types, all
       statuses, owner-scoped, grouped by `InterviewProcess` (GitHub
       issue #149)
 - [ ] Update/Delete under moderation-safe rules: edits reset to

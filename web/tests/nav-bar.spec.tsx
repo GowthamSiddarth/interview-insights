@@ -47,4 +47,17 @@ describe('NavBar', () => {
     render(<NavBar />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument());
   });
+
+  it('hides the "My reviews" link when there is no candidate session', async () => {
+    setLoggedInCookie(false);
+    render(<NavBar />);
+    await screen.findByRole('link', { name: 'Log in' });
+    expect(screen.queryByRole('link', { name: 'My reviews' })).not.toBeInTheDocument();
+  });
+
+  it('shows a "My reviews" link when a candidate session exists', async () => {
+    setLoggedInCookie(true);
+    render(<NavBar />);
+    expect(await screen.findByRole('link', { name: 'My reviews' })).toHaveAttribute('href', '/me');
+  });
 });

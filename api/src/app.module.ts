@@ -15,6 +15,7 @@ import { ModerationModule } from './moderation/moderation.module';
 import { CandidateAuthModule } from './candidate-auth/candidate-auth.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { SearchModule } from './search/search.module';
+import { MeModule } from './me/me.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { SearchModule } from './search/search.module';
     CandidateAuthModule,
     AnalyticsModule,
     SearchModule,
+    MeModule,
   ],
 })
 export class AppModule {}
