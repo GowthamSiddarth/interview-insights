@@ -510,6 +510,58 @@ docs/DECISIONS.md D36) — safe to rerun on demand, deliberately **not**
 wired into `npm run test:e2e` or CI, since the per-feature e2e specs
 already own regression coverage; this is a manual sanity check.
 
+### 6.2 Cleaning up manual, ad hoc verification data safely
+
+The smoke test above (6.1) cleans up after itself — it targets the
+isolated test database and its own `e2etest-` OpenSearch prefix. Manual
+one-off verification against the real dev cluster (e.g. seeding a
+company through the real API to check a specific UI behavior live, the
+way Phase 21's soft-gate verification did) has no such isolation, and
+naive cleanup leaves real residue (docs/DECISIONS.md D44, a real
+incident, not a hypothetical): deleting rows directly from Postgres
+mirrors none of the side effects the app's own service layer would have
+applied on a real delete.
+
+**If you created data through the real API** (so it's genuinely
+indexed/queued, not just inserted), deleting it afterward needs **all
+three** of the following, in this order — not just the Postgres rows:
+
+1. **Gather the ids first** — `moderation_queue` has no foreign key to
+   any entity table (it's deliberately polymorphic, covering three
+   entity types), so once the underlying row is gone there's no way to
+   find its queue entry again:
+   ```sql
+   SELECT id FROM round_ratings WHERE ... ; -- note the ids
+   ```
+2. **Delete the `moderation_queue` entries**, then the entities
+   themselves, in FK-safe order (round_ratings → rounds →
+   overall_reviews → interview_processes → companies → candidates):
+   ```sql
+   DELETE FROM moderation_queue WHERE entity_id IN (<ids from step 1>);
+   ```
+3. **Delete the OpenSearch documents** — the `companies` index's
+   document id is the company's **UUID, not its slug** (confirmed
+   directly: deleting by slug silently returns `"result":"not_found"`,
+   which looks like success in a script that doesn't check the
+   response body):
+   ```bash
+   kubectl -n interview-insights exec opensearch-0 -- \
+     curl -s -X DELETE "http://localhost:9200/companies/_doc/<company-uuid>"
+   ```
+   Then force a refresh before trusting a "did it actually work" check
+   — `_search` can lag a `_delete` by up to the index's refresh
+   interval, and a stale read looks identical to a failed delete:
+   ```bash
+   kubectl -n interview-insights exec opensearch-0 -- \
+     curl -s -X POST 'http://localhost:9200/companies/_refresh'
+   ```
+
+This is a checklist, not a script, deliberately (D44) — the real
+delete/erasure code paths (issue #150, GDPR erasure) already do all of
+this correctly every time; the gap only exists when verification work
+bypasses the app entirely via raw SQL, which is inherently a one-off,
+manual situation each time it happens.
+
 ## 7. Self-hosted GitHub Actions runner (on-demand, Phase 12)
 
 Registered once; started manually whenever a workflow needs to run on

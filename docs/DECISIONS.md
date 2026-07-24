@@ -1650,6 +1650,60 @@ to be pruned out from under it) worth hardening against.
 
 ---
 
+### D44 — Manual test-data cleanup left stale moderation-queue entries and a stale OpenSearch company index; a checklist, not a code fix
+
+**Context:** a user report of "stale, unactionable records" in the
+moderation queue and company search, traced to Phase 21's (issue #226)
+live-verification cleanup earlier the same night. That verification
+seeded real content through the actual API (candidate login → company
+→ process → round ratings → overall review) so indexing/moderation
+would behave realistically, then approved it directly via raw SQL
+(deliberately, to avoid re-testing the moderation flow itself — see
+that phase's own blog post) and cleaned up afterward with direct
+`DELETE FROM companies/interview_processes/rounds/round_ratings/
+overall_reviews/candidates` statements against Postgres.
+
+That cleanup mirrored the *create* side effects (real API calls, so
+real indexing/queue entries) but not the *delete* ones — because there
+is no real "delete a company" or "delete an already-SQL-approved
+rating" path in the app to mirror. Confirmed directly: 5 orphaned
+`moderation_queue` rows (their underlying `round_rating`/
+`overall_review` rows fully gone from Postgres) and 4 stale OpenSearch
+`companies` documents (their source rows also fully gone) — not a
+production code bug. Every *real* delete path in this app —
+`RoundRatingsService.remove()`/`OverallReviewService.remove()` (issue
+#150) and `MeService.eraseMe()` (GDPR erasure, issue #151) — already
+correctly cleans up both `moderation_queue` and the OpenSearch index
+themselves. The gap only exists when something bypasses the app
+entirely via raw SQL, which is exactly what ad hoc live-verification
+work in this project does routinely.
+
+**Decision:** not a code fix — there's no application bug to fix, and
+adding defensive auto-pruning to `ModerationService.listPending()` for
+this specific, self-inflicted scenario would be solving a problem this
+project's own verification habits created, not one real usage
+produces. Instead, a permanent checklist in
+`wiki/deployment-guide.md` (section 6.2): any manual test-data cleanup
+via direct SQL must also explicitly clean up `moderation_queue`
+(`DELETE FROM moderation_queue WHERE entity_id IN (...)`, gathered
+*before* deleting the entities themselves, since the ids are needed for
+the query) and the OpenSearch `companies` index (`DELETE
+/companies/_doc/<company id>` — note the document id is the company's
+UUID, not its slug, confirmed directly after an initial attempt to
+delete by slug silently no-op'd with `"result":"not_found"`), plus a
+reminder that OpenSearch's `_search` results can lag a `_delete` by up
+to its refresh interval — call `POST /<index>/_refresh` before treating
+a "did my cleanup work" check as authoritative, or the deletion can
+look like it silently failed when it didn't.
+
+**Revisit when:** if this class of test-data residue becomes frequent
+enough that a small internal-only cleanup script
+(`infra/scripts/prune-test-companies.sh`, mirroring
+`prune-kind-node-images.sh`'s shape) is worth building — not justified
+yet for a handful of one-off incidents.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
