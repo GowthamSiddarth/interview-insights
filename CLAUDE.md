@@ -1787,6 +1787,32 @@ issues #236-237 closed via merged PRs, closing out all five original
 UI/UX brainstorm items, and every phase built so far has a complete
 engineering blog.
 
+**Phase 20 reopened a second time the same night (GitHub issue #240,
+D43)** — a CD deploy failed with the exact D35 crash signature
+(OpenSearch's flood-stage watermark → `api` crash-loop) but from a disk
+D35's fix never covers. D35's "Prune stale Docker artifacts" step only
+cleans the *host* Docker Desktop cache; `kind load docker-image` copies
+images into the *kind node's own internal containerd store* and
+retags forward without removing prior layers there — a separate
+location that one heavy day (Phases 20-23, ~8 rebuild+`kind load`
+cycles) pushed to 91% full on its own. Cross-referenced every running
+pod's actual image digest cluster-wide before removing anything —
+confirmed the then-running `api`/`web`/`ingress-nginx-controller`
+images were each depending on a digest only reachable via an untagged
+`import-*` entry (the tag had since moved past them), exactly the
+condition D35's own near-miss already warned about; a blind
+`crictl rmi --prune` would likely have repeated it for real. Also found
+live: `crictl rmi` doesn't reclaim disk until `containerd` itself is
+restarted afterward — deletion alone and restart alone each measured
+zero change, only both together freed space. New
+`infra/scripts/prune-kind-node-images.sh` captures exactly this
+keep-set-aware sequence, wired into `cd.yml` as a second `if: always()`
+prune step. Verified live against the real incident (91%→45% disk
+freed, stuck rollout unblocked) and again afterward against the
+now-clean cluster. **Phase 20 is now fully done** — issue #240 closed
+via merged PR, and every phase built so far has a complete engineering
+blog.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162

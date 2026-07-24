@@ -785,8 +785,8 @@ GitHub issue #214.
       wired into `cd.yml` as a second prune step; verified live against
       the real incident, freeing the node's disk from 91% to 45% and
       unblocking the stuck deploy (GitHub issue #240, D43)
-- [ ] Engineering blog update for issue #240 (D43) — Phase 20 is fully
-      done once this lands
+- [x] Engineering blog update for issue #240 (D43) — Phase 20 is now
+      fully done
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
