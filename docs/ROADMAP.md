@@ -630,13 +630,32 @@ Phase 2's Update/Delete deferral and the GDPR retention/erasure open
 decision. Milestone: "Phase 17 — Candidate Self-Service". Epic: GitHub
 issue #183.
 
+Kickoff brainstorm (before implementing, same pattern as Phase 16's)
+resolved three gaps the already-filed issues #149-151 left open, all
+folded back into their issue bodies before any code was written:
+`GET /me/submissions` groups by `InterviewProcess` rather than three
+flat lists (matches how a candidate actually thinks about "my
+reviews"); Update/Delete is explicitly scoped to the three moderated
+content types only (`RoundRating`/`RecruiterRating`/`OverallReview`) —
+never the structural entities — and gets its own per-candidate edit
+throttle (extending D13's pattern) to stop edit-churn on the
+moderation queue; GDPR erasure clears the requester's session cookies
+like logout and `CandidateJwtAuthGuard` starts verifying the
+candidateId still exists in the DB, so a stale post-erasure token gets
+a clean 401 instead of a downstream FK/not-found error, and shared
+`Recruiter` rows are explicitly excluded from erasure (they're
+per-company internal identity, referenced by potentially many
+candidates).
+
 - [ ] My reviews: own submissions across all entity types, all
-      statuses, owner-scoped (GitHub issue #149)
+      statuses, owner-scoped, grouped by `InterviewProcess` (GitHub
+      issue #149)
 - [ ] Update/Delete under moderation-safe rules: edits reset to
-      `pending` and re-enqueue, never modify public content in place
-      (GitHub issue #150)
+      `pending` and re-enqueue, never modify public content in place;
+      rate-limited (GitHub issue #150)
 - [ ] GDPR erasure path: `DELETE /me` + retention policy decided and
-      documented (GitHub issue #151)
+      documented; clears session cookies; shared `Recruiter` rows
+      excluded (GitHub issue #151)
 - [ ] Engineering blog (last) (GitHub issue #152)
 
 ## Phase 18 — Admin Authentication
