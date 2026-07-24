@@ -1044,10 +1044,80 @@ threshold introduced this way in this codebase.
 
 ---
 
+### D34 — GDPR erasure (`DELETE /me`, GitHub issue #151): delete, not anonymize; structural entities are in scope here even though #150's edits/deletes never touch them; a DB existence check on every candidate-session request
+
+**Decision:** Closes the retention/deletion open decision that had sat in
+`docs/DECISIONS.md`/CLAUDE.md's "Open decisions" since Phase 1.
+
+**Delete every row, don't anonymize anything.** No raw candidate identity
+is stored anywhere to begin with (`Candidate.emailHash` is an HMAC, never
+the raw email — docs/DATA_MODEL.md design principle 1), and the public
+aggregates this candidate's approved content fed into
+(`company_round_type_aggregates` etc.) are already de-identified
+statistics — out of GDPR scope once computed, and they simply recompute
+correctly on their next refresh once the underlying rows are gone. There
+was nothing here that needed a tombstone row to stay consistent, unlike
+some erasure designs that anonymize-in-place to preserve foreign-key
+shape; a hard delete is simpler and was the right call.
+
+**Structural entities (`InterviewProcess`/`Round`/`RecruiterInteraction`)
+are in scope for this erasure, even though issue #150's Update/Delete
+explicitly excluded them.** The two issues are answering different
+questions: #150 was about whether editing/deleting *content* (an opinion,
+a rating) should be allowed post-submission without undermining
+moderation — structural facts ("there was a round called X") aren't
+opinions, so they stayed permanent. GDPR erasure is about whether a
+person's data can persist after they ask for it to be gone — and
+`InterviewProcess.candidateId` is a required, non-nullable FK (no
+`onDelete: Cascade` in `schema.prisma`), so a process literally cannot
+exist without a candidate owning it. Deleting the account without also
+deleting its processes/rounds/interactions isn't an option Prisma's
+schema even permits (it would 23503 on the `Candidate` delete) — so
+`MeService.eraseMe()` deletes, in FK-safe order: `RoundRating`/
+`RecruiterRating`/`OverallReview` (+ their `moderation_queue` entries,
+gathered by id list up front — same idea as #150's
+`removeQueueEntries()`, batched here instead of one entity at a time) →
+`Round`/`RecruiterInteraction` → `InterviewProcess` →
+`CandidateVerificationToken` → `Candidate` last. An approved round
+rating's OpenSearch document is best-effort removed after the
+transaction commits, same D16/D17 pattern as every other search-index
+mutation.
+
+**The shared `Recruiter` row is never touched.** Only the candidate's own
+`RecruiterInteraction` rows are deleted — `Recruiter` is per-company
+internal identity (CLAUDE.md hard constraint #1), and another candidate's
+`RecruiterInteraction`/`RecruiterRating` referencing that same row (same
+company, same recruiter identifier — a real, not hypothetical, case) must
+survive completely unaffected. Proven directly in
+`gdpr-erasure.e2e-spec.ts`, not just asserted.
+
+**Stale-session handling (decided during the Phase 17 kickoff
+brainstorm, implemented here): `CandidateJwtStrategy.validate()` now
+queries `candidate.findUnique()` and throws `UnauthorizedException` if
+the candidateId no longer exists.** Candidate sessions are stateless
+JWTs with no server-side revocation list (Phase 16's own brainstorm
+decision) — without this check, a token issued before erasure (copied
+elsewhere, or a second device that never called `DELETE /me`) would
+still pass JWT signature/expiry verification and reach a route handler,
+which would then fail downstream with an FK or not-found error instead
+of a clean 401. The trade-off is one extra DB round trip on *every*
+authenticated candidate request, not just erasure-adjacent ones — an
+explicit, accepted cost for correctness over the stateless design's
+usual "no DB hit needed" appeal. `DELETE /me` itself also clears both
+session cookies (`candidate_session`/`candidate_logged_in`) the same way
+`POST /auth/logout` does, even though the strategy check alone would
+already 401 their next use.
+
+**Revisit when:** if candidate session volume ever makes the
+per-request `candidate.findUnique()` a real bottleneck — a short-TTL
+in-memory negative cache (only caching "this ID was erased," never
+caching a positive existence result past the JWT's own expiry) would be
+the natural next step, not reverting the check.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
 - Whether `company_overall_aggregates` should be sliced by role/level from
   the start or added later.
-- Retention/deletion policy for moderation queue + rejected content (GDPR
-  erasure path).

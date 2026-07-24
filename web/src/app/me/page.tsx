@@ -447,11 +447,62 @@ function OverallReviewItem({
   );
 }
 
+// GitHub issue #151 (GDPR erasure) — permanently deletes the account and
+// everything it submitted. A plain window.confirm (same as every other
+// delete on this page) but with wording explicit about scope and
+// irreversibility, since this is a much bigger action than deleting one
+// item. A hard navigation (not router.push) afterward, matching D32's
+// verify-redirect precedent: NavBar is mounted once in the root layout
+// and won't otherwise notice the session is gone.
+function DeleteAccountSection() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function eraseAccount(): Promise<void> {
+    if (
+      !window.confirm(
+        'Permanently delete your account and every review you\'ve submitted? This cannot be undone.',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteAccount();
+      window.location.href = '/';
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-red-300 p-4 dark:border-red-800">
+      <h2 className="font-medium text-red-700 dark:text-red-400">Danger zone</h2>
+      <p className="text-sm text-gray-500">
+        Permanently delete your account and every review you&apos;ve submitted, across every
+        status. This cannot be undone.
+      </p>
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+      <Button
+        type="button"
+        onClick={() => void eraseAccount()}
+        className="self-start bg-red-600 hover:bg-red-700"
+        disabled={busy}
+      >
+        Delete my account
+      </Button>
+    </section>
+  );
+}
+
 // GitHub issue #149 — the one page where a candidate sees their own
 // pending/rejected/flagged content, never just what's already public.
 // Gated on the session-hint cookie (same pattern as NavBar/the wizard —
 // GitHub issue #147/D32), not a GET /me/me network probe. GitHub issue
-// #150 added the Edit/Delete controls on each item below.
+// #150 added the Edit/Delete controls on each item below; #151 added the
+// account-erasure "Danger zone" section at the bottom.
 export default function MyReviewsPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [submissions, setSubmissions] = useState<MyProcessSubmissions[] | null>(null);
@@ -572,6 +623,8 @@ export default function MyReviewsPage() {
           </section>
         );
       })}
+
+      <DeleteAccountSection />
     </PageContainer>
   );
 }

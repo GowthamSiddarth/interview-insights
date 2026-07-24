@@ -653,9 +653,9 @@ candidates).
 - [x] Update/Delete under moderation-safe rules: edits reset to
       `pending` and re-enqueue, never modify public content in place;
       rate-limited (GitHub issue #150) — see D33
-- [ ] GDPR erasure path: `DELETE /me` + retention policy decided and
+- [x] GDPR erasure path: `DELETE /me` + retention policy decided and
       documented; clears session cookies; shared `Recruiter` rows
-      excluded (GitHub issue #151)
+      excluded (GitHub issue #151) — see D34
 - [ ] Engineering blog (last) (GitHub issue #152)
 
 ## Phase 18 — Admin Authentication
