@@ -1764,6 +1764,29 @@ confirming cards visually read as elevated — zero console errors.
 **Phase 22 is now fully done** — issues #231-232 closed via merged PRs,
 and every phase built so far has a complete engineering blog.
 
+**Phase 23 (Color System & Brand Mark)** — the two directions
+deliberately scoped out of Phase 22 as design-taste calls: `Button`
+gained a `variant?: 'primary' | 'danger' | 'neutral' | 'warning'` prop,
+formalizing colors already doing real work in the app (indigo/red/
+gray/amber) rather than introducing a new accent hue — replaces 10
+duplicated inline `bg-red-600`/`bg-gray-600` overrides across
+`me/page.tsx`/`moderation/page.tsx`. `Button` and every repeated
+text-input class string also gained visible `focus`/`focus-visible`
+ring styling, a real accessibility gap, not decoration. A new
+`BrandMark` component (an inline SVG star badge, no external asset —
+same self-contained approach as `next/font/google`) sits beside the
+"Interview Insights" wordmark in `NavBar` and doubles as the site
+favicon via Next.js's `app/icon.svg` convention. 65 web tests, lint,
+build all green (`button.spec.tsx`'s default-variant assertion and
+`nav-bar.spec.tsx`'s accessible-name assertion both passed unchanged);
+live-verified against the real `kind` cluster: favicon serves at
+`/icon.svg`, brand mark renders, focus ring shows on input focus, a
+real logged-in session's "Delete my account" button computes to the
+correct red — zero console errors. **Phase 23 is now fully done** —
+issues #236-237 closed via merged PRs, closing out all five original
+UI/UX brainstorm items, and every phase built so far has a complete
+engineering blog.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162

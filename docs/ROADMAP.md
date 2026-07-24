@@ -836,5 +836,5 @@ Mark". Epic: GitHub issue #235.
       component (an inline SVG star badge, no external asset) placed in
       `NavBar` and reused as the site favicon via `app/icon.svg`
       (GitHub issue #236, D42)
-- [ ] Engineering blog (last) (GitHub issue #237) — implemented once
-      issue #236 merges
+- [x] Engineering blog (last) (GitHub issue #237) — Phase 23 is now
+      fully done
