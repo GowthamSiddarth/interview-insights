@@ -794,5 +794,5 @@ Soft-Gating". Epic: GitHub issue #225.
       sections behind one combined prompt. The homepage wizard's company
       picker and "Change company" button stay ungated — pure navigation
       with no data to tease (GitHub issue #226, D40)
-- [ ] Engineering blog (last) (GitHub issue #227) — implemented once
-      issue #226 merges
+- [x] Engineering blog (last) (GitHub issue #227) — Phase 21 is now
+      fully done
