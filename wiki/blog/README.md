@@ -190,3 +190,13 @@ candidate signup pressure that partially reverses Phase 15's fully-
 public design intent — this phase's blog is complete.
 
 1. [Soft-gate company profile & analytics pages (D40)](phase-21-anonymous-visitor-soft-gating/README.md)
+
+## Phase 22 — Visual Design Refresh
+
+See `docs/ROADMAP.md` Phase 22. A mechanical visual-polish pass — not
+a redesign — addressing "looks simple but not cool": typography,
+depth/surface, and layout width, with color-palette expansion and a
+brand mark deliberately scoped out as a second-pass option — this
+phase's blog is complete.
+
+1. [Typography, depth/surface, and layout-width pass (D41)](phase-22-visual-design-refresh/README.md)

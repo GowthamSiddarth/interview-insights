@@ -1739,6 +1739,31 @@ logged-in visits show everything, zero console errors. **Phase 21 is now
 fully done** — issues #226-227 closed via merged PRs, and every phase
 built so far has a complete engineering blog.
 
+**Phase 22 (Visual Design Refresh)** — a mechanical visual-polish pass,
+not a redesign, from the same brainstorm as Phase 21, addressing "looks
+simple but not cool." An inventory found real, concrete gaps: no custom
+font/theme, no page background at all (light or dark — a real
+prerequisite gap, since a card's shadow needs a distinct background to
+read as elevated), and 11 call sites duplicating the identical
+flat-border card string independently. Fixed with `Inter` via
+`next/font/google` (self-hosted at build time), an explicit
+`bg-gray-50`/`dark:bg-gray-950` page background, a new `Card` component
+(`rounded-xl` + `shadow-sm`, an `as="div"|"section"` prop to preserve
+document-outline semantics), controls bumped to `rounded-md` with
+`transition-colors` added everywhere (a clean addition — no
+`transition-*` existed anywhere before), and a `PageContainer` `size`
+prop (narrow for forms, wide for search/profile/analytics/moderation)
+with `NavBar`'s own width synced to match. Color-palette expansion and
+a real brand mark were explicitly scoped out as a second-pass option —
+both are subjective design-taste calls, not mechanical fixes. 65 web
+tests, lint, build all green; live-verified against the real `kind`
+cluster via headless-browser (Playwright): confirmed the font actually
+loaded, the correct page background per theme, correct container widths
+(672px narrow / 896px wide), and took screenshots in both themes
+confirming cards visually read as elevated — zero console errors.
+**Phase 22 is now fully done** — issues #231-232 closed via merged PRs,
+and every phase built so far has a complete engineering blog.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
