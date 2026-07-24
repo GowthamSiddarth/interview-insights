@@ -5,10 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
+import { loginAsCandidate } from './support/candidate-session';
 
-interface CandidateBody {
-  id: string;
-}
 interface CompanyBody {
   id: string;
 }
@@ -36,12 +34,18 @@ function body<T>(res: request.Response): T {
 // Proves the recruiter-interaction + recruiter-rating write path (Phase 14
 // issue #125) end to end: RecruiterInteraction/RecruiterRating had schema
 // since Phase 1 but no write path until this issue, and moderation for
-// recruiter_rating threw NotImplementedException until now.
+// recruiter_rating threw NotImplementedException until now. Rating
+// creation is candidate-session-gated since GitHub issue #146 — recruiter
+// interaction creation itself stays unauthenticated (it has no candidateId
+// field at all, see docs/DECISIONS.md D30's note on the schema).
 describe('Recruiter interactions + ratings (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
 
-  beforeAll(async () => {
+  // A fresh app per test — see overall-reviews.e2e-spec.ts's comment for
+  // why a shared beforeAll instance is fragile once several tests each
+  // need their own candidate login.
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -56,7 +60,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     adminCookie = await loginAsAdmin(app);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -66,12 +70,8 @@ describe('Recruiter interactions + ratings (e2e)', () => {
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
   const uniqueRecruiterIdentifier = () => `recruiter-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-  async function createCandidateAndProcess(): Promise<{ candidateId: string; processId: string }> {
-    const candidateRes = await server()
-      .post('/candidates')
-      .send({ email: uniqueEmail() })
-      .expect(200);
-    const candidateId = body<CandidateBody>(candidateRes).id;
+  async function createCandidateAndProcess(): Promise<{ cookie: string; processId: string }> {
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
     const companyRes = await server()
       .post('/companies')
@@ -81,19 +81,20 @@ describe('Recruiter interactions + ratings (e2e)', () => {
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
-      .send({ candidateId, roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
       .expect(201);
     const processId = body<ProcessBody>(processRes).id;
 
-    return { candidateId, processId };
+    return { cookie, processId };
   }
 
   async function submitRating(): Promise<{
-    candidateId: string;
+    cookie: string;
     interactionId: string;
     ratingId: string;
   }> {
-    const { candidateId, processId } = await createCandidateAndProcess();
+    const { cookie, processId } = await createCandidateAndProcess();
 
     const interactionRes = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
@@ -103,8 +104,8 @@ describe('Recruiter interactions + ratings (e2e)', () => {
 
     const ratingRes = await server()
       .post(`/recruiter-interactions/${interactionId}/ratings`)
+      .set('Cookie', cookie)
       .send({
-        candidateId,
         approachability: 4,
         responseTime: 3,
         timeliness: 5,
@@ -113,7 +114,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;
 
-    return { candidateId, interactionId, ratingId };
+    return { cookie, interactionId, ratingId };
   }
 
   async function findQueueEntryFor(ratingId: string): Promise<QueueEntryBody> {
@@ -143,7 +144,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     // this just proves the endpoint works twice with the same identifier
     // without erroring, not cross-company identity (out of scope here).
     expect(body<InteractionBody>(first).id).not.toBe(body<InteractionBody>(second).id);
-  });
+  }, 15000);
 
   it('submitting a rating starts pending and enqueues a matching moderation_queue entry', async () => {
     const { ratingId } = await submitRating();
@@ -151,7 +152,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     const entry = await findQueueEntryFor(ratingId);
     expect(entry.entityType).toBe('recruiter_rating');
     expect(entry.reviewedAt).toBeNull();
-  });
+  }, 15000);
 
   it('approving a pending recruiter rating makes it publicly visible', async () => {
     const { interactionId, ratingId } = await submitRating();
@@ -167,7 +168,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .get(`/recruiter-interactions/${interactionId}/ratings`)
       .expect(200);
     expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).toContain(ratingId);
-  });
+  }, 15000);
 
   it('rejecting a pending recruiter rating keeps it out of the public list', async () => {
     const { interactionId, ratingId } = await submitRating();
@@ -183,22 +184,22 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .get(`/recruiter-interactions/${interactionId}/ratings`)
       .expect(200);
     expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).not.toContain(ratingId);
-  });
+  }, 15000);
 
   it('rejects a second rating from the same candidate for the same interaction', async () => {
-    const { candidateId, interactionId } = await submitRating();
+    const { cookie, interactionId } = await submitRating();
 
     await server()
       .post(`/recruiter-interactions/${interactionId}/ratings`)
+      .set('Cookie', cookie)
       .send({
-        candidateId,
         approachability: 3,
         responseTime: 3,
         timeliness: 3,
         communicationQuality: 3,
       })
       .expect(409);
-  });
+  }, 15000);
 
   it('returns 404 for a non-existent process when creating an interaction', async () => {
     await server()
@@ -214,5 +215,5 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .post(`/processes/${processId}/recruiter-interactions`)
       .send({})
       .expect(400);
-  });
+  }, 15000);
 });

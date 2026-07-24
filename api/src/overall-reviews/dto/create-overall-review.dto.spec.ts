@@ -3,7 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { CreateOverallReviewDto } from './create-overall-review.dto';
 
 const valid = {
-  candidateId: '123e4567-e89b-12d3-a456-426614174000',
   overallExperience: 4,
   wouldRecommend: true,
 };
@@ -39,11 +38,5 @@ describe('CreateOverallReviewDto', () => {
     const dto = plainToInstance(CreateOverallReviewDto, rest);
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'wouldRecommend')).toBe(true);
-  });
-
-  it('rejects a non-UUID candidateId', async () => {
-    const dto = plainToInstance(CreateOverallReviewDto, { ...valid, candidateId: 'nope' });
-    const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'candidateId')).toBe(true);
   });
 });

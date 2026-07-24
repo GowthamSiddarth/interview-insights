@@ -12,7 +12,6 @@ describe('OverallReviewsService', () => {
   let moderationService: { enqueue: jest.Mock };
 
   const dto = {
-    candidateId: 'candidate-1',
     overallExperience: 4,
     wouldRecommend: true,
   };
@@ -38,16 +37,16 @@ describe('OverallReviewsService', () => {
     service = module.get(OverallReviewsService);
   });
 
-  it('creates the review scoped to the given process', async () => {
-    await service.create('process-1', dto);
+  it('creates the review scoped to the given process and candidate', async () => {
+    await service.create('process-1', 'candidate-1', dto);
 
     expect(prisma.overallReview.create).toHaveBeenCalledWith({
-      data: { ...dto, processId: 'process-1' },
+      data: { ...dto, processId: 'process-1', candidateId: 'candidate-1' },
     });
   });
 
   it('enqueues the new review for moderation', async () => {
-    await service.create('process-1', dto);
+    await service.create('process-1', 'candidate-1', dto);
 
     expect(moderationService.enqueue).toHaveBeenCalledWith('overall_review', 'review-1', prisma);
   });

@@ -3,7 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { CreateInterviewProcessDto } from './create-interview-process.dto';
 
 const valid = {
-  candidateId: '123e4567-e89b-12d3-a456-426614174000',
   roleTitle: 'Senior Backend Engineer',
   outcome: 'in_progress',
 };
@@ -22,12 +21,6 @@ describe('CreateInterviewProcessDto', () => {
       applicationDate: '2026-01-15',
     });
     expect(await validate(dto)).toHaveLength(0);
-  });
-
-  it('rejects a non-UUID candidateId', async () => {
-    const dto = plainToInstance(CreateInterviewProcessDto, { ...valid, candidateId: 'nope' });
-    const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'candidateId')).toBe(true);
   });
 
   it('rejects an invalid outcome', async () => {

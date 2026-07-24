@@ -3,7 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { CreateRoundRatingDto } from './create-round-rating.dto';
 
 const valid = {
-  candidateId: '123e4567-e89b-12d3-a456-426614174000',
   difficulty: 3,
   fairness: 4,
   communicationFluency: 5,
@@ -36,12 +35,6 @@ describe('CreateRoundRatingDto', () => {
     const dto = plainToInstance(CreateRoundRatingDto, { ...valid, technicalDepth: 6 });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'technicalDepth')).toBe(true);
-  });
-
-  it('rejects a non-UUID candidateId', async () => {
-    const dto = plainToInstance(CreateRoundRatingDto, { ...valid, candidateId: 'nope' });
-    const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'candidateId')).toBe(true);
   });
 
   it('rejects a missing required rating field', async () => {

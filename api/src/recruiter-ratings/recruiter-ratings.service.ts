@@ -15,10 +15,10 @@ export class RecruiterRatingsService {
   // transaction. No fraud-check wiring here — FraudChecksService is
   // round_rating-specific today (docs/DECISIONS.md D13); extending it to
   // other entity types is out of this issue's scope.
-  create(recruiterInteractionId: string, dto: CreateRecruiterRatingDto) {
+  create(recruiterInteractionId: string, candidateId: string, dto: CreateRecruiterRatingDto) {
     return this.prisma.$transaction(async (tx) => {
       const rating = await tx.recruiterRating.create({
-        data: { ...dto, recruiterInteractionId },
+        data: { ...dto, recruiterInteractionId, candidateId },
       });
       await this.moderationService.enqueue('recruiter_rating', rating.id, tx);
       return rating;

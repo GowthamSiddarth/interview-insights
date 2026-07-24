@@ -851,8 +851,68 @@ sequences, so they pass through as literal text.
 
 **Revisit when:** a second admin (Phase 18's own scope note) or a
 requirement for server-side session revocation ever arrives — either
-would reopen the "stateless JWT is enough" call this D30 and Phase
-18's D-something both made independently, for the same reasons.
+would reopen the "stateless JWT is enough" call this D30 makes, the
+same choice Phase 18's admin-auth session design made independently
+(without its own dedicated D-entry) for the same reasons.
+
+---
+
+### D31 — Every candidateId-bearing write requires a session; unauthenticated gets a plain 401, no fallback
+
+**Decision:** GitHub issue #146 made `candidateId` come exclusively from
+the authenticated session (`CurrentCandidateId`, backed by
+`CandidateJwtAuthGuard`) on every write path that has a `candidateId`
+column — which turned out to be **four**, not the three named in the
+issue's own prose ("round rating, recruiter interaction+rating, overall
+review"): `InterviewProcess` creation
+(`POST /companies/:companyId/processes`) also has one and was easy to
+miss on a first read of the issue text alone. Confirmed by grepping the
+Prisma schema directly for every `candidateId` field rather than
+trusting the issue's wording — `RecruiterInteraction` itself has no
+`candidateId` (only `RecruiterRating`, its child, does), so "recruiter
+interaction+rating" in the issue was really naming one write path, not
+two, and the schema search is what surfaced the real fourth one.
+
+An unauthenticated request to any of the four gets a plain 401 — no
+anonymous-submission fallback, no grace period. This is the explicit
+answer to the issue's own "decide (and document) what happens to
+unauthenticated submission" bullet. The practical consequence: `web`'s
+wizard, which starts with a "candidate email" step calling the now-
+removed `POST /candidates`, is broken from this commit forward — not a
+regression, the same deliberate "the frontend catches up in the next
+issue" sequencing Phase 18 used (issue #159 broke the moderation UI on
+purpose; issue #160 fixed it). Issue #147 (login/logout UI + wizard
+integration) is that catch-up here.
+
+**`POST /candidates` removed entirely, not just gated:** candidate
+creation is upsert-by-email logic (`CandidatesService.create()`) that
+now only runs *inside* `POST /auth/request-link` — there is no public
+route left that calls it directly. Keeping a standalone
+`POST /candidates` around (even gated behind nothing, as before) would
+have been a second, parallel way to mint a candidate identity without
+ever proving email ownership — undermining the entire point of this
+issue for that one endpoint. `GET /candidates/:id` stays public and
+unchanged — it's a read, not a write, and out of this issue's scope.
+
+**e2e pattern established here, worth reusing:** `api/test/support/
+candidate-session.ts`'s `loginAsCandidate()` drives the real
+request-link → Mailpit → verify → cookie loop for any test that needs
+an authenticated candidate — the same shape as `admin-session.ts`'s
+`loginAsAdmin()`. Every affected e2e spec was also converted from a
+shared `beforeAll` app to a fresh app per test (`beforeEach`/`afterEach`)
+— a shared instance's cumulative `/auth/request-link` calls across a
+whole file's tests routinely exceeded `MagicLinkThrottleService`'s
+5-per-window limit once several tests each needed their own candidate
+login (`overall-reviews.e2e-spec.ts` hit this directly; several others
+were sitting exactly at the boundary, one added test away from the same
+failure). This is now the default pattern for any e2e spec that logs in
+more than once or twice per file.
+
+**Revisit when:** issue #147 rebuilds the wizard against session-based
+auth — at that point `web/src/lib/api.ts`'s `createCandidate()` client
+method (calling the now-nonexistent route) needs removing too, and the
+wizard's flow needs restructuring around "log in first," not "enter an
+email inline."
 
 ---
 

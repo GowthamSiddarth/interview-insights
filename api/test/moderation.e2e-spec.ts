@@ -5,10 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
+import { loginAsCandidate } from './support/candidate-session';
 
-interface CandidateBody {
-  id: string;
-}
 interface CompanyBody {
   id: string;
 }
@@ -45,7 +43,12 @@ describe('Moderation (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
 
-  beforeAll(async () => {
+  // A fresh app (and therefore fresh admin-login and candidate
+  // magic-link-request throttle state) per test — see
+  // overall-reviews.e2e-spec.ts's comment for why a shared beforeAll
+  // instance is fragile once several tests each need their own
+  // candidate login.
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -60,7 +63,7 @@ describe('Moderation (e2e)', () => {
     adminCookie = await loginAsAdmin(app);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -69,12 +72,8 @@ describe('Moderation (e2e)', () => {
   const uniqueSlug = () => `acme-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-  async function submitRating(): Promise<{ candidateId: string; roundId: string; ratingId: string }> {
-    const candidateRes = await server()
-      .post('/candidates')
-      .send({ email: uniqueEmail() })
-      .expect(200);
-    const candidateId = body<CandidateBody>(candidateRes).id;
+  async function submitRating(): Promise<{ roundId: string; ratingId: string }> {
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
     const companyRes = await server()
       .post('/companies')
@@ -84,7 +83,8 @@ describe('Moderation (e2e)', () => {
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
-      .send({ candidateId, roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
       .expect(201);
     const processId = body<ProcessBody>(processRes).id;
 
@@ -96,8 +96,8 @@ describe('Moderation (e2e)', () => {
 
     const ratingRes = await server()
       .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', cookie)
       .send({
-        candidateId,
         difficulty: 3,
         fairness: 4,
         communicationFluency: 5,
@@ -107,7 +107,7 @@ describe('Moderation (e2e)', () => {
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;
 
-    return { candidateId, roundId, ratingId };
+    return { roundId, ratingId };
   }
 
   async function findQueueEntryFor(ratingId: string): Promise<QueueEntryBody> {

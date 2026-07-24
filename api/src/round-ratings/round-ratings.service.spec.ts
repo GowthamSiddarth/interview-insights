@@ -11,7 +11,6 @@ describe('RoundRatingsService', () => {
   let fraudChecksService: { detectFlagReason: jest.Mock };
 
   const dto = {
-    candidateId: 'candidate-1',
     difficulty: 3,
     fairness: 4,
     communicationFluency: 5,
@@ -40,7 +39,7 @@ describe('RoundRatingsService', () => {
   });
 
   it('checks pre-existing rows for fraud signals before creating the rating', async () => {
-    await service.create('round-1', dto);
+    await service.create('round-1', 'candidate-1', dto);
 
     expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
       'candidate-1',
@@ -50,10 +49,19 @@ describe('RoundRatingsService', () => {
     expect(prisma.roundRating.create).toHaveBeenCalled();
   });
 
+  it('attributes the rating to the given candidateId, not anything from the dto', async () => {
+    await service.create('round-1', 'candidate-1', dto);
+
+    expect(prisma.roundRating.create).toHaveBeenCalledWith({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.objectContaining() is typed `any` by @types/jest
+      data: expect.objectContaining({ candidateId: 'candidate-1', roundId: 'round-1' }),
+    });
+  });
+
   it('passes the detected flagReason through to the moderation queue entry', async () => {
     fraudChecksService.detectFlagReason.mockResolvedValue('rate_limit');
 
-    await service.create('round-1', dto);
+    await service.create('round-1', 'candidate-1', dto);
 
     expect(moderationService.enqueue).toHaveBeenCalledWith(
       'round_rating',
@@ -64,7 +72,7 @@ describe('RoundRatingsService', () => {
   });
 
   it('enqueues with no flagReason when nothing is flagged', async () => {
-    await service.create('round-1', dto);
+    await service.create('round-1', 'candidate-1', dto);
 
     expect(moderationService.enqueue).toHaveBeenCalledWith(
       'round_rating',

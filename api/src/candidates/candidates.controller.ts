@@ -1,16 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
-import { CreateCandidateDto } from './dto/create-candidate.dto';
 
+// POST / (candidate creation) was removed here (GitHub issue #146) — it's
+// now part of the auth flow (POST /auth/request-link upserts internally
+// via CandidatesService.create(), never exposed as its own public route)
+// rather than a standalone endpoint anyone could call directly to mint a
+// candidate identity without ever proving email ownership.
 @Controller('candidates')
 export class CandidatesController {
   constructor(private readonly candidatesService: CandidatesService) {}
-
-  @Post()
-  @HttpCode(HttpStatus.OK)
-  create(@Body() dto: CreateCandidateDto) {
-    return this.candidatesService.create(dto);
-  }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {

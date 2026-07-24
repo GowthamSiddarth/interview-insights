@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { CandidateJwtAuthGuard } from '../candidate-auth/guards/candidate-jwt-auth.guard';
+import { CurrentCandidateId } from '../candidate-auth/current-candidate.decorator';
 import { OverallReviewsService } from './overall-reviews.service';
 import { CreateOverallReviewDto } from './dto/create-overall-review.dto';
 
@@ -10,11 +12,13 @@ export class OverallReviewsController {
   constructor(private readonly overallReviewsService: OverallReviewsService) {}
 
   @Post()
+  @UseGuards(CandidateJwtAuthGuard)
   create(
     @Param('processId', ParseUUIDPipe) processId: string,
+    @CurrentCandidateId() candidateId: string,
     @Body() dto: CreateOverallReviewDto,
   ) {
-    return this.overallReviewsService.create(processId, dto);
+    return this.overallReviewsService.create(processId, candidateId, dto);
   }
 
   @Get()
