@@ -1590,6 +1590,66 @@ lightweight, functional placeholder, not a final brand system.
 
 ---
 
+### D43 — CD's disk-pressure fix (D35) didn't cover the kind node's own containerd store; a keep-set-aware prune script does (GitHub issue #240)
+
+**Context:** a CD run failed the same night — same crash signature as
+D35 (OpenSearch `cluster_block_exception` from a tripped flood-stage
+watermark), same underlying cause (disk pressure on the self-hosted
+runner), but a genuinely different disk than D35's fix touches. `cd.yml`'s
+"Prune stale Docker artifacts" step (D35) only prunes the *host* Docker
+Desktop cache. `kind load docker-image` copies the built image into the
+**kind node's own internal containerd store** and retags forward,
+never removing the layers the previous build left there — a completely
+separate location the host-level prune never reaches. One unusually
+heavy day (Phases 20-23, ~8 rebuild+`kind load` cycles for live
+verification) pushed the node's own filesystem to 91% full, tripping
+the same watermark again. Confirmed directly: `crictl images` on the
+node showed 48 images totaling 27GB, overwhelmingly untagged
+`import-2026-07-*` entries — exactly what `kind load`'s retag-forward
+behavior produces over many rebuilds.
+
+**Decision:**
+- New `infra/scripts/prune-kind-node-images.sh`, wired into `cd.yml` as
+  a second `if: always()` prune step alongside D35's host-level one.
+  Deliberately **not** a blind `crictl rmi --prune` — D35's own
+  near-miss already documented why: kubelet/containerd track a running
+  container by image digest, not tag, so a tag moving forward to a new
+  build can leave an already-running pod depending on a digest no
+  longer reachable by any tag, and `--prune`'s "unreferenced" logic
+  doesn't account for that. Confirmed live, not theoretically: at the
+  time of this incident, both currently-running `api`/`web` pods *and*
+  `ingress-nginx-controller` (the exact image D35's near-miss almost
+  deleted) were each depending on a digest only reachable via one of
+  the untagged `import-*` entries, since the `:k8s` tag had since moved
+  past them.
+- The script instead computes the set of image digests currently in
+  use by any pod in any namespace (the real source of truth for "safe
+  to delete," not just this app's own namespace) and removes only
+  node-side images that are both untagged and outside that keep set.
+- Also found live: `crictl rmi` doesn't reclaim disk immediately on its
+  own — a deletion reports success without `df` reflecting it until
+  `containerd` itself is restarted, which triggers the actual
+  garbage-collection pass. Confirmed directly: a single deletion plus a
+  prior `systemctl restart containerd` measurably freed disk once
+  combined; either alone measured zero change. The script restarts
+  containerd after removing images — already-running containers
+  survive this, since it restarts only the management daemon.
+
+**Verified live**: ran the script against the actual incident (node at
+91% full) — it correctly removed every genuinely-orphaned image while
+leaving the then-running `api`/`web`/`ingress-nginx-controller` images
+untouched, freed disk to 45%, cleared OpenSearch's blocks, and the
+subsequent rollout succeeded. Re-ran afterward against the now-clean
+cluster and it correctly found and removed only the single image
+orphaned by that same rollout's own pod termination.
+
+**Revisit when:** if this recurs despite the fix — would mean the
+keep-set computation has a gap (e.g., a pod in `Pending`/
+`ContainerCreating` with no `imageID` yet, referencing an image about
+to be pruned out from under it) worth hardening against.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

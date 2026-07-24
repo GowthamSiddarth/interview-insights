@@ -770,8 +770,23 @@ GitHub issue #214.
       on any deployed environment — verified via `Set-Cookie` through
       the real Ingress and a live headless-browser run confirming
       "Log out" renders correctly (GitHub issue #222, D39)
-- [x] Engineering blog update for issue #222 (D39) — Phase 20 is now
-      fully done
+- [x] Engineering blog update for issue #222 (D39) — Phase 20 declared
+      fully done, then reopened a second time the same night: a CD
+      deploy failed with the exact D35 crash signature (OpenSearch's
+      flood-stage watermark) but from a disk D35's fix never covered —
+      the kind node's own internal containerd store, filled by
+      repeated `kind load docker-image` calls across a single heavy day
+      (GitHub issue #240, D43). Epic #214 and milestone #17 reopened
+      again, same precedent already set twice this phase.
+- [x] `infra/scripts/prune-kind-node-images.sh` safely prunes the kind
+      node's own orphaned images — cross-references every pod's actual
+      running image digest cluster-wide before removing anything
+      (never a blind `crictl rmi --prune`, per D35's own near-miss),
+      wired into `cd.yml` as a second prune step; verified live against
+      the real incident, freeing the node's disk from 91% to 45% and
+      unblocking the stuck deploy (GitHub issue #240, D43)
+- [ ] Engineering blog update for issue #240 (D43) — Phase 20 is fully
+      done once this lands
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
