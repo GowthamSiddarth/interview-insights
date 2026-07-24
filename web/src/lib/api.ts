@@ -317,6 +317,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
     throw new ApiError(res.status, message ?? `Request to ${path} failed with ${res.status}`);
   }
+  // 204 No Content (the update/delete DELETE routes, GitHub issue #150) has
+  // no body to parse — res.json() would throw on the empty string.
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -367,6 +370,29 @@ export const api = {
   listApprovedRatingsForRound: (roundId: string) =>
     request<RoundRating[]>(`/rounds/${roundId}/ratings`),
 
+  // GitHub issue #150 — an edit never modifies public content in place; the
+  // server resets status to `pending` and re-enqueues for moderation.
+  updateRoundRating: (
+    roundId: string,
+    id: string,
+    input: {
+      difficulty: number;
+      fairness: number;
+      communicationFluency: number;
+      attentiveness: number;
+      biasSignal: number;
+      technicalDepth?: number;
+      freeText?: string;
+    },
+  ) =>
+    request<RoundRating>(`/rounds/${roundId}/ratings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  deleteRoundRating: (roundId: string, id: string) =>
+    request<void>(`/rounds/${roundId}/ratings/${id}`, { method: 'DELETE' }),
+
   createRecruiterInteraction: (processId: string, input: { recruiterIdentifier: string }) =>
     request<RecruiterInteraction>(`/processes/${processId}/recruiter-interactions`, {
       method: 'POST',
@@ -388,6 +414,27 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  updateRecruiterRating: (
+    recruiterInteractionId: string,
+    id: string,
+    input: {
+      approachability: number;
+      responseTime: number;
+      timeliness: number;
+      communicationQuality: number;
+      freeText?: string;
+    },
+  ) =>
+    request<RecruiterRating>(`/recruiter-interactions/${recruiterInteractionId}/ratings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  deleteRecruiterRating: (recruiterInteractionId: string, id: string) =>
+    request<void>(`/recruiter-interactions/${recruiterInteractionId}/ratings/${id}`, {
+      method: 'DELETE',
+    }),
+
   createOverallReview: (
     processId: string,
     input: {
@@ -400,6 +447,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  // Singular resource — no separate id, same as createOverallReview.
+  updateOverallReview: (
+    processId: string,
+    input: { overallExperience: number; wouldRecommend: boolean; reviewText?: string },
+  ) =>
+    request<OverallReview>(`/processes/${processId}/overall-review`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  deleteOverallReview: (processId: string) =>
+    request<void>(`/processes/${processId}/overall-review`, { method: 'DELETE' }),
 
   requestMagicLink: (email: string) =>
     request<{ status: string }>('/auth/request-link', {

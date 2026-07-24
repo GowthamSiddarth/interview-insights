@@ -37,6 +37,25 @@ export class ModerationService {
     return tx.moderationQueueEntry.create({ data: { entityType, entityId, flagReason } });
   }
 
+  // Called by an entity's update() path (GitHub issue #150): an edit
+  // resets the entity to `pending` and must get a fresh queue entry, but
+  // if the previous submission is still unreviewed at edit time, leaving
+  // that old entry alongside a new one would let a moderator review the
+  // same entity twice — superseding (deleting) any still-unreviewed
+  // entry first keeps exactly one live entry per entity.
+  async reenqueue(entityType: ModerationEntityType, entityId: string, tx: PrismaTransaction = this.prisma) {
+    await tx.moderationQueueEntry.deleteMany({ where: { entityType, entityId, reviewedAt: null } });
+    return tx.moderationQueueEntry.create({ data: { entityType, entityId } });
+  }
+
+  // Called by an entity's delete path (GitHub issue #150): the entity
+  // itself is gone, so every queue entry pointing at it — reviewed or
+  // not — is removed too, since moderation_queue's reference is
+  // polymorphic (not an FK) and nothing else would ever clean it up.
+  removeQueueEntries(entityType: ModerationEntityType, entityId: string, tx: PrismaTransaction = this.prisma) {
+    return tx.moderationQueueEntry.deleteMany({ where: { entityType, entityId } });
+  }
+
   // Unreviewed queue entries, each enriched with its underlying entity's
   // own fields plus display context (company, role, generated labels) —
   // the moderation UI (Phase 14 issue #128) must be able to review an

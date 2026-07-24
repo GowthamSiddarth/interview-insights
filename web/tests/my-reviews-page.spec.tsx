@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import MyReviewsPage from '../src/app/me/page';
 
@@ -17,6 +18,37 @@ function mockSubmissions(body: unknown) {
     throw new Error(`Unmocked fetch: ${url}`);
   }) as jest.Mock;
 }
+
+const roundRatingSubmission = [
+  {
+    processId: 'process-1',
+    companyId: 'company-1',
+    companyName: 'Acme Corp',
+    companySlug: 'acme-corp',
+    roleTitle: 'Senior Engineer',
+    outcome: 'in_progress',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    roundRatings: [
+      {
+        id: 'rating-1',
+        roundId: 'round-1',
+        roundTitle: 'Technical Screen',
+        roundType: 'coding',
+        status: 'approved',
+        difficulty: 3,
+        fairness: 4,
+        communicationFluency: 4,
+        attentiveness: 4,
+        biasSignal: 5,
+        technicalDepth: null,
+        freeText: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      },
+    ],
+    recruiterRatings: [],
+    overallReview: null,
+  },
+];
 
 describe('MyReviewsPage (GitHub issue #149)', () => {
   afterEach(() => {
@@ -119,5 +151,89 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     render(<MyReviewsPage />);
 
     expect(await screen.findByText('No ratings submitted for this process yet.')).toBeInTheDocument();
+  });
+
+  // GitHub issue #150: an edit resets the item to pending — this test
+  // proves the client sends a PATCH to the right URL and reloads the list
+  // afterward (which is why the list mock has to answer /me/submissions
+  // twice: once on initial load, once after save()'s onChanged() reload).
+  it('edits a round rating: PATCHes the right URL, then reloads the list', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const patchCalls: Array<{ url: string; body: unknown }> = [];
+
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/me/submissions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(roundRatingSubmission) });
+      }
+      if (url.includes('/rounds/round-1/ratings/rating-1') && init?.method === 'PATCH') {
+        patchCalls.push({ url, body: init.body ? JSON.parse(String(init.body)) : undefined });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'rating-1', status: 'pending' }),
+        });
+      }
+      throw new Error(`Unmocked fetch: ${url} ${init?.method ?? 'GET'}`);
+    }) as jest.Mock;
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchCalls).toHaveLength(1));
+    expect(patchCalls[0].url).toContain('/rounds/round-1/ratings/rating-1');
+    expect(patchCalls[0].body).toMatchObject({ difficulty: 3, fairness: 4 });
+    // The list is refetched after a successful edit (fetch called for
+    // /me/submissions twice: initial load + post-save reload).
+    const fetchMock = global.fetch as jest.Mock;
+    const submissionsCalls = fetchMock.mock.calls.filter((c: unknown[]) =>
+      String(c[0]).endsWith('/me/submissions'),
+    );
+    expect(submissionsCalls).toHaveLength(2);
+  });
+
+  it('deletes a round rating after confirming, then reloads the list', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    let deleteCalled = false;
+
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/me/submissions')) {
+        const body = deleteCalled ? [] : roundRatingSubmission;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      }
+      if (url.includes('/rounds/round-1/ratings/rating-1') && init?.method === 'DELETE') {
+        deleteCalled = true;
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
+      }
+      throw new Error(`Unmocked fetch: ${url} ${init?.method ?? 'GET'}`);
+    }) as jest.Mock;
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(deleteCalled).toBe(true));
+    confirmSpy.mockRestore();
+  });
+
+  it('does not delete when the confirmation is declined', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    mockSubmissions(roundRatingSubmission);
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    const fetchMock = global.fetch as jest.Mock;
+    expect(
+      fetchMock.mock.calls.some((c: unknown[]) => (c[1] as RequestInit | undefined)?.method === 'DELETE'),
+    ).toBe(false);
+    confirmSpy.mockRestore();
   });
 });

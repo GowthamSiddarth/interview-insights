@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
+import { ReviewSearchService } from '../search/review-search.service';
 import { CreateRoundRatingDto } from './dto/create-round-rating.dto';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class RoundRatingsService {
     private readonly prisma: PrismaService,
     private readonly moderationService: ModerationService,
     private readonly fraudChecksService: FraudChecksService,
+    private readonly reviewSearchService: ReviewSearchService,
   ) {}
 
   create(roundId: string, candidateId: string, dto: CreateRoundRatingDto) {
@@ -39,5 +41,52 @@ export class RoundRatingsService {
       where: { roundId, status: 'approved' },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // GitHub issue #150: an edit never modifies public content in place —
+  // it resets status to `pending` and gets a fresh moderation_queue
+  // entry (superseding any still-unreviewed one), same as a brand-new
+  // submission going back through the full moderation gate.
+  // findFirstOrThrow scopes to roundId too (not just id), so an id that
+  // exists but under a different round 404s rather than leaking whether
+  // it exists elsewhere; ownership (candidateId) is checked separately
+  // as a 403, not folded into the same query, so an owner mismatch is
+  // distinguishable from a genuinely missing rating.
+  async update(roundId: string, id: string, candidateId: string, dto: CreateRoundRatingDto) {
+    const rating = await this.prisma.roundRating.findFirstOrThrow({ where: { id, roundId } });
+    if (rating.candidateId !== candidateId) {
+      throw new ForbiddenException('You can only edit your own rating.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.roundRating.update({
+        where: { id },
+        data: { ...dto, status: 'pending' },
+      });
+      await this.moderationService.reenqueue('round_rating', id, tx);
+      return updated;
+    });
+  }
+
+  // A candidate may delete their own rating at any status. Also removes
+  // its moderation_queue entry (which would otherwise be orphaned — no
+  // FK ties them together, docs/DATA_MODEL.md) and, if it had been
+  // approved, best-effort removes it from the review search index —
+  // outside the transaction, after the DB delete has committed, same
+  // D16/D17 pattern as indexing an approval.
+  async remove(roundId: string, id: string, candidateId: string): Promise<void> {
+    const rating = await this.prisma.roundRating.findFirstOrThrow({ where: { id, roundId } });
+    if (rating.candidateId !== candidateId) {
+      throw new ForbiddenException('You can only delete your own rating.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.moderationService.removeQueueEntries('round_rating', id, tx);
+      await tx.roundRating.delete({ where: { id } });
+    });
+
+    if (rating.status === 'approved') {
+      await this.reviewSearchService.removeReview(id);
+    }
   }
 }

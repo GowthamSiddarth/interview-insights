@@ -1,8 +1,8 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from '@opensearch-project/opensearch';
 import { RoundType } from '@prisma/client';
 import { OPENSEARCH_CLIENT } from './opensearch-client.provider';
-import { isIndexAlreadyExistsError } from './opensearch-errors.util';
+import { isIndexAlreadyExistsError, isNotFoundError } from './opensearch-errors.util';
 import { searchIndexName } from './search-index-name.util';
 
 export interface IndexableReview {
@@ -45,6 +45,8 @@ interface OpenSearchQueryClause {
 // Postgres is the source of truth, this index is derived.
 @Injectable()
 export class ReviewSearchService implements OnModuleInit {
+  private readonly logger = new Logger(ReviewSearchService.name);
+
   // Resolved at construction, not module load — same reasoning as
   // CompanySearchService.
   private readonly index = searchIndexName('reviews');
@@ -97,6 +99,24 @@ export class ReviewSearchService implements OnModuleInit {
       },
       refresh: true,
     });
+  }
+
+  // Called from a candidate deleting their own round rating (GitHub
+  // issue #150) — best-effort, same D16/D17 reasoning as indexReview:
+  // Postgres is the source of truth and has already committed the
+  // delete by the time this runs, so a not-found (never indexed —
+  // pending/rejected/flagged at delete time) is silently expected, and
+  // any other failure is logged, never thrown.
+  async removeReview(id: string): Promise<void> {
+    try {
+      await this.client.delete({ index: this.index, id, refresh: true });
+    } catch (err) {
+      if (isNotFoundError(err)) return;
+      this.logger.error(
+        'Failed to remove review from OpenSearch',
+        err instanceof Error ? err.stack : err,
+      );
+    }
   }
 
   async search(params: ReviewSearchParams): Promise<ReviewSearchResult[]> {
