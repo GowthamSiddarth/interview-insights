@@ -157,9 +157,11 @@ removed, D31), #147 (login/logout UI + wizard integration —
 session-hint cookie instead of a passive `GET /auth/me` poll, hard
 navigation after verify, D32), and #148 (engineering blog, this
 phase's). Phase 17 (Candidate Self-Service) is in progress — issue
-#149 (my reviews, grouped by `InterviewProcess`) and #150 (Update/
+#149 (my reviews, grouped by `InterviewProcess`), #150 (Update/
 Delete under moderation-safe rules, shared per-candidate edit throttle,
-D33) done, #151 (GDPR erasure) and #152 (blog) not started yet. Phase 19
+D33), and #151 (GDPR erasure — `DELETE /me`, delete not anonymize,
+stale-session 401 via a DB existence check, D34) done, #152 (blog) not
+started yet. Phase 19
 (Content Quality & Synthetic Data) is planned but not started. Phase 18
 was filed after Phase 16-17, but per the same non-linear precedent
 Phase 6/8 already set, was implemented first — see the Phase 18 intro
@@ -1512,8 +1514,79 @@ the supersession) — then deleted it and confirmed both the per-process
 "no ratings submitted yet" note and the queue entry's removal, zero
 console errors throughout.
 
-- Next step: Phase 17, issue #151 (GDPR erasure path), per
-  `docs/ROADMAP.md` — depends on #150, which is now done.
+**Phase 17, issue #151 (GDPR erasure path)** — resolves the retention/
+deletion open decision that had sat in "Open decisions" since Phase 1.
+`CandidateJwtStrategy.validate()` now queries `candidate.findUnique()`
+and throws `UnauthorizedException` if the candidateId no longer
+exists — sessions are stateless JWTs with no server-side revocation
+(Phase 16's own brainstorm decision), so a token surviving past
+erasure would otherwise still pass signature/expiry checks and hit a
+downstream FK/not-found error instead of a clean 401. One extra DB
+round trip on every authenticated candidate request, an accepted
+trade-off (decided during the kickoff brainstorm).
+
+`MeService.eraseMe(candidateId)` deletes, in FK-safe order:
+`RoundRating`/`RecruiterRating`/`OverallReview` (+ their
+`moderation_queue` entries, gathered by id list up front — issue #150's
+`removeQueueEntries()` idea, batched here) → `Round`/
+`RecruiterInteraction` → `InterviewProcess` →
+`CandidateVerificationToken` → `Candidate` last — all in one
+`$transaction`. Delete, not anonymize (D34): no raw identity is stored
+anywhere (only an HMAC), and the public aggregates this candidate's
+content fed are already de-identified, out of GDPR scope once computed,
+and simply recompute correctly on the next materialized-view refresh.
+Structural entities are in scope here even though issue #150 explicitly
+excluded them from Update/Delete — #150 was about not letting edits
+undermine moderation; erasure is about a person's data not persisting,
+and `InterviewProcess.candidateId` is a required FK Prisma won't let you
+orphan anyway. An approved round rating's OpenSearch document is
+best-effort removed after the transaction commits (same D16/D17
+pattern). The shared `Recruiter` row is never touched — only the
+candidate's own `RecruiterInteraction` rows are deleted.
+
+New route: `DELETE /me` (`CandidateJwtAuthGuard`-gated, 204), clearing
+both `candidate_session`/`candidate_logged_in` cookies the same way
+`POST /auth/logout` does. `CandidateJwtStrategy`'s spec now covers the
+post-erasure 401 case alongside its existing ones, and `MeService`
+gained 5 new `eraseMe()` tests (deletion order, moderation-queue
+cleanup by id list, Recruiter-row exclusion, and search-removal
+scoped to approved-only) — 250 api unit tests total — plus a new
+3-test e2e suite (`gdpr-erasure.e2e-spec.ts`, 105 e2e tests total)
+against real Postgres + OpenSearch prove: a full
+erasure leaves zero rows across every table (verified by direct
+Postgres queries, not just HTTP responses) and both search indices
+gone, with `company_round_type_aggregates` converging to zero rows for
+that company/round-type on the next refresh; a stale post-erasure
+session gets a clean 401 from `GET /me/submissions`, not a downstream
+error; and erasing one candidate never touches another candidate's
+`RecruiterInteraction`/`RecruiterRating` sharing the same company's
+`Recruiter` row (proven by actually creating two candidates against the
+same shared recruiter identifier and confirming candidate B's data
+survives candidate A's erasure).
+
+On `web`: `web/src/app/me/page.tsx` gained a "Danger zone" section at
+the bottom with a "Delete my account" button — `window.confirm`-gated
+(same pattern as every other delete on this page, worded explicitly
+about scope/irreversibility since this is a bigger action than deleting
+one item), hard-navigating home (`window.location.href = '/'`, not
+`router.push`) after a successful erasure — same D32 reasoning as the
+post-verify redirect, since `NavBar` won't otherwise notice the session
+is gone. `web/src/lib/api.ts` gained `deleteAccount()`. 4 new component
+tests (`my-reviews-page.spec.tsx`, 54 web tests total) cover the Danger
+zone rendering, confirmed erasure + hard navigation, and a declined
+confirmation no-op.
+
+Verified live end to end (real `kind` Postgres/OpenSearch/Mailpit via
+port-forward, real dev servers, headless Chromium): logged in via a
+real magic link, submitted a round rating, clicked "Delete my account"
+on `/me`, confirmed the browser landed back on the anonymous homepage
+with zero console errors, confirmed directly via `kubectl exec` psql
+that the candidate row and every row it had touched were gone, and
+confirmed the same session cookie replayed against `GET /me/submissions`
+returned a clean 401.
+
+- Next step: Phase 17, issue #152 (engineering blog, last), per
+  `docs/ROADMAP.md` — depends on #149-151, all now done.
 
 ## Open decisions still to make
 

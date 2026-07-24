@@ -484,6 +484,13 @@ export const api = {
 
   getMySubmissions: () => request<MyProcessSubmissions[]>('/me/submissions'),
 
+  // GitHub issue #151 (GDPR erasure) — permanently deletes the candidate's
+  // account and everything they submitted. The server also clears both
+  // session cookies, but a hard navigation (not router.push) is still
+  // needed afterward for NavBar to remount and reflect the logged-out
+  // state (D32's same reasoning as the post-verify redirect).
+  deleteAccount: () => request<void>('/me', { method: 'DELETE' }),
+
   adminLogin: (username: string, password: string) =>
     request<{ status: string }>('/auth/admin/login', {
       method: 'POST',

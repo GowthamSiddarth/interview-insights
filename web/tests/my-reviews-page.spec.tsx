@@ -51,8 +51,23 @@ const roundRatingSubmission = [
 ];
 
 describe('MyReviewsPage (GitHub issue #149)', () => {
+  let originalLocation: Location;
+
+  beforeEach(() => {
+    originalLocation = window.location;
+    // GitHub issue #151's delete-account flow hard-navigates home (D32's
+    // same reasoning as the verify-page redirect) — jsdom doesn't
+    // implement real navigation, so replace window.location with a stub
+    // whose href setter tests can assert on.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+    });
+  });
+
   afterEach(() => {
     setLoggedInCookie(false);
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 
   it('prompts to log in when there is no candidate session', async () => {
@@ -233,6 +248,64 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     const fetchMock = global.fetch as jest.Mock;
     expect(
       fetchMock.mock.calls.some((c: unknown[]) => (c[1] as RequestInit | undefined)?.method === 'DELETE'),
+    ).toBe(false);
+    confirmSpy.mockRestore();
+  });
+
+  // GitHub issue #151: the "Danger zone" account-erasure control.
+  it('shows a Danger zone with a Delete my account control', async () => {
+    setLoggedInCookie(true);
+    mockSubmissions([]);
+    render(<MyReviewsPage />);
+
+    expect(await screen.findByText('Danger zone')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete my account' })).toBeInTheDocument();
+  });
+
+  it('erases the account and hard-navigates home after confirming', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    let deleteMeCalled = false;
+
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/me/submissions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url.endsWith('/me') && init?.method === 'DELETE') {
+        deleteMeCalled = true;
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
+      }
+      throw new Error(`Unmocked fetch: ${url} ${init?.method ?? 'GET'}`);
+    }) as jest.Mock;
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete my account' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(deleteMeCalled).toBe(true));
+    await waitFor(() => expect(window.location.href).toBe('/'));
+    confirmSpy.mockRestore();
+  });
+
+  it('does not erase the account when the confirmation is declined', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    mockSubmissions([]);
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete my account' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(window.location.href).toBe('');
+    const fetchMock = global.fetch as jest.Mock;
+    expect(
+      fetchMock.mock.calls.some(
+        (c: unknown[]) =>
+          String(c[0]).endsWith('/me') && (c[1] as RequestInit | undefined)?.method === 'DELETE',
+      ),
     ).toBe(false);
     confirmSpy.mockRestore();
   });
