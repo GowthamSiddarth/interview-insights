@@ -166,4 +166,17 @@ describe('Candidate magic-link auth (e2e)', () => {
     }
     await server().post('/auth/request-link').send({ email: uniqueEmail() }).expect(429);
   }, 20000);
+
+  it('GET /auth/me reflects session state', async () => {
+    await server().get('/auth/me').expect(401);
+
+    const email = uniqueEmail();
+    const token = await requestMagicLinkToken(email);
+    const verifyRes = await server().get(`/auth/verify?token=${token}`).expect(200);
+    const cookies = verifyRes.headers['set-cookie'] as unknown as string[];
+    const sessionCookie = cookies.find((c) => c.startsWith('candidate_session='));
+
+    const res = await server().get('/auth/me').set('Cookie', sessionCookie ?? '').expect(200);
+    expect(typeof body<{ candidateId: string }>(res).candidateId).toBe('string');
+  }, 15000);
 });

@@ -72,24 +72,15 @@ npm run dev                 # http://localhost:3000
 
 **4. Use it**
 
-Open `http://localhost:3000` and walk through the flow: create a company →
-enter a candidate email + role to start an interview process → add a round
-→ submit a rating. The rating will show as `pending` — every rating/review
-is moderation-gated before it's public (see `docs/DECISIONS.md` D3), and
-there's no moderation worker yet (Phase 3), so the public ratings count
-stays at `0` by design.
-
-**Known broken since Phase 16 issue #146:** the wizard's own "candidate
-email" step called `POST /candidates`, which no longer exists as a public
-endpoint (candidate creation is part of the magic-link auth flow now,
-`POST /auth/request-link`) — the every write path from there on also now
-requires a real candidate session, not a `candidateId` typed into a form.
-This is intentional, not a regression: it's deferred to issue #147
-(login/logout UI + wizard integration), the same non-linear "the frontend
-catches up in the next issue" pattern Phase 18 used for the moderation UI.
-Drive the write paths via curl (or the e2e suite) in the meantime — see
-`api/test/support/candidate-session.ts` for the real request-link →
-Mailpit → verify → cookie flow every e2e spec now uses.
+Open `http://localhost:3000`, click **Log in** in the nav (magic-link —
+no password: enter an email, then open the link from Mailpit at
+`http://localhost:8025`), and walk through the flow: create a company →
+start an interview process (role + outcome — the candidate comes from
+your session now, not a form field) → add a round → submit a rating. The
+rating will show as `pending` — every rating/review is moderation-gated
+before it's public (see `docs/DECISIONS.md` D3), and there's no
+moderation worker yet (Phase 3), so the public ratings count stays at `0`
+by design.
 
 **Stopping/resetting:** `docker compose down` stops Postgres and OpenSearch
 (data persists in named volumes). Add `-v` to also wipe the data and start
@@ -350,6 +341,7 @@ unaffected by D24.
 | POST   | `/auth/request-link`                                 | Phase 16 — magic-link email; never discloses if known   |
 | GET/POST | `/auth/verify`                                     | Consumes the link's token → session + `email_verified`  |
 | POST   | `/auth/logout`                                       | Clears the candidate session cookie                     |
+| GET    | `/auth/me`                                           | Session check (Phase 16 issue #147, mirrors `/auth/admin/me`) |
 | POST   | `/companies`                                         |                                                         |
 | GET    | `/companies` / `/companies/:id`                      |                                                         |
 | GET    | `/companies/by-slug/:slug`                           | Phase 15 — profile pages address companies by slug      |

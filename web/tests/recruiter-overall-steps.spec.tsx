@@ -16,9 +16,6 @@ function mockFetchByRoute() {
     if (url.endsWith('/companies') && method === 'GET') {
       return respond([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
     }
-    if (url.endsWith('/candidates')) {
-      return respond({ id: 'candidate-1' });
-    }
     if (url.endsWith('/companies/company-1/processes')) {
       return respond({ id: 'process-1', roleTitle: 'Engineer', rounds: [] });
     }
@@ -48,8 +45,7 @@ function mockFetchByRoute() {
 // both new sections.
 async function walkToRound(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
-  await user.type(screen.getByLabelText(/Candidate email/), 'me@example.com');
-  await user.type(screen.getByLabelText(/Role title/), 'Engineer');
+  await user.type(await screen.findByLabelText(/Role title/), 'Engineer');
   await user.click(screen.getByRole('button', { name: 'Create process' }));
   await user.type(await screen.findByLabelText('Title'), 'Screen');
   await user.click(screen.getByRole('button', { name: 'Add round' }));
@@ -59,6 +55,7 @@ async function walkToRound(user: ReturnType<typeof userEvent.setup>) {
 describe('Wizard: recruiter experience + overall review steps (Phase 14 issue #127)', () => {
   beforeEach(() => {
     mockFetchByRoute();
+    document.cookie = 'candidate_logged_in=1';
   });
 
   it('shows both new sections once a round exists, not before', async () => {
@@ -114,7 +111,6 @@ describe('Wizard: recruiter experience + overall review steps (Phase 14 issue #1
     ) as [string, RequestInit] | undefined;
     expect(overallCall).toBeDefined();
     expect(JSON.parse(String(overallCall?.[1].body))).toMatchObject({
-      candidateId: 'candidate-1',
       wouldRecommend: true,
     });
     // One overall review per process — the form disappears after submission.

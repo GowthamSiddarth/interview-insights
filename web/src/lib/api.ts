@@ -234,6 +234,10 @@ export interface AdminSession {
   username: string;
 }
 
+export interface CandidateSession {
+  candidateId: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -261,9 +265,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  createCandidate: (email: string) =>
-    request<Candidate>('/candidates', { method: 'POST', body: JSON.stringify({ email }) }),
-
   listCompanies: () => request<Company[]>('/companies'),
 
   createCompany: (input: { name: string; slug: string; sizeBucket: Company['sizeBucket'] }) =>
@@ -274,7 +275,7 @@ export const api = {
 
   createProcess: (
     companyId: string,
-    input: { candidateId: string; roleTitle: string; outcome: InterviewProcess['outcome'] },
+    input: { roleTitle: string; outcome: InterviewProcess['outcome'] },
   ) =>
     request<InterviewProcess>(`/companies/${companyId}/processes`, {
       method: 'POST',
@@ -295,7 +296,6 @@ export const api = {
   createRoundRating: (
     roundId: string,
     input: {
-      candidateId: string;
       difficulty: number;
       fairness: number;
       communicationFluency: number;
@@ -320,7 +320,6 @@ export const api = {
   createRecruiterRating: (
     recruiterInteractionId: string,
     input: {
-      candidateId: string;
       approachability: number;
       responseTime: number;
       timeliness: number;
@@ -336,7 +335,6 @@ export const api = {
   createOverallReview: (
     processId: string,
     input: {
-      candidateId: string;
       overallExperience: number;
       wouldRecommend: boolean;
       reviewText?: string;
@@ -346,6 +344,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  requestMagicLink: (email: string) =>
+    request<{ status: string }>('/auth/request-link', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyMagicLink: (token: string) =>
+    request<{ status: string }>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+
+  candidateLogout: () => request<{ status: string }>('/auth/logout', { method: 'POST' }),
+
+  getCandidateSession: () => request<CandidateSession>('/auth/me'),
+
+  // A plain (non-httpOnly) cookie the api sets/clears alongside the real
+  // session — lets every page (NavBar renders on all of them, for every
+  // anonymous visitor too) know "is there a session?" synchronously,
+  // without a network round trip that would 401 on the platform's single
+  // most common page view and show up as a console error for it.
+  hasCandidateSessionHint: () =>
+    typeof document !== 'undefined' && document.cookie.includes('candidate_logged_in=1'),
 
   adminLogin: (username: string, password: string) =>
     request<{ status: string }>('/auth/admin/login', {

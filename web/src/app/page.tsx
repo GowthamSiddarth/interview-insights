@@ -34,7 +34,13 @@ function errorMessage(err: unknown): string {
 export default function HomePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
-  const [candidateId, setCandidateId] = useState<string | null>(null);
+  // null = still checking; false = no session — GitHub issue #147 gates
+  // step 2 on a real candidate session instead of collecting an email
+  // inline, now that candidate creation only happens via the magic-link
+  // auth flow (issue #145/#146). Read from the session-hint cookie (see
+  // NavBar/api.ts) rather than a GET /auth/me call — no network 401 to
+  // log purely for rendering this gate on the platform's home page.
+  const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
   const [process, setProcess] = useState<InterviewProcess | null>(null);
   const [round, setRound] = useState<Round | null>(null);
   const [rating, setRating] = useState<RoundRating | null>(null);
@@ -47,11 +53,14 @@ export default function HomePage() {
     api.listCompanies().then(setCompanies).catch((err: unknown) => setError(errorMessage(err)));
   }, []);
 
+  useEffect(() => {
+    setCandidateSession(api.hasCandidateSessionHint());
+  }, []);
+
   function handleChangeCompany() {
     // Reset every step that depended on the previous company — none of
     // it applies once a different company is selected.
     setCompany(null);
-    setCandidateId(null);
     setProcess(null);
     setRound(null);
     setRating(null);
@@ -77,13 +86,10 @@ export default function HomePage() {
   }
 
   async function handleCreateProcess(formData: FormData) {
-    if (!company) return;
+    if (!company || !candidateSession) return;
     setError(null);
     try {
-      const candidate = await api.createCandidate(String(formData.get('email')));
-      setCandidateId(candidate.id);
       const created = await api.createProcess(company.id, {
-        candidateId: candidate.id,
         roleTitle: String(formData.get('roleTitle')),
         outcome: formData.get('outcome') as InterviewProcess['outcome'],
       });
@@ -110,12 +116,11 @@ export default function HomePage() {
   }
 
   async function handleCreateRating(formData: FormData) {
-    if (!round || !candidateId) return;
+    if (!round) return;
     setError(null);
     const field = (name: string) => Number(formData.get(name));
     try {
       const created = await api.createRoundRating(round.id, {
-        candidateId,
         difficulty: field('difficulty'),
         fairness: field('fairness'),
         communicationFluency: field('communicationFluency'),
@@ -131,7 +136,7 @@ export default function HomePage() {
   }
 
   async function handleCreateRecruiterRating(formData: FormData) {
-    if (!process || !candidateId) return;
+    if (!process) return;
     setError(null);
     const field = (name: string) => Number(formData.get(name));
     try {
@@ -143,7 +148,6 @@ export default function HomePage() {
       });
       const freeText = String(formData.get('freeText') ?? '').trim();
       const created = await api.createRecruiterRating(interaction.id, {
-        candidateId,
         approachability: field('approachability'),
         responseTime: field('responseTime'),
         timeliness: field('timeliness'),
@@ -157,12 +161,11 @@ export default function HomePage() {
   }
 
   async function handleCreateOverallReview(formData: FormData) {
-    if (!process || !candidateId) return;
+    if (!process) return;
     setError(null);
     try {
       const reviewText = String(formData.get('reviewText') ?? '').trim();
       const created = await api.createOverallReview(process.id, {
-        candidateId,
         overallExperience: Number(formData.get('overallExperience')),
         wouldRecommend: formData.get('wouldRecommend') === 'on',
         ...(reviewText ? { reviewText } : {}),
@@ -251,21 +254,23 @@ export default function HomePage() {
 
       {company && (
         <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
-          <h2 className="font-medium">2. Candidate + interview process</h2>
-          {!process && (
+          <h2 className="font-medium">2. Interview process</h2>
+          {candidateSession === null && (
+            <p className="text-sm text-gray-500">Checking your session…</p>
+          )}
+          {candidateSession === false && (
+            <p className="text-sm text-gray-500">
+              <Link href="/login" className={linkClass}>
+                Log in
+              </Link>{' '}
+              to submit a review — no password, just a login link emailed to you.
+            </p>
+          )}
+          {candidateSession && !process && (
             <form
               action={handleCreateProcess}
               className="flex flex-col gap-2 sm:flex-row sm:items-end"
             >
-              <label className="flex flex-col text-sm">
-                Candidate email
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  className="rounded border px-2 py-1 dark:bg-gray-900"
-                />
-              </label>
               <label className="flex flex-col text-sm">
                 Role title
                 <input
