@@ -166,3 +166,18 @@ set.
 
 1. [Issue #159 — Admin auth backend](phase-18-admin-authentication/issue-159-admin-auth-backend/README.md)
 2. [Issue #160 — Admin auth frontend](phase-18-admin-authentication/issue-160-admin-auth-frontend/README.md)
+
+## Phase 20 — Operational Hardening & Live-Verification Findings
+
+See `docs/ROADMAP.md` Phase 20. Filed retroactively — cross-cutting
+fixes and tooling discovered via live verification, stress-testing, and
+product review rather than planned feature work. All four feature
+issues are done — this phase's blog is complete. Numbered after Phase
+19 in filing order but implemented first, the same non-linear precedent
+Phase 6/8/18 already set — Phase 19 (Content Quality & Synthetic Data)
+remains queued behind it.
+
+1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20-operational-hardening/issue-215-cd-artifact-pruning/README.md)
+2. [Issue #216 — Full golden-path smoke test (D36)](phase-20-operational-hardening/issue-216-golden-path-smoke-test/README.md)
+3. [Issue #212 — `GET /moderation/queue` isolates each entity type's enrichment (D37)](phase-20-operational-hardening/issue-212-moderation-queue-race-fix/README.md)
+4. [Issue #217 — Honest login-page copy + lock down `POST /companies` (D38)](phase-20-operational-hardening/issue-217-login-copy-company-lockdown/README.md)

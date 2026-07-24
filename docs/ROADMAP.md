@@ -758,4 +758,5 @@ GitHub issue #214.
       nor rate limiting, an anonymous-write gap predating Phase 16
       entirely since `Company` has no `candidateId` (PR #219, GitHub
       issue #217, D38)
-- [ ] Engineering blog (last) (GitHub issue #218)
+- [x] Engineering blog (last) (GitHub issue #218) — Phase 20 is now
+      fully done
