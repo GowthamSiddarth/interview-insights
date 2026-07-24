@@ -69,4 +69,24 @@ describe('HomePage', () => {
     expect(await screen.findByLabelText('Role title')).toBeInTheDocument();
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
   });
+
+  // POST /companies now requires a session too (defense in depth — a
+  // company isn't owned by any candidate, but anonymous writes were an
+  // open gap). Selecting an *existing* company stays a read, no gate.
+  it('prompts to log in instead of showing the create-company form, when logged out', async () => {
+    render(<HomePage />);
+
+    expect(await screen.findByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Slug')).not.toBeInTheDocument();
+  });
+
+  it('shows the create-company form when a candidate session exists', async () => {
+    setLoggedInCookie(true);
+    render(<HomePage />);
+
+    expect(await screen.findByLabelText('Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Slug')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Log in' })).not.toBeInTheDocument();
+  });
 });

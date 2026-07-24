@@ -81,9 +81,10 @@ describe('GDPR erasure (e2e)', () => {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
   const server = () => request(app.getHttpServer());
 
-  async function createCompany(): Promise<string> {
+  async function createCompany(cookie: string): Promise<string> {
     const res = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     return body<CompanyBody>(res).id;
@@ -107,7 +108,7 @@ describe('GDPR erasure (e2e)', () => {
   it('erases every row referencing the candidate, both search indices, and converges the materialized view', async () => {
     const email = `candidate-${unique()}@example.com`;
     const { cookie, candidateId } = await loginAsCandidate(app, email);
-    const companyId = await createCompany();
+    const companyId = await createCompany(cookie);
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
@@ -206,10 +207,10 @@ describe('GDPR erasure (e2e)', () => {
   }, 15000);
 
   it('erasing one candidate never touches another candidate sharing the same company Recruiter row', async () => {
-    const companyId = await createCompany();
+    const candidateA = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
+    const companyId = await createCompany(candidateA.cookie);
     const sharedIdentifier = `recruiter-${unique()}@example.com`;
 
-    const candidateA = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
     const processA = await server()
       .post(`/companies/${companyId}/processes`)
       .set('Cookie', candidateA.cookie)

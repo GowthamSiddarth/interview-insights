@@ -147,6 +147,7 @@ describe('Full golden path (e2e smoke test)', () => {
   it('1. creates a company', async () => {
     const res = await server()
       .post('/companies')
+      .set('Cookie', candidateA.cookie)
       .send({ name: 'Golden Path Corp', slug: `golden-path-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     companyId = body<CompanyBody>(res).id;

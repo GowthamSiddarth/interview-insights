@@ -77,6 +77,7 @@ describe('Moderation (e2e)', () => {
 
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;

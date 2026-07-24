@@ -1660,6 +1660,25 @@ affecting the other two types or crashing the endpoint. Stress-verified
 fires occasionally (confirmed in logs) but no longer fails any test.
 Documented in `docs/DECISIONS.md` D37.
 
+**Login-page copy fixed + `POST /companies` locked down (no dedicated
+issue, product-review findings, D38)** — the login page's confirmation
+copy read as login-only ("if an account exists...") even though the
+same form always upserts a new candidate; rewritten to say plainly
+that it creates an account too. Separately, `POST /companies` had
+never been session-gated or rate-limited — an open anonymous-write gap
+predating Phase 16 entirely, since `Company` has no `candidateId` and
+was never on that phase's write-path list. Now gated with
+`CandidateJwtAuthGuard` *and* a new per-IP `CompanyCreationThrottleGuard`
+(defense in depth, not attribution — `Company` still has no
+`candidateId`). `web`'s wizard only gates the create-form, not
+selecting an existing company (a read). Every e2e spec calling
+`POST /companies` (13 files, 20 call sites) updated to attach a
+candidate cookie. 257 api unit tests, 105 e2e tests, 56 web tests all
+green; live-verified in a real browser (anonymous visit shows a
+"Log in" prompt instead of the create form, logging in reveals it,
+creating a company succeeds, and a direct unauthenticated
+`POST /companies` gets 401) — zero console errors.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
