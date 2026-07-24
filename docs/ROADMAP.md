@@ -770,5 +770,5 @@ GitHub issue #214.
       on any deployed environment — verified via `Set-Cookie` through
       the real Ingress and a live headless-browser run confirming
       "Log out" renders correctly (GitHub issue #222, D39)
-- [ ] Engineering blog update for issue #222 — Phase 20 is fully done
-      once this lands
+- [x] Engineering blog update for issue #222 (D39) — Phase 20 is now
+      fully done
