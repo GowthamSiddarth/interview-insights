@@ -619,7 +619,9 @@ Candidate Accounts & Auth". Epic: GitHub issue #182.
       NavBar stuck showing "Log in" since it's mounted once in the root
       layout and doesn't remount on client-side navigation, fixed with
       a hard `window.location.href` redirect instead — see D32
-- [ ] Engineering blog (last) (GitHub issue #148)
+- [x] Engineering blog (last) (GitHub issue #148) — one post per
+      feature issue under `wiki/blog/phase-16-candidate-accounts-auth/`;
+      Phase 16 is now fully done
 
 ## Phase 17 — Candidate Self-Service
 

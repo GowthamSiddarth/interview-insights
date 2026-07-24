@@ -141,25 +141,26 @@ Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
 Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
 Cluster Observability), Phase 13 (Local Infra Hardening &
 Reproducibility), Phase 14 (Recruiter & Overall Reviews + Moderation
-Admin UI), Phase 15 (Public Company Profile Pages), and Phase 18
-(Admin Authentication) are all done. Phase 6 is done except issue #18
-(blocked). Phase 18 was reopened the same day it was first declared
-done, once a real login attempt surfaced a Secure-cookie bug and two
-follow-up issues (#192 credential rotation, #193 mid-session-expiry
-redirect, both now done). Phases 1-7, 9-15, and 18 each have a complete
-engineering blog under `wiki/blog/`. Phase 8 is a trigger-gated
-backlog, not started. Phase 16 (Candidate Accounts & Auth) is in
-progress — issues #144 (mail foundation), #145 (magic-link auth,
-supersedes and removes Phase 3's standalone verification endpoints,
-D30), #146 (sessions on the write path, four candidateId-bearing
-writes now session-gated, `POST /candidates` removed, D31), and #147
-(login/logout UI + wizard integration — session-hint cookie instead of
-a passive `GET /auth/me` poll, hard navigation after verify, D32) done,
-#148 (blog) not started yet. Phases 17 (Candidate Self-Service) and 19 (Content Quality & Synthetic
-Data) are planned but not started. Phase 18 was filed after Phase
-16-17, but per the same non-linear precedent Phase 6/8 already set,
-was implemented first — see the Phase 18 intro in `docs/ROADMAP.md`
-for why. Phase 19 remains queued behind Phase 16/17.
+Admin UI), Phase 15 (Public Company Profile Pages), Phase 16
+(Candidate Accounts & Auth), and Phase 18 (Admin Authentication) are
+all done. Phase 6 is done except issue #18 (blocked). Phase 18 was
+reopened the same day it was first declared done, once a real login
+attempt surfaced a Secure-cookie bug and two follow-up issues (#192
+credential rotation, #193 mid-session-expiry redirect, both now done).
+Phases 1-7, 9-16, and 18 each have a complete engineering blog under
+`wiki/blog/`. Phase 8 is a trigger-gated backlog, not started. Phase 16
+closed out with issues #144 (mail foundation, D29), #145 (magic-link
+auth, supersedes and removes Phase 3's standalone verification
+endpoints, D30), #146 (sessions on the write path, four
+candidateId-bearing writes now session-gated, `POST /candidates`
+removed, D31), #147 (login/logout UI + wizard integration —
+session-hint cookie instead of a passive `GET /auth/me` poll, hard
+navigation after verify, D32), and #148 (engineering blog, this
+phase's). Phases 17 (Candidate Self-Service) and 19 (Content Quality &
+Synthetic Data) are planned but not started. Phase 18 was filed after
+Phase 16-17, but per the same non-linear precedent Phase 6/8 already
+set, was implemented first — see the Phase 18 intro in
+`docs/ROADMAP.md` for why. Phase 19 remains queued behind Phase 17.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1360,13 +1361,24 @@ logged in → create a company → create a process with no email field →
 add a round → submit a rating — confirmed the row landed in kind's
 Postgres via `kubectl exec psql`, zero console errors throughout.
 
-**Phase 16 is now fully done for its feature scope** — issues #144-147
-all closed via merged PRs; #148 (engineering blog) remains, to be
-written last per convention once every other Phase 16 issue is merged.
+**Phase 16, issue #148 (engineering blog)** —
+`wiki/blog/phase-16-candidate-accounts-auth/` gained one post per
+feature issue (#144-147), covering the Mailpit-over-LocalStack-SES
+decision (D29), the magic-link design and D30's replace-don't-duplicate
+reasoning, issue #146's fourth-write-path discovery and the
+no-fallback-401 decision (D31), and issue #147's two live-verification
+bugs — the session-hint cookie replacing a passive `GET /auth/me` poll,
+and the hard-navigation fix for `NavBar` not remounting across
+client-side routes (D32). `wiki/blog/README.md`'s index updated to
+match.
 
-- Next step: Phase 16, issue #148 (engineering blog for the whole
-  phase), per `docs/ROADMAP.md` — the last item in Phase 16, written
-  only now that #144-147 are all done.
+**Phase 16 is now fully done** — issues #144-148 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+- Next step: Phase 17 (Candidate Self-Service) planning, per
+  `docs/ROADMAP.md` — the next phase in line now that Phase 16 is
+  fully done; plan its issues under a milestone before implementing any
+  of them, per the standing convention.
 
 ## Open decisions still to make
 

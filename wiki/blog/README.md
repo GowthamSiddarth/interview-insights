@@ -138,6 +138,16 @@ this phase's blog is complete.
 2. [Issue #141 — Company profile page (/companies/[slug])](phase-15-company-profile-pages/issue-141-company-profile-page/README.md)
 3. [Issue #142 — Entry points: link search, wizard, and analytics to profile pages](phase-15-company-profile-pages/issue-142-profile-page-entry-points/README.md)
 
+## Phase 16 — Candidate Accounts & Auth
+
+See `docs/ROADMAP.md` Phase 16. All four feature issues are done — this
+phase's blog is complete.
+
+1. [Issue #144 — Mail foundation (Mailpit, D29)](phase-16-candidate-accounts-auth/issue-144-mail-foundation/README.md)
+2. [Issue #145 — Magic-link authentication](phase-16-candidate-accounts-auth/issue-145-magic-link-authentication/README.md)
+3. [Issue #146 — Sessions on the write path](phase-16-candidate-accounts-auth/issue-146-sessions-on-write-path/README.md)
+4. [Issue #147 — Login/logout UI + wizard integration](phase-16-candidate-accounts-auth/issue-147-login-logout-wizard-integration/README.md)
+
 ## Phase 18 — Admin Authentication
 
 See `docs/ROADMAP.md` Phase 18. Both feature issues are done — this
