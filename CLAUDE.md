@@ -162,10 +162,19 @@ moderation-safe rules, shared per-candidate edit throttle, D33), #151
 (GDPR erasure — `DELETE /me`, delete not anonymize, stale-session 401
 via a DB existence check, D34), and #152 (engineering blog, this
 phase's). Phase 19 (Content Quality & Synthetic Data) is planned but
-not started — it's next up now that Phase 17 is done. Phase 18 was
-filed after Phase 16-17, but per the same non-linear precedent Phase
-6/8 already set, was implemented first — see the Phase 18 intro in
-`docs/ROADMAP.md` for why.
+not started. Phase 18 was filed after Phase 16-17, but per the same
+non-linear precedent Phase 6/8 already set, was implemented first —
+see the Phase 18 intro in `docs/ROADMAP.md` for why. Phase 20
+(Operational Hardening & Live-Verification Findings) was filed
+retroactively, 2026-07-24 — a new standing convention that every ad-hoc
+dev/test/structural task gets tracked under an Epic, not just planned
+phase work. 3 of 5 Phase 20 issues are done (#215 CD prune/D35, #216
+golden-path smoke test/D36, #212 moderation-queue race fix/D37); #217
+(login-copy + company-creation lockdown/D38) is code-complete and
+live-verified but its PR is blocked on a GitHub Pull Requests service
+outage; #218 (blog) is last, once #217 merges. Phase 20 jumped ahead of
+Phase 19 the same way Phase 18 jumped ahead of 16/17 — the findings
+surfaced live, mid-session, rather than through planned-phase work.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1599,8 +1608,9 @@ updated to match.
 PRs, and every phase built so far (1-7, 9-18) now has a complete
 engineering blog.
 
-**Real CD incident found and fixed directly (no dedicated issue), same
-day as #152's merge** — the PR #208 merge (unrelated to this incident)
+**Real CD incident found and fixed directly (Phase 20, GitHub issue
+#215 — filed retroactively after the fact), same day as #152's
+merge** — the PR #208 merge (unrelated to this incident)
 triggered `cd.yml` as usual, and the "Roll out api" step timed out: the
 new pod crash-looped on an OpenSearch `cluster_block_exception`
 (flood-stage watermark). Root cause was several layers removed from the
@@ -1624,8 +1634,8 @@ either pod needed to restart, no actual outage. `cd.yml` gained a
 `crictl`/`ctr` inside the kind node, per the near-miss) so this doesn't
 recur. See D35 for the full incident writeup.
 
-**Full golden-path smoke test added (no dedicated issue, same pattern as
-D35)** — the same dev-DB cleanup that produced D35 also surfaced that
+**Full golden-path smoke test added (Phase 20, GitHub issue #216 —
+filed retroactively)** — the same dev-DB cleanup that produced D35 also surfaced that
 every "verify it live" script this project has ever written was a
 throwaway, pointed at the persistent dev cluster, and left no way to
 sanity-check the whole feature set without either rewriting one or
@@ -1660,8 +1670,8 @@ affecting the other two types or crashing the endpoint. Stress-verified
 fires occasionally (confirmed in logs) but no longer fails any test.
 Documented in `docs/DECISIONS.md` D37.
 
-**Login-page copy fixed + `POST /companies` locked down (no dedicated
-issue, product-review findings, D38)** — the login page's confirmation
+**Login-page copy fixed + `POST /companies` locked down (Phase 20,
+GitHub issue #217, product-review findings, D38)** — the login page's confirmation
 copy read as login-only ("if an account exists...") even though the
 same form always upserts a new candidate; rewritten to say plainly
 that it creates an account too. Separately, `POST /companies` had
@@ -1679,11 +1689,16 @@ green; live-verified in a real browser (anonymous visit shows a
 creating a company succeeds, and a direct unauthenticated
 `POST /companies` gets 401) — zero console errors.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data) — three
-  independent issues, any order (GitHub issues #162-165, already
-  filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
-  (near-duplicate review detection), since it directly replaces D13's
-  documented exact-match/full-table-scan limitation.
+- Next step: close out Phase 20 first — open the pending PR for issue
+  #217 once GitHub's Pull Requests outage clears (code is complete,
+  live-verified, and pushed to `fix-login-copy-and-company-creation-
+  lockdown`), merge it, then write issue #218 (Phase 20's engineering
+  blog, `wiki/blog/phase-20-operational-hardening/`, one post per
+  feature issue: #215, #216, #212, #217). After that, Phase 19 (Content
+  Quality & Synthetic Data) resumes — three independent issues, any
+  order (GitHub issues #162-165, already filed); the natural first pick
+  is issue #162 (near-duplicate review detection), since it directly
+  replaces D13's documented exact-match/full-table-scan limitation.
 
 ## Open decisions still to make
 
