@@ -238,6 +238,62 @@ export interface CandidateSession {
   candidateId: string;
 }
 
+// GET /me/submissions (GitHub issue #149) — grouped by InterviewProcess,
+// not three flat lists (decided during the Phase 17 kickoff brainstorm):
+// a candidate thinks in terms of "my interview at Company X." Every
+// status (pending/approved/rejected/flagged) is visible here, unlike
+// every public read path — this is the one place a candidate sees their
+// own not-yet-public content.
+export interface MySubmissionRoundRating {
+  id: string;
+  roundId: string;
+  roundTitle: string;
+  roundType: Round['roundType'];
+  status: RoundRating['status'];
+  difficulty: number;
+  fairness: number;
+  communicationFluency: number;
+  attentiveness: number;
+  biasSignal: number;
+  technicalDepth: number | null;
+  freeText: string | null;
+  createdAt: string;
+}
+
+export interface MySubmissionRecruiterRating {
+  id: string;
+  recruiterInteractionId: string;
+  status: RecruiterRating['status'];
+  approachability: number;
+  responseTime: number;
+  timeliness: number;
+  communicationQuality: number;
+  freeText: string | null;
+  createdAt: string;
+}
+
+export interface MySubmissionOverallReview {
+  id: string;
+  status: OverallReview['status'];
+  overallExperience: number;
+  wouldRecommend: boolean;
+  reviewText: string | null;
+  createdAt: string;
+}
+
+export interface MyProcessSubmissions {
+  processId: string;
+  companyId: string;
+  companyName: string;
+  companySlug: string;
+  roleTitle: string;
+  outcome: InterviewProcess['outcome'];
+  createdAt: string;
+  roundRatings: MySubmissionRoundRating[];
+  recruiterRatings: MySubmissionRecruiterRating[];
+  overallReview: MySubmissionOverallReview | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -365,6 +421,8 @@ export const api = {
   // most common page view and show up as a console error for it.
   hasCandidateSessionHint: () =>
     typeof document !== 'undefined' && document.cookie.includes('candidate_logged_in=1'),
+
+  getMySubmissions: () => request<MyProcessSubmissions[]>('/me/submissions'),
 
   adminLogin: (username: string, password: string) =>
     request<{ status: string }>('/auth/admin/login', {

@@ -156,11 +156,13 @@ candidateId-bearing writes now session-gated, `POST /candidates`
 removed, D31), #147 (login/logout UI + wizard integration —
 session-hint cookie instead of a passive `GET /auth/me` poll, hard
 navigation after verify, D32), and #148 (engineering blog, this
-phase's). Phases 17 (Candidate Self-Service) and 19 (Content Quality &
-Synthetic Data) are planned but not started. Phase 18 was filed after
-Phase 16-17, but per the same non-linear precedent Phase 6/8 already
-set, was implemented first — see the Phase 18 intro in
-`docs/ROADMAP.md` for why. Phase 19 remains queued behind Phase 17.
+phase's). Phase 17 (Candidate Self-Service) is in progress — issue
+#149 (my reviews, grouped by `InterviewProcess`) done, #150 (Update/
+Delete), #151 (GDPR erasure), and #152 (blog) not started yet. Phase 19
+(Content Quality & Synthetic Data) is planned but not started. Phase 18
+was filed after Phase 16-17, but per the same non-linear precedent
+Phase 6/8 already set, was implemented first — see the Phase 18 intro
+in `docs/ROADMAP.md` for why. Phase 19 remains queued behind Phase 17.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1391,9 +1393,53 @@ shared per-company `Recruiter` row from erasure. All three issue bodies
 updated on GitHub to record these decisions before implementation
 began. Epic #183 moved to "In Progress".
 
-- Next step: Phase 17, issue #149 (my reviews) — the first issue in
-  the phase's dependency chain (#149 → #150 → #151 → #152), per
-  `docs/ROADMAP.md`.
+**Phase 17, issue #149 (my reviews)** — a new `api` `me/` module:
+`GET /me/submissions` (`CandidateJwtAuthGuard`-gated) queries
+`InterviewProcess.findMany({ where: { candidateId } })` with nested
+`rounds.ratings`/`recruiterInteractions.ratings`/`overallReview`
+includes (each relation re-filtered by `candidateId` defensively, even
+though a process structurally has exactly one candidate already), then
+maps the result into the process-grouped shape decided during the
+kickoff brainstorm — one entry per `InterviewProcess` (company/role/
+outcome) with that process's round ratings, recruiter ratings, and
+overall review nested underneath, every status (pending/approved/
+rejected/flagged) included since this is the one read path where the
+owner should see their own not-yet-public content. A round only
+appears in `roundRatings` once it actually has a rating (the
+`@@unique([roundId, candidateId])` constraint guarantees at most one).
+4 new unit tests (mocked Prisma: candidateId scoping, full grouping
+shape, a round with no rating omitted, empty-candidate case) + 5 new
+e2e tests (`me-submissions.e2e-spec.ts`, 89 e2e tests total) against
+real Postgres prove: 401 unauthenticated, empty array for a candidate
+with nothing submitted, a full submission (round rating approved,
+recruiter rating rejected, overall review still pending) grouped
+correctly under its one process with every status intact, another
+candidate's submissions never leak, and a process with zero ratings
+yet still appears with empty nested arrays (not omitted).
+
+On `web`: a new `web/src/app/me/page.tsx`, gated on the session-hint
+cookie (same pattern as `NavBar`/the wizard, not a network probe —
+D32) — shows a "Log in to see your own submissions" prompt when
+logged out, otherwise fetches `GET /me/submissions` and renders one
+card per process (company, role, outcome, a link to that company's
+profile) with each nested rating/review shown with its real status
+(color-coded, matching this project's existing status-label
+conventions) and free text. Distinguishes loading/empty/populated
+throughout (Phase 9 issue #61 rule). `NavBar` gained a "My reviews"
+link, shown only when logged in. 5 new component tests
+(`my-reviews-page.spec.tsx`) + 2 new `NavBar` tests (48 web tests
+total). Verified live end to end (real `kind` Postgres/OpenSearch/
+Mailpit via port-forward, real dev servers, headless Chromium): logged
+in via a real magic link, confirmed `/me` showed the empty state
+before any submission, drove the full wizard (round rating + recruiter
+rating + overall review, all left pending), confirmed `/me` then
+showed all three grouped under one process card with "Pending" labels
+and a working company-profile link, logged out, and confirmed `/me`
+prompted to log in again with zero stale data leaking — zero console
+errors throughout.
+
+- Next step: Phase 17, issue #150 (Update/Delete under moderation-safe
+  rules), per `docs/ROADMAP.md` — depends on #149, which is now done.
 
 ## Open decisions still to make
 

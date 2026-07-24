@@ -46,6 +46,11 @@ export function NavBar() {
         <Link href="/moderation" className={linkClass}>
           Moderation
         </Link>
+        {loggedIn === true && (
+          <Link href="/me" className={linkClass}>
+            My reviews
+          </Link>
+        )}
         <span className="ml-auto">
           {loggedIn === true && (
             <button type="button" onClick={() => void logout()} className={linkClass}>
