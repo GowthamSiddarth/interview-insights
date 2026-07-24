@@ -200,3 +200,12 @@ brand mark deliberately scoped out as a second-pass option — this
 phase's blog is complete.
 
 1. [Typography, depth/surface, and layout-width pass (D41)](phase-22-visual-design-refresh/README.md)
+
+## Phase 23 — Color System & Brand Mark
+
+See `docs/ROADMAP.md` Phase 23. The two directions deliberately scoped
+out of Phase 22 — a formalized `Button` color-variant system and a real
+brand mark — closing out all five original UI/UX brainstorm items —
+this phase's blog is complete.
+
+1. [Button color variants, focus rings, and a brand mark (D42)](phase-23-color-system-brand-mark/README.md)
