@@ -123,13 +123,26 @@ jobs:
       # watermark and crash-looped the next api pod on a completely
       # unrelated PR. `if: always()` so a failed deploy still gets cleaned
       # up — that's exactly the case most likely to leave extra dangling
-      # layers behind. Deliberately not `docker system prune --volumes` or
-      # `crictl rmi --prune` on the kind node itself: both risk touching
-      # images/data still needed by already-running pods (confirmed the
-      # hard way while fixing the 2026-07-24 incident manually) — plain
-      # host-level image/build-cache pruning was sufficient and safe.
+      # layers behind.
       - name: Prune stale Docker artifacts
         if: always()
         run: |
           docker image prune -f
           docker builder prune -f --filter until=48h
+
+      # This host-level prune above is a *different* disk than the kind
+      # node's own internal containerd store — a second real incident,
+      # same day (2026-07-24): the node's own filesystem hit 91% full
+      # from repeated `kind load docker-image` calls (each one leaves an
+      # untagged, superseded image behind in the node's own store, not
+      # the host's), tripping the same OpenSearch watermark again. Uses
+      # infra/scripts/prune-kind-node-images.sh — deliberately not a
+      # blind `crictl rmi --prune` (D35's own near-miss documented why:
+      # kubelet tracks a running container by digest, not tag, so a tag
+      # moving forward can leave a still-running pod depending on a
+      # digest no longer reachable by any tag). The script instead
+      # cross-references every pod's actual running image digest,
+      # cluster-wide, before removing anything.
+      - name: Prune orphaned kind-node images
+        if: always()
+        run: ./infra/scripts/prune-kind-node-images.sh interview-insights
