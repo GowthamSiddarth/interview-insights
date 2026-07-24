@@ -11,6 +11,7 @@ import {
 } from '@/lib/api';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 
 function errorMessage(err: unknown): string {
@@ -92,7 +93,7 @@ export default function SearchPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer size="wide">
       <header>
         <h1 className="text-2xl font-semibold">Search</h1>
         <p className="text-sm text-gray-500">
@@ -101,19 +102,19 @@ export default function SearchPage() {
       </header>
 
       {error && (
-        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
       )}
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+      <Card as="section" className="flex flex-col gap-3">
         <h2 className="font-medium">1. Find a company</h2>
         <form onSubmit={handleCompanySearch} className="flex gap-2">
           <input
             name="q"
             required
             placeholder="Company name"
-            className="flex-1 rounded border px-2 py-1 text-sm dark:bg-gray-900"
+            className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm transition-colors dark:border-gray-600 dark:bg-gray-900"
           />
           <Button type="submit">Search</Button>
         </form>
@@ -129,7 +130,7 @@ export default function SearchPage() {
               {companyResults.map((company) => (
                 <li
                   key={company.id}
-                  className={`flex items-center justify-between gap-2 rounded border px-3 py-1 text-sm ${
+                  className={`flex items-center justify-between gap-2 rounded-md border px-3 py-1 text-sm transition-colors ${
                     selectedCompany?.id === company.id
                       ? 'border-indigo-600 dark:border-indigo-400'
                       : 'border-gray-300 dark:border-gray-600'
@@ -150,7 +151,7 @@ export default function SearchPage() {
                       step 2's review filtering below. */}
                   <Link
                     href={`/companies/${company.slug}`}
-                    className="shrink-0 text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    className="shrink-0 text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                   >
                     View profile
                   </Link>
@@ -159,15 +160,15 @@ export default function SearchPage() {
             </ul>
           )))
         }
-      </section>
+      </Card>
 
       {selectedCompany && (
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">
             2. Browse reviews for {selectedCompany.name}{' '}
             <Link
               href={`/companies/${selectedCompany.slug}`}
-              className="text-sm font-normal text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+              className="text-sm font-normal text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
               (view profile)
             </Link>
@@ -175,11 +176,11 @@ export default function SearchPage() {
           <form onSubmit={handleReviewSearch} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <label className="flex flex-col text-sm">
               Role title
-              <input name="roleTitle" className="rounded border px-2 py-1 dark:bg-gray-900" />
+              <input name="roleTitle" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <label className="flex flex-col text-sm">
               Round type
-              <select name="roundType" className="rounded border px-2 py-1 dark:bg-gray-900">
+              <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
                 <option value="">Any</option>
                 <option value="coding">Coding</option>
                 <option value="system_design">System design</option>
@@ -193,11 +194,11 @@ export default function SearchPage() {
             </label>
             <label className="flex flex-col text-sm">
               From
-              <input type="date" name="dateFrom" className="rounded border px-2 py-1 dark:bg-gray-900" />
+              <input type="date" name="dateFrom" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <label className="flex flex-col text-sm">
               To
-              <input type="date" name="dateTo" className="rounded border px-2 py-1 dark:bg-gray-900" />
+              <input type="date" name="dateTo" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <Button type="submit" className="col-span-full">
               Search reviews
@@ -215,7 +216,7 @@ export default function SearchPage() {
                 {reviewResults.map((review) => (
                   <li
                     key={review.id}
-                    className="rounded border border-gray-200 p-2 text-sm dark:border-gray-700"
+                    className="rounded-lg border border-gray-200 bg-white p-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
                   >
                     <p className="font-medium">
                       {review.roleTitle} — {roundTypeLabel(review.roundType)}
@@ -231,7 +232,7 @@ export default function SearchPage() {
               </ul>
             )))
           }
-        </section>
+        </Card>
       )}
     </PageContainer>
   );

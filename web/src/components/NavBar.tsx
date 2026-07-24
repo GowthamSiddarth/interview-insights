@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
 const linkClass =
-  'text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
+  'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 
 // Rendered once, in the root layout — present on every route. Each
 // page keeps its own title/description (page-specific); only the
@@ -33,8 +33,11 @@ export function NavBar() {
   }
 
   return (
-    <nav className="border-b border-gray-200 dark:border-gray-700">
-      <div className="mx-auto flex max-w-2xl items-center gap-4 px-8 py-3 text-sm">
+    <nav className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+      <div className="mx-auto flex max-w-4xl items-center gap-4 px-8 py-3 text-sm">
+        {/* max-w-4xl matches PageContainer's "wide" size (issue #231) —
+            the widest a page ever gets — so the nav bar never looks
+            narrower than the content below it. */}
         <Link href="/" className="font-semibold">
           Interview Insights
         </Link>

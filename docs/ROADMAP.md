@@ -796,3 +796,26 @@ Soft-Gating". Epic: GitHub issue #225.
       with no data to tease (GitHub issue #226, D40)
 - [x] Engineering blog (last) (GitHub issue #227) — Phase 21 is now
       fully done
+
+## Phase 22 — Visual Design Refresh
+
+Filed 2026-07-24 from the same UI/UX brainstorm as Phase 21, after the
+user characterized the app as "looks simple but not cool." Scoped to
+three mechanical, low-risk directions — typography, depth/surface, and
+layout width — not a redesign; color-palette expansion and a real
+brand mark were raised as a second-pass option, not attempted here.
+Milestone: "Phase 22 — Visual Design Refresh". Epic: GitHub issue #230.
+
+- [x] Typography, depth/surface, and layout-width pass — `Inter` via
+      `next/font/google` (self-hosted at build time); an explicit page
+      background (previously missing entirely, light or dark) so a
+      card's shadow has something to contrast against; a new `Card`
+      component replacing 11 duplicated flat-border strings; controls
+      bumped to `rounded-md`, cards to `rounded-xl`, with
+      `transition-colors` added to every hover state (a clean addition —
+      no `transition-*` existed anywhere before this); `PageContainer`
+      gained a `size` prop (narrow for forms, wide for the four
+      data-heavy pages), with `NavBar`'s own width synced to match
+      (GitHub issue #231, D41)
+- [ ] Engineering blog (last) (GitHub issue #232) — implemented once
+      issue #231 merges

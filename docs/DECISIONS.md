@@ -1493,6 +1493,70 @@ first cut, not a tuned threshold.
 
 ---
 
+### D41 — Visual design refresh: typography, depth/surface, and layout width (GitHub issue #231, Phase 22)
+
+**Context:** a UI/UX brainstorm characterized the app as "looks simple
+but not cool." An inventory of the actual styles confirmed it: default
+Tailwind config (no custom font, no extended color palette, no
+shadows), a single indigo accent used sparingly, flat `border-gray-200`
+boxes for every section, and — a real gap, not just a stylistic
+choice — no explicit page background at all, light or dark. Scoped to
+three mechanical, low-risk directions (typography, depth/surface,
+layout width); color-palette expansion and a real brand mark were
+explicitly raised as a second-pass option, not attempted here, since
+both are more subjective design-taste calls than the other three.
+
+**Decision:**
+- **Typography**: `Inter` via `next/font/google`, self-hosted at build
+  time (fetched once during `next build`, served from the app's own
+  origin — no runtime request to Google's CDN). Wired into Tailwind's
+  `fontFamily.sans` via a `--font-sans` CSS variable set on `<html>`,
+  with a system-font fallback chain for any context outside the root
+  layout (e.g. a bare component test).
+- **Depth & surface**: added an explicit page background
+  (`bg-gray-50`/`dark:bg-gray-950` on `<body>`) — without one, a card's
+  shadow has nothing to visually contrast against, so this was a
+  prerequisite for the rest of this decision, not a separate item.
+  Extracted a new `Card` component (`web/src/components/Card.tsx`,
+  `rounded-xl border bg-white p-4 shadow-sm dark:bg-gray-900`) — 11 call
+  sites across the app duplicated the identical flat-border string
+  independently before this. `Card` accepts an `as="div" | "section"`
+  prop so callers keep `<section>` where it's a real page landmark
+  rather than force every card into a generic `<div>`. Controls
+  (buttons, inputs, selects) bumped from bare `rounded` to `rounded-md`;
+  cards to `rounded-xl`; `GatedSection`'s dashed "locked" placeholder to
+  `rounded-lg` (kept dashed and shadow-less deliberately — it's not a
+  real card, the visual distinction from `Card` is the point). Hover
+  states across buttons, links, and inputs gained `transition-colors`
+  (there was no existing `transition-*` usage anywhere in the app
+  before this — a clean addition, not a change to any established
+  convention).
+- **Layout width**: `PageContainer` gained a `size?: 'narrow' | 'wide'`
+  prop — `narrow` (`max-w-2xl`, the default, unchanged) for every
+  form-shaped page (wizard, login, admin login, verify, my-reviews);
+  `wide` (`max-w-4xl`) for the four data-heavy pages (search, company
+  profile, analytics, moderation queue). `NavBar`'s own inner wrapper —
+  previously independently hardcoded to `max-w-2xl` — now matches the
+  wide value, so the nav bar never looks narrower than the page
+  content below it regardless of which size a given page uses; it also
+  gained a real surface (`bg-white`/`dark:bg-gray-900`) instead of
+  relying solely on its bottom border, consistent with the new page
+  background giving it something to contrast against.
+
+**Not a redesign** — no new color palette, no brand mark/logo, no
+change to any page's actual layout structure or information hierarchy.
+Every change here is a className-level swap plus two small,
+single-purpose components (`Card`, the `PageContainer` size prop) — the
+kind of change deliberately chosen to be mechanical and low-risk rather
+than something requiring new architecture.
+
+**Revisit when:** color-palette expansion and a real brand mark, if the
+user wants to pursue a second design pass — both were scoped out here
+specifically because they're subjective taste calls rather than
+mechanical fixes.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

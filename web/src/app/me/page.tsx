@@ -11,11 +11,12 @@ import {
   MySubmissionRoundRating,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
 
 const linkClass =
-  'text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
+  'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 
 const STATUS_CLASS: Record<string, string> = {
   pending: 'text-amber-700 dark:text-amber-400',
@@ -46,7 +47,8 @@ function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
-const inputClass = 'rounded border px-2 py-1 dark:bg-gray-900';
+const inputClass =
+  'rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900';
 const itemClass =
   'flex flex-col gap-2 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700';
 
@@ -478,7 +480,7 @@ function DeleteAccountSection() {
   }
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-red-300 p-4 dark:border-red-800">
+    <section className="flex flex-col gap-2 rounded-xl border border-red-300 bg-white p-4 shadow-sm dark:border-red-800 dark:bg-gray-900">
       <h2 className="font-medium text-red-700 dark:text-red-400">Danger zone</h2>
       <p className="text-sm text-gray-500">
         Permanently delete your account and every review you&apos;ve submitted, across every
@@ -560,7 +562,7 @@ export default function MyReviewsPage() {
       </header>
 
       {error && (
-        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
       )}
@@ -579,10 +581,7 @@ export default function MyReviewsPage() {
           !entry.overallReview;
 
         return (
-          <section
-            key={entry.processId}
-            className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700"
-          >
+          <Card as="section" key={entry.processId} className="flex flex-col gap-3">
             <header className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="font-medium">
@@ -620,7 +619,7 @@ export default function MyReviewsPage() {
                 onChanged={reload}
               />
             )}
-          </section>
+          </Card>
         );
       })}
 
