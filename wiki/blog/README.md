@@ -148,6 +148,15 @@ phase's blog is complete.
 3. [Issue #146 — Sessions on the write path](phase-16-candidate-accounts-auth/issue-146-sessions-on-write-path/README.md)
 4. [Issue #147 — Login/logout UI + wizard integration](phase-16-candidate-accounts-auth/issue-147-login-logout-wizard-integration/README.md)
 
+## Phase 17 — Candidate Self-Service
+
+See `docs/ROADMAP.md` Phase 17. All three feature issues are done —
+this phase's blog is complete.
+
+1. [Issue #149 — My reviews: own submissions grouped by InterviewProcess](phase-17-candidate-self-service/issue-149-my-reviews/README.md)
+2. [Issue #150 — Update/Delete under moderation-safe rules](phase-17-candidate-self-service/issue-150-update-delete/README.md)
+3. [Issue #151 — GDPR erasure path (D34)](phase-17-candidate-self-service/issue-151-gdpr-erasure/README.md)
+
 ## Phase 18 — Admin Authentication
 
 See `docs/ROADMAP.md` Phase 18. Both feature issues are done — this
