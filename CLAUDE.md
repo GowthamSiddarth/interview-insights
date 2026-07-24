@@ -1642,6 +1642,24 @@ real-browser (Playwright) companion is explicitly deferred, not built
 here. Documented in `wiki/deployment-guide.md` section 6.1 and
 `docs/DECISIONS.md` D36.
 
+**Real bug found and fixed via the smoke test's own verification
+(GitHub issue #212)** — stress-testing the e2e suite surfaced an
+intermittent `GET /moderation/queue` 500, jumping between unrelated
+test files each time. Root cause: `ModerationService.listPending()`
+enriches each entity type via a required-relation Prisma `include`
+several levels deep, which can transiently throw if a concurrent GDPR
+erasure/Update-Delete commits between Prisma's own internal round
+trips for that include — confirmed the FK itself is real and
+Postgres-enforced (`ON DELETE RESTRICT`), so this is a query-time race,
+never a durable orphaned row. The actual bug was the blast radius: one
+entity type's transient failure crashed the *whole* endpoint via
+`Promise.all`. Fixed with `Promise.allSettled` — a failed batch logs
+and degrades to `entity: null` for just its own entries, never
+affecting the other two types or crashing the endpoint. Stress-verified
+8+ consecutive full-suite runs before/after: the underlying race still
+fires occasionally (confirmed in logs) but no longer fails any test.
+Documented in `docs/DECISIONS.md` D37.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
