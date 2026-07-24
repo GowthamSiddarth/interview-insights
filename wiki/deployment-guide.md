@@ -485,6 +485,31 @@ curl "http://localhost:3001/search/reviews?companyId=<company-id>"
 Swap `localhost:3001` for `http://api.interview-insights.local` when
 running against `kind` (section 3).
 
+### 6.1 Automated golden-path smoke test
+
+The manual walkthrough above is a quick one-off check; for the full
+feature set (every moderated content type, update/delete, GDPR
+erasure — not just round ratings) there's a single automated test that
+does the same thing without copying IDs by hand:
+
+```bash
+cd api
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+OPENSEARCH_INDEX_PREFIX="e2etest-" \
+MAIL_HTTP_URL="http://localhost:8025" \
+npm run smoke:e2e
+```
+
+`api/test/golden-path.smoke-spec.ts` walks company creation, candidate
+magic-link auth, all three moderated content types, moderation approve/
+reject, search, analytics (clearing the shrinkage floor for a real
+score), my-reviews, update/delete, and GDPR erasure in one continuous
+pass. It refuses to run unless `DATABASE_URL` points at
+`interview_insights_test` (`assertUsingTestDatabase()`,
+docs/DECISIONS.md D36) — safe to rerun on demand, deliberately **not**
+wired into `npm run test:e2e` or CI, since the per-feature e2e specs
+already own regression coverage; this is a manual sanity check.
+
 ## 7. Self-hosted GitHub Actions runner (on-demand, Phase 12)
 
 Registered once; started manually whenever a workflow needs to run on
