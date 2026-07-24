@@ -1599,6 +1599,31 @@ updated to match.
 PRs, and every phase built so far (1-7, 9-18) now has a complete
 engineering blog.
 
+**Real CD incident found and fixed directly (no dedicated issue), same
+day as #152's merge** — the PR #208 merge (unrelated to this incident)
+triggered `cd.yml` as usual, and the "Roll out api" step timed out: the
+new pod crash-looped on an OpenSearch `cluster_block_exception`
+(flood-stage watermark). Root cause was several layers removed from the
+app itself: five days of CD runs had left the shared Docker Desktop
+disk at 96% full, almost entirely build cache and dangling images from
+every prior "Build api/web image" step (`kind load` retags forward but
+never removes what it replaces, and the self-hosted runner — issue
+#88 — is a persistent local machine, not a fresh disk per run). `api`/
+`web` were never actually down (the old pod kept serving throughout);
+the deploy was just stuck. Fixed live: pruned dangling images + build
+cache (96% → 49% disk), cleared OpenSearch's blocks, re-ran the
+rollout — both pods now healthy on the latest commit. A near-miss
+during manual diagnosis is documented in D35: node-internal
+`crictl rmi --prune` briefly deleted the image tags backing the
+then-live `web` Deployment and `ingress-nginx-controller` pod (neither
+caught by "unreferenced" logic, since Kubernetes tracks a running
+container by digest, not tag) — both restored immediately before
+either pod needed to restart, no actual outage. `cd.yml` gained a
+`Prune stale Docker artifacts` step (`if: always()`, host-level
+`docker image prune`/`docker builder prune` only — deliberately never
+`crictl`/`ctr` inside the kind node, per the near-miss) so this doesn't
+recur. See D35 for the full incident writeup.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
