@@ -752,11 +752,10 @@ GitHub issue #214.
       durable orphaned row is possible; the real bug was `Promise.all`
       letting one entity type's failure crash the whole endpoint for
       every caller (PR #213, GitHub issue #212, D37)
-- [ ] Honest login-page copy + lock down `POST /companies` — the login
+- [x] Honest login-page copy + lock down `POST /companies` — the login
       form already always upserts a candidate but its copy read as
       login-only; `POST /companies` had neither a session requirement
       nor rate limiting, an anonymous-write gap predating Phase 16
-      entirely since `Company` has no `candidateId` (GitHub issue #217,
-      D38) — code complete and live-verified, PR blocked on a GitHub
-      Pull Requests service outage, not the work itself
+      entirely since `Company` has no `candidateId` (PR #219, GitHub
+      issue #217, D38)
 - [ ] Engineering blog (last) (GitHub issue #218)
