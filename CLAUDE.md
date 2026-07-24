@@ -1719,6 +1719,26 @@ reopened, same precedent Phase 18 already set.
 closed via merged PRs, and every phase built so far has a complete
 engineering blog.
 
+**Phase 21 (Anonymous Visitor Soft-Gating)** — filed after a UI/UX
+brainstorm surfaced a deliberate product pivot: soft-gate (teaser + CTA,
+never a hard redirect) the company profile page and analytics dashboard
+for anonymous visitors, to drive candidate signups — asked directly and
+confirmed as a genuine pivot toward signup pressure, not a scraping
+concern, reversing part of Phase 15's fully-public design intent. A new
+`GatedSection` component (mirroring `EmptyState`'s minimal style, driven
+by the existing `hasCandidateSessionHint()` cookie-hint idiom, D32) keeps
+the profile page's header + "Overall experience" as a free hook while
+gating the round-type breakdown and reviews beyond the first; the
+analytics page gates all three data sections behind one combined prompt.
+The homepage wizard's company picker and "Change company" button stay
+ungated — pure navigation with no data to tease (GitHub issue #226, D40).
+77 web tests, lint, build all green; live-verified against the real
+`kind` cluster with seeded data via headless-browser (Playwright):
+anonymous visits show the gate prompts with content genuinely absent,
+logged-in visits show everything, zero console errors. **Phase 21 is now
+fully done** — issues #226-227 closed via merged PRs, and every phase
+built so far has a complete engineering blog.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162

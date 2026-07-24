@@ -182,3 +182,11 @@ Synthetic Data) remains queued behind it.
 3. [Issue #212 — `GET /moderation/queue` isolates each entity type's enrichment (D37)](phase-20-operational-hardening/issue-212-moderation-queue-race-fix/README.md)
 4. [Issue #217 — Honest login-page copy + lock down `POST /companies` (D38)](phase-20-operational-hardening/issue-217-login-copy-company-lockdown/README.md)
 5. [Issue #222 — Session cookies need a shared `Domain`, or `web` never sees a real login (D39)](phase-20-operational-hardening/issue-222-session-cookie-domain/README.md)
+
+## Phase 21 — Anonymous Visitor Soft-Gating
+
+See `docs/ROADMAP.md` Phase 21. A deliberate product pivot toward
+candidate signup pressure that partially reverses Phase 15's fully-
+public design intent — this phase's blog is complete.
+
+1. [Soft-gate company profile & analytics pages (D40)](phase-21-anonymous-visitor-soft-gating/README.md)
