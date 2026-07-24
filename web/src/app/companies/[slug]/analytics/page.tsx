@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError, CompanyAnalytics } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { GatedSection } from '@/components/GatedSection';
 import { PageContainer } from '@/components/PageContainer';
 
 function roundTypeLabel(roundType: string): string {
@@ -21,7 +22,16 @@ export default function CompanyAnalyticsPage() {
   // wrapper, which the Promise+use() pattern needs).
   const { slug } = useParams<{ slug: string }>();
   const [analytics, setAnalytics] = useState<CompanyAnalytics | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Session-hint cookie, not a GET /auth/me poll — same tri-state idiom
+  // NavBar/the wizard already use (D32): null while unchecked, so the gate
+  // never flashes before the real state is known.
+  const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setCandidateSession(api.hasCandidateSessionHint());
+  }, []);
 
   useEffect(() => {
     // Profile pages address companies by slug (Phase 15) — this route
@@ -29,7 +39,10 @@ export default function CompanyAnalyticsPage() {
     // itself still takes.
     api
       .getCompanyBySlug(slug)
-      .then((company) => api.getCompanyAnalytics(company.id))
+      .then((company) => {
+        setCompanyName(company.name);
+        return api.getCompanyAnalytics(company.id);
+      })
       .then(setAnalytics)
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Something went wrong.'));
   }, [slug]);
@@ -72,98 +85,103 @@ export default function CompanyAnalyticsPage() {
         </Link>
       </header>
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
-        <h2 className="font-medium">Overall experience</h2>
-        {analytics.overall ? (
-          <dl className="grid grid-cols-2 gap-4">
-            <ScoreDisplay
-              label="Overall experience"
-              value={analytics.overall.scores.overallExperience}
-              sampleSize={analytics.overall.sampleSize}
-            />
-            <ScoreDisplay
-              label="Would recommend"
-              value={analytics.overall.scores.wouldRecommendPct}
-              sampleSize={analytics.overall.sampleSize}
-              suffix="%"
-            />
-          </dl>
-        ) : (
-          <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
-        )}
-      </section>
+      <GatedSection
+        loggedIn={candidateSession}
+        prompt={`Log in to see the full analytics breakdown for ${companyName ?? 'this company'}`}
+      >
+        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+          <h2 className="font-medium">Overall experience</h2>
+          {analytics.overall ? (
+            <dl className="grid grid-cols-2 gap-4">
+              <ScoreDisplay
+                label="Overall experience"
+                value={analytics.overall.scores.overallExperience}
+                sampleSize={analytics.overall.sampleSize}
+              />
+              <ScoreDisplay
+                label="Would recommend"
+                value={analytics.overall.scores.wouldRecommendPct}
+                sampleSize={analytics.overall.sampleSize}
+                suffix="%"
+              />
+            </dl>
+          ) : (
+            <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
+          )}
+        </section>
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
-        <h2 className="font-medium">By round type</h2>
-        {analytics.roundTypes.length === 0 ? (
-          <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {analytics.roundTypes.map((rt) => (
-              <div key={rt.roundType}>
-                <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
-                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <ScoreDisplay
-                    label="Difficulty"
-                    value={rt.scores.difficulty}
-                    sampleSize={rt.sampleSize}
-                  />
-                  <ScoreDisplay
-                    label="Fairness"
-                    value={rt.scores.fairness}
-                    sampleSize={rt.sampleSize}
-                  />
-                  <ScoreDisplay
-                    label="Communication"
-                    value={rt.scores.communicationFluency}
-                    sampleSize={rt.sampleSize}
-                  />
-                  <ScoreDisplay
-                    label="Attentiveness"
-                    value={rt.scores.attentiveness}
-                    sampleSize={rt.sampleSize}
-                  />
-                  <ScoreDisplay
-                    label="Bias signal"
-                    value={rt.scores.biasSignal}
-                    sampleSize={rt.sampleSize}
-                  />
-                </dl>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+          <h2 className="font-medium">By round type</h2>
+          {analytics.roundTypes.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {analytics.roundTypes.map((rt) => (
+                <div key={rt.roundType}>
+                  <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
+                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                    <ScoreDisplay
+                      label="Difficulty"
+                      value={rt.scores.difficulty}
+                      sampleSize={rt.sampleSize}
+                    />
+                    <ScoreDisplay
+                      label="Fairness"
+                      value={rt.scores.fairness}
+                      sampleSize={rt.sampleSize}
+                    />
+                    <ScoreDisplay
+                      label="Communication"
+                      value={rt.scores.communicationFluency}
+                      sampleSize={rt.sampleSize}
+                    />
+                    <ScoreDisplay
+                      label="Attentiveness"
+                      value={rt.scores.attentiveness}
+                      sampleSize={rt.sampleSize}
+                    />
+                    <ScoreDisplay
+                      label="Bias signal"
+                      value={rt.scores.biasSignal}
+                      sampleSize={rt.sampleSize}
+                    />
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
-        <h2 className="font-medium">Recruiter experience</h2>
-        {analytics.recruiter ? (
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <ScoreDisplay
-              label="Approachability"
-              value={analytics.recruiter.scores.approachability}
-              sampleSize={analytics.recruiter.sampleSize}
-            />
-            <ScoreDisplay
-              label="Response time"
-              value={analytics.recruiter.scores.responseTime}
-              sampleSize={analytics.recruiter.sampleSize}
-            />
-            <ScoreDisplay
-              label="Timeliness"
-              value={analytics.recruiter.scores.timeliness}
-              sampleSize={analytics.recruiter.sampleSize}
-            />
-            <ScoreDisplay
-              label="Communication quality"
-              value={analytics.recruiter.scores.communicationQuality}
-              sampleSize={analytics.recruiter.sampleSize}
-            />
-          </dl>
-        ) : (
-          <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
-        )}
-      </section>
+        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+          <h2 className="font-medium">Recruiter experience</h2>
+          {analytics.recruiter ? (
+            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <ScoreDisplay
+                label="Approachability"
+                value={analytics.recruiter.scores.approachability}
+                sampleSize={analytics.recruiter.sampleSize}
+              />
+              <ScoreDisplay
+                label="Response time"
+                value={analytics.recruiter.scores.responseTime}
+                sampleSize={analytics.recruiter.sampleSize}
+              />
+              <ScoreDisplay
+                label="Timeliness"
+                value={analytics.recruiter.scores.timeliness}
+                sampleSize={analytics.recruiter.sampleSize}
+              />
+              <ScoreDisplay
+                label="Communication quality"
+                value={analytics.recruiter.scores.communicationQuality}
+                sampleSize={analytics.recruiter.sampleSize}
+              />
+            </dl>
+          ) : (
+            <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
+          )}
+        </section>
+      </GatedSection>
     </PageContainer>
   );
 }

@@ -1430,6 +1430,69 @@ a placeholder pending tuning.
 
 ---
 
+### D40 — Soft-gate company profile & analytics pages for anonymous visitors (GitHub issue #226, Phase 21)
+
+**Context:** a UI/UX brainstorm surfaced a request to gate company
+profile pages, the analytics dashboard, and "change company" behind
+login. Taken at face value this contradicts Phase 15's explicit design
+intent ("Public Company Profile Pages" — public discoverability is the
+whole "Glassdoor for interview loops" premise), so it was raised
+directly rather than silently implemented. Asked why: the motivation is
+a deliberate pivot toward candidate signup pressure, not a scraping/
+abuse concern or a misunderstanding of the existing design. Asked how
+hard the gate should be: a soft gate — teaser content plus a CTA — not
+a hard redirect-to-login wall, so an anonymous visitor still sees enough
+to decide it's worth logging in (the same pattern Glassdoor itself
+uses for its own deeper content).
+
+**Decision:**
+- **Company profile page** (`/companies/[slug]`) stays a light touch —
+  the "hook": header (name, industry, size) and the "Overall experience"
+  section remain visible to everyone. The "By round type" breakdown and
+  reviews beyond the first are gated. The reviews section always shows
+  the real total count and the first review in full, regardless of
+  login state.
+- **Analytics page** (`/companies/[slug]/analytics`) gets the
+  aggressive gate — its own copy already frames it as "the full
+  analytics breakdown," the deep-dive upsell from the profile page's
+  link, so all three data sections (overall, round-type, recruiter)
+  sit behind one combined prompt for anonymous visitors.
+- **Scope call, made explicitly rather than assumed**: the homepage
+  wizard's company picker and "Change company" button stay ungated.
+  Both are pure navigation/state-reset actions — they display no
+  company data themselves, they just point at (or reset) which
+  company's profile/analytics a visitor will look at next. There's
+  nothing in either action to tease; the actual gate belongs on the
+  destination pages' content. Same reasoning extends to the `/search`
+  page's "View profile" links — they just point at the now-gated
+  destination, nothing to change there.
+- New reusable `GatedSection` component
+  (`web/src/components/GatedSection.tsx`), mirroring `EmptyState.tsx`'s
+  minimal one-prop-object style: renders children when logged in, a
+  placeholder card (dashed border, muted background, "Log in to
+  unlock" link) when logged out, nothing while the session-hint check
+  is still pending. Driven by the existing `hasCandidateSessionHint()`
+  cookie-hint idiom already established in `NavBar.tsx`/the wizard
+  (D32) — no network call, no new backend endpoint; both pages were
+  already public `GET`s.
+- **Not a violation of hard constraint #3** (shrinkage floor, never
+  show null as zero): that constraint governs a score's *reliability*
+  once shown (n<3 → null), not who's allowed to see it at all. Limiting
+  *visibility* to logged-in users is a separate, new access layer
+  layered on top, not a change to the scoring/display logic itself.
+- No CSS blur effects — a placeholder card replacing the gated subtree
+  entirely is simpler to implement, test, and reason about, and matches
+  this codebase's existing minimalist component style. No SEO
+  trade-off either: both pages are `'use client'`, fully client-rendered
+  after mount with no SSR, so a crawler sees no real content either way
+  regardless of gating.
+
+**Revisit when:** if real signup-conversion data suggests the gate is
+too aggressive (or not aggressive enough) on either page — this is a
+first cut, not a tuned threshold.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
