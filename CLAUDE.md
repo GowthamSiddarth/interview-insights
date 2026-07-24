@@ -168,13 +168,14 @@ see the Phase 18 intro in `docs/ROADMAP.md` for why. Phase 20
 (Operational Hardening & Live-Verification Findings) was filed
 retroactively, 2026-07-24 — a new standing convention that every ad-hoc
 dev/test/structural task gets tracked under an Epic, not just planned
-phase work. 3 of 5 Phase 20 issues are done (#215 CD prune/D35, #216
-golden-path smoke test/D36, #212 moderation-queue race fix/D37); #217
-(login-copy + company-creation lockdown/D38) is code-complete and
-live-verified but its PR is blocked on a GitHub Pull Requests service
-outage; #218 (blog) is last, once #217 merges. Phase 20 jumped ahead of
-Phase 19 the same way Phase 18 jumped ahead of 16/17 — the findings
-surfaced live, mid-session, rather than through planned-phase work.
+phase work. 4 of 5 Phase 20 issues are done (#215 CD prune/D35, #216
+golden-path smoke test/D36, #212 moderation-queue race fix/D37, #217
+login-copy + company-creation lockdown/D38, PR #219 — its earlier PR
+attempts hit a GitHub Pull Requests service outage, resolved by simply
+retrying once the outage cleared); #218 (blog) is last, now that every
+other Phase 20 issue is merged. Phase 20 jumped ahead of Phase 19 the
+same way Phase 18 jumped ahead of 16/17 — the findings surfaced live,
+mid-session, rather than through planned-phase work.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1689,16 +1690,15 @@ green; live-verified in a real browser (anonymous visit shows a
 creating a company succeeds, and a direct unauthenticated
 `POST /companies` gets 401) — zero console errors.
 
-- Next step: close out Phase 20 first — open the pending PR for issue
-  #217 once GitHub's Pull Requests outage clears (code is complete,
-  live-verified, and pushed to `fix-login-copy-and-company-creation-
-  lockdown`), merge it, then write issue #218 (Phase 20's engineering
-  blog, `wiki/blog/phase-20-operational-hardening/`, one post per
-  feature issue: #215, #216, #212, #217). After that, Phase 19 (Content
-  Quality & Synthetic Data) resumes — three independent issues, any
-  order (GitHub issues #162-165, already filed); the natural first pick
-  is issue #162 (near-duplicate review detection), since it directly
-  replaces D13's documented exact-match/full-table-scan limitation.
+- Next step: close out Phase 20 — write issue #218 (Phase 20's
+  engineering blog, `wiki/blog/phase-20-operational-hardening/`, one
+  post per feature issue: #215, #216, #212, #217; PR #219 merged
+  cleanly once GitHub's earlier Pull Requests outage cleared, no code
+  changes needed). After that, Phase 19 (Content Quality & Synthetic
+  Data) resumes — three independent issues, any order (GitHub issues
+  #162-165, already filed); the natural first pick is issue #162
+  (near-duplicate review detection), since it directly replaces D13's
+  documented exact-match/full-table-scan limitation.
 
 ## Open decisions still to make
 
