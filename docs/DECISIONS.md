@@ -1557,6 +1557,39 @@ mechanical fixes.
 
 ---
 
+### D42 — Button color variants and a brand mark (GitHub issue #236, Phase 23)
+
+**Context:** the two directions D41/Phase 22 deliberately scoped out
+as design-taste calls rather than mechanical fixes — color-palette
+expansion and a real brand mark.
+
+**Decision:**
+- **Color**: no new arbitrary accent hue was introduced. Instead,
+  `Button` gained a `variant?: 'primary' | 'danger' | 'neutral' |
+  'warning'` prop, formalizing colors already in use throughout the
+  app (indigo for primary actions, red for destructive ones, gray for
+  cancel/secondary, amber for the moderation "flag" action) rather than
+  the identical `className="bg-red-600 hover:bg-red-700"`/
+  `"bg-gray-600 hover:bg-gray-700"` overrides duplicated independently
+  across `me/page.tsx` (7 sites) and `moderation/page.tsx` (3 sites,
+  including the one `bg-amber-600` "Flag" button). `Button` and the
+  repeated text-input class strings across the app also gained visible
+  `focus`/`focus-visible` ring styling — a real missing piece of
+  keyboard-accessible interactive polish, not decoration.
+- **Brand mark**: a small inline SVG (`BrandMark.tsx` — a rounded
+  indigo badge with a star, tying into the product's core "rating"
+  concept), placed beside the "Interview Insights" wordmark in
+  `NavBar`, and reused as the site favicon via Next.js's `app/icon.svg`
+  file convention (auto-served, no metadata config needed). No
+  external image asset or network dependency — the same self-contained
+  approach `next/font/google` already established for typography (D41).
+
+**Revisit when:** if a future design pass wants a more elaborate
+brand identity (a distinct logotype, more than one mark) — this is a
+lightweight, functional placeholder, not a final brand system.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

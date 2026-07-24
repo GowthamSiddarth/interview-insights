@@ -48,7 +48,7 @@ function errorMessage(err: unknown): string {
 }
 
 const inputClass =
-  'rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900';
+  'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
 const itemClass =
   'flex flex-col gap-2 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700';
 
@@ -144,7 +144,7 @@ function RoundRatingItem({
           <Button
             type="button"
             onClick={() => setEditing(false)}
-            className="bg-gray-600 hover:bg-gray-700"
+            variant="neutral"
             disabled={busy}
           >
             Cancel
@@ -170,7 +170,7 @@ function RoundRatingItem({
         <Button
           type="button"
           onClick={() => setEditing(true)}
-          className="bg-gray-600 hover:bg-gray-700"
+          variant="neutral"
           disabled={busy}
         >
           Edit
@@ -178,7 +178,7 @@ function RoundRatingItem({
         <Button
           type="button"
           onClick={() => void remove()}
-          className="bg-red-600 hover:bg-red-700"
+          variant="danger"
           disabled={busy}
         >
           Delete
@@ -273,7 +273,7 @@ function RecruiterRatingItem({
           <Button
             type="button"
             onClick={() => setEditing(false)}
-            className="bg-gray-600 hover:bg-gray-700"
+            variant="neutral"
             disabled={busy}
           >
             Cancel
@@ -298,7 +298,7 @@ function RecruiterRatingItem({
         <Button
           type="button"
           onClick={() => setEditing(true)}
-          className="bg-gray-600 hover:bg-gray-700"
+          variant="neutral"
           disabled={busy}
         >
           Edit
@@ -306,7 +306,7 @@ function RecruiterRatingItem({
         <Button
           type="button"
           onClick={() => void remove()}
-          className="bg-red-600 hover:bg-red-700"
+          variant="danger"
           disabled={busy}
         >
           Delete
@@ -405,7 +405,7 @@ function OverallReviewItem({
           <Button
             type="button"
             onClick={() => setEditing(false)}
-            className="bg-gray-600 hover:bg-gray-700"
+            variant="neutral"
             disabled={busy}
           >
             Cancel
@@ -431,7 +431,7 @@ function OverallReviewItem({
         <Button
           type="button"
           onClick={() => setEditing(true)}
-          className="bg-gray-600 hover:bg-gray-700"
+          variant="neutral"
           disabled={busy}
         >
           Edit
@@ -439,7 +439,7 @@ function OverallReviewItem({
         <Button
           type="button"
           onClick={() => void remove()}
-          className="bg-red-600 hover:bg-red-700"
+          variant="danger"
           disabled={busy}
         >
           Delete
@@ -490,7 +490,7 @@ function DeleteAccountSection() {
       <Button
         type="button"
         onClick={() => void eraseAccount()}
-        className="self-start bg-red-600 hover:bg-red-700"
+        variant="danger" className="self-start"
         disabled={busy}
       >
         Delete my account

@@ -114,7 +114,7 @@ export default function SearchPage() {
             name="q"
             required
             placeholder="Company name"
-            className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm transition-colors dark:border-gray-600 dark:bg-gray-900"
+            className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
           />
           <Button type="submit">Search</Button>
         </form>
@@ -176,11 +176,11 @@ export default function SearchPage() {
           <form onSubmit={handleReviewSearch} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <label className="flex flex-col text-sm">
               Role title
-              <input name="roleTitle" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
+              <input name="roleTitle" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <label className="flex flex-col text-sm">
               Round type
-              <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
+              <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
                 <option value="">Any</option>
                 <option value="coding">Coding</option>
                 <option value="system_design">System design</option>
@@ -194,11 +194,11 @@ export default function SearchPage() {
             </label>
             <label className="flex flex-col text-sm">
               From
-              <input type="date" name="dateFrom" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
+              <input type="date" name="dateFrom" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <label className="flex flex-col text-sm">
               To
-              <input type="date" name="dateTo" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
+              <input type="date" name="dateTo" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <Button type="submit" className="col-span-full">
               Search reviews
