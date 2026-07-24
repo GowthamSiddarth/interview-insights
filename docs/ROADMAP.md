@@ -819,3 +819,22 @@ Milestone: "Phase 22 — Visual Design Refresh". Epic: GitHub issue #230.
       (GitHub issue #231, D41)
 - [x] Engineering blog (last) (GitHub issue #232) — Phase 22 is now
       fully done
+
+## Phase 23 — Color System & Brand Mark
+
+Filed 2026-07-24, the two directions deliberately scoped out of Phase
+22 as design-taste calls: a formalized `Button` color-variant system
+and a real brand mark. Milestone: "Phase 23 — Color System & Brand
+Mark". Epic: GitHub issue #235.
+
+- [x] Button color variants, focus rings, and a brand mark — `Button`
+      gained a `variant` prop (`primary`/`danger`/`neutral`/`warning`),
+      formalizing colors already in use rather than introducing a new
+      accent hue, replacing 10 duplicated inline color overrides across
+      `me/page.tsx`/`moderation/page.tsx`; visible focus-ring styling
+      added to `Button` and every text input; a new `BrandMark`
+      component (an inline SVG star badge, no external asset) placed in
+      `NavBar` and reused as the site favicon via `app/icon.svg`
+      (GitHub issue #236, D42)
+- [ ] Engineering blog (last) (GitHub issue #237) — implemented once
+      issue #236 merges

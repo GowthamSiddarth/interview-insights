@@ -226,7 +226,7 @@ export default function HomePage() {
           >
             <label className="flex flex-col text-sm">
               Name
-              <input name="name" required className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
+              <input name="name" required className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <label className="flex flex-col text-sm">
               Slug
@@ -235,12 +235,12 @@ export default function HomePage() {
                 required
                 pattern="[a-z0-9]+(-[a-z0-9]+)*"
                 placeholder="acme-corp"
-                className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
               />
             </label>
             <label className="flex flex-col text-sm">
               Size
-              <select name="sizeBucket" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
+              <select name="sizeBucket" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
                 <option value="startup">Startup</option>
                 <option value="mid">Mid</option>
                 <option value="large">Large</option>
@@ -292,12 +292,12 @@ export default function HomePage() {
                 <input
                   name="roleTitle"
                   required
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               <label className="flex flex-col text-sm">
                 Outcome
-                <select name="outcome" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
+                <select name="outcome" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
                   <option value="in_progress">In progress</option>
                   <option value="offer">Offer</option>
                   <option value="rejected">Rejected</option>
@@ -329,12 +329,12 @@ export default function HomePage() {
                 <input
                   name="title"
                   required
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               <label className="flex flex-col text-sm">
                 Type
-                <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
+                <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
                   <option value="coding">Coding</option>
                   <option value="system_design">System design</option>
                   <option value="behavioral">Behavioral</option>
@@ -372,7 +372,7 @@ export default function HomePage() {
                       max={5}
                       required
                       defaultValue={3}
-                      className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                      className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                     />
                   </label>
                 ),
@@ -416,7 +416,7 @@ export default function HomePage() {
                 <input
                   name="recruiterIdentifier"
                   required
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                 />
                 <span className="text-xs text-gray-500">
                   Used only to tell recruiters apart — never shown publicly.
@@ -434,7 +434,7 @@ export default function HomePage() {
                         max={5}
                         required
                         defaultValue={3}
-                        className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                        className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                       />
                     </label>
                   ),
@@ -445,7 +445,7 @@ export default function HomePage() {
                 <textarea
                   name="freeText"
                   rows={2}
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               <Button type="submit" className="self-start">
@@ -482,7 +482,7 @@ export default function HomePage() {
                     max={5}
                     required
                     defaultValue={3}
-                    className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                    className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                   />
                 </label>
                 <label className="flex items-center gap-2 text-sm">
@@ -495,7 +495,7 @@ export default function HomePage() {
                 <textarea
                   name="reviewText"
                   rows={2}
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               {/* One overall review per process (schema-enforced) — the form

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { BrandMark } from '@/components/BrandMark';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
@@ -38,7 +39,8 @@ export function NavBar() {
         {/* max-w-4xl matches PageContainer's "wide" size (issue #231) —
             the widest a page ever gets — so the nav bar never looks
             narrower than the content below it. */}
-        <Link href="/" className="font-semibold">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <BrandMark />
           Interview Insights
         </Link>
         <Link href="/search" className={linkClass}>

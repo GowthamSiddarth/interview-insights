@@ -167,7 +167,7 @@ export default function ModerationPage() {
             item publicly visible; rejecting and flagging keep it hidden.
           </p>
         </div>
-        <Button type="button" onClick={() => void logout()} className="bg-gray-600 hover:bg-gray-700">
+        <Button type="button" onClick={() => void logout()} variant="neutral">
           Log out
         </Button>
       </header>
@@ -183,7 +183,7 @@ export default function ModerationPage() {
         <input
           value={reviewedBy}
           onChange={(e) => setReviewedBy(e.target.value)}
-          className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
+          className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
         />
       </label>
 
@@ -208,14 +208,14 @@ export default function ModerationPage() {
             <Button
               type="button"
               onClick={() => void act(entry, 'reject')}
-              className="bg-red-600 hover:bg-red-700"
+              variant="danger"
             >
               Reject
             </Button>
             <Button
               type="button"
               onClick={() => void act(entry, 'flag')}
-              className="bg-amber-600 hover:bg-amber-700"
+              variant="warning"
             >
               Flag
             </Button>
@@ -230,7 +230,7 @@ export default function ModerationPage() {
                     [entry.id]: e.target.value as ModerationFlagReason,
                   }))
                 }
-                className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors dark:border-gray-600 dark:bg-gray-900"
+                className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
               >
                 {FLAG_REASONS.map((r) => (
                   <option key={r} value={r}>
