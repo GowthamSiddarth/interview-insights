@@ -78,8 +78,12 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     pending?: number;
   }): Promise<{ companyId: string; slug: string; approvedIds: string[] }> {
     const slug = uniqueSlug();
+    // POST /companies is session-gated now too — a throwaway login just
+    // for this, separate from the per-rating candidates below.
+    const { cookie: setupCookie } = await loginAsCandidate(app, uniqueEmail());
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', setupCookie)
       .send({ name: 'Profile Co', slug, sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;

@@ -38,9 +38,10 @@ export default function LoginPage() {
   return (
     <PageContainer>
       <header>
-        <h1 className="text-2xl font-semibold">Log in</h1>
+        <h1 className="text-2xl font-semibold">Log in or sign up</h1>
         <p className="text-sm text-gray-500">
-          No password — we&apos;ll email you a one-time link to log in.
+          No password — enter your email and we&apos;ll send a one-time link. New here? The same
+          link creates your account automatically.
         </p>
       </header>
 
@@ -52,8 +53,9 @@ export default function LoginPage() {
 
       {linkRequestedFor ? (
         <p className="text-sm text-green-700 dark:text-green-400">
-          If an account exists for {linkRequestedFor}, a login link is on its way. Check your
-          inbox — the link expires in 15 minutes and can only be used once.
+          A login link is on its way to {linkRequestedFor} — first time here? It creates your
+          account too. Check your inbox — the link expires in 15 minutes and can only be used
+          once.
         </p>
       ) : (
         <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-3 sm:w-64">

@@ -717,3 +717,46 @@ Synthetic Data". Epic: GitHub issue #168.
       parameterized with deliberately uneven distribution to exercise the
       shrinkage floor on purpose (GitHub issue #164)
 - [ ] Engineering blog (last) (GitHub issue #165)
+
+## Phase 20 — Operational Hardening & Live-Verification Findings
+
+Filed retroactively, 2026-07-24, per a new standing convention: every
+ad-hoc dev/test/structural task — not just planned `docs/ROADMAP.md`
+feature work — gets tracked under an Epic, even when the work itself
+already happened before the issue existed. Four cross-cutting items
+surfaced this way, none discovered through planned feature work: a CD
+disk-pressure incident found while verifying the Phase 17 golden-path
+smoke test, the smoke test itself (built to make live verification
+repeatable and safe), a real Prisma race the smoke test's own
+stress-testing surfaced, and two product-review findings (login-page
+copy, an open anonymous-write gap on company creation). Milestone:
+"Phase 20 — Operational Hardening & Live-Verification Findings". Epic:
+GitHub issue #214.
+
+- [x] Prune stale Docker artifacts after every CD deploy — five days of
+      CD runs had filled the shared Docker Desktop disk to 96%,
+      tripping OpenSearch's flood-stage watermark and crash-looping
+      `api` on an unrelated merge (no real outage). `cd.yml` gained a
+      cleanup step; a near-miss with node-internal `crictl rmi --prune`
+      documented as the reason host-level Docker cleanup is used
+      instead (PR #210, GitHub issue #215, D35)
+- [x] Full golden-path smoke test, opt-in and DB-safety-guarded — one
+      continuous test walking the entire feature set built so far,
+      safe to rerun on demand against the isolated test database
+      (`assertUsingTestDatabase()` refuses anything else), deliberately
+      excluded from CI (PR #211, GitHub issue #216, D36)
+- [x] `GET /moderation/queue` isolates each entity type's enrichment —
+      the smoke test's own stress-testing surfaced a transient Prisma
+      required-relation race (a concurrent GDPR erasure/Update-Delete
+      committing mid-query), confirmed via the live schema that no
+      durable orphaned row is possible; the real bug was `Promise.all`
+      letting one entity type's failure crash the whole endpoint for
+      every caller (PR #213, GitHub issue #212, D37)
+- [ ] Honest login-page copy + lock down `POST /companies` — the login
+      form already always upserts a candidate but its copy read as
+      login-only; `POST /companies` had neither a session requirement
+      nor rate limiting, an anonymous-write gap predating Phase 16
+      entirely since `Company` has no `candidateId` (GitHub issue #217,
+      D38) — code complete and live-verified, PR blocked on a GitHub
+      Pull Requests service outage, not the work itself
+- [ ] Engineering blog (last) (GitHub issue #218)

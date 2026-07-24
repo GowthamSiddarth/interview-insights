@@ -111,6 +111,7 @@ describe('My submissions (e2e)', () => {
 
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;
@@ -189,6 +190,7 @@ describe('My submissions (e2e)', () => {
 
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', candidateA.cookie)
       .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;
@@ -208,6 +210,7 @@ describe('My submissions (e2e)', () => {
 
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;

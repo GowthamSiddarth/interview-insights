@@ -29,7 +29,7 @@ describe('LoginPage (GitHub issue #147)', () => {
     await user.type(screen.getByLabelText('Email'), 'me@example.com');
     await user.click(screen.getByRole('button', { name: 'Send login link' }));
 
-    expect(await screen.findByText(/If an account exists for me@example.com/)).toBeInTheDocument();
+    expect(await screen.findByText(/A login link is on its way to me@example.com/)).toBeInTheDocument();
     expect(JSON.parse(String((global.fetch as jest.Mock).mock.calls[0][1].body))).toEqual({
       email: 'me@example.com',
     });
@@ -46,6 +46,6 @@ describe('LoginPage (GitHub issue #147)', () => {
     await user.click(screen.getByRole('button', { name: 'Send login link' }));
 
     expect(await screen.findByText('Too many attempts. Try again later.')).toBeInTheDocument();
-    expect(screen.queryByText(/If an account exists/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/A login link is on its way/)).not.toBeInTheDocument();
   });
 });

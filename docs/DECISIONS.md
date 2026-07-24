@@ -1317,6 +1317,60 @@ next step, not a further patch on `Promise.allSettled`.
 
 ---
 
+### D38 — `POST /companies` requires a candidate session + per-IP throttle; login-page copy no longer implies login-only
+
+**Context:** a product review surfaced two real gaps, neither tied to a
+specific phase issue: (1) the login page's copy ("If an account exists
+for X, a login link is on its way") read as login-only, even though
+`CandidateAuthService.requestLink()` always upserts the candidate —
+there's no separate registration flow, the login form *is* the
+registration flow, and the copy didn't say so; (2) `POST /companies`
+had neither a session requirement nor any rate limiting, an open
+anonymous-write gap that predated Phase 16's "sessions on the write
+path" pass entirely — `Company` was never on that pass's list because
+it has no `candidateId` column to protect, but that's an argument for
+*why* it wasn't swept up automatically, not that it should stay open.
+
+**Decision:**
+- Login page copy rewritten to say plainly that the same link creates
+  an account for a new email, removing the "if an account exists"
+  hedge — that hedge was copied from an anti-enumeration pattern this
+  system doesn't need (the endpoint already always returns the same
+  `{ status: 'ok' }` shape and always upserts, so there's nothing left
+  to enumerate).
+- `POST /companies` gated with `CandidateJwtAuthGuard` *and* a new
+  per-IP `CompanyCreationThrottleGuard`/`CompanyCreationThrottleService`
+  (same `IpThrottle` shape as `MagicLinkThrottleService`/
+  `LoginThrottleService`, its own separate counter). Both together,
+  not one or the other — the session requirement means an abuser needs
+  a real, working magic-link login first (itself throttled), and the
+  IP throttle is defense in depth on top of that, same reasoning
+  `EditThrottleGuard` (D33) already established for a different write
+  path. Unlike every other session-gated write, this isn't about
+  attributing the write to a candidate (`Company` still has no
+  `candidateId`) — it's purely an access-control + abuse-prevention
+  gate.
+- `web`'s wizard: selecting an *existing* company (a read) stays
+  ungated; only the create-a-new-company form is gated on
+  `candidateSession`, mirroring exactly how the backend only gates the
+  `POST`, not `GET /companies`.
+- Every e2e spec that calls `POST /companies` (13 files, 20 call
+  sites) updated to attach a candidate cookie — in the large majority
+  of cases this was a one-line addition, since the test already logged
+  in a candidate moments before for an unrelated reason; a handful
+  needed either a new throwaway login added purely for the company-
+  creation step, or (in two "unauthenticated request" tests) the
+  existing login reordered to happen *before* company creation instead
+  of after, since company creation itself is no longer the
+  unauthenticated case those tests are actually about.
+
+**Revisit when:** if `CompanyCreationThrottleService`'s placeholder
+threshold (5/15min, same as its siblings) ever needs real tuning
+against actual abuse volume — same "tune later" caveat as every other
+threshold introduced this way in this codebase.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

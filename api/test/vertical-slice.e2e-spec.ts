@@ -66,6 +66,7 @@ describe('Vertical slice (e2e)', () => {
 
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug, sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;
@@ -145,8 +146,13 @@ describe('Vertical slice (e2e)', () => {
   }, 15000);
 
   it('rejects unauthenticated process/rating submissions', async () => {
+    // Company creation itself needs a session too (a separate lockdown,
+    // unrelated to what this test is about) — only the process-creation
+    // call below is the actual unauthenticated case under test.
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;
@@ -162,6 +168,7 @@ describe('Vertical slice (e2e)', () => {
 
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;

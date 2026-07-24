@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
+import { loginAsCandidate } from './support/candidate-session';
 
 interface CompanyBody {
   id: string;
@@ -25,6 +27,7 @@ const unique = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 // to account for (CompanySearchService.indexCompany uses refresh: true).
 describe('Company search (e2e)', () => {
   let app: INestApplication;
+  let candidateCookie: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -36,7 +39,12 @@ describe('Company search (e2e)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
     app.useGlobalFilters(new PrismaExceptionFilter());
+    app.use(cookieParser());
     await app.init();
+    // One shared login for the whole file — POST /companies is
+    // session-gated now, and every test here only needs *a* session, not
+    // its own distinct candidate.
+    candidateCookie = (await loginAsCandidate(app, `candidate-${unique()}@example.com`)).cookie;
   });
 
   afterAll(async () => {
@@ -50,6 +58,7 @@ describe('Company search (e2e)', () => {
     const uniqueName = `Zephyrion Analytics ${unique()}`;
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', candidateCookie)
       .send({ name: uniqueName, slug: `zephyrion-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;
@@ -70,10 +79,12 @@ describe('Company search (e2e)', () => {
 
     const exactRes = await server()
       .post('/companies')
+      .set('Cookie', candidateCookie)
       .send({ name: exactName, slug: `exact-${marker}`, sizeBucket: 'mid' })
       .expect(201);
     const looseRes = await server()
       .post('/companies')
+      .set('Cookie', candidateCookie)
       .send({ name: looseName, slug: `loose-${marker}`, sizeBucket: 'mid' })
       .expect(201);
 

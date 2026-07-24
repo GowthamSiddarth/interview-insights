@@ -37,9 +37,12 @@ export default function HomePage() {
   // null = still checking; false = no session — GitHub issue #147 gates
   // step 2 on a real candidate session instead of collecting an email
   // inline, now that candidate creation only happens via the magic-link
-  // auth flow (issue #145/#146). Read from the session-hint cookie (see
-  // NavBar/api.ts) rather than a GET /auth/me call — no network 401 to
-  // log purely for rendering this gate on the platform's home page.
+  // auth flow (issue #145/#146). Also gates step 1's *create* form (not
+  // the existing-company picker, which is just a read) now that
+  // POST /companies requires a session too. Read from the session-hint
+  // cookie (see NavBar/api.ts) rather than a GET /auth/me call — no
+  // network 401 to log purely for rendering this gate on the platform's
+  // home page.
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
   const [process, setProcess] = useState<InterviewProcess | null>(null);
   const [round, setRound] = useState<Round | null>(null);
@@ -203,7 +206,19 @@ export default function HomePage() {
             ))}
           </div>
         )}
-        {!company && (
+        {/* Selecting an existing company (above) is just a read/UI action —
+            no session needed. Creating a *new* one is a write, gated on a
+            real session same as every other write path (POST /companies
+            now requires CandidateJwtAuthGuard). */}
+        {!company && candidateSession === false && (
+          <p className="text-sm text-gray-500">
+            <Link href="/login" className={linkClass}>
+              Log in
+            </Link>{' '}
+            to add a company that isn&apos;t listed yet.
+          </p>
+        )}
+        {!company && candidateSession && (
           <form
             action={handleCreateCompany}
             className="flex flex-col gap-2 sm:flex-row sm:items-end"

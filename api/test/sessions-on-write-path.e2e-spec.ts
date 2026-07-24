@@ -62,6 +62,7 @@ describe('Sessions on the write path (e2e)', () => {
   async function setUpProcessAndRound(cookie: string): Promise<{ processId: string; roundId: string }> {
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', cookie)
       .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;
@@ -84,8 +85,13 @@ describe('Sessions on the write path (e2e)', () => {
 
   describe('unauthenticated requests get 401', () => {
     it('POST /companies/:companyId/processes', async () => {
+      // Company creation itself needs a session too (a separate lockdown,
+      // unrelated to what this test is about) — only the process-creation
+      // call below is the actual unauthenticated case under test.
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
       const companyRes = await server()
         .post('/companies')
+        .set('Cookie', cookie)
         .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
         .expect(201);
       const companyId = body<CompanyBody>(companyRes).id;

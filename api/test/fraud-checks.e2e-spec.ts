@@ -73,6 +73,7 @@ describe('Fraud checks (e2e)', () => {
   async function createProcessWithRounds(candidateCookie: string, roundCount: number): Promise<string[]> {
     const companyRes = await server()
       .post('/companies')
+      .set('Cookie', candidateCookie)
       .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
       .expect(201);
     const companyId = body<CompanyBody>(companyRes).id;

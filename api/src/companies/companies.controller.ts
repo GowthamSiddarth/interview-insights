@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { CandidateJwtAuthGuard } from '../candidate-auth/guards/candidate-jwt-auth.guard';
+import { CompanyCreationThrottleGuard } from './company-creation-throttle.guard';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { ListCompanyReviewsQueryDto } from './dto/list-company-reviews-query.dto';
@@ -7,7 +9,13 @@ import { ListCompanyReviewsQueryDto } from './dto/list-company-reviews-query.dto
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
+  // Session-gated + per-IP throttled: a company isn't owned by any one
+  // candidate (no candidateId column, unlike the other write paths), so
+  // this isn't attribution — it's closing an anonymous-write gap that
+  // predated Phase 16's "sessions on the write path" pass entirely
+  // (Company was never on that list because it has nothing to attribute).
   @Post()
+  @UseGuards(CandidateJwtAuthGuard, CompanyCreationThrottleGuard)
   create(@Body() dto: CreateCompanyDto) {
     return this.companiesService.create(dto);
   }
