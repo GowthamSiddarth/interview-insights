@@ -13,15 +13,16 @@ import {
   RoundRating,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 
 const linkClass =
-  'text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
+  'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 
 function ErrorBanner({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
       {message}
     </p>
   );
@@ -191,7 +192,7 @@ export default function HomePage() {
 
       <ErrorBanner message={error} />
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+      <Card as="section" className="flex flex-col gap-3">
         <h2 className="font-medium">1. Company</h2>
         {companies.length > 0 && !company && (
           <div className="flex flex-wrap gap-2">
@@ -199,7 +200,7 @@ export default function HomePage() {
               <button
                 key={c.id}
                 onClick={() => setCompany(c)}
-                className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+                className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
               >
                 {c.name}
               </button>
@@ -225,7 +226,7 @@ export default function HomePage() {
           >
             <label className="flex flex-col text-sm">
               Name
-              <input name="name" required className="rounded border px-2 py-1 dark:bg-gray-900" />
+              <input name="name" required className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900" />
             </label>
             <label className="flex flex-col text-sm">
               Slug
@@ -234,12 +235,12 @@ export default function HomePage() {
                 required
                 pattern="[a-z0-9]+(-[a-z0-9]+)*"
                 placeholder="acme-corp"
-                className="rounded border px-2 py-1 dark:bg-gray-900"
+                className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
               />
             </label>
             <label className="flex flex-col text-sm">
               Size
-              <select name="sizeBucket" className="rounded border px-2 py-1 dark:bg-gray-900">
+              <select name="sizeBucket" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
                 <option value="startup">Startup</option>
                 <option value="mid">Mid</option>
                 <option value="large">Large</option>
@@ -265,10 +266,10 @@ export default function HomePage() {
             </button>
           </p>
         )}
-      </section>
+      </Card>
 
       {company && (
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">2. Interview process</h2>
           {candidateSession === null && (
             <p className="text-sm text-gray-500">Checking your session…</p>
@@ -291,12 +292,12 @@ export default function HomePage() {
                 <input
                   name="roleTitle"
                   required
-                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               <label className="flex flex-col text-sm">
                 Outcome
-                <select name="outcome" className="rounded border px-2 py-1 dark:bg-gray-900">
+                <select name="outcome" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
                   <option value="in_progress">In progress</option>
                   <option value="offer">Offer</option>
                   <option value="rejected">Rejected</option>
@@ -312,11 +313,11 @@ export default function HomePage() {
               Process created for &quot;{process.roleTitle}&quot;.
             </p>
           )}
-        </section>
+        </Card>
       )}
 
       {process && (
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">3. Round</h2>
           {!round && (
             <form
@@ -328,12 +329,12 @@ export default function HomePage() {
                 <input
                   name="title"
                   required
-                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               <label className="flex flex-col text-sm">
                 Type
-                <select name="roundType" className="rounded border px-2 py-1 dark:bg-gray-900">
+                <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900">
                   <option value="coding">Coding</option>
                   <option value="system_design">System design</option>
                   <option value="behavioral">Behavioral</option>
@@ -352,11 +353,11 @@ export default function HomePage() {
               Round &quot;{round.title}&quot; added.
             </p>
           )}
-        </section>
+        </Card>
       )}
 
       {round && (
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">4. Rating</h2>
           {!rating && (
             <form action={handleCreateRating} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -371,7 +372,7 @@ export default function HomePage() {
                       max={5}
                       required
                       defaultValue={3}
-                      className="rounded border px-2 py-1 dark:bg-gray-900"
+                      className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                     />
                   </label>
                 ),
@@ -402,11 +403,11 @@ export default function HomePage() {
               </p>
             </div>
           )}
-        </section>
+        </Card>
       )}
 
       {round && (
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">5. Recruiter experience</h2>
           {!recruiterRating && (
             <form action={handleCreateRecruiterRating} className="flex flex-col gap-2">
@@ -415,7 +416,7 @@ export default function HomePage() {
                 <input
                   name="recruiterIdentifier"
                   required
-                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                 />
                 <span className="text-xs text-gray-500">
                   Used only to tell recruiters apart — never shown publicly.
@@ -433,7 +434,7 @@ export default function HomePage() {
                         max={5}
                         required
                         defaultValue={3}
-                        className="rounded border px-2 py-1 dark:bg-gray-900"
+                        className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                       />
                     </label>
                   ),
@@ -444,7 +445,7 @@ export default function HomePage() {
                 <textarea
                   name="freeText"
                   rows={2}
-                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               <Button type="submit" className="self-start">
@@ -463,11 +464,11 @@ export default function HomePage() {
               </p>
             </div>
           )}
-        </section>
+        </Card>
       )}
 
       {round && (
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">6. Overall review</h2>
           {!overallReview && (
             <form action={handleCreateOverallReview} className="flex flex-col gap-2">
@@ -481,7 +482,7 @@ export default function HomePage() {
                     max={5}
                     required
                     defaultValue={3}
-                    className="rounded border px-2 py-1 dark:bg-gray-900"
+                    className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                   />
                 </label>
                 <label className="flex items-center gap-2 text-sm">
@@ -494,7 +495,7 @@ export default function HomePage() {
                 <textarea
                   name="reviewText"
                   rows={2}
-                  className="rounded border px-2 py-1 dark:bg-gray-900"
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
                 />
               </label>
               {/* One overall review per process (schema-enforced) — the form
@@ -516,7 +517,7 @@ export default function HomePage() {
               </p>
             </div>
           )}
-        </section>
+        </Card>
       )}
     </PageContainer>
   );

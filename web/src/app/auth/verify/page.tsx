@@ -57,12 +57,12 @@ function VerifyContent() {
       {!checked && !error && <p className="text-sm text-gray-500">One moment…</p>}
       {error && (
         <div className="flex flex-col gap-2">
-          <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
             {error}
           </p>
           <Link
             href="/login"
-            className="text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+            className="text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             Request a new login link
           </Link>

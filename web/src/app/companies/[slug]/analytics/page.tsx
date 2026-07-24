@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api, ApiError, CompanyAnalytics } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { GatedSection } from '@/components/GatedSection';
+import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 
 function roundTypeLabel(roundType: string): string {
@@ -49,8 +50,8 @@ export default function CompanyAnalyticsPage() {
 
   if (error) {
     return (
-      <PageContainer>
-        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+      <PageContainer size="wide">
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
       </PageContainer>
@@ -59,14 +60,14 @@ export default function CompanyAnalyticsPage() {
 
   if (!analytics) {
     return (
-      <PageContainer>
+      <PageContainer size="wide">
         <p className="text-sm text-gray-500">Loading…</p>
       </PageContainer>
     );
   }
 
   return (
-    <PageContainer>
+    <PageContainer size="wide">
       <header>
         <h1 className="text-2xl font-semibold">Company Analytics</h1>
         {/* Scores are shrinkage-adjusted toward the platform-wide average
@@ -79,7 +80,7 @@ export default function CompanyAnalyticsPage() {
         </p>
         <Link
           href={`/companies/${slug}`}
-          className="text-sm text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
           Back to company profile
         </Link>
@@ -89,7 +90,7 @@ export default function CompanyAnalyticsPage() {
         loggedIn={candidateSession}
         prompt={`Log in to see the full analytics breakdown for ${companyName ?? 'this company'}`}
       >
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">Overall experience</h2>
           {analytics.overall ? (
             <dl className="grid grid-cols-2 gap-4">
@@ -108,9 +109,9 @@ export default function CompanyAnalyticsPage() {
           ) : (
             <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
           )}
-        </section>
+        </Card>
 
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">By round type</h2>
           {analytics.roundTypes.length === 0 ? (
             <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
@@ -150,9 +151,9 @@ export default function CompanyAnalyticsPage() {
               ))}
             </div>
           )}
-        </section>
+        </Card>
 
-        <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+        <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">Recruiter experience</h2>
           {analytics.recruiter ? (
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -180,7 +181,7 @@ export default function CompanyAnalyticsPage() {
           ) : (
             <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
           )}
-        </section>
+        </Card>
       </GatedSection>
     </PageContainer>
   );

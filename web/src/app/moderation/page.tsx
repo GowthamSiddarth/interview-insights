@@ -10,6 +10,7 @@ import {
   ModerationQueueEntry,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
 
@@ -157,7 +158,7 @@ export default function ModerationPage() {
   if (!sessionChecked) return null;
 
   return (
-    <PageContainer>
+    <PageContainer size="wide">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Moderation queue</h1>
@@ -172,7 +173,7 @@ export default function ModerationPage() {
       </header>
 
       {error && (
-        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
       )}
@@ -182,7 +183,7 @@ export default function ModerationPage() {
         <input
           value={reviewedBy}
           onChange={(e) => setReviewedBy(e.target.value)}
-          className="rounded border px-2 py-1 dark:bg-gray-900"
+          className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
         />
       </label>
 
@@ -192,10 +193,7 @@ export default function ModerationPage() {
       {entries?.length === 0 && <EmptyState message="Queue is clear — nothing pending." />}
 
       {entries?.map((entry) => (
-        <section
-          key={entry.id}
-          className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700"
-        >
+        <Card key={entry.id} as="section" className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="font-medium">{ENTITY_TYPE_LABEL[entry.entityType]}</h2>
             <span className="text-xs text-gray-500">
@@ -232,7 +230,7 @@ export default function ModerationPage() {
                     [entry.id]: e.target.value as ModerationFlagReason,
                   }))
                 }
-                className="rounded border px-1 py-0.5 dark:bg-gray-900"
+                className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors dark:border-gray-600 dark:bg-gray-900"
               >
                 {FLAG_REASONS.map((r) => (
                   <option key={r} value={r}>
@@ -242,7 +240,7 @@ export default function ModerationPage() {
               </select>
             </label>
           </div>
-        </section>
+        </Card>
       ))}
     </PageContainer>
   );

@@ -17,11 +17,11 @@ export function GatedSection({ loggedIn, prompt, children }: GatedSectionProps) 
   if (loggedIn === null) return null;
   if (loggedIn) return <>{children}</>;
   return (
-    <div className="rounded border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center dark:border-gray-600 dark:bg-gray-800">
+    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center dark:border-gray-600 dark:bg-gray-800">
       <p className="text-sm text-gray-600 dark:text-gray-300">{prompt}</p>
       <Link
         href="/login"
-        className="mt-2 inline-block text-sm font-medium text-indigo-600 underline dark:text-indigo-400"
+        className="mt-2 inline-block text-sm font-medium text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
       >
         Log in to unlock
       </Link>

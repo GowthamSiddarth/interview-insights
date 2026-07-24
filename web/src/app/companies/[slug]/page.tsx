@@ -15,6 +15,7 @@ import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { EmptyState } from '@/components/EmptyState';
 import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 
 const PAGE_SIZE = 10;
@@ -91,8 +92,8 @@ export default function CompanyProfilePage() {
 
   if (error) {
     return (
-      <PageContainer>
-        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+      <PageContainer size="wide">
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
       </PageContainer>
@@ -103,7 +104,7 @@ export default function CompanyProfilePage() {
   // #61 rule) — never render a blank page indistinguishable from a slow one.
   if (!company) {
     return (
-      <PageContainer>
+      <PageContainer size="wide">
         <p className="text-sm text-gray-500">Loading…</p>
       </PageContainer>
     );
@@ -112,7 +113,7 @@ export default function CompanyProfilePage() {
   const totalPages = reviews ? Math.max(1, Math.ceil(reviews.total / PAGE_SIZE)) : 1;
 
   return (
-    <PageContainer>
+    <PageContainer size="wide">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{company.name}</h1>
         <p className="text-sm text-gray-500">
@@ -120,13 +121,13 @@ export default function CompanyProfilePage() {
         </p>
         <Link
           href={`/companies/${company.slug}/analytics`}
-          className="text-sm text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
           Full analytics breakdown
         </Link>
       </header>
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+      <Card as="section" className="flex flex-col gap-3">
         <h2 className="font-medium">Overall experience</h2>
         {!analytics ? (
           <p className="text-sm text-gray-500">Loading…</p>
@@ -147,9 +148,9 @@ export default function CompanyProfilePage() {
         ) : (
           <EmptyState message="Not enough reviews yet" />
         )}
-      </section>
+      </Card>
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+      <Card as="section" className="flex flex-col gap-3">
         <h2 className="font-medium">By round type</h2>
         {!analytics ? (
           <p className="text-sm text-gray-500">Loading…</p>
@@ -175,9 +176,9 @@ export default function CompanyProfilePage() {
             </div>
           </GatedSection>
         )}
-      </section>
+      </Card>
 
-      <section className="flex flex-col gap-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+      <Card as="section" className="flex flex-col gap-3">
         <h2 className="font-medium">Reviews</h2>
         {reviews === null ? (
           <p className="text-sm text-gray-500">Loading…</p>
@@ -228,7 +229,7 @@ export default function CompanyProfilePage() {
             )}
           </>
         )}
-      </section>
+      </Card>
     </PageContainer>
   );
 }

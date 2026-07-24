@@ -46,7 +46,7 @@ export default function LoginPage() {
       </header>
 
       {error && (
-        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {error}
         </p>
       )}
@@ -65,7 +65,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded border px-2 py-1 dark:bg-gray-900"
+              className="rounded-md border border-gray-300 px-2 py-1 transition-colors dark:border-gray-600 dark:bg-gray-900"
               autoComplete="email"
               required
             />
