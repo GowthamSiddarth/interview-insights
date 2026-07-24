@@ -1375,10 +1375,25 @@ match.
 **Phase 16 is now fully done** — issues #144-148 all closed via merged
 PRs, and every phase built so far now has a complete engineering blog.
 
-- Next step: Phase 17 (Candidate Self-Service) planning, per
-  `docs/ROADMAP.md` — the next phase in line now that Phase 16 is
-  fully done; plan its issues under a milestone before implementing any
-  of them, per the standing convention.
+**Phase 17 kickoff brainstorm (before implementing)** — issues #149-152
+had already been planned (filed during the earlier "Phases 15-17
+planning" pass) but left three decisions open; resolved before writing
+any code, same pattern as Phase 16's kickoff: `GET /me/submissions`
+(#149) groups its response by `InterviewProcess` rather than three flat
+lists; Update/Delete (#150) is scoped explicitly to the three moderated
+content types only (never the structural entities) and gets its own
+per-candidate edit throttle extending D13's pattern; GDPR erasure
+(#151) clears the requester's session cookies on `DELETE /me` (like
+logout) with `CandidateJwtAuthGuard` additionally verifying the
+candidateId still exists in the DB (a stale post-erasure token gets a
+clean 401, not a downstream FK error), and explicitly excludes the
+shared per-company `Recruiter` row from erasure. All three issue bodies
+updated on GitHub to record these decisions before implementation
+began. Epic #183 moved to "In Progress".
+
+- Next step: Phase 17, issue #149 (my reviews) — the first issue in
+  the phase's dependency chain (#149 → #150 → #151 → #152), per
+  `docs/ROADMAP.md`.
 
 ## Open decisions still to make
 
