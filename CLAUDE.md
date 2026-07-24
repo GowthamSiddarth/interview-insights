@@ -1624,6 +1624,24 @@ either pod needed to restart, no actual outage. `cd.yml` gained a
 `crictl`/`ctr` inside the kind node, per the near-miss) so this doesn't
 recur. See D35 for the full incident writeup.
 
+**Full golden-path smoke test added (no dedicated issue, same pattern as
+D35)** — the same dev-DB cleanup that produced D35 also surfaced that
+every "verify it live" script this project has ever written was a
+throwaway, pointed at the persistent dev cluster, and left no way to
+sanity-check the whole feature set without either rewriting one or
+polluting the dev DB again. `api/test/golden-path.smoke-spec.ts` — one
+continuous narrative test (company → candidate auth → all three
+moderated content types → moderation → search → analytics, clearing
+the n=3 shrinkage floor for a real score → my-reviews → update/delete
+→ GDPR erasure), reusing every existing e2e helper — runs via a new
+`npm run smoke:e2e`, deliberately opt-in and never wired into
+`npm run test:e2e`/CI. A new `assertUsingTestDatabase()` helper
+refuses to run it against anything but `interview_insights_test`,
+the concrete guardrail against a repeat of D35's incident. A
+real-browser (Playwright) companion is explicitly deferred, not built
+here. Documented in `wiki/deployment-guide.md` section 6.1 and
+`docs/DECISIONS.md` D36.
+
 - Next step: Phase 19 (Content Quality & Synthetic Data) — three
   independent issues, any order (GitHub issues #162-165, already
   filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162

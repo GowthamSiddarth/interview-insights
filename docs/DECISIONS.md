@@ -1180,6 +1180,69 @@ disk entirely, not just tightening the prune step further.
 
 ---
 
+### D36 — Full golden-path smoke test: opt-in script, not CI; a runtime guard against the exact class of incident D35 just cleaned up
+
+**Context:** the cleanup that produced D35 also surfaced a second,
+distinct problem — the dev Postgres/OpenSearch had accumulated real
+rows (`Verify150 Corp`, `Verify151 Corp`, etc.) from every ad-hoc
+Playwright verification script written per issue across this project's
+history. Each one was a throwaway, never checked in, and pointed at the
+persistent dev cluster because that's what "verify it live" has always
+meant here. There was no repeatable, safe way to exercise the whole
+feature set in one pass without either writing a new throwaway script
+each time or leaving residue in a database nothing ever cleans.
+
+**Decision:** `api/test/golden-path.smoke-spec.ts` — one continuous
+narrative test walking company creation, candidate magic-link auth, all
+three moderated content types, moderation approve/reject, search,
+analytics (three approved round ratings, deliberately clearing the
+`n < 3 → null` shrinkage floor so the assertion proves a real score, not
+just the already-well-covered null case), my-reviews, update/delete
+(issue #150), and GDPR erasure (issue #151) — reusing every existing
+e2e helper (`loginAsCandidate`/`loginAsAdmin`/Mailpit) and the
+`rawPrisma` direct-Postgres-assertion pattern `gdpr-erasure.e2e-spec.ts`
+already established, rather than inventing new ones.
+
+**A new `assertUsingTestDatabase()` helper (`api/test/support/
+assert-test-database.ts`) throws immediately, before any Prisma/app
+instance exists, if `DATABASE_URL` doesn't contain the literal
+`interview_insights_test` (D24's fixed database name).** This is the
+concrete guardrail against a repeat of the incident D35 documents:
+this specific test creates, moderates, and erases real data end to
+end, and is the one most likely to get run ad hoc, outside the routine
+`npm run test:e2e` flow — exactly the same circumstance that let dev-DB
+pollution accumulate unnoticed for so long. Deliberately scoped to just
+this one spec, not retrofitted onto the other 20+ existing e2e files:
+those already follow the manual-`DATABASE_URL`-override convention
+without incident, and adding a second layer of runtime checking
+everywhere would be defending against a problem that hasn't actually
+occurred there.
+
+**A new `npm run smoke:e2e` script, deliberately not part of
+`npm run test:e2e` or `ci.yml`.** The 105+ per-feature e2e specs already
+own PR-time regression coverage; wiring in a large, deliberately
+redundant end-to-end narrative would slow down every CI run for a test
+whose actual job is on-demand full-system sanity checking, not
+per-commit gating. Documented as its own subsection in
+`wiki/deployment-guide.md` (6.1), alongside the pre-existing manual
+curl-based golden-path walkthrough (section 6) it complements rather
+than replaces.
+
+**A real-browser (Playwright) companion is explicitly out of scope
+here**, decided the same way as the rest of this entry — this pass is
+API/data-flow only (supertest, no browser), which catches everything
+except actual frontend rendering/console-error regressions. Adding a
+real browser driver is a larger, separate addition (a new dependency,
+a new config, a new class of flakiness to manage) that wasn't worth
+bundling into solving today's specific problem.
+
+**Revisit when:** UI-level regressions (not just data-flow ones) become
+a recurring pain point worth a checked-in Playwright script — at that
+point, treat it as the deferred follow-up this entry already names, not
+a retrofit onto this test.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
