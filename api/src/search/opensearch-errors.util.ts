@@ -17,3 +17,11 @@ export function isIndexAlreadyExistsError(err: unknown): boolean {
     (error as { type?: unknown }).type === 'resource_already_exists_exception'
   );
 }
+
+// Used by ReviewSearchService.removeReview() (GitHub issue #150): deleting
+// a rating that was never indexed (still pending/rejected/flagged at
+// delete time) is expected, not an error — the opensearch client's
+// ResponseError exposes the HTTP status directly as `.statusCode`.
+export function isNotFoundError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'statusCode' in err && (err as { statusCode?: unknown }).statusCode === 404;
+}

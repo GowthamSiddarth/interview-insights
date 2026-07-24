@@ -978,6 +978,72 @@ reintroducing a passive poll.
 
 ---
 
+### D33 — Update/Delete (GitHub issue #150): shared per-candidate edit throttle, and how a re-enqueue avoids two live moderation entries for one entity
+
+**Decision:** GitHub issue #150 closes Phase 2's original Update/Delete
+deferral, scoped (per the Phase 17 kickoff brainstorm) to exactly the
+three moderated content types — `RoundRating`, `RecruiterRating`,
+`OverallReview` — never the structural entities (`Company`/
+`InterviewProcess`/`Round`/`RecruiterInteraction`), which stay
+create+read-only permanently.
+
+**Edit throttle is one shared instance across all three entity types,
+not three independent counters.** `EditThrottleService`/
+`EditThrottleGuard` live in a new `api/src/common/edit-throttle.module.ts`
+(same per-key in-memory shape as `IpThrottle`, but keyed by candidateId
+instead of IP), imported by `RoundRatingsModule`/`RecruiterRatingsModule`/
+`OverallReviewsModule` alike — Nest dedupes a shared static module across
+an import tree, so all three controllers' `PATCH` routes drive the same
+counter per candidate (5 edits/hour, a placeholder like every other
+threshold in this codebase — D13's `k`-style "tune later" caveat
+applies here too). A single shared budget, not per-type ones, because
+the abuse this guards against — repeatedly editing to churn the
+moderation queue with fresh entries — doesn't care which entity type the
+churn comes from.
+
+**Found the hard way: a guard referenced by class in `@UseGuards()` needs
+its own dependencies exported from the shared module too, not just the
+guard itself.** `EditThrottleModule` originally only exported
+`EditThrottleGuard`; every e2e test failed at app-bootstrap with "Nest
+can't resolve dependencies of the EditThrottleGuard... make sure
+EditThrottleService is available in the RoundRatingsModule module" —
+because `@UseGuards(EditThrottleGuard)` resolves the guard (and,
+transitively, whatever it needs) from the *consuming* controller's own
+module context, not silently from wherever the guard happens to be
+defined. Fixed by exporting `EditThrottleService` alongside the guard.
+Worth remembering for any future shared guard extracted the same way —
+`LoginThrottleGuard`/`MagicLinkThrottleGuard` never hit this because
+their throttle service is declared directly in the same module as the
+guard's own usage, not imported from elsewhere.
+
+**An edit never modifies public content in place** — it resets `status`
+to `pending` and gets a fresh `moderation_queue` entry, going back
+through the full moderation gate exactly like a new submission (hard
+constraint #2 stays intact). The one real wrinkle: if the previous
+submission is still unreviewed at edit time, naively creating a second
+entry would leave two live queue entries pointing at the same entity —
+a moderator could review the same entity twice, the second decision
+silently overwriting the first. `ModerationService.reenqueue()` deletes
+any still-unreviewed entry for that entity before creating the new one,
+so exactly one live entry ever exists per entity. `removeQueueEntries()`
+handles the mirror case on delete — every entry for a deleted entity is
+removed (reviewed or not), since `moderation_queue`'s reference is
+polymorphic, not an FK, and nothing else would ever clean it up.
+
+**Delete cascades to the search index too, but only for `round_rating`**
+— the only entity type `ReviewSearchService` ever indexes (D17's scope
+note). `ReviewSearchService.removeReview()` is best-effort, same
+D16/D17 pattern as indexing an approval: runs after the DB delete has
+already committed, silently accepts a 404 (never indexed — the rating
+was still pending/rejected/flagged at delete time), and only logs (never
+throws) on anything else.
+
+**Revisit when:** issue #150's placeholder throttle numbers need real
+tuning against actual edit-abuse volume, same caveat as every other
+threshold introduced this way in this codebase.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

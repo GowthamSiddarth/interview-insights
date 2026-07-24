@@ -650,9 +650,9 @@ candidates).
 - [x] My reviews: own submissions across all entity types, all
       statuses, owner-scoped, grouped by `InterviewProcess` (GitHub
       issue #149)
-- [ ] Update/Delete under moderation-safe rules: edits reset to
+- [x] Update/Delete under moderation-safe rules: edits reset to
       `pending` and re-enqueue, never modify public content in place;
-      rate-limited (GitHub issue #150)
+      rate-limited (GitHub issue #150) — see D33
 - [ ] GDPR erasure path: `DELETE /me` + retention policy decided and
       documented; clears session cookies; shared `Recruiter` rows
       excluded (GitHub issue #151)

@@ -8,6 +8,7 @@ describe('ReviewSearchService', () => {
     indices: { create: jest.Mock };
     index: jest.Mock;
     search: jest.Mock;
+    delete: jest.Mock;
   };
 
   const review = {
@@ -29,6 +30,7 @@ describe('ReviewSearchService', () => {
       indices: { create: jest.fn() },
       index: jest.fn(),
       search: jest.fn(),
+      delete: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -81,6 +83,28 @@ describe('ReviewSearchService', () => {
         },
         refresh: true,
       });
+    });
+  });
+
+  describe('removeReview', () => {
+    it('deletes the document by id with an immediate refresh', async () => {
+      client.delete.mockResolvedValue({});
+
+      await service.removeReview('rating-1');
+
+      expect(client.delete).toHaveBeenCalledWith({ index: 'reviews', id: 'rating-1', refresh: true });
+    });
+
+    it('silently swallows a 404 (never indexed, or already removed)', async () => {
+      client.delete.mockRejectedValue({ statusCode: 404 });
+
+      await expect(service.removeReview('rating-1')).resolves.toBeUndefined();
+    });
+
+    it('does not throw on an unexpected error either — best-effort, logged only', async () => {
+      client.delete.mockRejectedValue(new Error('OpenSearch unreachable'));
+
+      await expect(service.removeReview('rating-1')).resolves.toBeUndefined();
     });
   });
 

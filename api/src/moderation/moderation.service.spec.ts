@@ -12,6 +12,7 @@ describe('ModerationService', () => {
       findMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
       update: jest.Mock;
+      deleteMany: jest.Mock;
     };
     roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock; findMany: jest.Mock };
     recruiterRating: { update: jest.Mock; findMany: jest.Mock };
@@ -27,6 +28,7 @@ describe('ModerationService', () => {
         findMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
+        deleteMany: jest.fn(),
       },
       roundRating: {
         update: jest.fn(),
@@ -68,6 +70,49 @@ describe('ModerationService', () => {
 
       expect(tx.moderationQueueEntry.create).toHaveBeenCalled();
       expect(prisma.moderationQueueEntry.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reenqueue', () => {
+    it('deletes any still-unreviewed entry for the entity before creating a fresh one', async () => {
+      prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-2' });
+
+      await service.reenqueue('round_rating', 'rating-1');
+
+      expect(prisma.moderationQueueEntry.deleteMany).toHaveBeenCalledWith({
+        where: { entityType: 'round_rating', entityId: 'rating-1', reviewedAt: null },
+      });
+      expect(prisma.moderationQueueEntry.create).toHaveBeenCalledWith({
+        data: { entityType: 'round_rating', entityId: 'rating-1' },
+      });
+    });
+
+    it('uses the provided transaction client instead of the default one', async () => {
+      const tx = {
+        moderationQueueEntry: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+          create: jest.fn().mockResolvedValue({ id: 'queue-2' }),
+        },
+      };
+
+      await service.reenqueue('round_rating', 'rating-1', tx as never);
+
+      expect(tx.moderationQueueEntry.deleteMany).toHaveBeenCalled();
+      expect(tx.moderationQueueEntry.create).toHaveBeenCalled();
+      expect(prisma.moderationQueueEntry.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeQueueEntries', () => {
+    it('deletes every entry for the entity, reviewed or not', async () => {
+      prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.removeQueueEntries('round_rating', 'rating-1');
+
+      expect(prisma.moderationQueueEntry.deleteMany).toHaveBeenCalledWith({
+        where: { entityType: 'round_rating', entityId: 'rating-1' },
+      });
     });
   });
 

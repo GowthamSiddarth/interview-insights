@@ -157,8 +157,9 @@ removed, D31), #147 (login/logout UI + wizard integration —
 session-hint cookie instead of a passive `GET /auth/me` poll, hard
 navigation after verify, D32), and #148 (engineering blog, this
 phase's). Phase 17 (Candidate Self-Service) is in progress — issue
-#149 (my reviews, grouped by `InterviewProcess`) done, #150 (Update/
-Delete), #151 (GDPR erasure), and #152 (blog) not started yet. Phase 19
+#149 (my reviews, grouped by `InterviewProcess`) and #150 (Update/
+Delete under moderation-safe rules, shared per-candidate edit throttle,
+D33) done, #151 (GDPR erasure) and #152 (blog) not started yet. Phase 19
 (Content Quality & Synthetic Data) is planned but not started. Phase 18
 was filed after Phase 16-17, but per the same non-linear precedent
 Phase 6/8 already set, was implemented first — see the Phase 18 intro
@@ -1438,8 +1439,81 @@ and a working company-profile link, logged out, and confirmed `/me`
 prompted to log in again with zero stale data leaking — zero console
 errors throughout.
 
-- Next step: Phase 17, issue #150 (Update/Delete under moderation-safe
-  rules), per `docs/ROADMAP.md` — depends on #149, which is now done.
+**Phase 17, issue #150 (Update/Delete under moderation-safe rules)** —
+scoped, per the kickoff brainstorm, to exactly the three moderated
+content types (`RoundRating`/`RecruiterRating`/`OverallReview`) — the
+structural entities stay create+read-only permanently. Each of the
+three services gained `update()`/`remove()`: ownership is checked
+against the session candidateId (403 for anyone else, distinct from a
+genuinely-missing row's 404 — `findFirstOrThrow` scopes by the parent
+id too, e.g. `{ id, roundId }`, so a mismatched round 404s rather than
+leaking existence); an edit never modifies public content in place — it
+resets `status` to `pending` and re-enqueues; a delete removes the
+entity plus its `moderation_queue` entries and, for an approved round
+rating only (the one entity type `ReviewSearchService` ever indexes,
+D17), best-effort removes it from OpenSearch too.
+`ModerationService` gained `reenqueue()` (supersedes any still-
+unreviewed entry for that entity before creating a fresh one — an edit
+before the first review would otherwise leave two live entries racing
+to review the same entity twice) and `removeQueueEntries()` (deletes
+every entry, reviewed or not, for a deleted entity — nothing else would
+ever clean up `moderation_queue`'s polymorphic, non-FK reference).
+`ReviewSearchService` gained `removeReview()`, same best-effort
+D16/D17 shape as indexing an approval, silently accepting a 404 (never
+indexed) and only logging anything else.
+
+**Edit throttle is one shared budget across all three entity types**
+(the user's explicit choice during the kickoff brainstorm), not three
+independent counters — a new `api/src/common/edit-throttle.{service,
+guard,module}.ts` (5 edits/hour per candidateId, same placeholder-
+threshold spirit as D13's `k`), imported by all three write-path
+modules so they share one `EditThrottleService` instance. Full design
+(including a real cross-module DI bug this surfaced — a guard
+referenced by class in `@UseGuards()` needs its *dependencies*
+exported from the shared module too, not just the guard itself; every
+e2e test failed at app-bootstrap until `EditThrottleService` was added
+to `EditThrottleModule`'s `exports`) documented as D33.
+
+New routes: `PATCH`/`DELETE /rounds/:roundId/ratings/:id`,
+`PATCH`/`DELETE /recruiter-interactions/:recruiterInteractionId/ratings/:id`,
+and (singular resource, no separate id — `UNIQUE(process_id)`)
+`PATCH`/`DELETE /processes/:processId/overall-review`. 26 new unit
+tests (244 total) + a new 13-test e2e suite
+(`update-delete-moderated-content.e2e-spec.ts`, 102 e2e tests total —
+100 passing, 2 pre-existing unrelated skips) against real Postgres +
+OpenSearch prove: owner-only 403 per entity type; an edit after
+approval resets to pending with the reviewed queue entry superseded; an
+edit *before* any review also collapses to exactly one live queue
+entry (not two); deleting an approved round rating removes it from
+public reads, the queue, and the OpenSearch index; deleting a
+still-pending rating still cleans up its queue entry; and the shared
+throttle trips on the 6th edit.
+
+On `web`: `web/src/app/me/page.tsx` gained per-item Edit/Delete
+controls — an inline edit form (pre-filled with the current values) and
+a `window.confirm`-gated delete button, per round rating / recruiter
+rating / overall review. A successful edit or delete just refetches
+`GET /me/submissions` (`onChanged()` callback) rather than hand-patching
+nested state, since the server-side status reset is the source of
+truth. `web/src/lib/api.ts` gained six client methods
+(`update`/`delete` × three entity types) plus 204-No-Content handling in
+the shared `request()` helper (a bare `res.json()` on an empty DELETE
+response would otherwise throw). 3 new component tests
+(`my-reviews-page.spec.tsx`, 51 web tests total) cover the edit-PATCH
+call, confirmed delete, and declined-confirmation no-op.
+
+Verified live end to end (real `kind` Postgres/OpenSearch/Mailpit via
+port-forward, real dev servers, headless Chromium): logged in via a
+real magic link, drove the wizard to a pending round rating, approved
+it via the admin API, confirmed `/me` showed "Approved," edited the
+rating on `/me` — confirmed it flipped to "Pending" *and* that the
+moderation queue held exactly one live entry for it (not two, proving
+the supersession) — then deleted it and confirmed both the per-process
+"no ratings submitted yet" note and the queue entry's removal, zero
+console errors throughout.
+
+- Next step: Phase 17, issue #151 (GDPR erasure path), per
+  `docs/ROADMAP.md` — depends on #150, which is now done.
 
 ## Open decisions still to make
 

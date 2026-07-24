@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiError, MyProcessSubmissions } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  MyProcessSubmissions,
+  MySubmissionOverallReview,
+  MySubmissionRecruiterRating,
+  MySubmissionRoundRating,
+} from '@/lib/api';
+import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
 
@@ -38,10 +46,412 @@ function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
+const inputClass = 'rounded border px-2 py-1 dark:bg-gray-900';
+const itemClass =
+  'flex flex-col gap-2 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700';
+
+// GitHub issue #150: an edit never modifies public content in place — the
+// server resets it to `pending` and re-enqueues, so after a successful
+// save/delete the parent just refetches the whole list rather than trying
+// to patch nested state by hand.
+function RoundRatingItem({
+  rating,
+  onChanged,
+}: {
+  rating: MySubmissionRoundRating;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    difficulty: rating.difficulty,
+    fairness: rating.fairness,
+    communicationFluency: rating.communicationFluency,
+    attentiveness: rating.attentiveness,
+    biasSignal: rating.biasSignal,
+    freeText: rating.freeText ?? '',
+  });
+
+  async function save(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.updateRoundRating(rating.roundId, rating.id, {
+        ...form,
+        freeText: form.freeText || undefined,
+      });
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(): Promise<void> {
+    if (!window.confirm('Delete this round rating? This cannot be undone.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteRoundRating(rating.roundId, rating.id);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <article className={itemClass}>
+        <p>
+          <strong>{rating.roundTitle}</strong> ({roundTypeLabel(rating.roundType)})
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {(
+            ['difficulty', 'fairness', 'communicationFluency', 'attentiveness', 'biasSignal'] as const
+          ).map((field) => (
+            <label key={field} className="flex flex-col text-xs">
+              {field}
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={form[field]}
+                onChange={(e) => setForm((f) => ({ ...f, [field]: Number(e.target.value) }))}
+                className={inputClass}
+              />
+            </label>
+          ))}
+        </div>
+        <label className="flex flex-col text-xs">
+          Comments
+          <textarea
+            value={form.freeText}
+            onChange={(e) => setForm((f) => ({ ...f, freeText: e.target.value }))}
+            className={inputClass}
+          />
+        </label>
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="button" onClick={() => void save()} disabled={busy}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="bg-gray-600 hover:bg-gray-700"
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className={itemClass}>
+      <p>
+        <strong>{rating.roundTitle}</strong> ({roundTypeLabel(rating.roundType)}) —{' '}
+        <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
+      </p>
+      <p className="text-gray-600 dark:text-gray-400">
+        difficulty {rating.difficulty} · fairness {rating.fairness} · communication{' '}
+        {rating.communicationFluency} · attentiveness {rating.attentiveness}
+      </p>
+      {rating.freeText && <p className="italic">&quot;{rating.freeText}&quot;</p>}
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="bg-gray-600 hover:bg-gray-700"
+          disabled={busy}
+        >
+          Edit
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void remove()}
+          className="bg-red-600 hover:bg-red-700"
+          disabled={busy}
+        >
+          Delete
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function RecruiterRatingItem({
+  rating,
+  onChanged,
+}: {
+  rating: MySubmissionRecruiterRating;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    approachability: rating.approachability,
+    responseTime: rating.responseTime,
+    timeliness: rating.timeliness,
+    communicationQuality: rating.communicationQuality,
+    freeText: rating.freeText ?? '',
+  });
+
+  async function save(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.updateRecruiterRating(rating.recruiterInteractionId, rating.id, {
+        ...form,
+        freeText: form.freeText || undefined,
+      });
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(): Promise<void> {
+    if (!window.confirm('Delete this recruiter rating? This cannot be undone.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteRecruiterRating(rating.recruiterInteractionId, rating.id);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <article className={itemClass}>
+        <p>Recruiter experience</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(
+            ['approachability', 'responseTime', 'timeliness', 'communicationQuality'] as const
+          ).map((field) => (
+            <label key={field} className="flex flex-col text-xs">
+              {field}
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={form[field]}
+                onChange={(e) => setForm((f) => ({ ...f, [field]: Number(e.target.value) }))}
+                className={inputClass}
+              />
+            </label>
+          ))}
+        </div>
+        <label className="flex flex-col text-xs">
+          Comments
+          <textarea
+            value={form.freeText}
+            onChange={(e) => setForm((f) => ({ ...f, freeText: e.target.value }))}
+            className={inputClass}
+          />
+        </label>
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="button" onClick={() => void save()} disabled={busy}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="bg-gray-600 hover:bg-gray-700"
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className={itemClass}>
+      <p>
+        Recruiter experience — <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
+      </p>
+      <p className="text-gray-600 dark:text-gray-400">
+        approachability {rating.approachability} · response time {rating.responseTime} · timeliness{' '}
+        {rating.timeliness} · communication {rating.communicationQuality}
+      </p>
+      {rating.freeText && <p className="italic">&quot;{rating.freeText}&quot;</p>}
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="bg-gray-600 hover:bg-gray-700"
+          disabled={busy}
+        >
+          Edit
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void remove()}
+          className="bg-red-600 hover:bg-red-700"
+          disabled={busy}
+        >
+          Delete
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function OverallReviewItem({
+  processId,
+  review,
+  onChanged,
+}: {
+  processId: string;
+  review: MySubmissionOverallReview;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    overallExperience: review.overallExperience,
+    wouldRecommend: review.wouldRecommend,
+    reviewText: review.reviewText ?? '',
+  });
+
+  async function save(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.updateOverallReview(processId, {
+        ...form,
+        reviewText: form.reviewText || undefined,
+      });
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(): Promise<void> {
+    if (!window.confirm('Delete this overall review? This cannot be undone.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteOverallReview(processId);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <article className={itemClass}>
+        <p>Overall review</p>
+        <label className="flex flex-col text-xs">
+          Overall experience (1-5)
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={form.overallExperience}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, overallExperience: Number(e.target.value) }))
+            }
+            className={inputClass}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={form.wouldRecommend}
+            onChange={(e) => setForm((f) => ({ ...f, wouldRecommend: e.target.checked }))}
+          />
+          Would recommend
+        </label>
+        <label className="flex flex-col text-xs">
+          Review text
+          <textarea
+            value={form.reviewText}
+            onChange={(e) => setForm((f) => ({ ...f, reviewText: e.target.value }))}
+            className={inputClass}
+          />
+        </label>
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="button" onClick={() => void save()} disabled={busy}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="bg-gray-600 hover:bg-gray-700"
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className={itemClass}>
+      <p>
+        Overall review —{' '}
+        <span className={STATUS_CLASS[review.status]}>{statusLabel(review.status)}</span>
+      </p>
+      <p className="text-gray-600 dark:text-gray-400">
+        overall experience {review.overallExperience} · would recommend{' '}
+        {review.wouldRecommend ? 'yes' : 'no'}
+      </p>
+      {review.reviewText && <p className="italic">&quot;{review.reviewText}&quot;</p>}
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="bg-gray-600 hover:bg-gray-700"
+          disabled={busy}
+        >
+          Edit
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void remove()}
+          className="bg-red-600 hover:bg-red-700"
+          disabled={busy}
+        >
+          Delete
+        </Button>
+      </div>
+    </article>
+  );
+}
+
 // GitHub issue #149 — the one page where a candidate sees their own
 // pending/rejected/flagged content, never just what's already public.
 // Gated on the session-hint cookie (same pattern as NavBar/the wizard —
-// GitHub issue #147/D32), not a GET /me/me network probe.
+// GitHub issue #147/D32), not a GET /me/me network probe. GitHub issue
+// #150 added the Edit/Delete controls on each item below.
 export default function MyReviewsPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [submissions, setSubmissions] = useState<MyProcessSubmissions[] | null>(null);
@@ -51,12 +461,16 @@ export default function MyReviewsPage() {
     setLoggedIn(api.hasCandidateSessionHint());
   }, []);
 
-  useEffect(() => {
-    if (!loggedIn) return;
+  function reload(): void {
     api
       .getMySubmissions()
       .then(setSubmissions)
       .catch((err: unknown) => setError(errorMessage(err)));
+  }
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    reload();
   }, [loggedIn]);
 
   if (loggedIn === null) {
@@ -89,7 +503,8 @@ export default function MyReviewsPage() {
         <h1 className="text-2xl font-semibold">My reviews</h1>
         <p className="text-sm text-gray-500">
           Every submission you&apos;ve made, across every status — the one place you can see a
-          rating before it&apos;s approved.
+          rating before it&apos;s approved. Editing resets a submission back to pending review;
+          deleting is permanent.
         </p>
       </header>
 
@@ -139,55 +554,20 @@ export default function MyReviewsPage() {
             )}
 
             {entry.roundRatings.map((r) => (
-              <article
-                key={r.id}
-                className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700"
-              >
-                <p>
-                  <strong>{r.roundTitle}</strong> ({roundTypeLabel(r.roundType)}) —{' '}
-                  <span className={STATUS_CLASS[r.status]}>{statusLabel(r.status)}</span>
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">
-                  difficulty {r.difficulty} · fairness {r.fairness} · communication{' '}
-                  {r.communicationFluency} · attentiveness {r.attentiveness}
-                </p>
-                {r.freeText && <p className="italic">&quot;{r.freeText}&quot;</p>}
-              </article>
+              <RoundRatingItem key={r.id} rating={r} onChanged={reload} />
             ))}
 
             {entry.recruiterRatings.map((r) => (
-              <article
-                key={r.id}
-                className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700"
-              >
-                <p>
-                  Recruiter experience —{' '}
-                  <span className={STATUS_CLASS[r.status]}>{statusLabel(r.status)}</span>
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">
-                  approachability {r.approachability} · response time {r.responseTime} ·
-                  timeliness {r.timeliness} · communication {r.communicationQuality}
-                </p>
-                {r.freeText && <p className="italic">&quot;{r.freeText}&quot;</p>}
-              </article>
+              <RecruiterRatingItem key={r.id} rating={r} onChanged={reload} />
             ))}
 
             {entry.overallReview && (
-              <article className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700">
-                <p>
-                  Overall review —{' '}
-                  <span className={STATUS_CLASS[entry.overallReview.status]}>
-                    {statusLabel(entry.overallReview.status)}
-                  </span>
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">
-                  overall experience {entry.overallReview.overallExperience} · would recommend{' '}
-                  {entry.overallReview.wouldRecommend ? 'yes' : 'no'}
-                </p>
-                {entry.overallReview.reviewText && (
-                  <p className="italic">&quot;{entry.overallReview.reviewText}&quot;</p>
-                )}
-              </article>
+              <OverallReviewItem
+                key={entry.overallReview.id}
+                processId={entry.processId}
+                review={entry.overallReview}
+                onChanged={reload}
+              />
             )}
           </section>
         );

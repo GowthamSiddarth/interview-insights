@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { CreateOverallReviewDto } from './dto/create-overall-review.dto';
@@ -34,6 +34,38 @@ export class OverallReviewsService {
   findApprovedForProcess(processId: string) {
     return this.prisma.overallReview.findFirst({
       where: { processId, status: 'approved' },
+    });
+  }
+
+  // GitHub issue #150 — singular resource (UNIQUE(process_id)), so
+  // there's no separate review id to scope by; processId alone
+  // identifies it. Same reset-to-pending + re-enqueue shape as the other
+  // two entity types.
+  async update(processId: string, candidateId: string, dto: CreateOverallReviewDto) {
+    const review = await this.prisma.overallReview.findFirstOrThrow({ where: { processId } });
+    if (review.candidateId !== candidateId) {
+      throw new ForbiddenException('You can only edit your own review.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.overallReview.update({
+        where: { processId },
+        data: { ...dto, status: 'pending' },
+      });
+      await this.moderationService.reenqueue('overall_review', review.id, tx);
+      return updated;
+    });
+  }
+
+  async remove(processId: string, candidateId: string): Promise<void> {
+    const review = await this.prisma.overallReview.findFirstOrThrow({ where: { processId } });
+    if (review.candidateId !== candidateId) {
+      throw new ForbiddenException('You can only delete your own review.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.moderationService.removeQueueEntries('overall_review', review.id, tx);
+      await tx.overallReview.delete({ where: { processId } });
     });
   }
 }
