@@ -817,5 +817,5 @@ Milestone: "Phase 22 — Visual Design Refresh". Epic: GitHub issue #230.
       gained a `size` prop (narrow for forms, wide for the four
       data-heavy pages), with `NavBar`'s own width synced to match
       (GitHub issue #231, D41)
-- [ ] Engineering blog (last) (GitHub issue #232) — implemented once
-      issue #231 merges
+- [x] Engineering blog (last) (GitHub issue #232) — Phase 22 is now
+      fully done
