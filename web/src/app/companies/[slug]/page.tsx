@@ -8,10 +8,12 @@ import {
   ApiError,
   Company,
   CompanyAnalytics,
+  CompanyReviewItem,
   CompanyReviewsPage,
 } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { EmptyState } from '@/components/EmptyState';
+import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
 import { PageContainer } from '@/components/PageContainer';
 
@@ -32,6 +34,21 @@ function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
+function ReviewItem({ review }: { review: CompanyReviewItem }) {
+  return (
+    <article className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700">
+      <p className="font-medium">
+        {review.roleTitle} · {roundTypeLabel(review.roundType)} ({review.roundTitle})
+      </p>
+      <p className="text-gray-600 dark:text-gray-400">
+        difficulty {review.difficulty} · fairness {review.fairness} · communication{' '}
+        {review.communicationFluency} · attentiveness {review.attentiveness}
+      </p>
+      {review.freeText && <p className="italic">&quot;{review.freeText}&quot;</p>}
+    </article>
+  );
+}
+
 export default function CompanyProfilePage() {
   const { slug } = useParams<{ slug: string }>();
   const [company, setCompany] = useState<Company | null>(null);
@@ -39,6 +56,14 @@ export default function CompanyProfilePage() {
   const [reviews, setReviews] = useState<CompanyReviewsPage | null>(null);
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  // Session-hint cookie, not a GET /auth/me poll — same tri-state idiom
+  // NavBar/the wizard already use (D32): null while unchecked, so a gated
+  // section never flashes before the real state is known.
+  const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setCandidateSession(api.hasCandidateSessionHint());
+  }, []);
 
   useEffect(() => {
     api
@@ -131,22 +156,24 @@ export default function CompanyProfilePage() {
         ) : analytics.roundTypes.length === 0 ? (
           <EmptyState message="Not enough reviews yet" />
         ) : (
-          <div className="flex flex-col gap-4">
-            {analytics.roundTypes.map((rt) => (
-              <div key={rt.roundType}>
-                <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
-                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <ScoreDisplay label="Difficulty" value={rt.scores.difficulty} sampleSize={rt.sampleSize} />
-                  <ScoreDisplay label="Fairness" value={rt.scores.fairness} sampleSize={rt.sampleSize} />
-                  <ScoreDisplay
-                    label="Communication"
-                    value={rt.scores.communicationFluency}
-                    sampleSize={rt.sampleSize}
-                  />
-                </dl>
-              </div>
-            ))}
-          </div>
+          <GatedSection loggedIn={candidateSession} prompt="Log in to see the full round-type breakdown">
+            <div className="flex flex-col gap-4">
+              {analytics.roundTypes.map((rt) => (
+                <div key={rt.roundType}>
+                  <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
+                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                    <ScoreDisplay label="Difficulty" value={rt.scores.difficulty} sampleSize={rt.sampleSize} />
+                    <ScoreDisplay label="Fairness" value={rt.scores.fairness} sampleSize={rt.sampleSize} />
+                    <ScoreDisplay
+                      label="Communication"
+                      value={rt.scores.communicationFluency}
+                      sampleSize={rt.sampleSize}
+                    />
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </GatedSection>
         )}
       </section>
 
@@ -158,45 +185,46 @@ export default function CompanyProfilePage() {
           <EmptyState message="No approved reviews yet." />
         ) : (
           <>
+            <p className="text-sm text-gray-500">
+              {reviews.total} review{reviews.total === 1 ? '' : 's'}
+            </p>
             <div className="flex flex-col gap-4">
-              {reviews.items.map((r) => (
-                <article
-                  key={r.id}
-                  className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700"
-                >
-                  <p className="font-medium">
-                    {r.roleTitle} · {roundTypeLabel(r.roundType)} ({r.roundTitle})
-                  </p>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    difficulty {r.difficulty} · fairness {r.fairness} · communication{' '}
-                    {r.communicationFluency} · attentiveness {r.attentiveness}
-                  </p>
-                  {r.freeText && <p className="italic">&quot;{r.freeText}&quot;</p>}
-                </article>
-              ))}
+              <ReviewItem review={reviews.items[0]} />
             </div>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-3 text-sm">
-                <Button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="disabled:opacity-40"
-                >
-                  Previous
-                </Button>
-                <span className="text-gray-500">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="disabled:opacity-40"
-                >
-                  Next
-                </Button>
-              </div>
+            {(reviews.items.length > 1 || totalPages > 1) && (
+              <GatedSection
+                loggedIn={candidateSession}
+                prompt={`Log in to see the other ${reviews.total - 1} review${reviews.total - 1 === 1 ? '' : 's'}`}
+              >
+                <div className="flex flex-col gap-4">
+                  {reviews.items.slice(1).map((r) => (
+                    <ReviewItem key={r.id} review={r} />
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex items-center gap-3 text-sm">
+                    <Button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="disabled:opacity-40"
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-gray-500">
+                      Page {page} of {totalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      className="disabled:opacity-40"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </GatedSection>
             )}
           </>
         )}

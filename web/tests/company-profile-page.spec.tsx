@@ -66,7 +66,17 @@ function renderPage() {
   return render(<CompanyProfilePage />);
 }
 
+function setLoggedInCookie(loggedIn: boolean) {
+  document.cookie = loggedIn
+    ? 'candidate_logged_in=1'
+    : 'candidate_logged_in=; expires=Thu, 01 Jan 1970 00:00:00 UTC';
+}
+
 describe('CompanyProfilePage (Phase 15 issue #141)', () => {
+  afterEach(() => {
+    setLoggedInCookie(false);
+  });
+
   it('renders company header, aggregate scores, and reviews', async () => {
     mockFetchByRoute(reviewsPage(1, 1, [oneReview]));
     renderPage();
@@ -101,7 +111,8 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
     expect(await screen.findByText(/No approved reviews yet/)).toBeInTheDocument();
   });
 
-  it('paginates the reviews list', async () => {
+  it('paginates the reviews list when logged in', async () => {
+    setLoggedInCookie(true);
     mockFetchByRoute(reviewsPage(1, 15, [oneReview]));
     const user = userEvent.setup();
     renderPage();
@@ -126,5 +137,47 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
 
     const link = await screen.findByRole('link', { name: /Full analytics breakdown/ });
     expect(link).toHaveAttribute('href', '/companies/acme-corp/analytics');
+  });
+
+  describe('anonymous visitor soft-gating (GitHub issue #226, Phase 21)', () => {
+    it('shows the overall-experience hook but gates the round-type breakdown', async () => {
+      mockFetchByRoute(reviewsPage(1, 1, [oneReview]));
+      renderPage();
+
+      expect(await screen.findByText('4.20')).toBeInTheDocument(); // overall experience — the free hook
+      expect(screen.getByText('Log in to see the full round-type breakdown')).toBeInTheDocument();
+      expect(screen.queryByText('3.50')).not.toBeInTheDocument(); // round-type difficulty score
+    });
+
+    it('shows the first review and the real total, gating the rest', async () => {
+      const secondReview = { ...oneReview, id: 'review-2', freeText: 'A second, gated review.' };
+      mockFetchByRoute(reviewsPage(1, 2, [oneReview, secondReview]));
+      renderPage();
+
+      expect(await screen.findByText('Solid, well-run round.', { exact: false })).toBeInTheDocument();
+      expect(screen.getByText('2 reviews')).toBeInTheDocument();
+      expect(screen.getByText('Log in to see the other 1 review')).toBeInTheDocument();
+      expect(screen.queryByText('A second, gated review.', { exact: false })).not.toBeInTheDocument();
+    });
+
+    it('gates pagination controls entirely when logged out', async () => {
+      mockFetchByRoute(reviewsPage(1, 15, [oneReview]));
+      renderPage();
+
+      await screen.findByText(/Log in to see the other 14 reviews/);
+      expect(screen.queryByText('Page 1 of 2')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+    });
+
+    it('shows the full round-type breakdown and all reviews when logged in', async () => {
+      setLoggedInCookie(true);
+      const secondReview = { ...oneReview, id: 'review-2', freeText: 'A second, visible review.' };
+      mockFetchByRoute(reviewsPage(1, 2, [oneReview, secondReview]));
+      renderPage();
+
+      expect(await screen.findByText('3.50')).toBeInTheDocument(); // round-type difficulty score
+      expect(screen.getByText('A second, visible review.', { exact: false })).toBeInTheDocument();
+      expect(screen.queryByText(/Log in to see/)).not.toBeInTheDocument();
+    });
   });
 });

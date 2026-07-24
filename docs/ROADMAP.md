@@ -772,3 +772,27 @@ GitHub issue #214.
       "Log out" renders correctly (GitHub issue #222, D39)
 - [x] Engineering blog update for issue #222 (D39) — Phase 20 is now
       fully done
+
+## Phase 21 — Anonymous Visitor Soft-Gating
+
+Filed 2026-07-24 after a UI/UX brainstorm surfaced a deliberate product
+pivot: soft-gate (teaser + CTA, never a hard redirect) the company profile
+page and analytics dashboard for anonymous visitors, to drive candidate
+signups. This reverses part of Phase 15's "fully public" design intent —
+asked directly, the motivation is signup pressure, not a scraping/abuse
+concern, and the mechanism is a soft gate matching how Glassdoor itself
+gates deeper content. Milestone: "Phase 21 — Anonymous Visitor
+Soft-Gating". Epic: GitHub issue #225.
+
+- [x] Soft-gate company profile & analytics pages — a new reusable
+      `GatedSection` component (mirroring `EmptyState`'s minimal style),
+      driven by the existing `hasCandidateSessionHint()` cookie-hint
+      idiom (D32), no new backend auth. Profile page keeps the header and
+      "Overall experience" section as a free hook, gating the round-type
+      breakdown and all reviews beyond the first; the analytics page
+      (already framed as "the full breakdown") gates its three data
+      sections behind one combined prompt. The homepage wizard's company
+      picker and "Change company" button stay ungated — pure navigation
+      with no data to tease (GitHub issue #226, D40)
+- [ ] Engineering blog (last) (GitHub issue #227) — implemented once
+      issue #226 merges
