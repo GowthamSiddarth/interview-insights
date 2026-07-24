@@ -134,7 +134,7 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
 *Update this section at the end of every working session — this is the
 single most useful thing to keep current.*
 
-As of 2026-07-23: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
+As of 2026-07-24: Phase 1 (repo scaffold), Phase 2 (thin vertical slice),
 Phase 3 (trust & moderation), Phase 4 (analytics), Phase 5 (search &
 discovery), Phase 7 (Kubernetes), Phase 9 (UX/UI Polish Pass),
 Phase 10 (Cloud-Readiness Practice, local/free), Phase 11 (Integrated
@@ -142,30 +142,30 @@ Prototype: LocalStack Secrets & IAM in kind), Phase 12 (Local CD &
 Cluster Observability), Phase 13 (Local Infra Hardening &
 Reproducibility), Phase 14 (Recruiter & Overall Reviews + Moderation
 Admin UI), Phase 15 (Public Company Profile Pages), Phase 16
-(Candidate Accounts & Auth), and Phase 18 (Admin Authentication) are
-all done. Phase 6 is done except issue #18 (blocked). Phase 18 was
-reopened the same day it was first declared done, once a real login
-attempt surfaced a Secure-cookie bug and two follow-up issues (#192
-credential rotation, #193 mid-session-expiry redirect, both now done).
-Phases 1-7, 9-16, and 18 each have a complete engineering blog under
-`wiki/blog/`. Phase 8 is a trigger-gated backlog, not started. Phase 16
-closed out with issues #144 (mail foundation, D29), #145 (magic-link
-auth, supersedes and removes Phase 3's standalone verification
-endpoints, D30), #146 (sessions on the write path, four
-candidateId-bearing writes now session-gated, `POST /candidates`
-removed, D31), #147 (login/logout UI + wizard integration —
-session-hint cookie instead of a passive `GET /auth/me` poll, hard
-navigation after verify, D32), and #148 (engineering blog, this
-phase's). Phase 17 (Candidate Self-Service) is in progress — issue
-#149 (my reviews, grouped by `InterviewProcess`), #150 (Update/
-Delete under moderation-safe rules, shared per-candidate edit throttle,
-D33), and #151 (GDPR erasure — `DELETE /me`, delete not anonymize,
-stale-session 401 via a DB existence check, D34) done, #152 (blog) not
-started yet. Phase 19
-(Content Quality & Synthetic Data) is planned but not started. Phase 18
-was filed after Phase 16-17, but per the same non-linear precedent
-Phase 6/8 already set, was implemented first — see the Phase 18 intro
-in `docs/ROADMAP.md` for why. Phase 19 remains queued behind Phase 17.
+(Candidate Accounts & Auth), Phase 17 (Candidate Self-Service), and
+Phase 18 (Admin Authentication) are all done. Phase 6 is done except
+issue #18 (blocked). Phase 18 was reopened the same day it was first
+declared done, once a real login attempt surfaced a Secure-cookie bug
+and two follow-up issues (#192 credential rotation, #193
+mid-session-expiry redirect, both now done). Phases 1-7, 9-18 each
+have a complete engineering blog under `wiki/blog/`. Phase 8 is a
+trigger-gated backlog, not started. Phase 16 closed out with issues
+#144 (mail foundation, D29), #145 (magic-link auth, supersedes and
+removes Phase 3's standalone verification endpoints, D30), #146
+(sessions on the write path, four candidateId-bearing writes now
+session-gated, `POST /candidates` removed, D31), #147 (login/logout UI
++ wizard integration — session-hint cookie instead of a passive
+`GET /auth/me` poll, hard navigation after verify, D32), and #148
+(engineering blog, that phase's). Phase 17 closed out with issues #149
+(my reviews, grouped by `InterviewProcess`), #150 (Update/Delete under
+moderation-safe rules, shared per-candidate edit throttle, D33), #151
+(GDPR erasure — `DELETE /me`, delete not anonymize, stale-session 401
+via a DB existence check, D34), and #152 (engineering blog, this
+phase's). Phase 19 (Content Quality & Synthetic Data) is planned but
+not started — it's next up now that Phase 17 is done. Phase 18 was
+filed after Phase 16-17, but per the same non-linear precedent Phase
+6/8 already set, was implemented first — see the Phase 18 intro in
+`docs/ROADMAP.md` for why.
 
 **Phase 1** — repo layout matches `docs/ARCHITECTURE.md`: `api/` (NestJS),
 `web/` (Next.js + Tailwind), `workers/` (placeholder, no logic yet), `infra/`
@@ -1585,8 +1585,25 @@ that the candidate row and every row it had touched were gone, and
 confirmed the same session cookie replayed against `GET /me/submissions`
 returned a clean 401.
 
-- Next step: Phase 17, issue #152 (engineering blog, last), per
-  `docs/ROADMAP.md` — depends on #149-151, all now done.
+**Phase 17, issue #152 (engineering blog)** —
+`wiki/blog/phase-17-candidate-self-service/` gained one post per
+feature issue (#149, #150, #151), covering the my-reviews
+grouped-by-`InterviewProcess` design, Update/Delete's moderation-safe
+`reenqueue()`/ownership-403-vs-404 rules and the shared-guard DI bug it
+surfaced (D33), and GDPR erasure's delete-not-anonymize reasoning,
+FK-safe deletion order, shared-`Recruiter`-row exclusion, and the
+stateless-session existence check (D34). `wiki/blog/README.md`'s index
+updated to match.
+
+**Phase 17 is now fully done** — issues #149-152 all closed via merged
+PRs, and every phase built so far (1-7, 9-18) now has a complete
+engineering blog.
+
+- Next step: Phase 19 (Content Quality & Synthetic Data) — three
+  independent issues, any order (GitHub issues #162-165, already
+  filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
+  (near-duplicate review detection), since it directly replaces D13's
+  documented exact-match/full-table-scan limitation.
 
 ## Open decisions still to make
 

@@ -656,7 +656,8 @@ candidates).
 - [x] GDPR erasure path: `DELETE /me` + retention policy decided and
       documented; clears session cookies; shared `Recruiter` rows
       excluded (GitHub issue #151) — see D34
-- [ ] Engineering blog (last) (GitHub issue #152)
+- [x] Engineering blog (last) (GitHub issue #152) — Phase 17 is now
+      fully done
 
 ## Phase 18 — Admin Authentication
 
