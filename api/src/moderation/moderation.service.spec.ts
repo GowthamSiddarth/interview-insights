@@ -203,6 +203,52 @@ describe('ModerationService', () => {
 
       expect(result[0].entity).toBeNull();
     });
+
+    // GitHub issue #212 / docs/DECISIONS.md D37: a required-relation
+    // include (e.g. recruiterRating -> recruiterInteraction -> process)
+    // can transiently reject if Prisma splits the nested include across
+    // multiple round trips and a concurrent delete (GDPR erasure, #151;
+    // Update/Delete, #150) commits in between — one entity type's
+    // enrichment failing must never crash the other two, or the whole
+    // endpoint.
+    it('degrades one entity type to entity: null on a transient enrichment failure, without affecting the other two', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },
+        { id: 'q2', entityType: 'recruiter_rating', entityId: 'cr1', reviewedAt: null },
+        { id: 'q3', entityType: 'overall_review', entityId: 'ov1', reviewedAt: null },
+      ]);
+      prisma.roundRating.findMany.mockResolvedValue([
+        {
+          id: 'rr1',
+          difficulty: 3,
+          fairness: 4,
+          communicationFluency: 4,
+          attentiveness: 4,
+          biasSignal: 5,
+          technicalDepth: null,
+          freeText: null,
+          round: { title: 'Screen', roundType: 'coding', process: { roleTitle: 'Engineer', company: { name: 'Acme' } } },
+        },
+      ]);
+      prisma.recruiterRating.findMany.mockRejectedValue(
+        new Error('Inconsistent query result: Field process is required to return data, got `null` instead.'),
+      );
+      prisma.overallReview.findMany.mockResolvedValue([
+        {
+          id: 'ov1',
+          overallExperience: 4,
+          wouldRecommend: true,
+          reviewText: 'good loop',
+          process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+        },
+      ]);
+
+      const result = await service.listPending();
+
+      expect(result[0].entity).toMatchObject({ roundTitle: 'Screen' });
+      expect(result[1].entity).toBeNull();
+      expect(result[2].entity).toMatchObject({ overallExperience: 4 });
+    });
   });
 
   describe('approve / reject / flag', () => {

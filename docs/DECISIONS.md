@@ -1243,6 +1243,80 @@ a retrofit onto this test.
 
 ---
 
+### D37 — `GET /moderation/queue` isolates each entity type's enrichment (`Promise.allSettled`, not `Promise.all`); a transient Prisma required-relation race, not a data-integrity bug (GitHub issue #212)
+
+**Context:** running the golden-path smoke test's own verification (stress-
+testing the full e2e suite repeatedly) surfaced an intermittent 500 on
+`GET /moderation/queue`, hitting a different, unrelated test file each
+time. The server log showed
+`PrismaClientUnknownRequestError: ... Field process is required to
+return data, got \`null\` instead` from `recruiterRating.findMany()`'s
+nested `include` (`recruiterInteraction -> process -> company`).
+
+**Ruled out concurrency and data volume as the cause before looking
+deeper — both are the obvious first guesses, and both were wrong.**
+Reproduced identically under `--runInBand` (fully serial, zero
+parallelism) and against a freshly truncated test database (actually
+*more* often than against an aged one). Also confirmed it wasn't the
+golden-path smoke test itself — reproduces with that file excluded.
+
+**Confirmed directly against the live schema that a durable orphaned
+row is impossible here**: `recruiter_interactions_process_id_fkey` is a
+real, Postgres-enforced `FOREIGN KEY ... ON DELETE RESTRICT`. Postgres
+would reject any delete that left a `RecruiterInteraction` pointing at
+a gone `InterviewProcess`. So the null Prisma sees isn't a bad row at
+rest — it's a **query-time race**: Prisma splits a nested `include`
+this deep (three levels) into multiple separate round trips rather
+than one atomic snapshot, and if a concurrent transaction — a GDPR
+erasure (issue #151) or an Update/Delete (issue #150) delete, both of
+which legitimately delete these rows — commits *between*
+`listPending()`'s own round trips, the second round trip can find
+nothing for a `processId` the first round trip already captured a
+reference to. A required relation can't return null gracefully, so
+Prisma throws.
+
+**The real bug worth fixing wasn't the race itself — it was the blast
+radius.** `listPending()` awaited all three entity types'
+enrichment queries via `Promise.all`. One entity type's transient
+failure rejected the *whole* `Promise.all`, crashing `GET
+/moderation/queue` for every caller, regardless of what they actually
+needed from it. That's why the failure kept jumping to unrelated test
+files — it's a shared, global endpoint, and any concurrently-running
+erasure/delete anywhere could poison it for everyone at that instant.
+
+**Decision:** switched to `Promise.allSettled`, isolating each entity
+type. A failed batch is logged (`this.logger.error`, a new
+`settledOrEmpty()` helper) and degrades to an empty result — its
+entries just get `entity: null`, the same graceful fallback already
+used for a genuinely missing underlying row. One entity type failing
+no longer affects the other two, and never crashes the endpoint
+outright. This does **not** eliminate the underlying transient race —
+a deeper fix would mean making the multi-query read fully
+snapshot-consistent (e.g. a serializable transaction) — but making an
+admin-facing read path resilient to an unrelated concurrent write
+elsewhere in the system is the right scope here, not chasing full
+isolation for a read that's inherently a point-in-time snapshot anyway.
+
+**Verified concretely, not just assumed**: stress-tested the full e2e
+suite (8+ consecutive runs) against a freshly truncated test database,
+both before and after. Before: intermittent failures matching this
+exact signature. After: the underlying transient Prisma error still
+fires and logs (caught directly in server output across two separate
+runs) but zero test failures resulted from it in any run.
+
+**A separate, unrelated intermittent failure** (`Parse Error: Expected
+HTTP/`, seen in `fraud-checks`/`recruiter-ratings`) was also observed
+during this investigation — explicitly out of scope for this entry,
+not chased further here.
+
+**Revisit when:** if the underlying race itself ever needs eliminating
+(not just contained) — e.g. if the moderation UI needs a stronger
+consistency guarantee than "graceful degradation to null" — a
+serializable transaction around `listPending()`'s reads would be the
+next step, not a further patch on `Promise.allSettled`.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

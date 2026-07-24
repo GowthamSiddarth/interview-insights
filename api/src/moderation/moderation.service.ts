@@ -73,9 +73,21 @@ export class ModerationService {
     const idsFor = (type: ModerationEntityType) =>
       entries.filter((e) => e.entityType === type).map((e) => e.entityId);
 
-    // One query per entity type over the whole page of entries — not one
-    // per entry.
-    const [roundRatings, recruiterRatings, overallReviews] = await Promise.all([
+    // Promise.allSettled, not Promise.all — each entity type's enrichment
+    // query is isolated from the other two. A required-relation include
+    // (e.g. recruiterRating -> recruiterInteraction -> process) can
+    // transiently fail with "Field X is required to return data, got null
+    // instead" if Prisma splits the nested include across multiple round
+    // trips and a concurrent delete (e.g. GDPR erasure, issue #151, or
+    // Update/Delete, issue #150) commits in between them — the FK itself
+    // is real and DB-enforced (ON DELETE RESTRICT), so this is a
+    // query-time race, not a durable orphaned row; see docs/DECISIONS.md
+    // D37. One entity type transiently failing to enrich must never crash
+    // the other two, or the whole moderation queue for every admin
+    // request — its entries just fall back to `entity: null` for that
+    // page, same as the pre-existing "underlying row genuinely missing"
+    // case below.
+    const [roundRatingsResult, recruiterRatingsResult, overallReviewsResult] = await Promise.allSettled([
       this.prisma.roundRating.findMany({
         where: { id: { in: idsFor('round_rating') } },
         include: { round: { include: { process: { include: { company: true } } } } },
@@ -93,6 +105,10 @@ export class ModerationService {
         include: { process: { include: { company: true } } },
       }),
     ]);
+
+    const roundRatings = this.settledOrEmpty(roundRatingsResult, 'round_rating');
+    const recruiterRatings = this.settledOrEmpty(recruiterRatingsResult, 'recruiter_rating');
+    const overallReviews = this.settledOrEmpty(overallReviewsResult, 'overall_review');
 
     const entityById = new Map<string, unknown>();
     for (const r of roundRatings) {
@@ -201,6 +217,18 @@ export class ModerationService {
     }
 
     return updatedEntry;
+  }
+
+  // Logs and degrades to an empty array rather than letting one entity
+  // type's enrichment failure propagate — see the D37 comment on
+  // listPending() for why this can transiently happen at all.
+  private settledOrEmpty<T>(result: PromiseSettledResult<T[]>, entityType: ModerationEntityType): T[] {
+    if (result.status === 'fulfilled') return result.value;
+    this.logger.error(
+      `Failed to enrich ${entityType} entries for the moderation queue — falling back to entity: null for this batch`,
+      result.reason instanceof Error ? result.reason.stack : result.reason,
+    );
+    return [];
   }
 
   private async indexApprovedReview(roundRatingId: string) {
