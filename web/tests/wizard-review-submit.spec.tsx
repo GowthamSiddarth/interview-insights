@@ -1,16 +1,17 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import HomePage from '../src/app/page';
 
 const fieldOptionsResponse = {
-  coding: { fields: [] },
-  system_design: { fields: [] },
-  behavioral: { fields: [] },
-  leadership: { fields: [] },
-  case_study: { fields: [] },
+  tech_screening: { fields: [] },
   assessment: { fields: [] },
   take_home: { fields: [] },
+  coding: { fields: [] },
+  system_design: { fields: [] },
+  case_study: { fields: [] },
+  behavioral: { fields: [] },
+  leadership: { fields: [] },
   other: { fields: [] },
 };
 
@@ -51,6 +52,16 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
   }
 
+  // GitHub issue #319 — adding a round is only reachable via the
+  // Next-button modal now (the sidebar's direct control is gone), and the
+  // modal's select defaults to unselected ("None").
+  async function addRound(user: ReturnType<typeof userEvent.setup>, roundType = 'coding') {
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add another round' });
+    await user.selectOptions(within(dialog).getByLabelText('Round type'), roundType);
+    await user.click(within(dialog).getByRole('button', { name: 'Add new round' }));
+  }
+
   it('sorts steps chronologically regardless of fill order (recruiter-start, rounds by sequence, recruiter-end)', async () => {
     mockFetchByRoute();
     const user = userEvent.setup();
@@ -63,7 +74,8 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.click(screen.getByRole('button', { name: '+ Recruiter (post-interview)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'end-recruiter@example.com');
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await user.click(screen.getByRole('button', { name: 'Process details' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Only Round');
 
     await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
@@ -92,7 +104,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
 
@@ -107,7 +119,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     // GitHub issue #282 — a rating is already attached by default, no
     // opt-in click needed.
@@ -139,7 +151,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
     await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
@@ -207,7 +219,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     // steps aren't added here) — this exercises the backend-error fallback
     // path specifically, simulating a shape the client-side check itself
     // didn't catch.
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
     await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
@@ -227,7 +239,8 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     // Company creation is gated, but selecting an *existing* company and
     // drafting needs no session at all (issue #253/#255) — only submit does.
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import HomePage from '../src/app/page';
@@ -46,7 +46,12 @@ describe('Non-blocking recruiter-touchpoint reminders on submit (GitHub issue #3
     await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
     await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    // GitHub issue #319 — adding a round is only reachable via the
+    // Next-button modal now (the sidebar's direct control is gone).
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add another round' });
+    await user.selectOptions(within(dialog).getByLabelText('Round type'), 'coding');
+    await user.click(within(dialog).getByRole('button', { name: 'Add new round' }));
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
   }

@@ -603,7 +603,6 @@ export default function HomePage() {
               draft={activeDraft}
               activeStepId={activeStepId}
               onSelect={setActiveStepId}
-              onAddRound={handleAddRound}
               onAddRecruiter={handleAddRecruiter}
             />
 
@@ -702,10 +701,7 @@ export default function HomePage() {
             setShowAddRoundModal(false);
             setActiveStepId('review');
           }}
-          onContinue={() => {
-            setShowAddRoundModal(false);
-            if (nextStepId) setActiveStepId(nextStepId);
-          }}
+          onCancel={() => setShowAddRoundModal(false)}
         />
       )}
     </PageContainer>

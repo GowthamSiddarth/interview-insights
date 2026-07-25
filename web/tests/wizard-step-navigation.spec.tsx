@@ -1,9 +1,12 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import HomePage from '../src/app/page';
 
 const fieldOptionsResponse = {
+  tech_screening: { fields: [] },
+  assessment: { fields: [] },
+  take_home: { fields: [] },
   coding: {
     fields: [
       { key: 'problemAlgorithms', kind: 'controlled-multi', options: ['DFS', 'BFS'] },
@@ -11,11 +14,9 @@ const fieldOptionsResponse = {
     ],
   },
   system_design: { fields: [{ key: 'keyConcepts', kind: 'controlled-multi', options: ['Caching'] }] },
+  case_study: { fields: [] },
   behavioral: { fields: [] },
   leadership: { fields: [] },
-  case_study: { fields: [] },
-  assessment: { fields: [] },
-  take_home: { fields: [] },
   other: { fields: [{ key: 'notes', kind: 'text' }] },
 };
 
@@ -46,17 +47,31 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     render(<HomePage />);
     await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
+    // Role title is required (issue #281) and Next is now the only way to
+    // add a round (issue #319) — fill it up front so Next isn't blocked.
+    await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
+  }
+
+  // GitHub issue #319 — the sidebar's direct "Add a round" control is
+  // gone; adding a round is only reachable via the Next-button modal, and
+  // the modal's select defaults to unselected ("None") with "Add new
+  // round" disabled until a real type is chosen.
+  async function addRound(user: ReturnType<typeof userEvent.setup>, roundType = 'coding') {
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add another round' });
+    await user.selectOptions(within(dialog).getByLabelText('Round type'), roundType);
+    await user.click(within(dialog).getByRole('button', { name: 'Add new round' }));
   }
 
   it('adds two rounds of the same type and keeps their data independent', async () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     expect(await screen.findByRole('heading', { name: 'Coding round' })).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Title/), 'Screen 1');
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await screen.findByRole('heading', { name: 'Coding round' });
     await user.type(screen.getByLabelText(/Title/), 'Screen 2');
 
@@ -73,9 +88,9 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Keep me');
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Remove me');
 
     await user.click(screen.getByText(/Round 2: Coding - Remove me/));
@@ -89,7 +104,7 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     expect(await screen.findByText('DFS')).toBeInTheDocument();
     expect(screen.getByText('Problem Description')).toBeInTheDocument();
   });
@@ -155,7 +170,7 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
 
     await user.hover(screen.getByRole('button', { name: 'difficulty help' }));
     expect(
@@ -179,7 +194,7 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     // GitHub issue #282 — a new round's rating is available by default,
     // no opt-in click needed.
@@ -192,16 +207,13 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
   });
 
-  it('"Next" advances process -> rounds -> recruiter steps -> overall -> review, live-recomputed as steps are added (GitHub issue #283)', async () => {
+  it('"Next" advances process -> round -> (via the sidebar) recruiter steps -> overall -> review (GitHub issues #283, #319)', async () => {
     const user = userEvent.setup();
     await openDraft(user);
-    // Role title is required (issue #281) — Next now blocks on the
-    // current step's own validation issues (issue #306), same as Submit.
-    await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
 
-    // Still on "Process details" — Next should go straight to the round,
-    // since no recruiter step exists yet at this point.
-    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    // Still on "Process details" — Next should go straight into adding
+    // the first round, since none exists yet.
+    await addRound(user);
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'jane@acme.example');
@@ -210,13 +222,18 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByDisplayValue('Screen')).toBeInTheDocument();
 
-    // GitHub issue #306 — Next from the last round opens the add-round
-    // modal instead of navigating directly; "No, continue" performs the
-    // original Next behavior, advancing to the already-existing recruiter
-    // step.
+    // GitHub issue #319 — Next from the last round still opens the
+    // add-round modal, but "Cancel" (renamed from "No, continue") no
+    // longer navigates anywhere — it just closes the modal, leaving the
+    // candidate on the round. Reaching the already-existing recruiter
+    // step from here is only possible via the sidebar now.
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByRole('dialog', { name: 'Add another round' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'No, continue' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('Screen')).toBeInTheDocument(); // still on the round
+
+    await user.click(screen.getByText(/Recruiter \(pre-interview\): jane@acme.example/));
     expect(await screen.findByDisplayValue('jane@acme.example')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
