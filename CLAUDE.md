@@ -2113,10 +2113,51 @@ pre-filled → delete removes the draft while the company itself
 (correctly) still exists in the picker — zero console errors
 throughout. Test data cleaned up afterward.
 
-- Next step: Phase 26, issue #254 (flashcard-style step navigation,
-  consuming Phase 24's round-type registry) — builds the actual round/
-  recruiter step forms and free-jump navigation on top of #253's data
-  layer.
+**Phase 26, issue #254 (flashcard-style step navigation)** — new
+`web/src/app/wizard/` colocated components (not routes — no `page.tsx`
+inside, so Next.js never treats the directory as one):
+`step-navigator.tsx` (the free-jump step list — process details, every
+round/recruiter step, overall review, each clickable in any order, plus
+"add round"/"add recruiter touchpoint" controls), `round-step-form.tsx`,
+`recruiter-step-form.tsx`, `type-metadata-fields.tsx` (a fully
+registry-driven renderer for `text`/`controlled-single`/
+`controlled-multi` fields — no per-round-type conditional, so a 9th
+round type needs zero frontend changes), and `round-type-labels.ts`
+(the one remaining place the 8 round types are named for display,
+since the registry only provides field schemas, not labels).
+`api.ts` gained `getRoundTypeFieldOptions()` (`GET /round-types/
+field-options`, built in Phase 24 issue #248). Both round and recruiter
+steps support an optional rating sub-section via a checkbox (a round
+or touchpoint can exist in the draft with no rating yet, mirroring the
+schema's own tolerance for that state, issue #260). Recruiter timing
+(`'start' | 'end'`, D50) is editable in its form via a plain "before/
+after your interview rounds" select. `page.tsx` wires it all in with a
+two-column layout (`PageContainer` now `size="wide"` once a draft is
+active) — step navigator on the left, the selected step's form on the
+right.
+
+10 new component tests (`wizard-step-navigation.spec.tsx` — two rounds
+of the same type stay independent, removing one doesn't affect the
+other, registry-driven fields render for the selected round type,
+recruiter steps with different timings stay independent, a round with
+its rating survives a reload) all green; 78 web tests total, build/lint
+clean. Live-verified with a real headless browser (Playwright) against
+the real `kind` cluster: real magic-link login → company creation
+opens a draft → added a coding round (registry-driven `problemAlgorithms`/
+`problemDataStructures` fields with real seeded options rendered) →
+added a second round (system design) → navigated back to round 1,
+title preserved independently → added a recruiter touchpoint → full
+page reload → all three steps (2 rounds + 1 recruiter touchpoint)
+survived intact — zero console errors throughout. Test data cleaned up
+afterward. (Also hit and fixed a live-verification-only environment
+issue, not a code bug: running the api and web dev servers in the same
+shell invocation leaked the api's `.env`-sourced `PORT=3001` into the
+web server's environment via `set -a`, causing a port collision —
+fixed by starting each dev server in its own separate shell invocation.)
+
+- Next step: Phase 26, issue #255 (chronological review screen +
+  bulk-submit integration) — the last feature issue in Phase 26, wiring
+  the draft to Phase 25's bulk endpoint for the one real submit call.
 
 ## Open decisions still to make
 

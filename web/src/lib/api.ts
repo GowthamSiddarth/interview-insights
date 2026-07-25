@@ -224,6 +224,18 @@ export interface ReviewSearchFilters {
   dateTo?: string;
 }
 
+// GET /round-types/field-options (Phase 24 issue #248) — the round-type
+// registry, consumed by the wizard's flashcard step forms (issue #254)
+// instead of hardcoding round-type-specific fields. `options` is present
+// only for controlled-single/controlled-multi fields, never for text.
+export interface RoundTypeFieldDef {
+  key: string;
+  kind: 'text' | 'controlled-single' | 'controlled-multi';
+  options?: string[];
+}
+
+export type RoundTypeFieldOptions = Record<Round['roundType'], { fields: RoundTypeFieldDef[] }>;
+
 export interface AdminSession {
   username: string;
 }
@@ -542,4 +554,6 @@ export const api = {
     if (filters.dateTo) query.set('dateTo', filters.dateTo);
     return request<ReviewSearchResult[]>(`/search/reviews?${query.toString()}`);
   },
+
+  getRoundTypeFieldOptions: () => request<RoundTypeFieldOptions>('/round-types/field-options'),
 };

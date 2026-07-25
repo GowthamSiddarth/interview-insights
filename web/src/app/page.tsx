@@ -2,12 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiError, Company } from '@/lib/api';
+import { api, ApiError, Company, RoundTypeFieldOptions, Round } from '@/lib/api';
 import {
+  addRecruiterStep,
+  addRoundStep,
   createDraft,
   deleteDraft,
   listDrafts,
+  removeRecruiterStep,
+  removeRoundStep,
   saveDraft,
+  setOverallReview,
+  updateRecruiterStep,
+  updateRoundStep,
+  DraftOverallReview,
   ProcessDraft,
 } from '@/lib/draft-store';
 import { Button } from '@/components/Button';
@@ -15,6 +23,9 @@ import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { GatedSection } from '@/components/GatedSection';
+import { StepNavigator } from './wizard/step-navigator';
+import { RoundStepForm } from './wizard/round-step-form';
+import { RecruiterStepForm } from './wizard/recruiter-step-form';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
@@ -23,6 +34,62 @@ const inputClass =
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
+}
+
+function OverallReviewForm({
+  value,
+  onChange,
+}: {
+  value: DraftOverallReview | undefined;
+  onChange: (value: DraftOverallReview | undefined) => void;
+}) {
+  function toggle(hasReview: boolean) {
+    onChange(hasReview ? { overallExperience: 3, wouldRecommend: false } : undefined);
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="font-medium">Overall review</h3>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={!!value} onChange={(e) => toggle(e.target.checked)} />
+        I have an overall review for this process
+      </label>
+      {value && (
+        <>
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="flex flex-col text-sm">
+              Overall experience (1–5)
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={value.overallExperience}
+                onChange={(e) => onChange({ ...value, overallExperience: Number(e.target.value) })}
+                className={inputClass}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={value.wouldRecommend}
+                onChange={(e) => onChange({ ...value, wouldRecommend: e.target.checked })}
+              />
+              I&apos;d recommend interviewing here
+            </label>
+          </div>
+          <label className="flex flex-col text-sm">
+            Summary of the whole process (optional)
+            <textarea
+              rows={2}
+              value={value.reviewText ?? ''}
+              onChange={(e) => onChange({ ...value, reviewText: e.target.value || undefined })}
+              className={inputClass}
+            />
+          </label>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -35,6 +102,8 @@ export default function HomePage() {
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
   const [drafts, setDrafts] = useState<ProcessDraft[]>([]);
   const [activeDraft, setActiveDraft] = useState<ProcessDraft | null>(null);
+  const [activeStepId, setActiveStepId] = useState<string>('process');
+  const [fieldOptions, setFieldOptions] = useState<RoundTypeFieldOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,10 +118,22 @@ export default function HomePage() {
     setDrafts(listDrafts());
   }, []);
 
+  // Fetched once — the round-type registry (GitHub issue #248) drives the
+  // "add round" menu and every round step's type_metadata fields, so
+  // there's nothing to hardcode here as new round types/fields are added
+  // server-side.
+  useEffect(() => {
+    api
+      .getRoundTypeFieldOptions()
+      .then(setFieldOptions)
+      .catch((err: unknown) => setError(errorMessage(err)));
+  }, []);
+
   function handleStartDraft(company: Company) {
     const draft = createDraft(company);
     setDrafts(listDrafts());
     setActiveDraft(draft);
+    setActiveStepId('process');
   }
 
   async function handleCreateCompany(formData: FormData) {
@@ -81,21 +162,55 @@ export default function HomePage() {
     if (activeDraft?.id === id) setActiveDraft(null);
   }
 
+  function persist(updated: ProcessDraft) {
+    const saved = saveDraft(updated);
+    setActiveDraft(saved);
+    setDrafts(listDrafts());
+    return saved;
+  }
+
   function updateProcessField<K extends keyof ProcessDraft['process']>(
     key: K,
     value: ProcessDraft['process'][K],
   ) {
     if (!activeDraft) return;
-    const updated = saveDraft({
-      ...activeDraft,
-      process: { ...activeDraft.process, [key]: value },
-    });
-    setActiveDraft(updated);
-    setDrafts(listDrafts());
+    persist({ ...activeDraft, process: { ...activeDraft.process, [key]: value } });
   }
 
+  function handleAddRound(roundType: Round['roundType']) {
+    if (!activeDraft) return;
+    const nextSequenceNumber = activeDraft.rounds.length + 1;
+    const saved = persist(
+      addRoundStep(activeDraft, { sequenceNumber: nextSequenceNumber, title: '', roundType }),
+    );
+    setActiveStepId(saved.rounds[saved.rounds.length - 1].clientId);
+  }
+
+  function handleAddRecruiter(timing: 'start' | 'end') {
+    if (!activeDraft) return;
+    const saved = persist(addRecruiterStep(activeDraft, { recruiterIdentifier: '' }, timing));
+    setActiveStepId(saved.recruiterInteractions[saved.recruiterInteractions.length - 1].clientId);
+  }
+
+  function handleRemoveRound(clientId: string) {
+    if (!activeDraft) return;
+    persist(removeRoundStep(activeDraft, clientId));
+    setActiveStepId('process');
+  }
+
+  function handleRemoveRecruiter(clientId: string) {
+    if (!activeDraft) return;
+    persist(removeRecruiterStep(activeDraft, clientId));
+    setActiveStepId('process');
+  }
+
+  const activeRoundStep = activeDraft?.rounds.find((r) => r.clientId === activeStepId);
+  const activeRecruiterStep = activeDraft?.recruiterInteractions.find(
+    (r) => r.clientId === activeStepId,
+  );
+
   return (
-    <PageContainer>
+    <PageContainer size={activeDraft ? 'wide' : 'narrow'}>
       <header>
         <h1 className="text-2xl font-semibold">Interview Insights</h1>
         <p className="text-sm text-gray-500">
@@ -121,7 +236,13 @@ export default function HomePage() {
                       {d.companyName} — {d.process.roleTitle || 'Untitled process'}
                     </span>
                     <span className="flex gap-2">
-                      <Button type="button" onClick={() => setActiveDraft(d)}>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setActiveDraft(d);
+                          setActiveStepId('process');
+                        }}
+                      >
                         Resume
                       </Button>
                       <Button
@@ -213,39 +334,90 @@ export default function HomePage() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <label className="flex flex-col text-sm">
-              Role title
-              <input
-                value={activeDraft.process.roleTitle}
-                onChange={(e) => updateProcessField('roleTitle', e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col text-sm">
-              Outcome
-              <select
-                value={activeDraft.process.outcome}
-                onChange={(e) =>
-                  updateProcessField('outcome', e.target.value as ProcessDraft['process']['outcome'])
-                }
-                className={inputClass}
-              >
-                <option value="in_progress">In progress</option>
-                <option value="offer">Offer</option>
-                <option value="rejected">Rejected</option>
-                <option value="withdrawn">Withdrawn</option>
-                <option value="ghosted">Ghosted</option>
-              </select>
-            </label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[220px_1fr]">
+            <StepNavigator
+              draft={activeDraft}
+              activeStepId={activeStepId}
+              onSelect={setActiveStepId}
+              onAddRound={handleAddRound}
+              onAddRecruiter={handleAddRecruiter}
+            />
+
+            <div className="border-t border-gray-200 pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4 dark:border-gray-700">
+              {activeStepId === 'process' && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <label className="flex flex-col text-sm">
+                    Role title
+                    <input
+                      value={activeDraft.process.roleTitle}
+                      onChange={(e) => updateProcessField('roleTitle', e.target.value)}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="flex flex-col text-sm">
+                    Outcome
+                    <select
+                      value={activeDraft.process.outcome}
+                      onChange={(e) =>
+                        updateProcessField(
+                          'outcome',
+                          e.target.value as ProcessDraft['process']['outcome'],
+                        )
+                      }
+                      className={inputClass}
+                    >
+                      <option value="in_progress">In progress</option>
+                      <option value="offer">Offer</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="withdrawn">Withdrawn</option>
+                      <option value="ghosted">Ghosted</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {activeRoundStep && (
+                <RoundStepForm
+                  step={activeRoundStep}
+                  fieldOptions={fieldOptions}
+                  onChange={(round) => persist(updateRoundStep(activeDraft, activeRoundStep.clientId, round))}
+                  onRemove={() => handleRemoveRound(activeRoundStep.clientId)}
+                />
+              )}
+
+              {activeRecruiterStep && (
+                <RecruiterStepForm
+                  step={activeRecruiterStep}
+                  onChange={(interaction, timing) =>
+                    persist(
+                      updateRecruiterStep(
+                        activeDraft,
+                        activeRecruiterStep.clientId,
+                        interaction,
+                        timing,
+                      ),
+                    )
+                  }
+                  onRemove={() => handleRemoveRecruiter(activeRecruiterStep.clientId)}
+                />
+              )}
+
+              {activeStepId === 'overall' && (
+                <OverallReviewForm
+                  value={activeDraft.overallReview}
+                  onChange={(overallReview) =>
+                    persist(setOverallReview(activeDraft, overallReview))
+                  }
+                />
+              )}
+            </div>
           </div>
 
-          {/* Rounds, recruiter touchpoints, and the overall review — plus
-              final submission — land in the next update (GitHub issues
-              #254/#255). This draft already survives a reload and can sit
-              alongside drafts for other companies in the meantime. */}
-          <p className="text-sm text-gray-500 italic">
-            Add your first round or recruiter touchpoint once step navigation lands.
+          {/* The chronological review screen + final bulk-submit call land
+              in the next update (GitHub issue #255). */}
+          <p className="text-xs text-gray-500 italic">
+            Review &amp; submit lands in the next update — this draft keeps
+            saving locally in the meantime.
           </p>
         </Card>
       )}

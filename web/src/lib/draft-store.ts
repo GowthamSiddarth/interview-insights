@@ -203,11 +203,14 @@ export function updateRecruiterStep(
   draft: ProcessDraft,
   clientId: string,
   interaction: DraftRecruiterInteraction,
+  timing?: DraftRecruiterStep['timing'],
 ): ProcessDraft {
   return {
     ...draft,
     recruiterInteractions: draft.recruiterInteractions.map((step) =>
-      step.clientId === clientId ? { ...step, interaction } : step,
+      step.clientId === clientId
+        ? { ...step, interaction, ...(timing ? { timing } : {}) }
+        : step,
     ),
   };
 }
