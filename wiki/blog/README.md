@@ -238,3 +238,15 @@ needs before it can submit anything for real. The one feature issue is
 done — this phase's blog is complete.
 
 1. [Bulk process-submission endpoint (D49)](phase-25-bulk-process-submission-api/README.md)
+
+## Phase 26 — Client-Side Draft Wizard (Flashcard Navigation)
+
+See `docs/ROADMAP.md` Phase 26. Planned alongside Phases 24/25 in one
+pass — replaces the old incremental, immediately-writing wizard with
+client-side draft state, free-jump step navigation, and a chronological
+review screen wired to Phase 25's bulk endpoint. All three feature
+issues are done — this phase's blog is complete.
+
+1. [Issue #253 — Client-side draft state architecture (D50)](phase-26-client-side-draft-wizard/issue-253-draft-state-architecture/README.md)
+2. [Issue #254 — Flashcard-style step navigation](phase-26-client-side-draft-wizard/issue-254-flashcard-navigation/README.md)
+3. [Issue #255 — Chronological review screen + bulk-submit integration](phase-26-client-side-draft-wizard/issue-255-review-screen-bulk-submit/README.md)
