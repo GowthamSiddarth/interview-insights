@@ -2719,14 +2719,9 @@ PRs (#316 closed without a dedicated PR, resolved as a side effect of
 #315), and every phase built so far now has a complete engineering
 blog.
 
-- Next step: Phase 27 (Admin Content Gateway, issues #263-265) — user
-  confirmed the issues are well-specified enough to implement directly,
-  no kickoff brainstorm needed. Phase 19 (Content Quality & Synthetic
-  Data, issues #162-165) and Phases 30-32 (Event-Driven Foundation /
-  Notification Service / Review Analyzer Service) remain planned but
-  not started, after Phase 27. Continue merging without waiting for CI
-  until the user says the GitHub Actions billing limit has been
-  refreshed.
+Phase 27 (Admin Content Gateway) analyzed before implementing (per the
+user's explicit request) — both feature issues were already well-
+specified with no blocking questions.
 
 **Phase 27, issue #263 (admin CRUD API)** — analyzed before
 implementing (per the user's explicit request): both feature issues
@@ -2795,6 +2790,23 @@ the public endpoint, retired it, confirmed it left the public endpoint
 while staying visible (and marked inactive) in the admin list,
 navigated back to the moderation queue via the back-link — zero
 console errors throughout. Test data cleaned up afterward.
+
+**Phase 27, issue #265 (engineering blog)** —
+`wiki/blog/phase-27-admin-content-gateway/` gained one post per feature
+issue (#263, #264), covering the admin CRUD API's separate-controller
+design and reuse of the existing 404/409 Prisma exception mapping, the
+retire-never-delete decision (D47), and the admin UI's schema-derived
+field list, single retire/reactivate toggle, and three distinct empty
+states. `wiki/blog/README.md`'s index updated to match.
+
+**Phase 27 is now fully done** — issues #263-265 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+- Next step: Phase 19 (Content Quality & Synthetic Data, issues
+  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
+  Service / Review Analyzer Service) remain planned but not started.
+  Continue merging without waiting for CI until the user says the
+  GitHub Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 

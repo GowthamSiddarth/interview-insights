@@ -995,7 +995,7 @@ Content Gateway (Round-Type Field Options)". Epic: GitHub issue #262.
       `AdminJwtAuthGuard` same as `ModerationController` (GitHub issue #263)
 - [x] Admin UI page to manage round-type field options, mirroring
       `moderation/page.tsx`'s session-check shape (GitHub issue #264)
-- [ ] Engineering blog (last) (GitHub issue #265)
+- [x] Engineering blog (last) (GitHub issue #265)
 
 ## Phase 28 — Wizard UX Refinements
 
