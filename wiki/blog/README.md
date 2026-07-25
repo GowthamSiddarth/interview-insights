@@ -251,3 +251,21 @@ issues are done — this phase's blog is complete.
 1. [Issue #253 — Client-side draft state architecture (D50)](phase-26-client-side-draft-wizard/issue-253-draft-state-architecture/README.md)
 2. [Issue #254 — Flashcard-style step navigation](phase-26-client-side-draft-wizard/issue-254-flashcard-navigation/README.md)
 3. [Issue #255 — Chronological review screen + bulk-submit integration](phase-26-client-side-draft-wizard/issue-255-review-screen-bulk-submit/README.md)
+
+## Phase 28 — Wizard UX Refinements
+
+See `docs/ROADMAP.md` Phase 28. Filed from a batch of live-verification
+findings against the Phase 26 wizard: an unfriendly raw validation
+error on submit, round ratings requiring an opt-in click per round, no
+sequential step navigation, a missing round type, recruiter step
+wording/timing issues, no trait tooltips, and a mandatory round title
+displayed as "untitled." All seven feature issues are done — this
+phase's blog is complete.
+
+1. [Issue #281 — Friendly, actionable validation errors on submit](phase-28-wizard-ux-refinements/issue-281-friendly-validation-errors/README.md)
+2. [Issue #282 — Round ratings default to available](phase-28-wizard-ux-refinements/issue-282-default-round-ratings/README.md)
+3. [Issue #283 — "Next" button alongside free-jump navigation](phase-28-wizard-ux-refinements/issue-283-next-button-navigation/README.md)
+4. [Issue #284 — Adding "Tech Screening" as a round type](phase-28-wizard-ux-refinements/issue-284-tech-screening-round-type/README.md)
+5. [Issue #285 — Recruiter step wording + read-only timing](phase-28-wizard-ux-refinements/issue-285-recruiter-wording-readonly-timing/README.md)
+6. [Issue #286 — Tooltips for recruiter trait ratings](phase-28-wizard-ux-refinements/issue-286-recruiter-trait-tooltips/README.md)
+7. [Issue #287 — Optional round title + "{Type} - {Title}" display](phase-28-wizard-ux-refinements/issue-287-optional-round-title/README.md)
