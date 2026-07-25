@@ -920,7 +920,7 @@ Round-Type Registry & Rating Field Redesign". Epic: GitHub issue #244.
       `guidelines_shared`/`rejection_message_authenticity` new — the
       latter nullable and self-reported, no backend outcome gating)
       before implementation (GitHub issue #249, D48)
-- [ ] Engineering blog (last) (GitHub issue #250)
+- [x] Engineering blog (last) (GitHub issue #250)
 
 ## Phase 25 — Bulk Process Submission API
 
@@ -934,7 +934,7 @@ GitHub issue #245. Depends on Phase 24's field shapes being finalized.
 - [x] Bulk process-submission endpoint, single `$transaction`,
       moderation-queue entries created per rateable entity exactly as
       today's incremental writes, just batched (GitHub issue #251, D49)
-- [ ] Engineering blog (last) (GitHub issue #252)
+- [x] Engineering blog (last) (GitHub issue #252)
 
 ## Phase 26 — Client-Side Draft Wizard (Flashcard Navigation)
 
@@ -957,7 +957,7 @@ Phase 25's bulk endpoint.
       (GitHub issue #254)
 - [x] Chronological review screen + bulk-submit integration (GitHub
       issue #255)
-- [ ] Engineering blog (last) (GitHub issue #256)
+- [x] Engineering blog (last) (GitHub issue #256)
 
 ## Phase 27 — Admin Content Gateway (Round-Type Field Options)
 
