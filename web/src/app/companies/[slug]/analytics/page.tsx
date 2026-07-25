@@ -151,25 +151,20 @@ export default function CompanyAnalyticsPage() {
         <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">Recruiter experience</h2>
           {analytics.recruiter ? (
-            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <ScoreDisplay
-                label="Approachability"
-                value={analytics.recruiter.scores.approachability}
+                label="Reachability"
+                value={analytics.recruiter.scores.reachability}
                 sampleSize={analytics.recruiter.sampleSize}
               />
               <ScoreDisplay
-                label="Response time"
-                value={analytics.recruiter.scores.responseTime}
+                label="Responsiveness"
+                value={analytics.recruiter.scores.responsiveness}
                 sampleSize={analytics.recruiter.sampleSize}
               />
               <ScoreDisplay
-                label="Timeliness"
-                value={analytics.recruiter.scores.timeliness}
-                sampleSize={analytics.recruiter.sampleSize}
-              />
-              <ScoreDisplay
-                label="Communication quality"
-                value={analytics.recruiter.scores.communicationQuality}
+                label="Guidelines shared"
+                value={analytics.recruiter.scores.guidelinesShared}
                 sampleSize={analytics.recruiter.sampleSize}
               />
             </dl>

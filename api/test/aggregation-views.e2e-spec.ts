@@ -10,7 +10,7 @@ interface RoundTypeAggregateRow {
 }
 interface RecruiterAggregateRow {
   company_id: string;
-  avg_approachability: string;
+  avg_reachability: string;
   sample_size: number;
 }
 interface OverallAggregateRow {
@@ -149,10 +149,9 @@ describe('Aggregation materialized views (e2e)', () => {
       data: {
         recruiterInteractionId: interaction.id,
         candidateId: candidate.id,
-        approachability: 5,
-        responseTime: 5,
-        timeliness: 5,
-        communicationQuality: 5,
+        reachability: 5,
+        responsiveness: 5,
+        guidelinesShared: 5,
         status: 'approved',
       },
     });
@@ -160,13 +159,13 @@ describe('Aggregation materialized views (e2e)', () => {
     await refresh('company_recruiter_aggregates');
 
     const rows = await prisma.$queryRaw<RecruiterAggregateRow[]>`
-      SELECT company_id, avg_approachability, sample_size
+      SELECT company_id, avg_reachability, sample_size
       FROM company_recruiter_aggregates
       WHERE company_id = ${company.id}::uuid
     `;
     expect(rows).toHaveLength(1);
     expect(rows[0].sample_size).toBe(1);
-    expect(Number(rows[0].avg_approachability)).toBe(5.0);
+    expect(Number(rows[0].avg_reachability)).toBe(5.0);
   });
 
   it('company_overall_aggregates computes pct_would_recommend as a 0-100 percentage', async () => {

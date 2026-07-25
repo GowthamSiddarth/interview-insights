@@ -273,10 +273,21 @@ model RecruiterRating {
   id                     String           @id @default(uuid()) @db.Uuid
   recruiterInteractionId String           @map("recruiter_interaction_id") @db.Uuid
   candidateId            String           @map("candidate_id") @db.Uuid
-  approachability        Int              @db.SmallInt
-  responseTime           Int              @map("response_time") @db.SmallInt
-  timeliness             Int              @db.SmallInt
-  communicationQuality   Int              @map("communication_quality") @db.SmallInt
+  // reachability: rename+reinterpretation of the old approachability field
+  // (friendliness -> "could you actually get hold of them when needed").
+  reachability           Int              @db.SmallInt
+  // responsiveness: merges the old response_time + timeliness fields — a
+  // candidate can't cleanly separate "replied fast" from "kept to promised
+  // dates" in one rating anyway (GitHub issue #249, docs/DECISIONS.md D48).
+  responsiveness         Int              @db.SmallInt
+  // guidelines_shared: how much useful interview-prep guidance the
+  // recruiter shared. Kept as a 1-5 rating (not boolean) for uniformity
+  // with every other column here.
+  guidelinesShared       Int              @map("guidelines_shared") @db.SmallInt
+  // Nullable by design: only meaningful for a touchpoint tied to the
+  // process's rejection communication, self-reported by the candidate's own
+  // judgment — no backend gating against InterviewProcess.outcome (D48).
+  rejectionMessageAuthenticity Int?       @map("rejection_message_authenticity") @db.SmallInt
   freeText               String?          @map("free_text")
   status                 ModerationStatus @default(pending)
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz

@@ -19,6 +19,7 @@ interface InteractionBody {
 interface RatingBody {
   id: string;
   status: string;
+  rejectionMessageAuthenticity: number | null;
 }
 interface QueueEntryBody {
   id: string;
@@ -107,10 +108,9 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .post(`/recruiter-interactions/${interactionId}/ratings`)
       .set('Cookie', cookie)
       .send({
-        approachability: 4,
-        responseTime: 3,
-        timeliness: 5,
-        communicationQuality: 4,
+        reachability: 4,
+        responsiveness: 3,
+        guidelinesShared: 5,
       })
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;
@@ -194,10 +194,9 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .post(`/recruiter-interactions/${interactionId}/ratings`)
       .set('Cookie', cookie)
       .send({
-        approachability: 3,
-        responseTime: 3,
-        timeliness: 3,
-        communicationQuality: 3,
+        reachability: 3,
+        responsiveness: 3,
+        guidelinesShared: 3,
       })
       .expect(409);
   }, 15000);
@@ -216,5 +215,47 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .post(`/processes/${processId}/recruiter-interactions`)
       .send({})
       .expect(400);
+  }, 15000);
+
+  // GitHub issue #249 (D48) — rejectionMessageAuthenticity is nullable and
+  // self-reported: a candidate can omit it entirely, or provide it when the
+  // touchpoint was about their rejection.
+  it('rejectionMessageAuthenticity is null when omitted', async () => {
+    const { cookie, processId } = await createCandidateAndProcess();
+    const interactionRes = await server()
+      .post(`/processes/${processId}/recruiter-interactions`)
+      .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
+      .expect(201);
+    const interactionId = body<InteractionBody>(interactionRes).id;
+
+    const ratingRes = await server()
+      .post(`/recruiter-interactions/${interactionId}/ratings`)
+      .set('Cookie', cookie)
+      .send({ reachability: 4, responsiveness: 4, guidelinesShared: 4 })
+      .expect(201);
+
+    expect(body<RatingBody>(ratingRes).rejectionMessageAuthenticity).toBeNull();
+  }, 15000);
+
+  it('accepts a real rejectionMessageAuthenticity value when provided', async () => {
+    const { cookie, processId } = await createCandidateAndProcess();
+    const interactionRes = await server()
+      .post(`/processes/${processId}/recruiter-interactions`)
+      .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
+      .expect(201);
+    const interactionId = body<InteractionBody>(interactionRes).id;
+
+    const ratingRes = await server()
+      .post(`/recruiter-interactions/${interactionId}/ratings`)
+      .set('Cookie', cookie)
+      .send({
+        reachability: 4,
+        responsiveness: 4,
+        guidelinesShared: 4,
+        rejectionMessageAuthenticity: 2,
+      })
+      .expect(201);
+
+    expect(body<RatingBody>(ratingRes).rejectionMessageAuthenticity).toBe(2);
   }, 15000);
 });

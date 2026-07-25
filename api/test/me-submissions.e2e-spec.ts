@@ -145,7 +145,7 @@ describe('My submissions (e2e)', () => {
     const recruiterRatingRes = await server()
       .post(`/recruiter-interactions/${interactionId}/ratings`)
       .set('Cookie', cookie)
-      .send({ approachability: 5, responseTime: 4, timeliness: 5, communicationQuality: 5 })
+      .send({ reachability: 5, responsiveness: 4, guidelinesShared: 5 })
       .expect(201);
     const recruiterRatingId = body<{ id: string }>(recruiterRatingRes).id;
 

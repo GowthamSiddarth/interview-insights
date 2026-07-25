@@ -74,10 +74,10 @@ export interface RecruiterRating {
   id: string;
   recruiterInteractionId: string;
   candidateId: string;
-  approachability: number;
-  responseTime: number;
-  timeliness: number;
-  communicationQuality: number;
+  reachability: number;
+  responsiveness: number;
+  guidelinesShared: number;
+  rejectionMessageAuthenticity: number | null;
   freeText: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'flagged';
   createdAt: string;
@@ -111,10 +111,10 @@ export interface ModerationQueueEntity {
   // recruiter_rating — recruiterLabel is the generated label, never a
   // real name (CLAUDE.md hard constraint #1)
   recruiterLabel?: string;
-  approachability?: number;
-  responseTime?: number;
-  timeliness?: number;
-  communicationQuality?: number;
+  reachability?: number;
+  responsiveness?: number;
+  guidelinesShared?: number;
+  rejectionMessageAuthenticity?: number | null;
   // overall_review
   overallExperience?: number;
   wouldRecommend?: boolean;
@@ -149,10 +149,9 @@ export interface RoundTypeAnalytics {
 export interface RecruiterAnalytics {
   sampleSize: number;
   scores: {
-    approachability: number | null;
-    responseTime: number | null;
-    timeliness: number | null;
-    communicationQuality: number | null;
+    reachability: number | null;
+    responsiveness: number | null;
+    guidelinesShared: number | null;
   };
 }
 
@@ -258,10 +257,10 @@ export interface MySubmissionRecruiterRating {
   id: string;
   recruiterInteractionId: string;
   status: RecruiterRating['status'];
-  approachability: number;
-  responseTime: number;
-  timeliness: number;
-  communicationQuality: number;
+  reachability: number;
+  responsiveness: number;
+  guidelinesShared: number;
+  rejectionMessageAuthenticity: number | null;
   freeText: string | null;
   createdAt: string;
 }
@@ -400,10 +399,10 @@ export const api = {
   createRecruiterRating: (
     recruiterInteractionId: string,
     input: {
-      approachability: number;
-      responseTime: number;
-      timeliness: number;
-      communicationQuality: number;
+      reachability: number;
+      responsiveness: number;
+      guidelinesShared: number;
+      rejectionMessageAuthenticity?: number;
       freeText?: string;
     },
   ) =>
@@ -416,10 +415,10 @@ export const api = {
     recruiterInteractionId: string,
     id: string,
     input: {
-      approachability: number;
-      responseTime: number;
-      timeliness: number;
-      communicationQuality: number;
+      reachability: number;
+      responsiveness: number;
+      guidelinesShared: number;
+      rejectionMessageAuthenticity?: number;
       freeText?: string;
     },
   ) =>

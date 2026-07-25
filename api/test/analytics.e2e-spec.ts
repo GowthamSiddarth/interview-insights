@@ -161,10 +161,9 @@ describe('Analytics (e2e)', () => {
       data: {
         recruiterInteractionId: interaction.id,
         candidateId: candidate.id,
-        approachability: 5,
-        responseTime: 5,
-        timeliness: 5,
-        communicationQuality: 5,
+        reachability: 5,
+        responsiveness: 5,
+        guidelinesShared: 5,
         status: 'approved',
       },
     });
@@ -188,7 +187,7 @@ describe('Analytics (e2e)', () => {
     expect(analytics.overall).not.toBeNull();
     expect(analytics.overall!.sampleSize).toBe(1);
     // n=1 is under the floor — present, but every score still null.
-    expect(Object.values(analytics.recruiter!.scores)).toEqual([null, null, null, null]);
+    expect(Object.values(analytics.recruiter!.scores)).toEqual([null, null, null]);
     expect(Object.values(analytics.overall!.scores)).toEqual([null, null]);
   });
 

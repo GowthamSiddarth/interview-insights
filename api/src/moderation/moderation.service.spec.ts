@@ -153,10 +153,10 @@ describe('ModerationService', () => {
       prisma.recruiterRating.findMany.mockResolvedValue([
         {
           id: 'cr1',
-          approachability: 5,
-          responseTime: 4,
-          timeliness: 5,
-          communicationQuality: 5,
+          reachability: 5,
+          responsiveness: 4,
+          guidelinesShared: 5,
+          rejectionMessageAuthenticity: null,
           freeText: null,
           recruiterInteraction: {
             recruiter: { displayLabel: 'Recruiter A', internalIdentifierHash: 'deadbeef' },
@@ -184,7 +184,7 @@ describe('ModerationService', () => {
       });
       expect(result[1].entity).toMatchObject({
         recruiterLabel: 'Recruiter A',
-        approachability: 5,
+        reachability: 5,
       });
       expect(JSON.stringify(result)).not.toContain('deadbeef');
       expect(result[2].entity).toMatchObject({

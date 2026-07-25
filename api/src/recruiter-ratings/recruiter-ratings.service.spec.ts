@@ -19,10 +19,9 @@ describe('RecruiterRatingsService', () => {
   let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; removeQueueEntries: jest.Mock };
 
   const dto = {
-    approachability: 4,
-    responseTime: 3,
-    timeliness: 5,
-    communicationQuality: 4,
+    reachability: 4,
+    responsiveness: 3,
+    guidelinesShared: 5,
   };
 
   beforeEach(async () => {

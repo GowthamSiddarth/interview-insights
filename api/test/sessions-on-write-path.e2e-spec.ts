@@ -124,7 +124,7 @@ describe('Sessions on the write path (e2e)', () => {
 
       await server()
         .post(`/recruiter-interactions/${interactionId}/ratings`)
-        .send({ approachability: 4, responseTime: 3, timeliness: 5, communicationQuality: 4 })
+        .send({ reachability: 4, responsiveness: 3, guidelinesShared: 5 })
         .expect(401);
     }, 15000);
 

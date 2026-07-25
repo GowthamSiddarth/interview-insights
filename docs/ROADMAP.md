@@ -901,9 +901,13 @@ Round-Type Registry & Rating Field Redesign". Epic: GitHub issue #244.
       issue builds the read side (registry, service-layer validation,
       public `GET /round-types/field-options`) and seeds illustrative
       defaults — admin CRUD over the table itself is the new Phase 27.
-- [ ] Redesign `recruiter_ratings` fields — needs a kickoff brainstorm
-      first (the mapping isn't a clean 1:1 rename the way issue #247's
-      is) (GitHub issue #249)
+- [x] Redesign `recruiter_ratings` fields — kickoff brainstorm resolved
+      the mapping (`response_time`+`timeliness` merged into
+      `responsiveness`, `communication_quality` dropped,
+      `approachability` renamed+reinterpreted as `reachability`,
+      `guidelines_shared`/`rejection_message_authenticity` new — the
+      latter nullable and self-reported, no backend outcome gating)
+      before implementation (GitHub issue #249, D48)
 - [ ] Engineering blog (last) (GitHub issue #250)
 
 ## Phase 25 — Bulk Process Submission API

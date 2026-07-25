@@ -1841,6 +1841,58 @@ seed data.
 
 ---
 
+### D48 — `recruiter_ratings` field redesign: responsiveness merge, reachability reinterpretation, guidelines_shared, nullable self-reported rejection_message_authenticity (GitHub issue #249, Phase 24)
+
+**Context:** issue #249, unlike #247's clean 1:1 rename, had five real
+open questions left unresolved when originally filed. Resolved directly
+with the project owner (kickoff brainstorm, same pattern Phase
+16/17/21 each used) before any implementation.
+
+**Decision:**
+- `response_time` + `timeliness` merge into one `responsiveness` field
+  — a candidate can't cleanly separate "replied fast" from "kept to
+  promised dates" in a single rating anyway, the same reasoning #247
+  used to drop `fairness`/`bias_signal` as overly-correlated axes.
+  `response_time`'s column is renamed (data-preserving); `timeliness`
+  is dropped outright.
+- `communication_quality` is dropped entirely, not kept as a 5th
+  field — its signal folds into `reachability`/`responsiveness`/the
+  free-text field, matching the issue's own 4-field target exactly.
+- `reachability` is a rename + reinterpretation of `approachability`
+  (`RENAME COLUMN`, data-preserving), not a new additional field — the
+  meaning shifts from "were they pleasant/friendly" to "could you
+  actually get hold of them when needed."
+- `guidelines_shared` is a 1-5 rating, not a boolean — keeps every
+  `recruiter_ratings` column uniform (`NOT NULL SMALLINT`,
+  `CHECK 1-5`), 1 meaning "none/unhelpful" and 5 "extremely helpful."
+- `rejection_message_authenticity` is a **nullable** 1-5 column,
+  self-reported, with **no backend gating** against
+  `interview_processes.outcome`. `RecruiterInteraction` has no outcome
+  link of its own (outcome lives on `InterviewProcess`, and a process
+  can have many recruiter interactions), so enforcing "only when
+  `outcome = 'rejected'`" would need an extra join and risks a race —
+  the interaction can be logged before the process outcome is
+  finalized. The wizard just offers it as an optional field the
+  candidate fills in by their own judgment. Deliberately excluded from
+  `company_recruiter_aggregates` and `AnalyticsService`'s
+  shrinkage-scored output — same precedent `round_ratings.
+  technical_depth` (also nullable) already set: optional fields stay
+  out of the aggregation layer, visible only via raw per-rating reads
+  (`MeService`, `ModerationService`).
+- Final field set: `reachability`, `responsiveness`,
+  `guidelinesShared`, `rejectionMessageAuthenticity` (nullable) —
+  matches the issue's originally-proposed 4-field target exactly.
+  Migration mirrors #247's shape: drop the dependent materialized view
+  first (`company_recruiter_aggregates`), rename/drop/add columns,
+  recreate the CHECK constraints under matching names, recreate the
+  view.
+
+**Revisit when:** never expected to need revisiting — the field
+semantics are settled; only Phase 26's wizard rewrite will change how
+they're collected, not what they mean.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

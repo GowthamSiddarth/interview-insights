@@ -130,10 +130,10 @@ export class ModerationService {
         companyName: r.recruiterInteraction.process.company.name,
         roleTitle: r.recruiterInteraction.process.roleTitle,
         recruiterLabel: r.recruiterInteraction.recruiter.displayLabel,
-        approachability: r.approachability,
-        responseTime: r.responseTime,
-        timeliness: r.timeliness,
-        communicationQuality: r.communicationQuality,
+        reachability: r.reachability,
+        responsiveness: r.responsiveness,
+        guidelinesShared: r.guidelinesShared,
+        rejectionMessageAuthenticity: r.rejectionMessageAuthenticity,
         freeText: r.freeText,
       });
     }

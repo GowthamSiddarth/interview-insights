@@ -11,10 +11,9 @@ export interface RoundTypeGlobalAverages {
 }
 
 export interface RecruiterGlobalAverages {
-  avgApproachability: number;
-  avgResponseTime: number;
-  avgTimeliness: number;
-  avgCommunicationQuality: number;
+  avgReachability: number;
+  avgResponsiveness: number;
+  avgGuidelinesShared: number;
   sampleSize: number;
 }
 
@@ -32,10 +31,9 @@ interface RoundTypeGlobalRow {
   sample_size: number | null;
 }
 interface RecruiterGlobalRow {
-  avg_approachability: string | null;
-  avg_response_time: string | null;
-  avg_timeliness: string | null;
-  avg_communication_quality: string | null;
+  avg_reachability: string | null;
+  avg_responsiveness: string | null;
+  avg_guidelines_shared: string | null;
   sample_size: number | null;
 }
 interface OverallGlobalRow {
@@ -86,10 +84,9 @@ export class GlobalAveragesService {
   async getRecruiterGlobalAverages(): Promise<RecruiterGlobalAverages | null> {
     const rows = await this.prisma.$queryRaw<RecruiterGlobalRow[]>`
       SELECT
-        SUM(avg_approachability * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_approachability,
-        SUM(avg_response_time * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_response_time,
-        SUM(avg_timeliness * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_timeliness,
-        SUM(avg_communication_quality * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_communication_quality,
+        SUM(avg_reachability * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_reachability,
+        SUM(avg_responsiveness * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_responsiveness,
+        SUM(avg_guidelines_shared * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_guidelines_shared,
         SUM(sample_size)::int AS sample_size
       FROM company_recruiter_aggregates
     `;
@@ -99,10 +96,9 @@ export class GlobalAveragesService {
     if (!sampleSize) return null;
 
     return {
-      avgApproachability: Number(row.avg_approachability),
-      avgResponseTime: Number(row.avg_response_time),
-      avgTimeliness: Number(row.avg_timeliness),
-      avgCommunicationQuality: Number(row.avg_communication_quality),
+      avgReachability: Number(row.avg_reachability),
+      avgResponsiveness: Number(row.avg_responsiveness),
+      avgGuidelinesShared: Number(row.avg_guidelines_shared),
       sampleSize,
     };
   }

@@ -208,15 +208,21 @@ Same pattern as `interviewers` — internal identity, generated public label.
 | created_at | timestamptz | |
 
 ### `recruiter_ratings`
+Fields redesigned per GitHub issue #249 (`docs/DECISIONS.md` D48) —
+`response_time`/`timeliness` merged into `responsiveness`,
+`communication_quality` dropped, `approachability` renamed +
+reinterpreted as `reachability`, `guidelines_shared` and
+`rejection_message_authenticity` are new.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | recruiter_interaction_id | uuid FK → recruiter_interactions | |
 | candidate_id | uuid FK → candidates | |
-| approachability | smallint | CHECK 1–5 |
-| response_time | smallint | CHECK 1–5 |
-| timeliness | smallint | CHECK 1–5 |
-| communication_quality | smallint | CHECK 1–5 |
+| reachability | smallint | CHECK 1–5 — could you actually get hold of them when needed |
+| responsiveness | smallint | CHECK 1–5 — merges the old response_time + timeliness |
+| guidelines_shared | smallint | CHECK 1–5 — how much useful interview-prep guidance they shared |
+| rejection_message_authenticity | smallint | nullable, CHECK 1–5 or NULL — only meaningful for a touchpoint about the process's rejection, self-reported by the candidate, no backend gating against `interview_processes.outcome` |
 | free_text | text | nullable |
 | status | text | `pending`, `approved`, `rejected`, `flagged` |
 | created_at | timestamptz | |
@@ -264,8 +270,10 @@ Grain: `(company_id, round_type)`
 
 ### `company_recruiter_aggregates`
 Grain: `(company_id)`
-- `avg_approachability`, `avg_response_time`, `avg_timeliness`,
-  `avg_communication_quality`, `sample_size`
+- `avg_reachability`, `avg_responsiveness`, `avg_guidelines_shared`,
+  `sample_size`. `rejection_message_authenticity` is deliberately excluded
+  (nullable/optional fields stay out of the shrinkage-scored aggregation
+  layer — same precedent `round_ratings.technical_depth` already set).
 
 ### `company_overall_aggregates`
 Grain: `(company_id, role_title_normalized?)` — decide during implementation

@@ -23,10 +23,9 @@ export interface RoundTypeAnalytics {
 export interface RecruiterAnalytics {
   sampleSize: number;
   scores: {
-    approachability: number | null;
-    responseTime: number | null;
-    timeliness: number | null;
-    communicationQuality: number | null;
+    reachability: number | null;
+    responsiveness: number | null;
+    guidelinesShared: number | null;
   };
 }
 
@@ -54,10 +53,9 @@ interface CompanyRoundTypeRow {
   sample_size: number;
 }
 interface CompanyRecruiterRow {
-  avg_approachability: string;
-  avg_response_time: string;
-  avg_timeliness: string;
-  avg_communication_quality: string;
+  avg_reachability: string;
+  avg_responsiveness: string;
+  avg_guidelines_shared: string;
   sample_size: number;
 }
 interface CompanyOverallRow {
@@ -98,7 +96,7 @@ export class AnalyticsService {
     );
 
     const recruiterRows = await this.prisma.$queryRaw<CompanyRecruiterRow[]>`
-      SELECT avg_approachability, avg_response_time, avg_timeliness, avg_communication_quality, sample_size
+      SELECT avg_reachability, avg_responsiveness, avg_guidelines_shared, sample_size
       FROM company_recruiter_aggregates
       WHERE company_id = ${companyId}::uuid
     `;
@@ -145,10 +143,9 @@ export class AnalyticsService {
     return {
       sampleSize: n,
       scores: {
-        approachability: score(row.avg_approachability, 'avgApproachability'),
-        responseTime: score(row.avg_response_time, 'avgResponseTime'),
-        timeliness: score(row.avg_timeliness, 'avgTimeliness'),
-        communicationQuality: score(row.avg_communication_quality, 'avgCommunicationQuality'),
+        reachability: score(row.avg_reachability, 'avgReachability'),
+        responsiveness: score(row.avg_responsiveness, 'avgResponsiveness'),
+        guidelinesShared: score(row.avg_guidelines_shared, 'avgGuidelinesShared'),
       },
     };
   }
