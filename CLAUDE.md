@@ -2264,10 +2264,39 @@ with the project owner before filing (default-checked rating vs. no
 checkbox at all vs. something else — "default it to checked" chosen).
 Implementation starting now, sequentially per issue.
 
-- Next step: Phase 28 (Wizard UX Refinements, issues #281-288) — being
-  implemented now. Phase 19 (Content Quality & Synthetic Data, issues
-  #162-165) and Phase 27 (Admin Content Gateway) remain planned but not
-  started, queued behind it.
+**Phase 28, issues #281-287 (implementation)** — all seven feature
+issues implemented and verified (unit/e2e/component tests + build/lint
+clean on each): #281 client-side pre-submit validation + a humanizer
+for any backend error shape that still reaches the UI; #282 rounds
+default to an available (checked) rating; #283 a "Next" button
+advancing process -> rounds -> recruiter steps -> overall -> review;
+#284 a new `tech_screening` round type (two migrations — enum value,
+then its seeded `round_type_field_options` in a separate migration,
+since Postgres won't let a newly added enum value be used in the same
+transaction that added it); #285 recruiter step wording renamed to
+pre-interview/post-interview + its timing made read-only; #286
+tooltips for each recruiter trait; #287 `Round.title` made optional,
+with a new shared `formatRoundLabel()` util applied everywhere a round
+is displayed (also fixed a real pre-existing bug this surfaced: the
+moderation queue's round segment was gated on `roundTitle` truthiness,
+so a round with no title wouldn't show its round type either — now
+gated on `roundType`). #281-284 merged via CI-verified PRs (#290-293).
+**#285-287 (PRs #294-296) are code-complete, tests passing locally,
+but NOT YET MERGED** — GitHub Actions CI is blocked account-wide by a
+billing issue ("recent account payments have failed or your spending
+limit needs to be increased"), unrelated to this project's code;
+confirmed by the user to keep implementing but hold off merging until
+CI can actually run. #286/#287's branches are correctly based on
+`main` directly (not stacked on #285's branch) so they can merge
+independently once CI is restored, in numeric order. Issue #288
+(engineering blog, implemented last per convention) is blocked on
+#285-287 actually merging first.
+- Next step: once GitHub Actions billing is resolved, re-run CI on PRs
+  #294/#295/#296 and merge in order (285 -> 286 -> 287), verify CD
+  deploys the new migrations cleanly, then implement issue #288 (Phase
+  28's engineering blog). Phase 19 (Content Quality & Synthetic Data,
+  issues #162-165) and Phase 27 (Admin Content Gateway) remain planned
+  but not started, queued behind it.
 
 ## Open decisions still to make
 
