@@ -68,10 +68,9 @@ function RoundRatingItem({
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     difficulty: rating.difficulty,
-    fairness: rating.fairness,
-    communicationFluency: rating.communicationFluency,
-    attentiveness: rating.attentiveness,
-    biasSignal: rating.biasSignal,
+    fluency: rating.fluency,
+    clarity: rating.clarity,
+    focus: rating.focus,
     freeText: rating.freeText ?? '',
   });
 
@@ -111,10 +110,8 @@ function RoundRatingItem({
         <p>
           <strong>{rating.roundTitle}</strong> ({roundTypeLabel(rating.roundType)})
         </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {(
-            ['difficulty', 'fairness', 'communicationFluency', 'attentiveness', 'biasSignal'] as const
-          ).map((field) => (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(['difficulty', 'fluency', 'clarity', 'focus'] as const).map((field) => (
             <label key={field} className="flex flex-col text-xs">
               {field}
               <input
@@ -161,8 +158,8 @@ function RoundRatingItem({
         <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
       </p>
       <p className="text-gray-600 dark:text-gray-400">
-        difficulty {rating.difficulty} · fairness {rating.fairness} · communication{' '}
-        {rating.communicationFluency} · attentiveness {rating.attentiveness}
+        difficulty {rating.difficulty} · fluency {rating.fluency} · clarity{' '}
+        {rating.clarity} · focus {rating.focus}
       </p>
       {rating.freeText && <p className="italic">&quot;{rating.freeText}&quot;</p>}
       {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}

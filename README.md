@@ -1,9 +1,9 @@
 # Interview Insights Platform
 
-Candidates rate their interview experience per-round (difficulty, fairness,
-interviewer traits) plus recruiter interactions, rolled up into
-company-level analytics. See `CLAUDE.md` and `docs/` for the full
-architecture, data model, and decisions log.
+Candidates rate their interview experience per-round (difficulty, plus
+interviewer traits limited to fluency, clarity, and focus) plus recruiter
+interactions, rolled up into company-level analytics. See `CLAUDE.md` and
+`docs/` for the full architecture, data model, and decisions log.
 
 Currently implemented: Phases 1-4 (repo scaffold, a Create+Read vertical
 slice, trust & moderation, and analytics) plus part of Phase 5 (search).

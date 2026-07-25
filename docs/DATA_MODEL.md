@@ -128,16 +128,19 @@ Index: `(process_id, sequence_number)`, `(round_type)`.
 ```
 
 ### `round_ratings`
+Interviewer traits are deliberately limited to three (GitHub issue #247,
+`docs/DECISIONS.md` D45) — `difficulty` is a separate axis (the round/
+problem, not the interviewer).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | round_id | uuid FK → rounds | |
 | candidate_id | uuid FK → candidates | |
-| difficulty | smallint | CHECK 1–5 |
-| fairness | smallint | CHECK 1–5 |
-| communication_fluency | smallint | CHECK 1–5, interviewer trait |
-| attentiveness | smallint | CHECK 1–5, interviewer trait |
-| bias_signal | smallint | CHECK 1–5 — higher = less bias perceived; document polarity clearly in code |
+| difficulty | smallint | CHECK 1–5 — round/problem axis, not an interviewer trait |
+| fluency | smallint | CHECK 1–5, interviewer trait — communication fluency |
+| clarity | smallint | CHECK 1–5, interviewer trait — clarity of the problem statement |
+| focus | smallint | CHECK 1–5, interviewer trait — focus/attentiveness during the interview |
 | technical_depth | smallint | nullable, CHECK 1–5 |
 | free_text | text | nullable |
 | status | text | `pending`, `approved`, `rejected`, `flagged` — default `pending` |
@@ -217,8 +220,7 @@ or via CDC trigger on rating writes.
 
 ### `company_round_type_aggregates`
 Grain: `(company_id, round_type)`
-- `avg_difficulty`, `avg_fairness`, `avg_communication_fluency`,
-  `avg_attentiveness`, `avg_bias_signal`, `sample_size`
+- `avg_difficulty`, `avg_fluency`, `avg_clarity`, `avg_focus`, `sample_size`
 
 ### `company_recruiter_aggregates`
 Grain: `(company_id)`

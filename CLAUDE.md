@@ -1,9 +1,10 @@
 # Project: Interview Insights Platform
 
-Candidates rate their interview experience per-round (difficulty, fairness,
-interviewer traits) plus their recruiter interactions, rolled up into
-company-level analytics dashboards. Think "Glassdoor for interview loops,"
-but with structured per-round data instead of just free text.
+Candidates rate their interview experience per-round (difficulty, plus
+interviewer traits limited to fluency, clarity, and focus) plus their
+recruiter interactions, rolled up into company-level analytics dashboards.
+Think "Glassdoor for interview loops," but with structured per-round data
+instead of just free text.
 
 Read `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, and `docs/DECISIONS.md`
 before making structural changes — they contain reasoning you should not
@@ -14,7 +15,7 @@ re-litigate without a good reason.
 Company
   └── InterviewProcess (one candidate's application loop)
         ├── Round (phase, title, type, interviewer, description)
-        │     └── RoundRating (difficulty, fairness, interviewer traits)
+        │     └── RoundRating (difficulty, interviewer traits: fluency/clarity/focus)
         ├── RecruiterInteraction
         │     └── RecruiterRating (approachability, response time, timeliness)
         └── OverallReview (summary review for the whole process)
@@ -1837,10 +1838,38 @@ brainstorm before implementation, same pattern Phase 16/17/21 each
 used. All three epics are on the project board at "Todo" — planning
 only, no implementation started yet.
 
-- Next step: Phase 24, issue #247 (round_ratings interviewer-trait
-  field redesign) is the natural first pick — issue #248 (round-type
-  registry) can be built alongside it; issue #249 (recruiter fields)
-  needs its kickoff brainstorm resolved first.
+**Phase 24, issue #247 (round_ratings interviewer-trait field
+redesign)** — `difficulty` unchanged (round/problem axis, not a
+trait); `communication_fluency`→`fluency` and `attentiveness`→`focus`
+are true renames (`RENAME COLUMN`, preserving data); `fairness`/
+`bias_signal` dropped outright; `clarity` is new. `company_round_type_
+aggregates` (a materialized view, not Prisma-managed) dropped and
+recreated with the new column set — Postgres won't let you `ALTER` a
+column a view depends on. Every consumer updated in the same pass:
+DTOs, `RoundRatingsService`, `ReviewSearchService`, `MeService`,
+`CompaniesService`, `ModerationService`, `AnalyticsService`/
+`GlobalAveragesService`, the wizard's rating form, `/me`'s edit form,
+the company profile page (now shows all 4 fields as its round-type
+summary instead of 3-of-5, since there's no longer a meaningfully
+richer analytics-only version), the analytics dashboard, the search
+page, the moderation queue detail view, and every unit/e2e/smoke test
+referencing the old field names (D45). 260 api unit tests, 105 e2e
+tests, the golden-path smoke test, and 65 web tests all green;
+live-verified through the real Ingress-fronted app: wizard submission
+with the new fields, `/me` echoing them back correctly, an anonymous
+analytics-page visit correctly showing Phase 21's gate (not a
+regression), and a logged-in visit showing the real `fluency`/
+`clarity`/`focus` labels — zero console errors throughout. Along the
+way, fixed two real, pre-existing test-database gaps this surfaced:
+the `interview_insights_test` database had never had this migration
+applied (a genuinely separate database from dev, needing its own
+`prisma migrate deploy`) and had 112 leftover `round_ratings` rows
+from prior sessions blocking the `NOT NULL` column add — truncated,
+since it's disposable test data by design (D24).
+
+- Next step: Phase 24, issue #248 (round-type registry + `type_
+  metadata` schemas for coding/system design) — issue #249 (recruiter
+  fields) still needs its kickoff brainstorm resolved first.
 
 ## Open decisions still to make
 

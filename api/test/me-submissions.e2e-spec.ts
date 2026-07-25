@@ -132,7 +132,7 @@ describe('My submissions (e2e)', () => {
     const ratingRes = await server()
       .post(`/rounds/${roundId}/ratings`)
       .set('Cookie', cookie)
-      .send({ difficulty: 3, fairness: 4, communicationFluency: 4, attentiveness: 4, biasSignal: 5 })
+      .send({ difficulty: 3, fluency: 4, clarity: 5, focus: 4 })
       .expect(201);
     const ratingId = body<{ id: string }>(ratingRes).id;
 

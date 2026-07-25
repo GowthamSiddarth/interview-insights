@@ -39,10 +39,9 @@ async function seedCompanyWithCodingRatings(
         roundId: round.id,
         candidateId: candidate.id,
         difficulty,
-        fairness: difficulty,
-        communicationFluency: difficulty,
-        attentiveness: difficulty,
-        biasSignal: difficulty,
+        fluency: difficulty,
+        clarity: difficulty,
+        focus: difficulty,
         status: 'approved',
       },
     });

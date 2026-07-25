@@ -9,10 +9,9 @@ export interface MySubmissionRoundRating {
   roundType: string;
   status: string;
   difficulty: number;
-  fairness: number;
-  communicationFluency: number;
-  attentiveness: number;
-  biasSignal: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
   technicalDepth: number | null;
   freeText: string | null;
   createdAt: Date;
@@ -108,10 +107,9 @@ export class MeService {
           roundType: round.roundType,
           status: rating.status,
           difficulty: rating.difficulty,
-          fairness: rating.fairness,
-          communicationFluency: rating.communicationFluency,
-          attentiveness: rating.attentiveness,
-          biasSignal: rating.biasSignal,
+          fluency: rating.fluency,
+          clarity: rating.clarity,
+          focus: rating.focus,
           technicalDepth: rating.technicalDepth,
           freeText: rating.freeText,
           createdAt: rating.createdAt,

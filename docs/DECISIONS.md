@@ -1704,6 +1704,44 @@ yet for a handful of one-off incidents.
 
 ---
 
+### D45 — `round_ratings` interviewer traits reduced to fluency/clarity/focus (GitHub issue #247, Phase 24)
+
+**Context:** a UI/UX brainstorm asked to streamline what's collected per
+round rating, limiting interviewer traits to three specific ones —
+fluency (communication), clarity (of the problem statement), and focus
+(attentiveness during the interview) — rather than the original five
+generic fields (`difficulty`, `fairness`, `communication_fluency`,
+`attentiveness`, `bias_signal`).
+
+**Decision:**
+- `difficulty` stays unchanged — it's an axis about the round/problem
+  itself, not the interviewer, and was never in scope for this
+  reduction.
+- `communication_fluency`→`fluency` and `attentiveness`→`focus` are
+  true renames (the migration uses `RENAME COLUMN`, preserving any
+  existing data, even though the table was empty at the time this
+  shipped).
+- `fairness` and `bias_signal` are dropped outright — neither maps
+  onto the new three-trait list. `clarity` is genuinely new.
+- `technical_depth` is unchanged (still optional) — out of scope for
+  this reduction, though it may eventually fold into round-type
+  `type_metadata` (issue #248) instead of staying a generic column.
+- `company_round_type_aggregates` (the materialized view, issue #7)
+  is dropped and recreated with the new column set — Postgres won't
+  let you `ALTER` a column a view depends on, so the view has to go
+  first and come back after.
+- Every consumer (DTOs, services, the wizard, `/me`, the company
+  profile page, the analytics dashboard, `docs/DATA_MODEL.md`) was
+  updated in the same pass — this was a genuinely cross-cutting
+  rename, not additive, exactly because the fields were being
+  *reduced*, not expanded alongside the old ones.
+
+**Revisit when:** if `technical_depth` should move into round-type
+`type_metadata` (issue #248) instead of staying a generic column —
+deferred, not decided here.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

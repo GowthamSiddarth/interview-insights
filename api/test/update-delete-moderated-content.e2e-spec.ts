@@ -41,10 +41,9 @@ const unique = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 const roundRatingPayload = {
   difficulty: 3,
-  fairness: 4,
-  communicationFluency: 4,
-  attentiveness: 4,
-  biasSignal: 5,
+  fluency: 4,
+  clarity: 5,
+  focus: 4,
 };
 const recruiterRatingPayload = {
   approachability: 4,

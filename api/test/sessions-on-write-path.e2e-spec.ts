@@ -108,7 +108,7 @@ describe('Sessions on the write path (e2e)', () => {
 
       await server()
         .post(`/rounds/${roundId}/ratings`)
-        .send({ difficulty: 3, fairness: 4, communicationFluency: 5, attentiveness: 4, biasSignal: 5 })
+        .send({ difficulty: 3, fluency: 5, clarity: 5, focus: 4 })
         .expect(401);
     }, 15000);
 
@@ -155,10 +155,9 @@ describe('Sessions on the write path (e2e)', () => {
         .send({
           candidateId: 'not-my-candidate-id',
           difficulty: 3,
-          fairness: 4,
-          communicationFluency: 5,
-          attentiveness: 4,
-          biasSignal: 5,
+          fluency: 5,
+          clarity: 5,
+          focus: 4,
         })
         .expect(400);
 
@@ -170,7 +169,7 @@ describe('Sessions on the write path (e2e)', () => {
       const ratingRes = await server()
         .post(`/rounds/${roundId}/ratings`)
         .set('Cookie', cookie)
-        .send({ difficulty: 3, fairness: 4, communicationFluency: 5, attentiveness: 4, biasSignal: 5 })
+        .send({ difficulty: 3, fluency: 5, clarity: 5, focus: 4 })
         .expect(201);
       expect(body<EntityWithCandidateId>(ratingRes).candidateId).toBe(ownCandidateId);
     }, 15000);

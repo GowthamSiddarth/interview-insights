@@ -110,10 +110,9 @@ describe('Company read paths: slug + reviews (e2e)', () => {
         .set('Cookie', cookie)
         .send({
           difficulty: 3,
-          fairness: 4,
-          communicationFluency: 4,
-          attentiveness: 4,
-          biasSignal: 5,
+          fluency: 4,
+          clarity: 5,
+          focus: 4,
           freeText: `review number ${i} for ${slug}`,
         })
         .expect(201);

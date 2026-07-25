@@ -118,10 +118,9 @@ export class ModerationService {
         roundTitle: r.round.title,
         roundType: r.round.roundType,
         difficulty: r.difficulty,
-        fairness: r.fairness,
-        communicationFluency: r.communicationFluency,
-        attentiveness: r.attentiveness,
-        biasSignal: r.biasSignal,
+        fluency: r.fluency,
+        clarity: r.clarity,
+        focus: r.focus,
         technicalDepth: r.technicalDepth,
         freeText: r.freeText,
       });
@@ -245,10 +244,9 @@ export class ModerationService {
         freeText: roundRating.freeText,
         createdAt: roundRating.createdAt,
         difficulty: roundRating.difficulty,
-        fairness: roundRating.fairness,
-        communicationFluency: roundRating.communicationFluency,
-        attentiveness: roundRating.attentiveness,
-        biasSignal: roundRating.biasSignal,
+        fluency: roundRating.fluency,
+        clarity: roundRating.clarity,
+        focus: roundRating.focus,
       });
     } catch (err) {
       this.logger.error(

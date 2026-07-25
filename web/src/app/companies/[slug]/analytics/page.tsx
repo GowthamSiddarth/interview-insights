@@ -120,30 +120,25 @@ export default function CompanyAnalyticsPage() {
               {analytics.roundTypes.map((rt) => (
                 <div key={rt.roundType}>
                   <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
-                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <ScoreDisplay
                       label="Difficulty"
                       value={rt.scores.difficulty}
                       sampleSize={rt.sampleSize}
                     />
                     <ScoreDisplay
-                      label="Fairness"
-                      value={rt.scores.fairness}
+                      label="Fluency"
+                      value={rt.scores.fluency}
                       sampleSize={rt.sampleSize}
                     />
                     <ScoreDisplay
-                      label="Communication"
-                      value={rt.scores.communicationFluency}
+                      label="Clarity"
+                      value={rt.scores.clarity}
                       sampleSize={rt.sampleSize}
                     />
                     <ScoreDisplay
-                      label="Attentiveness"
-                      value={rt.scores.attentiveness}
-                      sampleSize={rt.sampleSize}
-                    />
-                    <ScoreDisplay
-                      label="Bias signal"
-                      value={rt.scores.biasSignal}
+                      label="Focus"
+                      value={rt.scores.focus}
                       sampleSize={rt.sampleSize}
                     />
                   </dl>

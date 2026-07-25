@@ -85,10 +85,9 @@ describe('Analytics (e2e)', () => {
           roundId: round.id,
           candidateId: candidate.id,
           difficulty,
-          fairness: difficulty,
-          communicationFluency: difficulty,
-          attentiveness: difficulty,
-          biasSignal: difficulty,
+          fluency: difficulty,
+          clarity: difficulty,
+          focus: difficulty,
           status: 'approved',
         },
       });
@@ -132,7 +131,7 @@ describe('Analytics (e2e)', () => {
     const behavioralRow = analytics.roundTypes.find((rt) => rt.roundType === 'behavioral');
     expect(behavioralRow).toBeDefined();
     expect(behavioralRow!.sampleSize).toBe(2);
-    expect(Object.values(behavioralRow!.scores)).toEqual([null, null, null, null, null]);
+    expect(Object.values(behavioralRow!.scores)).toEqual([null, null, null, null]);
   });
 
   it('omits round types the company has no approved ratings for, and returns null recruiter/overall when nothing exists', async () => {

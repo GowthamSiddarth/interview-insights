@@ -23,10 +23,9 @@ describe('RoundRatingsService', () => {
 
   const dto = {
     difficulty: 3,
-    fairness: 4,
-    communicationFluency: 5,
-    attentiveness: 4,
-    biasSignal: 5,
+    fluency: 5,
+    clarity: 4,
+    focus: 4,
   };
 
   beforeEach(async () => {

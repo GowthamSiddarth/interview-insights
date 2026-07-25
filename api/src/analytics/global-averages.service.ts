@@ -4,10 +4,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export interface RoundTypeGlobalAverages {
   avgDifficulty: number;
-  avgFairness: number;
-  avgCommunicationFluency: number;
-  avgAttentiveness: number;
-  avgBiasSignal: number;
+  avgFluency: number;
+  avgClarity: number;
+  avgFocus: number;
   sampleSize: number;
 }
 
@@ -27,10 +26,9 @@ export interface OverallGlobalAverages {
 
 interface RoundTypeGlobalRow {
   avg_difficulty: string | null;
-  avg_fairness: string | null;
-  avg_communication_fluency: string | null;
-  avg_attentiveness: string | null;
-  avg_bias_signal: string | null;
+  avg_fluency: string | null;
+  avg_clarity: string | null;
+  avg_focus: string | null;
   sample_size: number | null;
 }
 interface RecruiterGlobalRow {
@@ -64,10 +62,9 @@ export class GlobalAveragesService {
     const rows = await this.prisma.$queryRaw<RoundTypeGlobalRow[]>`
       SELECT
         SUM(avg_difficulty * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_difficulty,
-        SUM(avg_fairness * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_fairness,
-        SUM(avg_communication_fluency * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_communication_fluency,
-        SUM(avg_attentiveness * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_attentiveness,
-        SUM(avg_bias_signal * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_bias_signal,
+        SUM(avg_fluency * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_fluency,
+        SUM(avg_clarity * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_clarity,
+        SUM(avg_focus * sample_size) / NULLIF(SUM(sample_size), 0) AS avg_focus,
         SUM(sample_size)::int AS sample_size
       FROM company_round_type_aggregates
       WHERE round_type = ${roundType}::"RoundType"
@@ -79,10 +76,9 @@ export class GlobalAveragesService {
 
     return {
       avgDifficulty: Number(row.avg_difficulty),
-      avgFairness: Number(row.avg_fairness),
-      avgCommunicationFluency: Number(row.avg_communication_fluency),
-      avgAttentiveness: Number(row.avg_attentiveness),
-      avgBiasSignal: Number(row.avg_bias_signal),
+      avgFluency: Number(row.avg_fluency),
+      avgClarity: Number(row.avg_clarity),
+      avgFocus: Number(row.avg_focus),
       sampleSize,
     };
   }

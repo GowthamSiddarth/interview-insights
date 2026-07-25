@@ -37,7 +37,7 @@ const populatedAnalytics = {
     {
       roundType: 'coding',
       sampleSize: 5,
-      scores: { difficulty: 3.5, fairness: 4.1, communicationFluency: 4.0, attentiveness: null, biasSignal: null },
+      scores: { difficulty: 3.5, fluency: 4.0, clarity: 4.1, focus: null },
     },
   ],
   recruiter: null,

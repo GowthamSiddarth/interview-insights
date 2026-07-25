@@ -126,10 +126,9 @@ export default function HomePage() {
     try {
       const created = await api.createRoundRating(round.id, {
         difficulty: field('difficulty'),
-        fairness: field('fairness'),
-        communicationFluency: field('communicationFluency'),
-        attentiveness: field('attentiveness'),
-        biasSignal: field('biasSignal'),
+        fluency: field('fluency'),
+        clarity: field('clarity'),
+        focus: field('focus'),
       });
       setRating(created);
       const approved = await api.listApprovedRatingsForRound(round.id);
@@ -361,7 +360,7 @@ export default function HomePage() {
           <h2 className="font-medium">4. Rating</h2>
           {!rating && (
             <form action={handleCreateRating} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {(['difficulty', 'fairness', 'communicationFluency', 'attentiveness', 'biasSignal'] as const).map(
+              {(['difficulty', 'fluency', 'clarity', 'focus'] as const).map(
                 (field) => (
                   <label key={field} className="flex flex-col text-sm capitalize">
                     {field.replace(/([A-Z])/g, ' $1')}

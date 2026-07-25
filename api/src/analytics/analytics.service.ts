@@ -14,10 +14,9 @@ export interface RoundTypeAnalytics {
   sampleSize: number;
   scores: {
     difficulty: number | null;
-    fairness: number | null;
-    communicationFluency: number | null;
-    attentiveness: number | null;
-    biasSignal: number | null;
+    fluency: number | null;
+    clarity: number | null;
+    focus: number | null;
   };
 }
 
@@ -49,10 +48,9 @@ export interface CompanyAnalytics {
 interface CompanyRoundTypeRow {
   round_type: RoundType;
   avg_difficulty: string;
-  avg_fairness: string;
-  avg_communication_fluency: string;
-  avg_attentiveness: string;
-  avg_bias_signal: string;
+  avg_fluency: string;
+  avg_clarity: string;
+  avg_focus: string;
   sample_size: number;
 }
 interface CompanyRecruiterRow {
@@ -91,8 +89,7 @@ export class AnalyticsService {
     await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
 
     const roundTypeRows = await this.prisma.$queryRaw<CompanyRoundTypeRow[]>`
-      SELECT round_type, avg_difficulty, avg_fairness, avg_communication_fluency,
-             avg_attentiveness, avg_bias_signal, sample_size
+      SELECT round_type, avg_difficulty, avg_fluency, avg_clarity, avg_focus, sample_size
       FROM company_round_type_aggregates
       WHERE company_id = ${companyId}::uuid
     `;
@@ -132,10 +129,9 @@ export class AnalyticsService {
       sampleSize: n,
       scores: {
         difficulty: score(row.avg_difficulty, 'avgDifficulty'),
-        fairness: score(row.avg_fairness, 'avgFairness'),
-        communicationFluency: score(row.avg_communication_fluency, 'avgCommunicationFluency'),
-        attentiveness: score(row.avg_attentiveness, 'avgAttentiveness'),
-        biasSignal: score(row.avg_bias_signal, 'avgBiasSignal'),
+        fluency: score(row.avg_fluency, 'avgFluency'),
+        clarity: score(row.avg_clarity, 'avgClarity'),
+        focus: score(row.avg_focus, 'avgFocus'),
       },
     };
   }

@@ -138,10 +138,9 @@ describe('ModerationService', () => {
         {
           id: 'rr1',
           difficulty: 3,
-          fairness: 4,
-          communicationFluency: 4,
-          attentiveness: 4,
-          biasSignal: 5,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
           technicalDepth: null,
           freeText: 'tough but fair',
           round: {
@@ -221,10 +220,9 @@ describe('ModerationService', () => {
         {
           id: 'rr1',
           difficulty: 3,
-          fairness: 4,
-          communicationFluency: 4,
-          attentiveness: 4,
-          biasSignal: 5,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
           technicalDepth: null,
           freeText: null,
           round: { title: 'Screen', roundType: 'coding', process: { roleTitle: 'Engineer', company: { name: 'Acme' } } },
@@ -269,10 +267,9 @@ describe('ModerationService', () => {
         freeText: 'Great round',
         createdAt: new Date('2026-01-01'),
         difficulty: 3,
-        fairness: 4,
-        communicationFluency: 4,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 4,
+        clarity: 4,
+        focus: 4,
         round: {
           roundType: 'coding',
           process: { companyId: 'company-1', roleTitle: 'Engineer' },
@@ -310,10 +307,9 @@ describe('ModerationService', () => {
         freeText: 'Great round',
         createdAt: new Date('2026-01-01'),
         difficulty: 3,
-        fairness: 4,
-        communicationFluency: 4,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 4,
+        clarity: 4,
+        focus: 4,
       });
     });
 

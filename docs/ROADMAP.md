@@ -878,12 +878,12 @@ type-specific detail — starting with coding (`problemAlgorithms`,
 entry, not scattered conditional logic. Milestone "Phase 24 —
 Round-Type Registry & Rating Field Redesign". Epic: GitHub issue #244.
 
-- [ ] Redesign `round_ratings` interviewer-trait fields — drop
+- [x] Redesign `round_ratings` interviewer-trait fields — drop
       `fairness`/`bias_signal`, rename `communication_fluency`→
       `fluency`/`attentiveness`→`focus`, add `clarity`; touches the
       `company_round_type_aggregates` materialized view, DTOs/services,
       every frontend surface showing these fields, and every existing
-      test referencing the old names (GitHub issue #247)
+      test referencing the old names (GitHub issue #247, D45)
 - [ ] Round-type registry + `type_metadata` schemas for coding and
       system design (GitHub issue #248)
 - [ ] Redesign `recruiter_ratings` fields — needs a kickoff brainstorm
