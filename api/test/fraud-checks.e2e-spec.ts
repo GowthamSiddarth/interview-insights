@@ -19,6 +19,9 @@ interface RoundBody {
 interface RatingBody {
   id: string;
 }
+interface InteractionBody {
+  id: string;
+}
 interface QueueEntryBody {
   entityId: string;
   flagReason: string | null;
@@ -31,10 +34,11 @@ function body<T>(res: request.Response): T {
   return res.body as T;
 }
 
-// Proves the two checks from docs/ROADMAP.md Phase 3 issue #2 actually flag
-// suspicious writes — neither ever rejects the write outright (every rating
-// still starts `pending`, CLAUDE.md hard constraint #2), they just attach a
-// flagReason to the moderation_queue entry for a human reviewer.
+// Proves the two checks from docs/ROADMAP.md Phase 3 issue #2 (extended by
+// Phase 29 issue #317 / D52) actually flag suspicious writes — neither ever
+// rejects the write outright (every rating still starts `pending`, CLAUDE.md
+// hard constraint #2), they just attach a flagReason to the moderation_queue
+// entry for a human reviewer.
 describe('Fraud checks (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
@@ -73,7 +77,7 @@ describe('Fraud checks (e2e)', () => {
     return cookie;
   }
 
-  async function createProcessWithRounds(candidateCookie: string, roundCount: number): Promise<string[]> {
+  async function createProcess(candidateCookie: string): Promise<string> {
     const companyRes = await server()
       .post('/companies')
       .set('Cookie', candidateCookie)
@@ -86,20 +90,27 @@ describe('Fraud checks (e2e)', () => {
       .set('Cookie', candidateCookie)
       .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
       .expect(201);
-    const processId = body<ProcessBody>(processRes).id;
-
-    const roundIds: string[] = [];
-    for (let i = 1; i <= roundCount; i++) {
-      const roundRes = await server()
-        .post(`/processes/${processId}/rounds`)
-        .send({ sequenceNumber: i, title: `Round ${i}`, roundType: 'coding' })
-        .expect(201);
-      roundIds.push(body<RoundBody>(roundRes).id);
-    }
-    return roundIds;
+    return body<ProcessBody>(processRes).id;
   }
 
-  async function submitRating(
+  async function createRound(processId: string, sequenceNumber = 1): Promise<string> {
+    const roundRes = await server()
+      .post(`/processes/${processId}/rounds`)
+      .send({ sequenceNumber, title: `Round ${sequenceNumber}`, roundType: 'coding' })
+      .expect(201);
+    return body<RoundBody>(roundRes).id;
+  }
+
+  async function queueEntryFor(entityId: string): Promise<QueueEntryBody> {
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+    const entry = body<QueueGroupBody[]>(queueRes)
+      .flatMap((g) => g.entries)
+      .find((e) => e.entityId === entityId);
+    if (!entry) throw new Error(`No moderation_queue entry found for entity ${entityId}`);
+    return entry;
+  }
+
+  async function submitRoundRating(
     roundId: string,
     candidateCookie: string,
     freeText?: string,
@@ -116,55 +127,194 @@ describe('Fraud checks (e2e)', () => {
       })
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;
-
-    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const queueEntry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === ratingId);
-    if (!queueEntry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
-
-    return { ratingId, queueEntry };
+    return { ratingId, queueEntry: await queueEntryFor(ratingId) };
   }
 
-  it('flags a rating with rate_limit once a candidate exceeds the rolling window threshold, but still creates it', async () => {
-    const candidateCookie = await loginNewCandidate();
-    // 4 rounds: 3 within the limit, the 4th should trip it (threshold is 3 —
-    // see FraudChecksService.RATE_LIMIT_MAX_RATINGS).
-    const [round1, round2, round3, round4] = await createProcessWithRounds(candidateCookie, 4);
+  async function submitRecruiterRating(
+    processId: string,
+    candidateCookie: string,
+    freeText?: string,
+  ): Promise<{ ratingId: string; queueEntry: QueueEntryBody }> {
+    const interactionRes = await server()
+      .post(`/processes/${processId}/recruiter-interactions`)
+      .send({ recruiterIdentifier: `recruiter-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com` })
+      .expect(201);
+    const interactionId = body<InteractionBody>(interactionRes).id;
 
-    const first = await submitRating(round1, candidateCookie);
-    const second = await submitRating(round2, candidateCookie);
-    const third = await submitRating(round3, candidateCookie);
-    const fourth = await submitRating(round4, candidateCookie);
+    const ratingRes = await server()
+      .post(`/recruiter-interactions/${interactionId}/ratings`)
+      .set('Cookie', candidateCookie)
+      .send({
+        reachability: 4,
+        responsiveness: 4,
+        guidelinesShared: 4,
+        ...(freeText ? { freeText } : {}),
+      })
+      .expect(201);
+    const ratingId = body<RatingBody>(ratingRes).id;
+    return { ratingId, queueEntry: await queueEntryFor(ratingId) };
+  }
+
+  async function submitOverallReview(
+    processId: string,
+    candidateCookie: string,
+    reviewText?: string,
+  ): Promise<{ reviewId: string; queueEntry: QueueEntryBody }> {
+    const reviewRes = await server()
+      .post(`/processes/${processId}/overall-review`)
+      .set('Cookie', candidateCookie)
+      .send({
+        overallExperience: 4,
+        wouldRecommend: true,
+        ...(reviewText ? { reviewText } : {}),
+      })
+      .expect(201);
+    const reviewId = body<RatingBody>(reviewRes).id;
+    return { reviewId, queueEntry: await queueEntryFor(reviewId) };
+  }
+
+  // GitHub issue #317 / D52: the rate limit now counts submissions
+  // (InterviewProcess creations), not individual entities.
+  it('flags an entity with rate_limit once a candidate exceeds the submission threshold, but still creates it', async () => {
+    const candidateCookie = await loginNewCandidate();
+    // Threshold is 3 submissions (FraudChecksService.RATE_LIMIT_MAX_SUBMISSIONS)
+    // — the 3rd submission's own content should trip it. Each process is
+    // created immediately before its own rating is submitted, so the
+    // submission count at each rating's creation time is 1, 2, then 3 —
+    // not all 3 upfront, which would trip every rating equally.
+    const process1 = await createProcess(candidateCookie);
+    const round1 = await createRound(process1);
+    const first = await submitRoundRating(round1, candidateCookie);
+
+    const process2 = await createProcess(candidateCookie);
+    const round2 = await createRound(process2);
+    const second = await submitRoundRating(round2, candidateCookie);
+
+    const process3 = await createProcess(candidateCookie);
+    const round3 = await createRound(process3);
+    const third = await submitRoundRating(round3, candidateCookie);
+
+    expect(first.queueEntry.flagReason).toBeNull();
+    expect(second.queueEntry.flagReason).toBeNull();
+    expect(third.queueEntry.flagReason).toBe('rate_limit');
+  }, 20000);
+
+  // The exact false positive D52 fixed: a single legitimate submission with
+  // several round ratings must never trip the rate limit against itself.
+  it('never flags multiple round ratings within a single submission for rate_limit', async () => {
+    const candidateCookie = await loginNewCandidate();
+    const processId = await createProcess(candidateCookie);
+    const round1 = await createRound(processId, 1);
+    const round2 = await createRound(processId, 2);
+    const round3 = await createRound(processId, 3);
+    const round4 = await createRound(processId, 4);
+
+    const first = await submitRoundRating(round1, candidateCookie);
+    const second = await submitRoundRating(round2, candidateCookie);
+    const third = await submitRoundRating(round3, candidateCookie);
+    const fourth = await submitRoundRating(round4, candidateCookie);
 
     expect(first.queueEntry.flagReason).toBeNull();
     expect(second.queueEntry.flagReason).toBeNull();
     expect(third.queueEntry.flagReason).toBeNull();
-    expect(fourth.queueEntry.flagReason).toBe('rate_limit');
+    expect(fourth.queueEntry.flagReason).toBeNull();
   }, 20000);
 
-  it('flags a rating with duplicate when its free_text matches an existing one, but still creates it', async () => {
+  // GitHub issue #317: the submission-count rate limit applies identically
+  // regardless of which entity type is being created within the
+  // over-the-limit submission.
+  it('applies the rate limit to recruiter ratings and overall reviews too, not just round ratings', async () => {
+    const candidateCookie = await loginNewCandidate();
+
+    const process1 = await createProcess(candidateCookie);
+    const recruiterResult = await submitRecruiterRating(process1, candidateCookie);
+
+    const process2 = await createProcess(candidateCookie);
+    const overallResult1 = await submitOverallReview(process2, candidateCookie);
+
+    // process3 is the candidate's 3rd submission — both a recruiter rating
+    // and an overall review created within it should be flagged.
+    const process3 = await createProcess(candidateCookie);
+    const recruiterResult3 = await submitRecruiterRating(process3, candidateCookie);
+    const overallResult3 = await submitOverallReview(process3, candidateCookie);
+
+    expect(recruiterResult.queueEntry.flagReason).toBeNull();
+    expect(overallResult1.queueEntry.flagReason).toBeNull();
+    expect(recruiterResult3.queueEntry.flagReason).toBe('rate_limit');
+    expect(overallResult3.queueEntry.flagReason).toBe('rate_limit');
+  }, 20000);
+
+  it('flags a round rating with duplicate when its free_text matches an existing round rating, but still creates it', async () => {
     const candidateCookieA = await loginNewCandidate();
     const candidateCookieB = await loginNewCandidate();
-    const [roundA] = await createProcessWithRounds(candidateCookieA, 1);
-    const [roundB] = await createProcessWithRounds(candidateCookieB, 1);
+    const roundA = await createRound(await createProcess(candidateCookieA));
+    const roundB = await createRound(await createProcess(candidateCookieB));
 
     // Unique per run — the dockerized dev Postgres persists data across
     // test runs (fraud-checks duplicate detection is a full-table scan by
     // design, see D13), so a fixed literal string here would collide with
     // leftover rows from a previous run instead of only this test's data.
     const reviewText = `Great interview, fair and well-structured questions. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
-    const first = await submitRating(roundA, candidateCookieA, reviewText);
+    const first = await submitRoundRating(roundA, candidateCookieA, reviewText);
     // Same text, different case/whitespace, different candidate/round.
-    const second = await submitRating(roundB, candidateCookieB, `  ${reviewText.toUpperCase()}  `);
+    const second = await submitRoundRating(roundB, candidateCookieB, `  ${reviewText.toUpperCase()}  `);
 
     expect(first.queueEntry.flagReason).toBeNull();
     expect(second.queueEntry.flagReason).toBe('duplicate');
   }, 20000);
 
+  // GitHub issue #317: duplicate-text detection extends to recruiter
+  // ratings and overall reviews, each scoped to its own field/entity type.
+  it('flags a recruiter rating with duplicate when its free_text matches an existing recruiter rating', async () => {
+    const candidateCookieA = await loginNewCandidate();
+    const candidateCookieB = await loginNewCandidate();
+    const processA = await createProcess(candidateCookieA);
+    const processB = await createProcess(candidateCookieB);
+
+    const freeText = `Very responsive, clear about next steps. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const first = await submitRecruiterRating(processA, candidateCookieA, freeText);
+    const second = await submitRecruiterRating(processB, candidateCookieB, `  ${freeText.toUpperCase()}  `);
+
+    expect(first.queueEntry.flagReason).toBeNull();
+    expect(second.queueEntry.flagReason).toBe('duplicate');
+  }, 20000);
+
+  it('flags an overall review with duplicate when its review_text matches an existing overall review', async () => {
+    const candidateCookieA = await loginNewCandidate();
+    const candidateCookieB = await loginNewCandidate();
+    const processA = await createProcess(candidateCookieA);
+    const processB = await createProcess(candidateCookieB);
+
+    const reviewText = `Would recommend, great loop overall. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const first = await submitOverallReview(processA, candidateCookieA, reviewText);
+    const second = await submitOverallReview(processB, candidateCookieB, `  ${reviewText.toUpperCase()}  `);
+
+    expect(first.queueEntry.flagReason).toBeNull();
+    expect(second.queueEntry.flagReason).toBe('duplicate');
+  }, 20000);
+
+  // Duplicate detection is scoped per entity type/field (GitHub issue
+  // #317) — the same text appearing in a round rating's freeText must
+  // never flag an overall review's reviewText as a duplicate of it.
+  it('does not flag a duplicate across different entity types', async () => {
+    const candidateCookieA = await loginNewCandidate();
+    const candidateCookieB = await loginNewCandidate();
+    const roundA = await createRound(await createProcess(candidateCookieA));
+    const processB = await createProcess(candidateCookieB);
+
+    const text = `Shared wording across entity types. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const roundResult = await submitRoundRating(roundA, candidateCookieA, text);
+    const overallResult = await submitOverallReview(processB, candidateCookieB, text);
+
+    expect(roundResult.queueEntry.flagReason).toBeNull();
+    expect(overallResult.queueEntry.flagReason).toBeNull();
+  }, 20000);
+
   it('does not flag distinct free_text submissions', async () => {
     const candidateCookie = await loginNewCandidate();
-    const [roundId] = await createProcessWithRounds(candidateCookie, 1);
+    const roundId = await createRound(await createProcess(candidateCookie));
 
-    const { queueEntry } = await submitRating(
+    const { queueEntry } = await submitRoundRating(
       roundId,
       candidateCookie,
       `A genuinely unique review. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`,

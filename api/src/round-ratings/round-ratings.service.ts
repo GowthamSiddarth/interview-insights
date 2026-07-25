@@ -25,6 +25,7 @@ export class RoundRatingsService {
       // so it never flags a rating as a duplicate of itself.
       const flagReason = await this.fraudChecksService.detectFlagReason(
         candidateId,
+        'round_rating',
         dto.freeText,
         tx,
       );

@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 import { CreateRecruiterRatingDto } from './dto/create-recruiter-rating.dto';
 
 @Injectable()
@@ -8,19 +9,28 @@ export class RecruiterRatingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly moderationService: ModerationService,
+    private readonly fraudChecksService: FraudChecksService,
   ) {}
 
   // Same shape as RoundRatingsService.create(): status defaults to 'pending'
   // (CLAUDE.md hard constraint #2), moderation_queue row created in the same
-  // transaction. No fraud-check wiring here — FraudChecksService is
-  // round_rating-specific today (docs/DECISIONS.md D13); extending it to
-  // other entity types is out of this issue's scope.
+  // transaction. Fraud-check wiring added in GitHub issue #317 (D52) —
+  // FraudChecksService's rate limit now counts submissions, not entities,
+  // so it applies identically here as it does for round ratings.
   create(recruiterInteractionId: string, candidateId: string, dto: CreateRecruiterRatingDto) {
     return this.prisma.$transaction(async (tx) => {
+      // Runs against pre-existing rows only (before this one is inserted),
+      // so it never flags a rating as a duplicate of itself.
+      const flagReason = await this.fraudChecksService.detectFlagReason(
+        candidateId,
+        'recruiter_rating',
+        dto.freeText,
+        tx,
+      );
       const rating = await tx.recruiterRating.create({
         data: { ...dto, recruiterInteractionId, candidateId },
       });
-      await this.moderationService.enqueue('recruiter_rating', rating.id, tx);
+      await this.moderationService.enqueue('recruiter_rating', rating.id, tx, flagReason);
       return rating;
     });
   }

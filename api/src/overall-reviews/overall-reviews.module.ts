@@ -3,10 +3,11 @@ import { OverallReviewsController } from './overall-reviews.controller';
 import { OverallReviewsService } from './overall-reviews.service';
 import { CandidateAuthModule } from '../candidate-auth/candidate-auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
+import { FraudChecksModule } from '../fraud-checks/fraud-checks.module';
 import { EditThrottleModule } from '../common/edit-throttle.module';
 
 @Module({
-  imports: [ModerationModule, CandidateAuthModule, EditThrottleModule],
+  imports: [ModerationModule, FraudChecksModule, CandidateAuthModule, EditThrottleModule],
   controllers: [OverallReviewsController],
   providers: [OverallReviewsService],
   exports: [OverallReviewsService],

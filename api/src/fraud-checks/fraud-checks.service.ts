@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ModerationFlagReason, Prisma } from '@prisma/client';
+import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PrismaTransaction = Prisma.TransactionClient;
@@ -8,7 +8,7 @@ type PrismaTransaction = Prisma.TransactionClient;
 // framing (basic checks now, revisit once there's real volume), same spirit
 // as the shrinkage-formula `k` constant in docs/DATA_MODEL.md.
 const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
-const RATE_LIMIT_MAX_RATINGS = 3;
+const RATE_LIMIT_MAX_SUBMISSIONS = 3;
 
 function normalizeFreeText(freeText: string): string {
   return freeText.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -23,15 +23,26 @@ function normalizeFreeText(freeText: string): string {
 export class FraudChecksService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // GitHub issue #317 / docs/DECISIONS.md D52: counts `InterviewProcess`
+  // creations (submissions), not individual round/recruiter/overall rows.
+  // The previous entity-count version could trip on a single legitimate
+  // multi-round submission, since Phase 25/26 explicitly support several
+  // round ratings per submission — one real interview loop with 5 rounds
+  // is 1 event under this model, not 5. Applies identically regardless of
+  // which entity type is being created within a submission (round rating,
+  // recruiter rating, or overall review), since the signal being measured
+  // — "is this candidate creating an excessive number of submissions" —
+  // doesn't depend on entity type at all.
   async checkRateLimit(candidateId: string, tx: PrismaTransaction = this.prisma): Promise<boolean> {
     const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
-    const count = await tx.roundRating.count({
+    const count = await tx.interviewProcess.count({
       where: { candidateId, createdAt: { gte: windowStart } },
     });
-    return count >= RATE_LIMIT_MAX_RATINGS;
+    return count >= RATE_LIMIT_MAX_SUBMISSIONS;
   }
 
   async checkDuplicateFreeText(
+    entityType: ModerationEntityType,
     freeText: string | null | undefined,
     tx: PrismaTransaction = this.prisma,
   ): Promise<boolean> {
@@ -44,22 +55,52 @@ export class FraudChecksService {
     // real volume makes this slow. Also exact-match only (after
     // normalizing whitespace/case) — genuinely fuzzy near-duplicate
     // detection is a further-out enhancement, not this issue's scope.
-    const existing = await tx.roundRating.findMany({
-      where: { freeText: { not: null } },
-      select: { freeText: true },
-    });
-    return existing.some((r) => r.freeText !== null && normalizeFreeText(r.freeText) === normalized);
+    // Scoped per entity type/field (GitHub issue #317): a recruiter
+    // rating's freeText is only compared against other recruiter
+    // ratings' freeText, never cross-type.
+    const existing = await this.fetchExistingFreeText(entityType, tx);
+    return existing.some((text) => text !== null && normalizeFreeText(text) === normalized);
+  }
+
+  private async fetchExistingFreeText(
+    entityType: ModerationEntityType,
+    tx: PrismaTransaction,
+  ): Promise<(string | null)[]> {
+    switch (entityType) {
+      case 'round_rating': {
+        const rows = await tx.roundRating.findMany({
+          where: { freeText: { not: null } },
+          select: { freeText: true },
+        });
+        return rows.map((r) => r.freeText);
+      }
+      case 'recruiter_rating': {
+        const rows = await tx.recruiterRating.findMany({
+          where: { freeText: { not: null } },
+          select: { freeText: true },
+        });
+        return rows.map((r) => r.freeText);
+      }
+      case 'overall_review': {
+        const rows = await tx.overallReview.findMany({
+          where: { reviewText: { not: null } },
+          select: { reviewText: true },
+        });
+        return rows.map((r) => r.reviewText);
+      }
+    }
   }
 
   // Only one flagReason fits per moderation_queue row, so if multiple
   // checks trip, rate_limit wins — arbitrary but deterministic priority.
   async detectFlagReason(
     candidateId: string,
+    entityType: ModerationEntityType,
     freeText: string | null | undefined,
     tx: PrismaTransaction = this.prisma,
   ): Promise<ModerationFlagReason | undefined> {
     if (await this.checkRateLimit(candidateId, tx)) return 'rate_limit';
-    if (await this.checkDuplicateFreeText(freeText, tx)) return 'duplicate';
+    if (await this.checkDuplicateFreeText(entityType, freeText, tx)) return 'duplicate';
     return undefined;
   }
 }

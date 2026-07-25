@@ -106,6 +106,7 @@ describe('BulkProcessSubmissionService', () => {
 
     expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
       'candidate-1',
+      'round_rating',
       undefined,
       prisma,
     );
@@ -137,7 +138,7 @@ describe('BulkProcessSubmissionService', () => {
     expect(prisma.recruiterRating.create).not.toHaveBeenCalled();
   });
 
-  it('creates a recruiter rating and enqueues moderation when a rating is given', async () => {
+  it('creates a recruiter rating, runs fraud checks, and enqueues moderation when a rating is given', async () => {
     await service.create('company-1', 'candidate-1', {
       ...baseDto,
       recruiterInteractions: [
@@ -148,6 +149,12 @@ describe('BulkProcessSubmissionService', () => {
       ],
     });
 
+    expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
+      'candidate-1',
+      'recruiter_rating',
+      undefined,
+      prisma,
+    );
     expect(prisma.recruiterRating.create).toHaveBeenCalledWith({
       data: {
         reachability: 4,
@@ -161,19 +168,31 @@ describe('BulkProcessSubmissionService', () => {
       'recruiter_rating',
       'recruiter-rating-1',
       prisma,
+      undefined,
     );
   });
 
-  it('creates the overall review and enqueues moderation when provided', async () => {
+  it('creates the overall review, runs fraud checks, and enqueues moderation when provided', async () => {
     await service.create('company-1', 'candidate-1', {
       ...baseDto,
       overallReview: { overallExperience: 5, wouldRecommend: true },
     });
 
+    expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
+      'candidate-1',
+      'overall_review',
+      undefined,
+      prisma,
+    );
     expect(prisma.overallReview.create).toHaveBeenCalledWith({
       data: { overallExperience: 5, wouldRecommend: true, processId: 'process-1', candidateId: 'candidate-1' },
     });
-    expect(moderationService.enqueue).toHaveBeenCalledWith('overall_review', 'review-1', prisma);
+    expect(moderationService.enqueue).toHaveBeenCalledWith(
+      'overall_review',
+      'review-1',
+      prisma,
+      undefined,
+    );
   });
 
   it('creates every entity type together in one call', async () => {

@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { OverallReviewsService } from './overall-reviews.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 
 describe('OverallReviewsService', () => {
   let service: OverallReviewsService;
@@ -17,6 +18,7 @@ describe('OverallReviewsService', () => {
     $transaction: jest.Mock;
   };
   let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; removeQueueEntries: jest.Mock };
+  let fraudChecksService: { detectFlagReason: jest.Mock };
 
   const dto = {
     overallExperience: 4,
@@ -39,12 +41,14 @@ describe('OverallReviewsService', () => {
       reenqueue: jest.fn(),
       removeQueueEntries: jest.fn(),
     };
+    fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OverallReviewsService,
         { provide: PrismaService, useValue: prisma },
         { provide: ModerationService, useValue: moderationService },
+        { provide: FraudChecksService, useValue: fraudChecksService },
       ],
     }).compile();
 
@@ -59,10 +63,41 @@ describe('OverallReviewsService', () => {
     });
   });
 
-  it('enqueues the new review for moderation', async () => {
+  // GitHub issue #317 (D52): fraud-check wiring, same shape as
+  // RoundRatingsService.create().
+  it('checks pre-existing rows for fraud signals before creating the review', async () => {
     await service.create('process-1', 'candidate-1', dto);
 
-    expect(moderationService.enqueue).toHaveBeenCalledWith('overall_review', 'review-1', prisma);
+    expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
+      'candidate-1',
+      'overall_review',
+      undefined,
+      prisma,
+    );
+  });
+
+  it('enqueues the new review for moderation with no flagReason when nothing is flagged', async () => {
+    await service.create('process-1', 'candidate-1', dto);
+
+    expect(moderationService.enqueue).toHaveBeenCalledWith(
+      'overall_review',
+      'review-1',
+      prisma,
+      undefined,
+    );
+  });
+
+  it('passes the detected flagReason through to the moderation queue entry', async () => {
+    fraudChecksService.detectFlagReason.mockResolvedValue('rate_limit');
+
+    await service.create('process-1', 'candidate-1', dto);
+
+    expect(moderationService.enqueue).toHaveBeenCalledWith(
+      'overall_review',
+      'review-1',
+      prisma,
+      'rate_limit',
+    );
   });
 
   it('findApprovedForProcess only queries the approved review for that process', async () => {
