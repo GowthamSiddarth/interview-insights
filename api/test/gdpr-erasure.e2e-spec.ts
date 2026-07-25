@@ -27,6 +27,9 @@ interface QueueEntryBody {
   id: string;
   entityId: string;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 interface ReviewSearchResultBody {
   id: string;
 }
@@ -92,7 +95,7 @@ describe('GDPR erasure (e2e)', () => {
 
   async function approve(entityId: string): Promise<void> {
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === entityId);
+    const entry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === entityId);
     if (!entry) throw new Error(`No moderation_queue entry found for entity ${entityId}`);
     await server()
       .post(`/moderation/queue/${entry.id}/approve`)

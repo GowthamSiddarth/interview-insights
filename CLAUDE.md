@@ -2469,7 +2469,7 @@ issue-319-consolidate-round-adding/` added. Epic #280 reopened and
 re-closed the same day, same precedent as every prior reopening.
 
 **Phase 29 — Moderator Full Content Visibility & Submission
-Consistency (planned, not started)** — filed the same day, from the
+Consistency (in progress)** — filed the same day, from the
 same user request. An investigation (read-only Explore agent)
 confirmed three real gaps: (1) `ModerationService.listPending()`
 fetches a round's full `Round` row but only surfaces `title`/
@@ -2496,15 +2496,105 @@ rate limiting to recruiter ratings/overall reviews, with two kickoff
 questions flagged for whenever implementation starts — a shared
 rolling-window counter across all three entity types vs. three
 independent ones, and whether duplicate-text detection should extend
-too; engineering blog). Planning only, per the user's explicit
-"brainstorm... in a separate phase" — no implementation yet.
+too; engineering blog). Planned first; implementation on #315 started
+the same session per the user's explicit confirmation ("Implement
+#315 now") once a concrete follow-up request (the moderation queue's
+information architecture, see below) needed a real decision on
+whether to fold into this already-"planning only" phase or wait.
+
+**Phase 29, issue #315 (moderation queue: full round content +
+group by submission)** — expanded mid-implementation, per direct user
+feedback: the original ask was "surface more round fields"; the user
+then described the queue's real problem directly — a multi-round
+submission repeated the same "Company · Role" context once per
+round/rating/review (a real 5-row example: "Amazon · SSE" five times
+over), and asked for one list item per submission instead, expanding
+to full detail on click. `ModerationService.listPending()` rewritten:
+new `ModerationQueueEntity`/`ModerationQueueEntry`/
+`ModerationQueueGroup` interfaces replace the previously untyped
+inline shapes; every entity type's enrichment now also carries
+`processId` (round_rating additionally gains `roundDescription`,
+`roundTypeMetadata`, `roundScheduledDurationMinutes` — this issue's
+original ask); the previously-flat `enrichedEntries` array is grouped
+into a `Map<string, ModerationQueueGroup>` keyed by `processId`
+(a synthetic `unknown-${entry.id}` key covers the pre-existing D37
+transient-failure case, so a failed enrichment still surfaces as its
+own standalone group rather than disappearing), returned as
+`ModerationQueueGroup[]` — `Map` insertion order keeps groups in the
+same createdAt-ascending order the flat list always had. The existing
+`Promise.allSettled` per-entity-type isolation (D37) is preserved
+unchanged underneath the new grouping. Both kickoff questions resolved
+directly rather than left open: `typeMetadata` renders as plain
+key/value pairs (the registry's stored values, e.g. `["DFS", "BFS"]`
+for `problemAlgorithms`, are already the human-readable display
+strings — no ID-to-label lookup layer exists anywhere in this schema);
+an interviewer display label was judged out of scope entirely — `Round.
+interviewerId` has no write path anywhere in the codebase today
+(`CreateRoundDto` has no interviewer field, `RoundsService.create()`
+never sets it), so there's no data to enrich with, and building
+interviewer-identity capture would be a materially larger, separate
+feature (Phase 14's recruiter-identity capture is the closest analog).
+
+On `web`: `web/src/lib/api.ts` gained the matching `ModerationQueueGroup`
+type and `ModerationQueueEntity` gained the three new round-content
+fields plus `processId` (and, opportunistically, `roundTitle`'s type
+fixed to `string | null` while the type was already being touched —
+closing issue #316's own gap early, since it's the same file/type).
+`web/src/app/moderation/page.tsx` restructured: one collapsed `Card`
+per group showing company/role and a pending-item count, expanding on
+click (local `Set<number>` of expanded indices) to reveal each entry's
+full detail — a new `RoundContentDetails` component renders
+`roundDescription`/`roundScheduledDurationMinutes`/`roundTypeMetadata`
+beneath the existing score line for round_rating entries only.
+Approve/reject/flag still act per-entry; a group collapses out of the
+list entirely once its last entry is resolved.
+
+12 new/updated api unit tests (`moderation.service.spec.ts` — grouping
+by shared `processId`, separate processes producing separate groups,
+the D37 transient-failure case now also asserted per-group, plus the
+new content fields) — 294 api unit tests total, all green. A new e2e
+test in `moderation.e2e-spec.ts` proves grouping against real Postgres
+(two round ratings under one process land in the same group; a second
+process's own rating lands in a separate group); every other e2e spec
+that reads `GET /moderation/queue` (`golden-path.smoke-spec.ts`,
+`bulk-process-submission`, `update-delete-moderated-content`,
+`company-reviews`, `recruiter-ratings`, `gdpr-erasure`,
+`review-search`, `fraud-checks`, `me-submissions`, `overall-reviews` —
+10 files) updated to flatten groups before searching for a specific
+entity, via a shared `test/support/moderation-queue.ts` helper for new
+code and matching inline `QueueGroupBody` types for existing files'
+established per-file style — 127 e2e tests total (2 pre-existing
+unrelated skips), all green. 10 new/updated web component tests
+(`moderation-page.spec.tsx` rewritten for the grouped/expandable UI) —
+118 web tests total, all green. `api`/`web` build/lint clean.
+
+Live-verified against the real `kind` cluster (Postgres/OpenSearch/
+Mailpit via the persistent port-forward script, D-series precedent):
+logged in via a real magic link, created a company with one process
+carrying two round ratings (one with a real description/duration/
+typeMetadata) plus a recruiter rating, confirmed via the admin API
+that `GET /moderation/queue` returned exactly one group with all
+three entities nested under it, confirmed the round's full submitted
+content (description, 45-minute duration, `{"problemAlgorithms":
+["DFS","BFS"]}`) all reached the response, approved one entry and
+confirmed the group correctly dropped to two remaining entries. Also
+confirmed directly against the cluster's own pre-existing dev data:
+the user's original "Amazon · SSE" 5-row example collapsed to exactly
+one group of 5 entries. Test data cleaned up afterward via the real
+`DELETE /me` GDPR-erasure endpoint plus a direct company/recruiter
+delete and the existing `prune-orphaned-company-search-docs` script
+(D51's own tooling), confirming zero orphaned rows or search
+documents were left behind.
 
 - Next step: continue merging without waiting for CI until the user
-  says the GitHub Actions billing limit has been refreshed. Phase 19
-  (Content Quality & Synthetic Data, issues #162-165), Phase 27 (Admin
-  Content Gateway), and Phase 29 (Moderator Full Content Visibility &
-  Submission Consistency) remain planned but not started, next in
-  line.
+  says the GitHub Actions billing limit has been refreshed. Phase 29
+  issues #316-318 (the `roundTitle` type fix — likely now redundant
+  given #315 already fixed it opportunistically, worth confirming
+  before implementing — extending fraud-check rate limiting, and the
+  phase's engineering blog, written last once #316/#317 are also
+  done) remain next in line, followed by Phase 19 (Content Quality &
+  Synthetic Data, issues #162-165) and Phase 27 (Admin Content
+  Gateway), both still planned but not started.
 
 ## Open decisions still to make
 

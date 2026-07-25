@@ -98,12 +98,17 @@ export interface OverallReview {
 // The `entity` payload GET /moderation/queue attaches to each entry —
 // shape varies by entityType; only the fields the moderation page needs.
 export interface ModerationQueueEntity {
+  processId: string;
   companyName: string;
   roleTitle: string;
   freeText?: string | null;
-  // round_rating
-  roundTitle?: string;
+  // round_rating — full submitted content (GitHub issue #315), not just
+  // the highlighted score fields.
+  roundTitle?: string | null;
   roundType?: Round['roundType'];
+  roundDescription?: string | null;
+  roundTypeMetadata?: Record<string, unknown> | null;
+  roundScheduledDurationMinutes?: number | null;
   difficulty?: number;
   fluency?: number;
   clarity?: number;
@@ -134,6 +139,16 @@ export interface ModerationQueueEntry {
   reviewedAt: string | null;
   createdAt: string;
   entity: ModerationQueueEntity | null;
+}
+
+// GitHub issue #315: the queue groups every pending entity by its
+// InterviewProcess ("submission") rather than returning a flat list — one
+// collapsed row per submission, full detail revealed on expand.
+export interface ModerationQueueGroup {
+  processId: string | null;
+  companyName: string;
+  roleTitle: string;
+  entries: ModerationQueueEntry[];
 }
 
 export interface RoundTypeAnalytics {
@@ -568,7 +583,7 @@ export const api = {
 
   getAdminSession: () => request<AdminSession>('/auth/admin/me'),
 
-  listModerationQueue: () => request<ModerationQueueEntry[]>('/moderation/queue'),
+  listModerationQueue: () => request<ModerationQueueGroup[]>('/moderation/queue'),
 
   approveModerationEntry: (id: string, reviewedBy?: string) =>
     request<ModerationQueueEntry>(`/moderation/queue/${id}/approve`, {

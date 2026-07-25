@@ -29,6 +29,9 @@ interface QueueEntryBody {
   entityId: string;
   reviewedAt: string | null;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 interface ReviewSearchResultBody {
   id: string;
 }
@@ -179,7 +182,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
 
   async function findQueueEntryFor(entityId: string): Promise<QueueEntryBody> {
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === entityId);
+    const entry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === entityId);
     if (!entry) throw new Error(`No moderation_queue entry found for entity ${entityId}`);
     return entry;
   }
@@ -240,7 +243,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
         .expect(200);
 
       const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-      const entriesForRating = body<QueueEntryBody[]>(queueRes).filter((e) => e.entityId === ratingId);
+      const entriesForRating = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).filter((e) => e.entityId === ratingId);
       expect(entriesForRating).toHaveLength(1);
     }, 20000);
 
@@ -260,7 +263,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
       expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).not.toContain(ratingId);
 
       const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-      expect(body<QueueEntryBody[]>(queueRes).some((e) => e.entityId === ratingId)).toBe(false);
+      expect(body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).some((e) => e.entityId === ratingId)).toBe(false);
 
       const searchAfter = await server().get('/search/reviews').query({ companyId }).expect(200);
       expect(body<ReviewSearchResultBody[]>(searchAfter)).toEqual([]);
@@ -275,7 +278,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
         .expect(204);
 
       const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-      expect(body<QueueEntryBody[]>(queueRes).some((e) => e.entityId === ratingId)).toBe(false);
+      expect(body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).some((e) => e.entityId === ratingId)).toBe(false);
     }, 20000);
   });
 
@@ -320,7 +323,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
       expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).not.toContain(ratingId);
 
       const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-      expect(body<QueueEntryBody[]>(queueRes).some((e) => e.entityId === ratingId)).toBe(false);
+      expect(body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).some((e) => e.entityId === ratingId)).toBe(false);
     }, 20000);
   });
 
@@ -363,7 +366,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
       expect(body<RatingBody>(publicRes).id).toBeUndefined();
 
       const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-      expect(body<QueueEntryBody[]>(queueRes).some((e) => e.entityId === reviewId)).toBe(false);
+      expect(body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).some((e) => e.entityId === reviewId)).toBe(false);
     }, 20000);
   });
 

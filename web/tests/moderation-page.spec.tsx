@@ -15,62 +15,87 @@ jest.mock('next/navigation', () => ({
   useRouter: () => mockRouter,
 }));
 
-const queueEntries = [
+// GitHub issue #315: the queue groups every pending entity by its
+// InterviewProcess ("submission") — one collapsed row per submission, full
+// detail revealed on expand. This fixture puts the round + recruiter
+// entities under the same process (process-1) and the overall review under
+// a different one (process-2), matching the real grouping behavior.
+const queueGroups = [
   {
-    id: 'q-round',
-    entityType: 'round_rating',
-    entityId: 'rr1',
-    flagReason: 'duplicate',
-    reviewedBy: null,
-    reviewedAt: null,
-    createdAt: '2026-07-19T00:00:00Z',
-    entity: {
-      companyName: 'Acme Corp',
-      roleTitle: 'Engineer',
-      roundTitle: 'Screen',
-      roundType: 'coding',
-      difficulty: 3,
-      fluency: 4,
-      clarity: 4,
-      focus: 4,
-      technicalDepth: null,
-      freeText: 'tough but fair',
-    },
+    processId: 'process-1',
+    companyName: 'Acme Corp',
+    roleTitle: 'Engineer',
+    entries: [
+      {
+        id: 'q-round',
+        entityType: 'round_rating',
+        entityId: 'rr1',
+        flagReason: 'duplicate',
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: '2026-07-19T00:00:00Z',
+        entity: {
+          processId: 'process-1',
+          companyName: 'Acme Corp',
+          roleTitle: 'Engineer',
+          roundTitle: 'Screen',
+          roundType: 'coding',
+          roundDescription: 'A live coding round over a shared editor',
+          roundTypeMetadata: { problemAlgorithms: ['DFS'] },
+          roundScheduledDurationMinutes: 45,
+          difficulty: 3,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
+          technicalDepth: null,
+          freeText: 'tough but fair',
+        },
+      },
+      {
+        id: 'q-recruiter',
+        entityType: 'recruiter_rating',
+        entityId: 'cr1',
+        flagReason: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: '2026-07-19T00:01:00Z',
+        entity: {
+          processId: 'process-1',
+          companyName: 'Acme Corp',
+          roleTitle: 'Engineer',
+          recruiterLabel: 'Recruiter A',
+          reachability: 5,
+          responsiveness: 4,
+          guidelinesShared: 5,
+          rejectionMessageAuthenticity: null,
+          freeText: null,
+        },
+      },
+    ],
   },
   {
-    id: 'q-recruiter',
-    entityType: 'recruiter_rating',
-    entityId: 'cr1',
-    flagReason: null,
-    reviewedBy: null,
-    reviewedAt: null,
-    createdAt: '2026-07-19T00:01:00Z',
-    entity: {
-      companyName: 'Acme Corp',
-      roleTitle: 'Engineer',
-      recruiterLabel: 'Recruiter A',
-      reachability: 5,
-      responsiveness: 4,
-      guidelinesShared: 5,
-      rejectionMessageAuthenticity: null,
-      freeText: null,
-    },
-  },
-  {
-    id: 'q-overall',
-    entityType: 'overall_review',
-    entityId: 'ov1',
-    flagReason: null,
-    reviewedBy: null,
-    reviewedAt: null,
-    createdAt: '2026-07-19T00:02:00Z',
-    entity: {
-      companyName: 'Acme Corp',
-      roleTitle: 'Engineer',
-      overallExperience: 4,
-      wouldRecommend: true,
-      reviewText: 'good loop overall',
-    },
+    processId: 'process-2',
+    companyName: 'Acme Corp',
+    roleTitle: 'Manager',
+    entries: [
+      {
+        id: 'q-overall',
+        entityType: 'overall_review',
+        entityId: 'ov1',
+        flagReason: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: '2026-07-19T00:02:00Z',
+        entity: {
+          processId: 'process-2',
+          companyName: 'Acme Corp',
+          roleTitle: 'Manager',
+          overallExperience: 4,
+          wouldRecommend: true,
+          reviewText: 'good loop overall',
+        },
+      },
+    ],
   },
 ];
 
@@ -85,7 +110,7 @@ function mockFetch() {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) });
     }
     if (url.endsWith('/moderation/queue') && method === 'GET') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(queueEntries) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
     }
     if (/\/moderation\/queue\/.+\/(approve|reject|flag)$/.test(url) && method === 'POST') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -94,7 +119,7 @@ function mockFetch() {
   }) as jest.Mock;
 }
 
-describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #160)', () => {
+describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #160; grouped-by-submission Phase 29 issue #315)', () => {
   beforeEach(() => {
     push.mockClear();
     mockFetch();
@@ -145,7 +170,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
       }
       if (url.endsWith('/moderation/queue') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(queueEntries) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
       }
       if (/\/moderation\/queue\/.+\/approve$/.test(url) && method === 'POST') {
         return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
@@ -156,6 +181,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     const user = userEvent.setup();
     render(<ModerationPage />);
 
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Engineer/ }));
     const approveButtons = await screen.findAllByRole('button', { name: 'Approve' });
     await user.click(approveButtons[0]);
 
@@ -179,44 +205,66 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     expect(push).toHaveBeenCalledWith('/moderation/login');
   });
 
-  it('renders all three entity types with their context, generated labels only', async () => {
+  it('renders one collapsed row per submission, not one row per entity', async () => {
     render(<ModerationPage />);
 
-    expect(await screen.findByText('Round rating')).toBeInTheDocument();
-    expect(screen.getByText('Recruiter rating')).toBeInTheDocument();
-    expect(screen.getByText('Overall review')).toBeInTheDocument();
-    // Context rendered without a second lookup
-    expect(screen.getByText('tough but fair')).toBeInTheDocument();
-    expect(screen.getByText(/Recruiter A/)).toBeInTheDocument();
-    expect(screen.getByText('good loop overall')).toBeInTheDocument();
-    // Fraud-check flag reason surfaced
-    expect(screen.getByText(/Auto-flagged: duplicate/)).toBeInTheDocument();
+    expect(await screen.findByText('Acme Corp · Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Acme Corp · Manager')).toBeInTheDocument();
+    expect(screen.getByText('2 pending items')).toBeInTheDocument();
+    expect(screen.getByText('1 pending item')).toBeInTheDocument();
+    // Nothing about the individual entities is visible until expanded.
+    expect(screen.queryByText('Round rating')).not.toBeInTheDocument();
+    expect(screen.queryByText('tough but fair')).not.toBeInTheDocument();
   });
 
-  it('approve calls the endpoint and removes the entry from the list', async () => {
+  it('expanding a submission reveals its full entity detail, including round content beyond the highlighted scores', async () => {
     const user = userEvent.setup();
     render(<ModerationPage />);
 
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Engineer/ }));
+
+    expect(screen.getByText('Round rating')).toBeInTheDocument();
+    expect(screen.getByText('Recruiter rating')).toBeInTheDocument();
+    expect(screen.getByText('tough but fair')).toBeInTheDocument();
+    expect(screen.getByText(/Recruiter A/)).toBeInTheDocument();
+    // Fraud-check flag reason surfaced
+    expect(screen.getByText(/Auto-flagged: duplicate/)).toBeInTheDocument();
+    // Full round content (issue #315), not just difficulty/fluency/clarity/focus
+    expect(screen.getByText('A live coding round over a shared editor')).toBeInTheDocument();
+    expect(screen.getByText(/scheduled duration: 45 min/)).toBeInTheDocument();
+    expect(screen.getByText(/problem algorithms: DFS/)).toBeInTheDocument();
+
+    // The other submission stays collapsed.
+    expect(screen.queryByText('Overall review')).not.toBeInTheDocument();
+  });
+
+  it('approve calls the endpoint and removes just that entry, collapsing the group once empty', async () => {
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Manager/ }));
     const approveButtons = await screen.findAllByRole('button', { name: 'Approve' });
     await user.click(approveButtons[0]);
 
     await waitFor(() =>
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/moderation/queue/q-round/approve'),
+        expect.stringContaining('/moderation/queue/q-overall/approve'),
         expect.objectContaining({ method: 'POST' }),
       ),
     );
-    await waitFor(() => expect(screen.queryByText('Round rating')).not.toBeInTheDocument());
-    // The other two are untouched
-    expect(screen.getByText('Recruiter rating')).toBeInTheDocument();
+    // That submission had exactly one entry — the whole row disappears.
+    await waitFor(() => expect(screen.queryByText('Acme Corp · Manager')).not.toBeInTheDocument());
+    // The other submission (still with a pending recruiter rating) is untouched.
+    expect(screen.getByText('Acme Corp · Engineer')).toBeInTheDocument();
   });
 
-  it('reject calls the endpoint and removes the entry', async () => {
+  it('reject calls the endpoint and removes just that entry, keeping the group open with its remaining entry', async () => {
     const user = userEvent.setup();
     render(<ModerationPage />);
 
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Engineer/ }));
     const rejectButtons = await screen.findAllByRole('button', { name: 'Reject' });
-    await user.click(rejectButtons[1]);
+    await user.click(rejectButtons[1]); // the recruiter rating
 
     await waitFor(() =>
       expect(global.fetch).toHaveBeenCalledWith(
@@ -225,16 +273,21 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       ),
     );
     await waitFor(() => expect(screen.queryByText('Recruiter rating')).not.toBeInTheDocument());
+    // The round rating in the same submission is still there.
+    expect(screen.getByText('Round rating')).toBeInTheDocument();
+    // Both groups now show exactly one remaining pending item (Engineer's
+    // count dropped from 2 to 1; Manager's was already 1).
+    expect(screen.getAllByText('1 pending item')).toHaveLength(2);
   });
 
   it('flag sends the selected reason and removes the entry', async () => {
     const user = userEvent.setup();
     render(<ModerationPage />);
 
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Manager/ }));
     await screen.findByText('Overall review');
     await user.selectOptions(screen.getByLabelText('Flag reason for q-overall'), 'spam_pattern');
-    const flagButtons = screen.getAllByRole('button', { name: 'Flag' });
-    await user.click(flagButtons[2]);
+    await user.click(screen.getByRole('button', { name: 'Flag' }));
 
     await waitFor(() => {
       const call = (global.fetch as jest.Mock).mock.calls.find(([url]: [string]) =>
@@ -243,7 +296,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       expect(call).toBeDefined();
       expect(JSON.parse(String(call?.[1].body))).toMatchObject({ flagReason: 'spam_pattern' });
     });
-    await waitFor(() => expect(screen.queryByText('Overall review')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Acme Corp · Manager')).not.toBeInTheDocument());
   });
 
   it('shows the empty state when the queue is clear, distinct from loading', async () => {

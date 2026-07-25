@@ -1102,14 +1102,18 @@ correct `string | null` used by the other two read surfaces; and
 ratings only — recruiter ratings and overall reviews (both
 single-create and bulk-submission paths) have no fraud-check wiring
 at all. Milestone "Phase 29 — Moderator Full Content Visibility &
-Submission Consistency". Epic: GitHub issue #314. Planning only, per
-the user's explicit request to brainstorm this in a separate phase —
-no implementation yet.
+Submission Consistency". Epic: GitHub issue #314.
 
-- [ ] Moderation queue: surface a round's `description`, `typeMetadata`,
-      `scheduledDurationMinutes`, and an interviewer display label —
-      all fetched already but currently dropped before reaching the
-      moderator (GitHub issue #315)
+- [x] Moderation queue: surface a round's `description`, `typeMetadata`,
+      and `scheduledDurationMinutes` (all fetched already but
+      previously dropped before reaching the moderator), and — per
+      direct user feedback mid-implementation — group every pending
+      entity by its `InterviewProcess` ("submission") instead of
+      returning a flat list, so a moderator sees one collapsed row per
+      submission with an expand action revealing full per-entity
+      detail. Interviewer display label judged out of scope: `Round.
+      interviewerId` has no write path anywhere in the codebase today,
+      so there is no data to enrich with (GitHub issue #315)
 - [ ] Fix `ModerationQueueEntity.roundTitle`'s type (`string` ->
       `string | null`), matching `CompanyReviewItem`/
       `MySubmissionRoundRating` (GitHub issue #316)

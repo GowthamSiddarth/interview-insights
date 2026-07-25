@@ -25,6 +25,9 @@ interface QueueEntryBody {
   entityId: string;
   reviewedAt: string | null;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 
 function body<T>(res: request.Response): T {
   return res.body as T;
@@ -112,7 +115,7 @@ describe('Overall reviews (e2e)', () => {
 
   async function findQueueEntryFor(reviewId: string): Promise<QueueEntryBody> {
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === reviewId);
+    const entry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === reviewId);
     if (!entry) throw new Error(`No moderation_queue entry found for review ${reviewId}`);
     return entry;
   }

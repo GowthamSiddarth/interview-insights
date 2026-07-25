@@ -128,7 +128,7 @@ describe('ModerationService', () => {
       });
     });
 
-    it('enriches each entry with its entity, using only generated labels — never the identifier hash', async () => {
+    it('groups entries from the same process into one group, enriched with only generated labels — never the identifier hash', async () => {
       prisma.moderationQueueEntry.findMany.mockResolvedValue([
         { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },
         { id: 'q2', entityType: 'recruiter_rating', entityId: 'cr1', reviewedAt: null },
@@ -146,7 +146,10 @@ describe('ModerationService', () => {
           round: {
             title: 'Screen',
             roundType: 'coding',
-            process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+            description: 'A live coding round',
+            typeMetadata: { problemAlgorithms: ['DFS'] },
+            scheduledDurationMinutes: 45,
+            process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
           },
         },
       ]);
@@ -160,7 +163,7 @@ describe('ModerationService', () => {
           freeText: null,
           recruiterInteraction: {
             recruiter: { displayLabel: 'Recruiter A', internalIdentifierHash: 'deadbeef' },
-            process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+            process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
           },
         },
       ]);
@@ -170,37 +173,97 @@ describe('ModerationService', () => {
           overallExperience: 4,
           wouldRecommend: true,
           reviewText: 'good loop',
-          process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+          process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
         },
       ]);
 
       const result = await service.listPending();
 
-      expect(result[0].entity).toMatchObject({
+      // GitHub issue #315 — all three belong to the same process, so
+      // they come back as exactly one group.
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ processId: 'process-1', companyName: 'Acme', roleTitle: 'Engineer' });
+      expect(result[0].entries).toHaveLength(3);
+
+      expect(result[0].entries[0].entity).toMatchObject({
         companyName: 'Acme',
         roundTitle: 'Screen',
+        roundDescription: 'A live coding round',
+        roundTypeMetadata: { problemAlgorithms: ['DFS'] },
+        roundScheduledDurationMinutes: 45,
         difficulty: 3,
         freeText: 'tough but fair',
       });
-      expect(result[1].entity).toMatchObject({
+      expect(result[0].entries[1].entity).toMatchObject({
         recruiterLabel: 'Recruiter A',
         reachability: 5,
       });
       expect(JSON.stringify(result)).not.toContain('deadbeef');
-      expect(result[2].entity).toMatchObject({
+      expect(result[0].entries[2].entity).toMatchObject({
         overallExperience: 4,
         wouldRecommend: true,
       });
     });
 
-    it('attaches entity: null when the underlying row is missing', async () => {
+    it('puts entries from different processes into separate groups', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },
+        { id: 'q2', entityType: 'round_rating', entityId: 'rr2', reviewedAt: null },
+      ]);
+      prisma.roundRating.findMany.mockResolvedValue([
+        {
+          id: 'rr1',
+          difficulty: 3,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
+          technicalDepth: null,
+          freeText: null,
+          round: {
+            title: 'Screen',
+            roundType: 'coding',
+            description: null,
+            typeMetadata: null,
+            scheduledDurationMinutes: null,
+            process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
+          },
+        },
+        {
+          id: 'rr2',
+          difficulty: 3,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
+          technicalDepth: null,
+          freeText: null,
+          round: {
+            title: 'Onsite',
+            roundType: 'system_design',
+            description: null,
+            typeMetadata: null,
+            scheduledDurationMinutes: null,
+            process: { id: 'process-2', roleTitle: 'Manager', company: { name: 'Globex' } },
+          },
+        },
+      ]);
+
+      const result = await service.listPending();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].processId).toBe('process-1');
+      expect(result[1].processId).toBe('process-2');
+    });
+
+    it('attaches entity: null when the underlying row is missing, in its own standalone group', async () => {
       prisma.moderationQueueEntry.findMany.mockResolvedValue([
         { id: 'q1', entityType: 'round_rating', entityId: 'gone', reviewedAt: null },
       ]);
 
       const result = await service.listPending();
 
-      expect(result[0].entity).toBeNull();
+      expect(result).toHaveLength(1);
+      expect(result[0].processId).toBeNull();
+      expect(result[0].entries[0].entity).toBeNull();
     });
 
     // GitHub issue #212 / docs/DECISIONS.md D37: a required-relation
@@ -225,7 +288,14 @@ describe('ModerationService', () => {
           focus: 4,
           technicalDepth: null,
           freeText: null,
-          round: { title: 'Screen', roundType: 'coding', process: { roleTitle: 'Engineer', company: { name: 'Acme' } } },
+          round: {
+            title: 'Screen',
+            roundType: 'coding',
+            description: null,
+            typeMetadata: null,
+            scheduledDurationMinutes: null,
+            process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
+          },
         },
       ]);
       prisma.recruiterRating.findMany.mockRejectedValue(
@@ -237,15 +307,19 @@ describe('ModerationService', () => {
           overallExperience: 4,
           wouldRecommend: true,
           reviewText: 'good loop',
-          process: { roleTitle: 'Engineer', company: { name: 'Acme' } },
+          process: { id: 'process-2', roleTitle: 'Engineer', company: { name: 'Acme' } },
         },
       ]);
 
       const result = await service.listPending();
 
-      expect(result[0].entity).toMatchObject({ roundTitle: 'Screen' });
-      expect(result[1].entity).toBeNull();
-      expect(result[2].entity).toMatchObject({ overallExperience: 4 });
+      const roundGroup = result.find((g) => g.processId === 'process-1');
+      const failedGroup = result.find((g) => g.processId === null);
+      const overallGroup = result.find((g) => g.processId === 'process-2');
+
+      expect(roundGroup?.entries[0].entity).toMatchObject({ roundTitle: 'Screen' });
+      expect(failedGroup?.entries[0].entity).toBeNull();
+      expect(overallGroup?.entries[0].entity).toMatchObject({ overallExperience: 4 });
     });
   });
 
