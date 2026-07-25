@@ -239,6 +239,16 @@ export interface DraftValidationIssue {
   // to the offending step.
   stepId: string;
   message: string;
+  // GitHub issue #306 (Phase 28) — a stable rule identifier, distinct
+  // from stepId. Needed because not every issue attached to a step is a
+  // defect *of that step's own content* — 'at-least-one-round' is
+  // attached to stepId 'process' for its Fix link, but a candidate on
+  // Process Details with no round yet hasn't done anything wrong there;
+  // the fix is adding a round, which is exactly what clicking Next lets
+  // them do (the add-round modal). Callers that gate step-level actions
+  // (like Next) on "does the current step have an issue" can exclude
+  // rules like this one by id instead of by fragile message matching.
+  id: string;
 }
 
 function isValidRating1to5(value: number | undefined): boolean {
@@ -254,16 +264,22 @@ type ValidationRule = (draft: ProcessDraft) => DraftValidationIssue[];
 
 function validateRoleTitle(draft: ProcessDraft): DraftValidationIssue[] {
   if (!draft.process.roleTitle.trim()) {
-    return [{ stepId: 'process', message: 'Role title is required.' }];
+    return [{ id: 'role-title', stepId: 'process', message: 'Role title is required.' }];
   }
   return [];
 }
 
 // GitHub issue #307 — a draft with zero rounds must never be submittable.
+// GitHub issue #306 — id 'at-least-one-round' is deliberately excluded
+// from Next's per-step blocking check (see DraftValidationIssue.id).
 function validateAtLeastOneRound(draft: ProcessDraft): DraftValidationIssue[] {
   if (draft.rounds.length === 0) {
     return [
-      { stepId: 'process', message: 'At least one round is required before you can submit.' },
+      {
+        id: 'at-least-one-round',
+        stepId: 'process',
+        message: 'At least one round is required before you can submit.',
+      },
     ];
   }
   return [];
@@ -281,6 +297,7 @@ function validateRoundRatingBounds(draft: ProcessDraft): DraftValidationIssue[] 
       !isValidRating1to5(focus)
     ) {
       issues.push({
+        id: 'round-rating-bounds',
         stepId: step.clientId,
         message: `Round ${index + 1}'s rating fields must all be between 1 and 5.`,
       });
@@ -294,6 +311,7 @@ function validateRecruiterIdentifiers(draft: ProcessDraft): DraftValidationIssue
   draft.recruiterInteractions.forEach((step, index) => {
     if (!step.interaction.recruiterIdentifier.trim()) {
       issues.push({
+        id: 'recruiter-identifier',
         stepId: step.clientId,
         message: `Recruiter touchpoint ${index + 1} needs a name or email.`,
       });
@@ -313,6 +331,7 @@ function validateRecruiterRatingBounds(draft: ProcessDraft): DraftValidationIssu
       !isValidRating1to5(guidelinesShared)
     ) {
       issues.push({
+        id: 'recruiter-rating-bounds',
         stepId: step.clientId,
         message: `Recruiter touchpoint ${index + 1}'s rating fields must all be between 1 and 5.`,
       });
@@ -323,7 +342,13 @@ function validateRecruiterRatingBounds(draft: ProcessDraft): DraftValidationIssu
 
 function validateOverallReviewBounds(draft: ProcessDraft): DraftValidationIssue[] {
   if (draft.overallReview && !isValidRating1to5(draft.overallReview.overallExperience)) {
-    return [{ stepId: 'overall', message: 'Overall experience rating must be between 1 and 5.' }];
+    return [
+      {
+        id: 'overall-review-bounds',
+        stepId: 'overall',
+        message: 'Overall experience rating must be between 1 and 5.',
+      },
+    ];
   }
   return [];
 }

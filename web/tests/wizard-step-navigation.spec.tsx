@@ -195,6 +195,9 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
   it('"Next" advances process -> rounds -> recruiter steps -> overall -> review, live-recomputed as steps are added (GitHub issue #283)', async () => {
     const user = userEvent.setup();
     await openDraft(user);
+    // Role title is required (issue #281) — Next now blocks on the
+    // current step's own validation issues (issue #306), same as Submit.
+    await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
 
     // Still on "Process details" — Next should go straight to the round,
     // since no recruiter step exists yet at this point.
@@ -207,7 +210,13 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByDisplayValue('Screen')).toBeInTheDocument();
 
+    // GitHub issue #306 — Next from the last round opens the add-round
+    // modal instead of navigating directly; "No, continue" performs the
+    // original Next behavior, advancing to the already-existing recruiter
+    // step.
     await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('dialog', { name: 'Add another round' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'No, continue' }));
     expect(await screen.findByDisplayValue('jane@acme.example')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
