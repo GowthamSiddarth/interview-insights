@@ -2095,6 +2095,73 @@ placeholder-value spirit as D13's original constant.
 
 ---
 
+### D53 — Revisiting D12: a real event bus, deliberately scoped, for microservices/distributed-systems practice (Phases 30-32)
+
+**Context:** D12 documented a deliberate choice to keep moderation
+in-process rather than event-driven — "no async load yet to justify
+decoupling it." That reasoning hasn't changed: there still isn't
+organic load driving this. What's new is a different, equally
+legitimate kind of trigger — the project owner explicitly wants real
+distributed-systems/microservices practice (notification-service,
+review-analyzer, and, discussed but deliberately not phased,
+moderator-service), the same category of trigger Phase 10/11 already
+accepted for LocalStack IAM/secrets work ("free/local practice for
+Phase 8's eventual real AWS work," not organic need). D12 itself isn't
+wrong to revisit — its own text never claimed the decision was
+permanent, only that nothing was asking for it *yet*.
+
+**Decision:**
+- Introduce a real message broker (Redpanda) for the first time in
+  this project (Phase 30) — but scoped narrowly and additively: a
+  best-effort, after-commit event-publishing pattern, matching D16/D17's
+  already-proven "never block the write" philosophy for OpenSearch
+  indexing exactly. The synchronous write path itself — `RoundRatingsService.
+  create()`'s `$transaction` including `ModerationService.enqueue()` —
+  is **unchanged**. This is new plumbing for new downstream consumers,
+  not a rewrite of anything that already works. D12's core reasoning
+  (moderation's own write is transactionally safer in-process) still
+  holds and isn't being reversed.
+- Build exactly two new consumers, in a deliberately conservative
+  order: **notification-service** first (Phase 31) — the lowest-risk
+  extraction, since `mail/` is already a clean-boundary module with no
+  write-path dependencies, proving the whole pattern (broker, a real
+  out-of-cluster consumer, independent deployment, idempotent
+  consumption) end to end before anything riskier. **review-analyzer**
+  second (Phase 32) — deliberately sequenced *after* Phase 19 issue
+  #163 (LLM-assisted moderation triage) is already built in-process,
+  so the analysis logic and the service-extraction plumbing aren't
+  both being invented at the same time; review-analyzer becomes a
+  secondary, arrives-later enrichment alongside the existing
+  synchronous `FraudChecksService` signal, never a replacement for it
+  (final call deferred to that phase's own kickoff brainstorm, issue
+  #338).
+- **Moderator-service is explicitly not phased.** `ModerationService`
+  is already a clean bounded context inside the monolith, and Phase 29
+  just reshaped its query for exactly this reason — no concrete trigger
+  (independent scaling/deployment need) has fired for splitting it out.
+  Left as a documented backlog note, same trigger-gated treatment
+  Phase 8's own menu already uses for its sub-areas.
+- The first real Kafka/Redpanda consumer (Phase 31) fires
+  `docs/ROADMAP.md` Phase 8's own sub-area 8g trigger ("Distributed
+  systems hardening... the first real Kafka/Redpanda consumer existing
+  at all — none does yet") for the first time. That gets its own
+  planning pass under Phase 8's existing menu structure once Phase 31
+  actually ships — not pre-filed here, per Phase 8's own "plan one
+  sub-area at a time, only once its trigger fires" convention. Phase
+  8f (observability/tracing) does **not** get triggered by this —
+  its own stated trigger ("first shared/staging deployment with real
+  traffic") still hasn't fired; this stays solo local `kind`.
+
+**Revisit when:** if either new service's operational cost (another
+thing to run, patch, debug, deploy) turns out not to be worth the
+practice value, that's a legitimate reason to fold it back into the
+monolith — same as any other D9-style "premature infrastructure"
+call, just running in the opposite direction from usual (accepting
+complexity deliberately, for a stated non-functional reason, rather
+than deferring it).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
