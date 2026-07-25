@@ -856,32 +856,27 @@ Mark". Epic: GitHub issue #235.
 
 ## Phase 24 — Round-Type Registry & Rating Field Redesign
 
-## Phase 25 — Bulk Process Submission API
+Planned together with Phases 25-26 in one pass, 2026-07-25, from a
+UI/UX brainstorm about round-level rating detail and a full wizard
+rewrite — tightly sequential (24 → 25 → 26), same "plan several phases
+together, implement strictly in order" precedent the "Phases 15-17
+planning" pass already set. Numbered after Phase 19 in filing order but
+planned/implemented ahead of it — the same non-linear precedent Phase
+6/8/18/20/21/22/23 already set.
 
-## Phase 26 — Client-Side Draft Wizard (Flashcard Navigation)
-
-Phases 24-26 planned together in one pass, 2026-07-25, from a UI/UX
-brainstorm about round-level rating detail and a full wizard rewrite —
-tightly sequential (24 → 25 → 26), same "plan several phases together,
-implement strictly in order" precedent the "Phases 15-17 planning" pass
-already set. Numbered after Phase 19 in filing order but planned/
-implemented ahead of it — the same non-linear precedent Phase 6/8/18/
-20/21/22/23 already set.
-
-**Phase 24** redesigns what a round rating and a recruiter rating
-actually collect (interviewer traits reduced to fluency/clarity/focus,
-recruiter fields expanded to reachability/responsiveness/guidelines-
-shared/rejection-message-authenticity — the recruiter mapping has real
-open questions and gets its own kickoff brainstorm before
-implementation, same as Phase 16/17/21 each did) and introduces a
-shared round-type registry (round type → `type_metadata` schema → form
-component → validation) so type-specific detail — starting with coding
-(`problemAlgorithms`, `problemDataStructures`) and system design
-(`keyConcepts`, `highLevelConcept`), both via the existing
-`type_metadata` JSONB column (`docs/DATA_MODEL.md` principle #4, no
-new columns) — is a registry entry, not scattered conditional logic.
-Milestone "Phase 24 — Round-Type Registry & Rating Field Redesign".
-Epic: GitHub issue #244.
+Redesigns what a round rating and a recruiter rating actually collect
+(interviewer traits reduced to fluency/clarity/focus, recruiter fields
+expanded to reachability/responsiveness/guidelines-shared/rejection-
+message-authenticity — the recruiter mapping has real open questions
+and gets its own kickoff brainstorm before implementation, same as
+Phase 16/17/21 each did) and introduces a shared round-type registry
+(round type → `type_metadata` schema → form component → validation) so
+type-specific detail — starting with coding (`problemAlgorithms`,
+`problemDataStructures`) and system design (`keyConcepts`,
+`highLevelConcept`), both via the existing `type_metadata` JSONB column
+(`docs/DATA_MODEL.md` principle #4, no new columns) — is a registry
+entry, not scattered conditional logic. Milestone "Phase 24 —
+Round-Type Registry & Rating Field Redesign". Epic: GitHub issue #244.
 
 - [ ] Redesign `round_ratings` interviewer-trait fields — drop
       `fairness`/`bias_signal`, rename `communication_fluency`→
@@ -896,10 +891,12 @@ Epic: GitHub issue #244.
       is) (GitHub issue #249)
 - [ ] Engineering blog (last) (GitHub issue #250)
 
-**Phase 25** adds a single transactional endpoint accepting a whole
-interview-process tree in one payload — the backend counterpart
-Phase 26's draft wizard needs before it can submit anything for real.
-Existing per-entity endpoints stay unchanged; this is a new path, not a
+## Phase 25 — Bulk Process Submission API
+
+Adds a single transactional endpoint accepting a whole interview-
+process tree in one payload — the backend counterpart Phase 26's draft
+wizard needs before it can submit anything for real. Existing
+per-entity endpoints stay unchanged; this is a new path, not a
 replacement. Milestone "Phase 25 — Bulk Process Submission API". Epic:
 GitHub issue #245. Depends on Phase 24's field shapes being finalized.
 
@@ -908,18 +905,20 @@ GitHub issue #245. Depends on Phase 24's field shapes being finalized.
       today's incremental writes, just batched (GitHub issue #251)
 - [ ] Engineering blog (last) (GitHub issue #252)
 
-**Phase 26** rewrites the wizard around client-side draft state
-(localStorage, no DB writes until final submit — rate limits still
-apply, evaluated at submit time), a flashcard-style step UI navigable
-freely and in any order (recruiter-screening, technical-screening,
-per-round-type cards, etc. — explicitly reversible, not a one-way
-swipe-and-commit pattern), and a final review screen that sorts
-everything chronologically before the one real submit call. Recruiter
-touchpoints (start/end of a process — the schema already supports many
-`RecruiterInteraction`s per process, only the wizard UI ever created
-one) become just another step kind in the same registry. Milestone
-"Phase 26 — Client-Side Draft Wizard (Flashcard Navigation)". Epic:
-GitHub issue #246. Depends on Phase 25's bulk endpoint.
+## Phase 26 — Client-Side Draft Wizard (Flashcard Navigation)
+
+Rewrites the wizard around client-side draft state (localStorage, no
+DB writes until final submit — rate limits still apply, evaluated at
+submit time), a flashcard-style step UI navigable freely and in any
+order (recruiter-screening, technical-screening, per-round-type cards,
+etc. — explicitly reversible, not a one-way swipe-and-commit pattern),
+and a final review screen that sorts everything chronologically before
+the one real submit call. Recruiter touchpoints (start/end of a
+process — the schema already supports many `RecruiterInteraction`s per
+process, only the wizard UI ever created one) become just another step
+kind in the same registry. Milestone "Phase 26 — Client-Side Draft
+Wizard (Flashcard Navigation)". Epic: GitHub issue #246. Depends on
+Phase 25's bulk endpoint.
 
 - [ ] Client-side draft state architecture, supporting multiple
       simultaneous in-progress company drafts (GitHub issue #253)
