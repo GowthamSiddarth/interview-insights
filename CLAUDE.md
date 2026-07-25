@@ -2761,6 +2761,41 @@ clean. Live-verified against the real `kind` cluster: added a real
 endpoint immediately, retired it, confirmed it disappeared from public
 but stayed in the admin list — test data cleaned up afterward.
 
+**Phase 27, issue #264 (admin UI page)** — a new
+`web/src/app/moderation/round-type-options/page.tsx`, session-gated
+identically to `moderation/page.tsx` (`GET /auth/admin/me` check,
+redirect to `/moderation/login` on 401). A round-type `<select>`
+(reusing `ROUND_TYPES`/`ROUND_TYPE_LABELS`) drives which round type's
+controlled fields are shown — derived from the existing public
+`GET /round-types/field-options` schema (filtering out `kind: 'text'`
+fields, which have no admin-managed vocabulary at all) — combined with
+issue #263's new admin listing endpoint for that round type's actual
+rows. Each controlled field gets its own `FieldSection` card: every
+value (active and inactive) with an inline editable value/sortOrder
+pair and a Save button, a Retire/Reactivate toggle (the same `PATCH`
+endpoint handles both directions of `isActive`, so one button suffices
+rather than a separate reactivate flow), and an "add value" mini-form
+at the bottom. Distinguishes "still loading," "no round type picked
+yet," and "this round type has no controlled fields" as three genuinely
+different empty states (Phase 9 issue #61 rule). Reachable from
+`/moderation`'s header via a new "Manage round-type field options"
+link, with a "Back to moderation queue" link on the new page closing
+the loop — same pattern Phase 15 issue #142 established for company
+profile/analytics.
+
+7 new component tests (`round-type-options-page.spec.tsx`) cover the
+session-gate redirect, the two empty states, loading existing values,
+adding a new one, retiring one, and a retired value's own Reactivate
+affordance — 125 web tests total, build/lint clean. Live-verified with
+a real headless browser (Playwright, reusing an existing scratch
+install) against the real `kind` cluster end to end: logged in as
+admin, navigated to the new page via the header link, selected
+"Coding," added a real `problemAlgorithms` value, confirmed it reached
+the public endpoint, retired it, confirmed it left the public endpoint
+while staying visible (and marked inactive) in the admin list,
+navigated back to the moderation queue via the back-link — zero
+console errors throughout. Test data cleaned up afterward.
+
 ## Open decisions still to make
 
 - Exact value of `k` in the shrinkage scoring formula (start at 8, tune later)
