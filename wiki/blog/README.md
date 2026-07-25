@@ -214,3 +214,18 @@ brand mark — closing out all five original UI/UX brainstorm items —
 this phase's blog is complete.
 
 1. [Button color variants, focus rings, and a brand mark (D42)](phase-23-color-system-brand-mark/README.md)
+
+## Phase 24 — Round-Type Registry & Rating Field Redesign
+
+See `docs/ROADMAP.md` Phase 24. Planned together with Phases 25-26 in
+one pass from a UI/UX brainstorm about round-level rating detail and a
+full wizard rewrite, implemented strictly in order. Redesigns what a
+round rating and a recruiter rating collect, and introduces a shared
+round-type registry — its own scope expanded from 2 to all 8 round
+types, plus a new admin-content-gateway phase (27), directly at the
+project owner's request before implementation began. All three feature
+issues are done — this phase's blog is complete.
+
+1. [Issue #247 — Round rating trait redesign](phase-24-round-type-registry-rating-fields/issue-247-round-rating-trait-redesign/README.md)
+2. [Issue #248 — Round-type registry, expanded to all 8 round types (D47)](phase-24-round-type-registry-rating-fields/issue-248-round-type-registry/README.md)
+3. [Issue #249 — Recruiter rating field redesign (D48)](phase-24-round-type-registry-rating-fields/issue-249-recruiter-rating-redesign/README.md)
