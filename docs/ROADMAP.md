@@ -1028,3 +1028,29 @@ long after their session actually died.
       correcting itself automatically; a submit that still hits a 401
       shows the same clear message instead of the generic
       validation-error fallback (GitHub issue #301)
+
+Reopened a third time, same day: three more follow-ons from live
+discussion of the wizard — round rating traits had no tooltip at all
+(recruiter traits only got one, issue #286), the "Next" button
+(issue #283) could silently skip past adding a round entirely, and
+draft validation needed to be genuinely modular plus two new rules
+(require at least one round; remind, don't force, on missing
+pre/post-interview recruiter touchpoints).
+
+- [x] Question-mark "?" tooltip button, on hover and keyboard focus,
+      for every round AND recruiter trait rating — redesigned from
+      issue #286's dotted-underline/title-attribute pattern for
+      consistency (GitHub issue #305)
+- [x] Modularized `validateDraft()` into independent rule functions;
+      new hard rule requiring at least one round before submission;
+      new non-blocking reminder rules for missing pre/post-interview
+      recruiter touchpoints, with a review-screen confirmation panel
+      ("+ Add now" / "Submit anyway") (GitHub issue #307)
+- [x] "Next" opens an add-round modal instead of navigating directly
+      whenever it would leave round-adding territory for the first
+      time (from Process Details with no round yet, or the last
+      existing round) — offering Add round / Finish draft & go to
+      review / No, continue; Next is blocked entirely on the current
+      step's own validation issues, same as Submit, except the
+      whole-draft "at least one round" rule (GitHub issue #306)
+- [x] Engineering blog update for issues #305-307
