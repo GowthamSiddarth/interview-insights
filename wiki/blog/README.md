@@ -188,6 +188,7 @@ behind it.
 5. [Issue #222 — Session cookies need a shared `Domain`, or `web` never sees a real login (D39)](phase-20-operational-hardening/issue-222-session-cookie-domain/README.md)
 6. [Issue #240 — D35's fix cleaned the wrong disk: pruning the kind node's own containerd store (D43)](phase-20-operational-hardening/issue-240-kind-node-image-pruning/README.md)
 7. [Issue #278 — 415 ghosts in the search index: pruning orphaned OpenSearch company documents (D51)](phase-20-operational-hardening/issue-278-orphaned-search-docs/README.md)
+8. [Issue #312 — Port-forwards that outlive the shell that started them](phase-20-operational-hardening/issue-312-launchd-port-forwards/README.md)
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

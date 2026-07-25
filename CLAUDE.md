@@ -1839,6 +1839,36 @@ re-closed the same day, same precedent as #222/#240. **Phase 20 is now
 fully done** — issue #278 closed via merged PR, and every phase built
 so far has a complete engineering blog.
 
+**Phase 20 reopened a fourth time (GitHub issue #312)** — asked why
+Mailpit's local port-forward kept dying, and the honest answer turned
+out not to be Mailpit-specific at all: Postgres's and OpenSearch's
+forwards died the identical way, repeatedly, during Phase 28's live
+verification. Root cause: `kubectl port-forward ... & disown` only
+survives as long as the shell process that started it, and this
+project's AI-assisted dev sessions can run separate tool calls in
+separate shells — a background job from one doesn't reliably survive
+into the next (this session's own logs show a literal "Shell cwd was
+reset" notice, direct evidence of exactly that). Fixed with
+`infra/scripts/dev-port-forwards.sh` (`start`/`stop`/`restart`/
+`status`): wires all three forwards into macOS launchd LaunchAgents
+instead, supervised independently of any shell, with `KeepAlive`
+auto-restarting a forward if the underlying `kubectl port-forward`
+process ever exits. Written as a bash-3.2-compatible script (a `case`
+statement, not `declare -A` — macOS's actual default `/bin/bash`
+predates associative arrays; an early draft used one and broke
+immediately), matching every other script in `infra/scripts/`.
+Verified persistence directly, not just assumed: started the
+forwards, then `exec`'d into a completely fresh shell process and
+confirmed all four ports were still listening; separately killed the
+Postgres `kubectl port-forward` process directly and confirmed
+`KeepAlive` relaunched it within seconds. `wiki/deployment-guide.md`
+updated in three places (the native dev-loop instructions, the
+direct-access instructions, and the machine-migration checklist) to
+use the script instead of the plain backgrounded command. Epic #214
+reopened and re-closed the same day, same precedent as #222/#240/
+#278. **Phase 20 is now fully done** — issue #312 closed via merged
+PR, and every phase built so far has a complete engineering blog.
+
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
 started (GitHub issues #162-165) — now queued behind Phases 24-26
 below, planned more recently and with a more immediate user priority.

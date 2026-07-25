@@ -808,6 +808,19 @@ GitHub issue #214.
       re-closed the same day, same precedent as #222/#240.
 - [x] Engineering blog update for issue #278 (D51) — Phase 20 is now
       fully done
+- [x] `infra/scripts/dev-port-forwards.sh` wires the local Postgres/
+      OpenSearch/Mailpit port-forwards into macOS launchd LaunchAgents
+      instead of plain backgrounded `kubectl port-forward` jobs, which
+      only survive as long as the shell that started them — unreliable
+      across separate AI-assisted tool-call shells, confirmed dying
+      repeatedly during Phase 28's live verification. `KeepAlive`
+      auto-restarts a forward if it ever exits; verified persistence
+      directly by `exec`-ing into a fresh shell and confirming the
+      forwards were still listening (GitHub issue #312). Epic #214
+      reopened and re-closed the same day, same precedent as #222/
+      #240/#278.
+- [x] Engineering blog update for issue #312 — Phase 20 is now fully
+      done
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
