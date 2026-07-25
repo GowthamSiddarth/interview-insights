@@ -15,6 +15,7 @@ import {
   setOverallReview,
   updateRecruiterStep,
   updateRoundStep,
+  validateDraft,
   DraftOverallReview,
   ProcessDraft,
 } from '@/lib/draft-store';
@@ -35,6 +36,57 @@ const inputClass =
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
+}
+
+// GitHub issue #281 (Phase 28) — client-side pre-submit checks (see
+// validateDraft()) catch the common cases before the bulk endpoint ever
+// sees them, but this is the fallback for whatever validation error does
+// still reach the UI: translate the bulk endpoint's known
+// class-validator message shapes ("recruiterInteractions.0.recruiterIdentifier
+// should not be empty") into plain English instead of showing the raw
+// dotted path. Deliberately scoped to just the field/rule shapes this one
+// endpoint can actually produce, not a generic class-validator translator.
+const SUBMIT_FIELD_LABELS: Record<string, string> = {
+  roleTitle: 'Role title',
+  recruiterIdentifier: 'Recruiter name or email',
+  title: 'Round title',
+  overallExperience: 'Overall experience rating',
+  difficulty: 'Difficulty rating',
+  fluency: 'Fluency rating',
+  clarity: 'Clarity rating',
+  focus: 'Focus rating',
+  reachability: 'Reachability rating',
+  responsiveness: 'Responsiveness rating',
+  guidelinesShared: 'Guidelines-shared rating',
+};
+
+const SUBMIT_SECTION_LABELS: Record<string, (index: number) => string> = {
+  rounds: (index) => `Round ${index}`,
+  recruiterInteractions: (index) => `Recruiter touchpoint ${index}`,
+};
+
+function humanizeSubmitValidationMessage(raw: string): string {
+  const nested = raw.match(/^(\w+)\.(\d+)\.(\w+) (should not be empty|must .+)$/);
+  if (nested) {
+    const [, section, indexStr, field, rule] = nested;
+    const sectionLabel = SUBMIT_SECTION_LABELS[section]?.(Number(indexStr) + 1) ?? section;
+    const fieldLabel = SUBMIT_FIELD_LABELS[field] ?? field;
+    return `${sectionLabel}: ${fieldLabel} ${rule === 'should not be empty' ? 'is required.' : `${rule}.`}`;
+  }
+  const flat = raw.match(/^(\w+) (should not be empty|must .+)$/);
+  if (flat) {
+    const [, field, rule] = flat;
+    const fieldLabel = SUBMIT_FIELD_LABELS[field] ?? field;
+    return `${fieldLabel} ${rule === 'should not be empty' ? 'is required.' : `${rule}.`}`;
+  }
+  return 'Please check the highlighted fields and try again.';
+}
+
+function submitErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return err.messages.map(humanizeSubmitValidationMessage).join(' ');
+  }
+  return 'Something went wrong.';
 }
 
 function OverallReviewForm({
@@ -287,12 +339,13 @@ export default function HomePage() {
       setActiveStepId('process');
       setSubmitSuccess(summary);
     } catch (err) {
-      setError(errorMessage(err));
+      setError(submitErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
   }
 
+  const validationIssues = activeDraft ? validateDraft(activeDraft) : [];
   const activeRoundStep = activeDraft?.rounds.find((r) => r.clientId === activeStepId);
   const activeRecruiterStep = activeDraft?.recruiterInteractions.find(
     (r) => r.clientId === activeStepId,
@@ -509,6 +562,7 @@ export default function HomePage() {
                   draft={activeDraft}
                   loggedIn={candidateSession}
                   submitting={submitting}
+                  validationIssues={validationIssues}
                   onEditStep={setActiveStepId}
                   onSubmit={handleSubmit}
                 />

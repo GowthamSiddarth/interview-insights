@@ -7,6 +7,8 @@ import {
   listDrafts,
   removeRoundStep,
   saveDraft,
+  setOverallReview,
+  validateDraft,
 } from '../src/lib/draft-store';
 
 const acme = { id: 'company-1', name: 'Acme Corp', slug: 'acme-corp' };
@@ -121,5 +123,63 @@ describe('draft-store', () => {
   it('tolerates corrupted localStorage data by treating it as no drafts', () => {
     window.localStorage.setItem('interview-insights:drafts:v1', 'not json');
     expect(listDrafts()).toEqual([]);
+  });
+
+  describe('validateDraft (GitHub issue #281)', () => {
+    it('flags an empty role title', () => {
+      const draft = createDraft(acme);
+      const issues = validateDraft(draft);
+      expect(issues).toContainEqual({ stepId: 'process', message: 'Role title is required.' });
+    });
+
+    it('flags an empty recruiter identifier, scoped to that step\'s clientId', () => {
+      let draft = createDraft(acme);
+      draft = { ...draft, process: { ...draft.process, roleTitle: 'Engineer' } };
+      draft = addRecruiterStep(draft, { recruiterIdentifier: '  ' }, 'start');
+
+      const issues = validateDraft(draft);
+      expect(issues).toContainEqual({
+        stepId: draft.recruiterInteractions[0].clientId,
+        message: 'Recruiter touchpoint 1 needs a name or email.',
+      });
+    });
+
+    it('flags an out-of-range round rating', () => {
+      let draft = createDraft(acme);
+      draft = { ...draft, process: { ...draft.process, roleTitle: 'Engineer' } };
+      draft = addRoundStep(draft, {
+        sequenceNumber: 1,
+        title: 'Screen',
+        roundType: 'coding',
+        rating: { difficulty: 3, fluency: 3, clarity: 3, focus: 6 },
+      });
+
+      const issues = validateDraft(draft);
+      expect(issues).toContainEqual({
+        stepId: draft.rounds[0].clientId,
+        message: "Round 1's rating fields must all be between 1 and 5.",
+      });
+    });
+
+    it('flags an out-of-range overall experience rating', () => {
+      let draft = createDraft(acme);
+      draft = { ...draft, process: { ...draft.process, roleTitle: 'Engineer' } };
+      draft = setOverallReview(draft, { overallExperience: 0, wouldRecommend: true });
+
+      const issues = validateDraft(draft);
+      expect(issues).toContainEqual({
+        stepId: 'overall',
+        message: 'Overall experience rating must be between 1 and 5.',
+      });
+    });
+
+    it('returns no issues for a fully valid draft', () => {
+      let draft = createDraft(acme);
+      draft = { ...draft, process: { ...draft.process, roleTitle: 'Engineer' } };
+      draft = addRoundStep(draft, { sequenceNumber: 1, title: 'Screen', roundType: 'coding' });
+      draft = addRecruiterStep(draft, { recruiterIdentifier: 'jane@acme.example' }, 'start');
+
+      expect(validateDraft(draft)).toEqual([]);
+    });
   });
 });

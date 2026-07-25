@@ -1,6 +1,6 @@
 'use client';
 
-import { ProcessDraft } from '@/lib/draft-store';
+import { DraftValidationIssue, ProcessDraft } from '@/lib/draft-store';
 import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
 import { ROUND_TYPE_LABELS } from './round-type-labels';
@@ -9,11 +9,18 @@ const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 const rowClass =
   'flex items-center justify-between gap-2 rounded-md border border-gray-200 p-2 text-sm dark:border-gray-700';
+const rowWithIssueClass =
+  'flex items-center justify-between gap-2 rounded-md border border-amber-400 bg-amber-50 p-2 text-sm dark:border-amber-600 dark:bg-amber-950';
 
 interface ReviewScreenProps {
   draft: ProcessDraft;
   loggedIn: boolean | null;
   submitting: boolean;
+  // Client-side pre-submit validation (GitHub issue #281) — computed live
+  // from the draft on every render, never stale state. Submit stays
+  // disabled while any issue exists, so an invalid draft never reaches the
+  // bulk endpoint at all.
+  validationIssues: DraftValidationIssue[];
   onEditStep: (stepId: string) => void;
   onSubmit: () => void;
 }
@@ -25,7 +32,14 @@ interface ReviewScreenProps {
 // before all rounds and 'end' steps after — a display-only merge, the
 // submitted payload keeps rounds/recruiterInteractions as two separate
 // arrays exactly as the bulk endpoint expects.
-export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit }: ReviewScreenProps) {
+export function ReviewScreen({
+  draft,
+  loggedIn,
+  submitting,
+  validationIssues,
+  onEditStep,
+  onSubmit,
+}: ReviewScreenProps) {
   const startSteps = draft.recruiterInteractions.filter((s) => s.timing === 'start');
   const endSteps = draft.recruiterInteractions.filter((s) => s.timing === 'end');
   const sortedRounds = [...draft.rounds].sort(
@@ -35,6 +49,14 @@ export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit
     sortedRounds.length === 0 &&
     draft.recruiterInteractions.length === 0 &&
     !draft.overallReview;
+
+  function issueFor(stepId: string): DraftValidationIssue | undefined {
+    return validationIssues.find((issue) => issue.stepId === stepId);
+  }
+
+  function rowFor(stepId: string): string {
+    return issueFor(stepId) ? rowWithIssueClass : rowClass;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -46,9 +68,29 @@ export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit
         </p>
       )}
 
+      {validationIssues.length > 0 && (
+        <div className="rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
+          <p className="font-medium">Fix these before you can submit:</p>
+          <ul className="mt-1 list-inside list-disc">
+            {validationIssues.map((issue, i) => (
+              <li key={i}>
+                {issue.message}{' '}
+                <button
+                  type="button"
+                  onClick={() => onEditStep(issue.stepId)}
+                  className={linkClass}
+                >
+                  Fix
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <ol className="flex flex-col gap-2">
         {startSteps.map((step) => (
-          <li key={step.clientId} className={rowClass}>
+          <li key={step.clientId} className={rowFor(step.clientId)}>
             <span>
               Recruiter (before rounds): {step.interaction.recruiterIdentifier || 'untitled'}
             </span>
@@ -59,7 +101,7 @@ export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit
         ))}
 
         {sortedRounds.map((step, index) => (
-          <li key={step.clientId} className={rowClass}>
+          <li key={step.clientId} className={rowFor(step.clientId)}>
             <span>
               Round {index + 1}: {step.round.title || 'untitled'} —{' '}
               {ROUND_TYPE_LABELS[step.round.roundType]}
@@ -71,7 +113,7 @@ export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit
         ))}
 
         {endSteps.map((step) => (
-          <li key={step.clientId} className={rowClass}>
+          <li key={step.clientId} className={rowFor(step.clientId)}>
             <span>
               Recruiter (after rounds): {step.interaction.recruiterIdentifier || 'untitled'}
             </span>
@@ -82,7 +124,7 @@ export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit
         ))}
 
         {draft.overallReview && (
-          <li className={rowClass}>
+          <li className={rowFor('overall')}>
             <span>Overall review provided</span>
             <button type="button" onClick={() => onEditStep('overall')} className={linkClass}>
               Edit
@@ -95,7 +137,11 @@ export function ReviewScreen({ draft, loggedIn, submitting, onEditStep, onSubmit
         loggedIn={loggedIn}
         prompt="Log in to submit — this is the only step in the whole draft that needs a session."
       >
-        <Button type="button" onClick={onSubmit} disabled={submitting || isEmpty}>
+        <Button
+          type="button"
+          onClick={onSubmit}
+          disabled={submitting || isEmpty || validationIssues.length > 0}
+        >
           {submitting ? 'Submitting…' : 'Submit'}
         </Button>
       </GatedSection>
