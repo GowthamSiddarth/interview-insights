@@ -3,6 +3,7 @@
 import { DraftValidationIssue, ProcessDraft } from '@/lib/draft-store';
 import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
+import { formatRoundLabel } from '@/lib/format-round-label';
 import { ROUND_TYPE_LABELS } from './round-type-labels';
 
 const linkClass =
@@ -103,8 +104,8 @@ export function ReviewScreen({
         {sortedRounds.map((step, index) => (
           <li key={step.clientId} className={rowFor(step.clientId)}>
             <span>
-              Round {index + 1}: {step.round.title || 'untitled'} —{' '}
-              {ROUND_TYPE_LABELS[step.round.roundType]}
+              Round {index + 1}:{' '}
+              {formatRoundLabel(ROUND_TYPE_LABELS[step.round.roundType], step.round.title)}
             </span>
             <button type="button" onClick={() => onEditStep(step.clientId)} className={linkClass}>
               Edit

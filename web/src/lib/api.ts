@@ -34,7 +34,7 @@ export interface Round {
   id: string;
   processId: string;
   sequenceNumber: number;
-  title: string;
+  title: string | null;
   description: string | null;
   roundType:
     | 'coding'
@@ -177,7 +177,7 @@ export interface CompanyAnalytics {
 export interface CompanyReviewItem {
   id: string;
   createdAt: string;
-  roundTitle: string;
+  roundTitle: string | null;
   roundType: Round['roundType'];
   roleTitle: string;
   difficulty: number;
@@ -254,7 +254,7 @@ export interface CreateBulkRoundRatingInput {
 
 export interface CreateBulkRoundInput {
   sequenceNumber: number;
-  title: string;
+  title?: string;
   roundType: Round['roundType'];
   description?: string;
   scheduledDurationMinutes?: number;
@@ -303,7 +303,7 @@ export interface CandidateSession {
 export interface MySubmissionRoundRating {
   id: string;
   roundId: string;
-  roundTitle: string;
+  roundTitle: string | null;
   roundType: Round['roundType'];
   status: RoundRating['status'];
   difficulty: number;

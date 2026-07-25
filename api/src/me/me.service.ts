@@ -5,7 +5,7 @@ import { ReviewSearchService } from '../search/review-search.service';
 export interface MySubmissionRoundRating {
   id: string;
   roundId: string;
-  roundTitle: string;
+  roundTitle: string | null;
   roundType: string;
   status: string;
   difficulty: number;

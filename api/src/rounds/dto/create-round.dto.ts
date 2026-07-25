@@ -1,22 +1,17 @@
 import { RoundType } from '@prisma/client';
-import {
-  IsEnum,
-  IsInt,
-  IsNotEmpty,
-  IsObject,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateRoundDto {
   @IsInt()
   @Min(1)
   sequenceNumber!: number;
 
+  // Optional (GitHub issue #287, Phase 28) — a round doesn't need a title
+  // for a candidate to submit it; display sites fall back to just the
+  // round type when it's absent.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  title!: string;
+  title?: string;
 
   @IsOptional()
   @IsString()
