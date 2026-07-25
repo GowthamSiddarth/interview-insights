@@ -44,6 +44,7 @@ export interface Round {
     | 'case_study'
     | 'assessment'
     | 'take_home'
+    | 'tech_screening'
     | 'other';
   scheduledDurationMinutes: number | null;
   createdAt: string;

@@ -11,6 +11,7 @@ export const ROUND_TYPE_LABELS: Record<Round['roundType'], string> = {
   case_study: 'Case study',
   assessment: 'Assessment',
   take_home: 'Take-home',
+  tech_screening: 'Tech Screening',
   other: 'Other',
 };
 

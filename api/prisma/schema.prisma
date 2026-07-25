@@ -181,6 +181,7 @@ enum RoundType {
   case_study
   assessment
   take_home
+  tech_screening
   other
 }
 
