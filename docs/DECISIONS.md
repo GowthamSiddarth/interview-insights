@@ -1784,6 +1784,63 @@ narrow, permanent capability, not a placeholder.
 
 ---
 
+### D47 — Round-type registry expanded to all 8 round types; controlled-vocabulary values admin-managed, not hardcoded (GitHub issue #248, Phase 24)
+
+**Context:** issue #248 as originally filed only structured
+`type_metadata` for `coding`/`system_design`, with every other round type
+staying free-form JSON indefinitely and any controlled-vocabulary values
+(algorithm names, data structure names, etc.) hardcoded wherever they were
+needed. Before implementation started, the project owner expanded the
+scope directly: all 8 `RoundType` values should get structured schemas,
+and the selectable values behind controlled fields should be admin-
+manageable through a UI, not hardcoded — with a new phase for that
+admin gateway.
+
+**Decision:**
+- All 8 round types (`coding`, `system_design`, `behavioral`,
+  `leadership`, `case_study`, `assessment`, `take_home`, `other`) get a
+  structured `type_metadata` schema, defined once in
+  `api/src/round-type-registry/round-type-field-schema.ts` — a single
+  static config mapping round type → field list → `text`/
+  `controlled-single`/`controlled-multi` kind. `other` deliberately gets
+  no controlled field (only a free-text `notes` key) — it's the
+  catch-all round type by definition, so there's no sensible fixed
+  vocabulary to constrain it with.
+- Controlled-vocabulary values live in a new `round_type_field_options`
+  table (`round_type`, `field_key`, `value`, `sort_order`, `is_active`),
+  not in the static registry config — this is what makes them
+  admin-editable later without a code change. `is_active` (not a hard
+  delete) so retiring a value never invalidates `type_metadata` that
+  already reference it.
+- **Read/write split across two phases, not built together:** this
+  issue builds only the read side — the registry, semantic validation,
+  and a public `GET /round-types/field-options` — plus seeds
+  illustrative default values via migration so Phase 25/26 aren't
+  blocked waiting on an admin UI to populate the table. The write side
+  (admin CRUD over `round_type_field_options`, reusing `AdminJwtAuthGuard`
+  exactly as `ModerationController` does, plus an admin UI page) is a
+  new, separately-planned **Phase 27 — Admin Content Gateway**, filed
+  alongside this issue but implemented after Phase 25/26 since nothing
+  downstream depends on it existing yet.
+- **Validation lives in `RoundsService.create()`, not an async DTO
+  validator** — matches this codebase's existing pattern of putting
+  business-rule validation in services (`FraudChecksService`,
+  `ModerationService`), not class-validator custom validators.
+  `CreateRoundDto.typeMetadata` keeps its existing `@IsObject()`
+  shape-only check; the service rejects (400) an unknown key for the
+  round type, or a controlled value that isn't currently `is_active`.
+- This issue deliberately does **not** touch the current wizard
+  (`web/src/app/page.tsx`) — issue #248's own original body already
+  framed the frontend config object as what Phase 26/issue #254's
+  wizard rewrite reads from, not this issue's job, and building that UI
+  twice (now, then again in Phase 26's rewrite) isn't worth it.
+
+**Revisit when:** Phase 27 ships — at that point `is_active` retirement
+and reordering become real admin actions instead of migration-only
+seed data.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

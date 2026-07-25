@@ -115,17 +115,57 @@ Internal entity — never expose `internal_identifier` or any real name field pu
 
 Index: `(process_id, sequence_number)`, `(round_type)`.
 
-**`type_metadata` examples by `round_type`:**
+**`type_metadata` schema by `round_type`** (the round-type registry, GitHub
+issue #248/Phase 24, `docs/DECISIONS.md` D47 — supersedes the earlier
+free-form examples this section used to show for coding/case_study/
+behavioral only). Defined in code at
+`api/src/round-type-registry/round-type-field-schema.ts`; `controlled-*`
+fields' selectable values live in the `round_type_field_options` table
+below (admin-managed starting Phase 27), `text` fields are free-form
+strings with no admin-managed vocabulary:
+
+| `round_type` | Fields (`key`: `kind`) |
+|---|---|
+| `coding` | `problemAlgorithms`: controlled-multi, `problemDataStructures`: controlled-multi, `problemDescription`: text |
+| `system_design` | `keyConcepts`: controlled-multi, `highLevelConcept`: text |
+| `behavioral` | `frameworkUsed`: controlled-single, `focusAreas`: controlled-multi |
+| `leadership` | `principlesAsked`: controlled-multi |
+| `case_study` | `frameworksUsed`: controlled-multi, `industryContext`: text |
+| `assessment` | `assessmentFormat`: controlled-single, `skillsAssessed`: controlled-multi |
+| `take_home` | `projectType`: controlled-single, `technologiesUsed`: controlled-multi |
+| `other` | `notes`: text — deliberately no controlled field, it's the catch-all round type by definition |
+
 ```json
 // coding
-{ "language_used": "Python", "platform": "CoderPad", "problem_topic": "graphs" }
+{ "problemAlgorithms": ["DFS", "BFS"], "problemDataStructures": ["Graph"], "problemDescription": "Find shortest path in an unweighted graph" }
 
-// case_study
-{ "framework_provided": true, "industry_context": "fintech" }
-
-// behavioral
-{ "framework_used": "STAR", "focus_areas": ["conflict resolution", "ownership"] }
+// leadership
+{ "principlesAsked": ["Ownership", "Deliver Results"] }
 ```
+
+Semantic validation (right keys for the round type, controlled values
+currently active) happens in `RoundsService.create()`, not as DTO-level
+validation — see D47.
+
+### `round_type_field_options`
+Admin-controlled selectable values for every `controlled-single`/
+`controlled-multi` field above. One row per selectable value, e.g.
+(`coding`, `problemAlgorithms`, `"DFS"`). Read-only (registry validation +
+a public `GET /round-types/field-options`) as of Phase 24; admin CRUD over
+this table is Phase 27.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| round_type | text | same `RoundType` enum as `rounds.round_type` |
+| field_key | text | e.g. `problemAlgorithms` |
+| value | text | e.g. `"DFS"` |
+| sort_order | int | display order within (round_type, field_key) |
+| is_active | boolean | retiring a value flips this off rather than deleting the row, so historical `type_metadata` referencing it stays valid |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+Unique: `(round_type, field_key, value)`. Index: `(round_type, field_key, is_active)`.
 
 ### `round_ratings`
 Interviewer traits are deliberately limited to three (GitHub issue #247,
