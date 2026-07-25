@@ -229,3 +229,12 @@ issues are done — this phase's blog is complete.
 1. [Issue #247 — Round rating trait redesign](phase-24-round-type-registry-rating-fields/issue-247-round-rating-trait-redesign/README.md)
 2. [Issue #248 — Round-type registry, expanded to all 8 round types (D47)](phase-24-round-type-registry-rating-fields/issue-248-round-type-registry/README.md)
 3. [Issue #249 — Recruiter rating field redesign (D48)](phase-24-round-type-registry-rating-fields/issue-249-recruiter-rating-redesign/README.md)
+
+## Phase 25 — Bulk Process Submission API
+
+See `docs/ROADMAP.md` Phase 25. Planned alongside Phases 24/26 in one
+pass — the backend counterpart Phase 26's client-side draft wizard
+needs before it can submit anything for real. The one feature issue is
+done — this phase's blog is complete.
+
+1. [Bulk process-submission endpoint (D49)](phase-25-bulk-process-submission-api/README.md)
