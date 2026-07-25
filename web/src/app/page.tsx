@@ -29,6 +29,7 @@ import { StepNavigator } from './wizard/step-navigator';
 import { RoundStepForm } from './wizard/round-step-form';
 import { RecruiterStepForm } from './wizard/recruiter-step-form';
 import { ReviewScreen } from './wizard/review-screen';
+import { AddRoundModal } from './wizard/add-round-modal';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
@@ -114,6 +115,18 @@ function getNextStepId(draft: ProcessDraft, currentStepId: string): string | nul
   const index = sequence.indexOf(currentStepId);
   if (index === -1 || index === sequence.length - 1) return null;
   return sequence[index + 1];
+}
+
+// GitHub issue #306 (Phase 28) — "Next" opens the add-round modal instead
+// of navigating directly whenever leaving the current step would leave
+// round-adding territory for the first time: from Process Details before
+// any round exists, or from the last existing round. Any other step
+// (an earlier round, a recruiter step, overall review) still navigates
+// straight to the next existing step, same as issue #283 built.
+function shouldOfferAddRoundModal(draft: ProcessDraft, currentStepId: string): boolean {
+  if (currentStepId === 'process') return draft.rounds.length === 0;
+  const lastRound = draft.rounds[draft.rounds.length - 1];
+  return lastRound?.clientId === currentStepId;
 }
 
 function OverallReviewForm({
@@ -237,6 +250,9 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<SubmissionSummary | null>(null);
+  // GitHub issue #306 — the add-round modal Next opens instead of
+  // navigating directly, at the round-adding boundary.
+  const [showAddRoundModal, setShowAddRoundModal] = useState(false);
 
   useEffect(() => {
     api.listCompanies().then(setCompanies).catch((err: unknown) => setError(errorMessage(err)));
@@ -412,6 +428,36 @@ export default function HomePage() {
     (r) => r.clientId === activeStepId,
   );
   const nextStepId = activeDraft ? getNextStepId(activeDraft, activeStepId) : null;
+  // 'at-least-one-round' is a whole-draft completeness rule, not a defect
+  // of the process step's own fields — clicking Next from Process
+  // Details with zero rounds is exactly how a candidate resolves it (the
+  // add-round modal below), so it must never block Next itself.
+  const currentStepIssues = validationIssues.filter(
+    (issue) => issue.stepId === activeStepId && issue.id !== 'at-least-one-round',
+  );
+
+  // GitHub issue #306 — Next is blocked entirely (no navigation, no modal)
+  // while the current step has a validation issue, same guarantee Submit
+  // already has; otherwise either opens the add-round modal at the
+  // round-adding boundary or navigates directly, same as issue #283.
+  function handleNextClick() {
+    if (!activeDraft) return;
+    if (currentStepIssues.length > 0) {
+      setError(currentStepIssues.map((issue) => issue.message).join(' '));
+      return;
+    }
+    setError(null);
+    if (shouldOfferAddRoundModal(activeDraft, activeStepId)) {
+      setShowAddRoundModal(true);
+      return;
+    }
+    if (nextStepId) setActiveStepId(nextStepId);
+  }
+
+  function handleAddRoundFromModal(roundType: Round['roundType']) {
+    handleAddRound(roundType);
+    setShowAddRoundModal(false);
+  }
 
   return (
     <PageContainer size={activeDraft ? 'wide' : 'narrow'}>
@@ -639,7 +685,7 @@ export default function HomePage() {
 
               {activeStepId !== 'review' && nextStepId && (
                 <div className="mt-4">
-                  <Button type="button" variant="neutral" onClick={() => setActiveStepId(nextStepId)}>
+                  <Button type="button" variant="neutral" onClick={handleNextClick}>
                     Next
                   </Button>
                 </div>
@@ -647,6 +693,20 @@ export default function HomePage() {
             </div>
           </div>
         </Card>
+      )}
+
+      {showAddRoundModal && (
+        <AddRoundModal
+          onAddRound={handleAddRoundFromModal}
+          onFinishAndReview={() => {
+            setShowAddRoundModal(false);
+            setActiveStepId('review');
+          }}
+          onContinue={() => {
+            setShowAddRoundModal(false);
+            if (nextStepId) setActiveStepId(nextStepId);
+          }}
+        />
       )}
     </PageContainer>
   );

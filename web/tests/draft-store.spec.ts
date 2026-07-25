@@ -130,7 +130,11 @@ describe('draft-store', () => {
     it('flags an empty role title', () => {
       const draft = createDraft(acme);
       const issues = validateDraft(draft);
-      expect(issues).toContainEqual({ stepId: 'process', message: 'Role title is required.' });
+      expect(issues).toContainEqual({
+        id: 'role-title',
+        stepId: 'process',
+        message: 'Role title is required.',
+      });
     });
 
     it('flags an empty recruiter identifier, scoped to that step\'s clientId', () => {
@@ -140,6 +144,7 @@ describe('draft-store', () => {
 
       const issues = validateDraft(draft);
       expect(issues).toContainEqual({
+        id: 'recruiter-identifier',
         stepId: draft.recruiterInteractions[0].clientId,
         message: 'Recruiter touchpoint 1 needs a name or email.',
       });
@@ -157,6 +162,7 @@ describe('draft-store', () => {
 
       const issues = validateDraft(draft);
       expect(issues).toContainEqual({
+        id: 'round-rating-bounds',
         stepId: draft.rounds[0].clientId,
         message: "Round 1's rating fields must all be between 1 and 5.",
       });
@@ -169,6 +175,7 @@ describe('draft-store', () => {
 
       const issues = validateDraft(draft);
       expect(issues).toContainEqual({
+        id: 'overall-review-bounds',
         stepId: 'overall',
         message: 'Overall experience rating must be between 1 and 5.',
       });
@@ -197,6 +204,7 @@ describe('draft-store', () => {
 
       const issues = validateDraft(draft);
       expect(issues).toContainEqual({
+        id: 'at-least-one-round',
         stepId: 'process',
         message: 'At least one round is required before you can submit.',
       });
