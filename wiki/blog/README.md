@@ -269,8 +269,11 @@ wizard: round traits had no tooltip at all (only recruiter traits did,
 issue #286), "Next" could silently skip past adding a round entirely,
 and draft validation needed to be genuinely modular plus two new rules
 (require at least one round; remind, don't force, on missing
-pre/post-interview recruiter touchpoints). All eleven feature issues
-are done — this phase's blog is complete.
+pre/post-interview recruiter touchpoints). Reopened a fourth time to
+remove the sidebar's now-redundant "Add a round" control once the
+Next-button modal existed, and to reorder/validate the round-type
+select. All twelve feature issues are done — this phase's blog is
+complete.
 
 1. [Issue #281 — Friendly, actionable validation errors on submit](phase-28-wizard-ux-refinements/issue-281-friendly-validation-errors/README.md)
 2. [Issue #282 — Round ratings default to available](phase-28-wizard-ux-refinements/issue-282-default-round-ratings/README.md)
@@ -283,3 +286,4 @@ are done — this phase's blog is complete.
 9. [Issue #305 — A question-mark button for every trait tooltip](phase-28-wizard-ux-refinements/issue-305-help-tooltip-button/README.md)
 10. [Issue #307 — Modular validation, a new hard rule, and a soft reminder](phase-28-wizard-ux-refinements/issue-307-modular-validation-reminders/README.md)
 11. [Issue #306 — A modal for the moment "Next" would skip past adding a round](phase-28-wizard-ux-refinements/issue-306-next-button-add-round-modal/README.md)
+12. [Issue #319 — One way to add a round, not two](phase-28-wizard-ux-refinements/issue-319-consolidate-round-adding/README.md)
