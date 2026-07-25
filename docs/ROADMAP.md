@@ -993,7 +993,7 @@ Content Gateway (Round-Type Field Options)". Epic: GitHub issue #262.
 
 - [x] Admin CRUD API for `round_type_field_options`, gated by
       `AdminJwtAuthGuard` same as `ModerationController` (GitHub issue #263)
-- [ ] Admin UI page to manage round-type field options, mirroring
+- [x] Admin UI page to manage round-type field options, mirroring
       `moderation/page.tsx`'s session-check shape (GitHub issue #264)
 - [ ] Engineering blog (last) (GitHub issue #265)
 

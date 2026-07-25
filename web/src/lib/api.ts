@@ -252,6 +252,18 @@ export interface RoundTypeFieldDef {
 
 export type RoundTypeFieldOptions = Record<Round['roundType'], { fields: RoundTypeFieldDef[] }>;
 
+// Admin CRUD for round_type_field_options (Phase 27 issue #263) — every
+// value (active and inactive), unlike the public schema above which only
+// ever surfaces active ones.
+export interface RoundTypeFieldOptionRow {
+  id: string;
+  roundType: Round['roundType'];
+  fieldKey: string;
+  value: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 // POST /companies/:companyId/processes/bulk (Phase 25 issue #251, D49) —
 // the whole tree in one atomic transaction. Mirrors the backend's
 // CreateBulkProcessDto field-for-field; the wizard's draft (issue #253)
@@ -629,6 +641,27 @@ export const api = {
   },
 
   getRoundTypeFieldOptions: () => request<RoundTypeFieldOptions>('/round-types/field-options'),
+
+  listRoundTypeFieldOptionsAdmin: (roundType: Round['roundType']) =>
+    request<RoundTypeFieldOptionRow[]>(`/admin/round-types/${roundType}/field-options`),
+
+  createRoundTypeFieldOption: (
+    roundType: Round['roundType'],
+    input: { fieldKey: string; value: string; sortOrder?: number },
+  ) =>
+    request<RoundTypeFieldOptionRow>(`/admin/round-types/${roundType}/field-options`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  updateRoundTypeFieldOption: (
+    id: string,
+    input: { value?: string; sortOrder?: number; isActive?: boolean },
+  ) =>
+    request<RoundTypeFieldOptionRow>(`/admin/round-types/field-options/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
 
   createBulkProcess: (companyId: string, input: CreateBulkProcessInput) =>
     request<InterviewProcess>(`/companies/${companyId}/processes/bulk`, {

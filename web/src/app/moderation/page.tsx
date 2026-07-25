@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   api,
   ApiError,
@@ -203,9 +204,14 @@ export default function ModerationPage() {
             and flagging keep it hidden.
           </p>
         </div>
-        <Button type="button" onClick={() => void logout()} variant="neutral">
-          Log out
-        </Button>
+        <div className="flex items-center gap-4">
+          <Link href="/moderation/round-type-options" className="text-sm text-indigo-600 underline dark:text-indigo-400">
+            Manage round-type field options
+          </Link>
+          <Button type="button" onClick={() => void logout()} variant="neutral">
+            Log out
+          </Button>
+        </div>
       </header>
 
       {error && (
