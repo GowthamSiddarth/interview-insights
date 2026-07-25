@@ -2244,13 +2244,30 @@ flashcard navigation, a chronological review screen, one atomic bulk
 submit) no longer resembles the incremental, immediately-writing one
 this project shipped in Phase 2.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data, issues
-  #162-165) — planned but not started, next in line now that Phases
-  24-26 (planned together, implemented ahead of it per the same
-  non-linear precedent Phase 6/8/18/20/21/22/23 already set) are all
-  done. Phase 27 (Admin Content Gateway, admin CRUD/UI for the
-  round-type registry's controlled-vocabulary values) is also planned
-  but not started, filed alongside issue #248.
+**Phase 28 planning (Wizard UX Refinements)** — filed 2026-07-25 from a
+batch of live-verification findings against the Phase 26 wizard: a
+meaningless raw class-validator error message on submit
+(`recruiterInteractions.0.recruiterIdentifier should not be empty`),
+round ratings requiring an opt-in click per round (now defaults to
+available), no way to advance through steps without returning to the
+navigator, a missing "Tech Screening" round type, recruiter step
+wording issues ("before/after rounds" -> "pre-interview/post-interview",
+and an editable "When was this?" select that should just read-only
+reflect the timing already chosen at add-time), no tooltips explaining
+the recruiter trait fields, and `Round.title` being both mandatory and
+displayed as the literal word "untitled" when empty (should be optional,
+formatted as "{Type} - {Title}" with the title segment omitted
+entirely when absent). Milestone "Phase 28 — Wizard UX Refinements",
+epic #280, issues #281-288 filed together per the "plan a phase before
+implementing" convention; one clarifying question resolved directly
+with the project owner before filing (default-checked rating vs. no
+checkbox at all vs. something else — "default it to checked" chosen).
+Implementation starting now, sequentially per issue.
+
+- Next step: Phase 28 (Wizard UX Refinements, issues #281-288) — being
+  implemented now. Phase 19 (Content Quality & Synthetic Data, issues
+  #162-165) and Phase 27 (Admin Content Gateway) remain planned but not
+  started, queued behind it.
 
 ## Open decisions still to make
 
