@@ -1813,11 +1813,34 @@ now-clean cluster. **Phase 20 is now fully done** — issue #240 closed
 via merged PR, and every phase built so far has a complete engineering
 blog.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data) — three
-  independent issues, any order (GitHub issues #162-165, already
-  filed). Per `docs/ROADMAP.md`, the natural first pick is issue #162
-  (near-duplicate review detection), since it directly replaces D13's
-  documented exact-match/full-table-scan limitation.
+Phase 19 (Content Quality & Synthetic Data) remains planned but not
+started (GitHub issues #162-165) — now queued behind Phases 24-26
+below, planned more recently and with a more immediate user priority.
+
+**Phases 24-26 planning (Round-Type Registry & Rating Redesign; Bulk
+Process Submission API; Client-Side Draft Wizard)** — filed 2026-07-25
+from a UI/UX brainstorm about streamlining round-level rating detail
+(round-type-specific fields via the existing `type_metadata` JSONB
+column, interviewer traits reduced to fluency/clarity/focus, expanded
+recruiter-touchpoint fields) and a full wizard rewrite (client-side
+draft state until final submit, flashcard-style free step navigation,
+a chronological final review). Three tightly-sequential phases planned
+together (mirroring the "Phases 15-17 planning" precedent), implemented
+strictly in order: Phase 24 (epic #244, issues #247-#250) redesigns the
+rating field shapes and introduces a shared round-type registry; Phase
+25 (epic #245, issues #251-#252) adds a bulk transactional
+process-submission endpoint the existing per-entity endpoints don't
+replace; Phase 26 (epic #246, issues #253-#256) rewrites the wizard
+around client-side drafting on top of both. The recruiter-field
+mapping (issue #249) has real open questions flagged for a kickoff
+brainstorm before implementation, same pattern Phase 16/17/21 each
+used. All three epics are on the project board at "Todo" — planning
+only, no implementation started yet.
+
+- Next step: Phase 24, issue #247 (round_ratings interviewer-trait
+  field redesign) is the natural first pick — issue #248 (round-type
+  registry) can be built alongside it; issue #249 (recruiter fields)
+  needs its kickoff brainstorm resolved first.
 
 ## Open decisions still to make
 
