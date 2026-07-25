@@ -114,7 +114,9 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
 
     await user.click(screen.getByText('Review & Submit'));
-    await user.click(await screen.findByRole('button', { name: 'Submit' }));
+    // GitHub issue #307 — no recruiter touchpoints added, so the
+    // non-blocking reminder shows "Submit anyway" instead of "Submit".
+    await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
 
     expect(await screen.findByText('Submitted!')).toBeInTheDocument();
     expect(screen.getByText(/1 round rating is pending moderation/)).toBeInTheDocument();
@@ -140,7 +142,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.click(screen.getByRole('button', { name: 'Add round' }));
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
-    await user.click(await screen.findByRole('button', { name: 'Submit' }));
+    await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
 
     // GitHub issue #281 — a backend error shape this app's own humanizer
     // doesn't specifically recognize falls back to a plain-English message,
@@ -208,7 +210,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.click(screen.getByRole('button', { name: 'Add round' }));
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
-    await user.click(await screen.findByRole('button', { name: 'Submit' }));
+    await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
 
     expect(
       await screen.findByText('Recruiter touchpoint 1: Recruiter name or email is required.'),

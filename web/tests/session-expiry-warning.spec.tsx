@@ -129,7 +129,9 @@ describe('Session-expiry warning mid-draft (GitHub issue #301)', () => {
     await user.type(await screen.findByLabelText(/Title/), 'Screen');
 
     await user.click(screen.getByText('Review & Submit'));
-    await user.click(await screen.findByRole('button', { name: 'Submit' }));
+    // GitHub issue #307 — no recruiter touchpoints added, so the
+    // non-blocking reminder shows "Submit anyway" instead of "Submit".
+    await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
 
     expect(
       await screen.findByText(/Your session has expired\. Log in again to submit/),

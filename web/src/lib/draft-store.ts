@@ -245,37 +245,52 @@ function isValidRating1to5(value: number | undefined): boolean {
   return typeof value === 'number' && !Number.isNaN(value) && value >= 1 && value <= 5;
 }
 
-// Client-side pre-submit validation (GitHub issue #281, Phase 28) — mirrors
-// the backend's own required-field rules closely enough to catch the
-// common mistakes (an empty recruiter identifier, an out-of-range rating)
-// before the bulk endpoint ever sees them, so a candidate never has to
-// decode a raw class-validator message like
-// "recruiterInteractions.0.recruiterIdentifier should not be empty".
-export function validateDraft(draft: ProcessDraft): DraftValidationIssue[] {
-  const issues: DraftValidationIssue[] = [];
+// GitHub issue #307 (Phase 28) — validateDraft() is a list of small,
+// independent rules combined via flatMap, rather than one monolithic
+// function, specifically so a future rule is just one more function
+// added to VALIDATION_RULES below, never a change to validateDraft()
+// itself or to any rule that already exists.
+type ValidationRule = (draft: ProcessDraft) => DraftValidationIssue[];
 
+function validateRoleTitle(draft: ProcessDraft): DraftValidationIssue[] {
   if (!draft.process.roleTitle.trim()) {
-    issues.push({ stepId: 'process', message: 'Role title is required.' });
+    return [{ stepId: 'process', message: 'Role title is required.' }];
   }
+  return [];
+}
 
+// GitHub issue #307 — a draft with zero rounds must never be submittable.
+function validateAtLeastOneRound(draft: ProcessDraft): DraftValidationIssue[] {
+  if (draft.rounds.length === 0) {
+    return [
+      { stepId: 'process', message: 'At least one round is required before you can submit.' },
+    ];
+  }
+  return [];
+}
+
+function validateRoundRatingBounds(draft: ProcessDraft): DraftValidationIssue[] {
+  const issues: DraftValidationIssue[] = [];
   draft.rounds.forEach((step, index) => {
-    // Title is optional (GitHub issue #287) — nothing to validate here.
-    if (step.round.rating) {
-      const { difficulty, fluency, clarity, focus } = step.round.rating;
-      if (
-        !isValidRating1to5(difficulty) ||
-        !isValidRating1to5(fluency) ||
-        !isValidRating1to5(clarity) ||
-        !isValidRating1to5(focus)
-      ) {
-        issues.push({
-          stepId: step.clientId,
-          message: `Round ${index + 1}'s rating fields must all be between 1 and 5.`,
-        });
-      }
+    if (!step.round.rating) return;
+    const { difficulty, fluency, clarity, focus } = step.round.rating;
+    if (
+      !isValidRating1to5(difficulty) ||
+      !isValidRating1to5(fluency) ||
+      !isValidRating1to5(clarity) ||
+      !isValidRating1to5(focus)
+    ) {
+      issues.push({
+        stepId: step.clientId,
+        message: `Round ${index + 1}'s rating fields must all be between 1 and 5.`,
+      });
     }
   });
+  return issues;
+}
 
+function validateRecruiterIdentifiers(draft: ProcessDraft): DraftValidationIssue[] {
+  const issues: DraftValidationIssue[] = [];
   draft.recruiterInteractions.forEach((step, index) => {
     if (!step.interaction.recruiterIdentifier.trim()) {
       issues.push({
@@ -283,24 +298,100 @@ export function validateDraft(draft: ProcessDraft): DraftValidationIssue[] {
         message: `Recruiter touchpoint ${index + 1} needs a name or email.`,
       });
     }
-    if (step.interaction.rating) {
-      const { reachability, responsiveness, guidelinesShared } = step.interaction.rating;
-      if (
-        !isValidRating1to5(reachability) ||
-        !isValidRating1to5(responsiveness) ||
-        !isValidRating1to5(guidelinesShared)
-      ) {
-        issues.push({
-          stepId: step.clientId,
-          message: `Recruiter touchpoint ${index + 1}'s rating fields must all be between 1 and 5.`,
-        });
-      }
+  });
+  return issues;
+}
+
+function validateRecruiterRatingBounds(draft: ProcessDraft): DraftValidationIssue[] {
+  const issues: DraftValidationIssue[] = [];
+  draft.recruiterInteractions.forEach((step, index) => {
+    if (!step.interaction.rating) return;
+    const { reachability, responsiveness, guidelinesShared } = step.interaction.rating;
+    if (
+      !isValidRating1to5(reachability) ||
+      !isValidRating1to5(responsiveness) ||
+      !isValidRating1to5(guidelinesShared)
+    ) {
+      issues.push({
+        stepId: step.clientId,
+        message: `Recruiter touchpoint ${index + 1}'s rating fields must all be between 1 and 5.`,
+      });
     }
   });
-
-  if (draft.overallReview && !isValidRating1to5(draft.overallReview.overallExperience)) {
-    issues.push({ stepId: 'overall', message: 'Overall experience rating must be between 1 and 5.' });
-  }
-
   return issues;
+}
+
+function validateOverallReviewBounds(draft: ProcessDraft): DraftValidationIssue[] {
+  if (draft.overallReview && !isValidRating1to5(draft.overallReview.overallExperience)) {
+    return [{ stepId: 'overall', message: 'Overall experience rating must be between 1 and 5.' }];
+  }
+  return [];
+}
+
+const VALIDATION_RULES: ValidationRule[] = [
+  validateRoleTitle,
+  validateAtLeastOneRound,
+  validateRoundRatingBounds,
+  validateRecruiterIdentifiers,
+  validateRecruiterRatingBounds,
+  validateOverallReviewBounds,
+];
+
+// Client-side pre-submit validation (GitHub issue #281, Phase 28) — mirrors
+// the backend's own required-field rules closely enough to catch the
+// common mistakes (an empty recruiter identifier, an out-of-range rating)
+// before the bulk endpoint ever sees them, so a candidate never has to
+// decode a raw class-validator message like
+// "recruiterInteractions.0.recruiterIdentifier should not be empty".
+export function validateDraft(draft: ProcessDraft): DraftValidationIssue[] {
+  return VALIDATION_RULES.flatMap((rule) => rule(draft));
+}
+
+// GitHub issue #307 — non-blocking reminders, structurally separate from
+// DraftValidationIssue: these never disable Submit, they only prompt for
+// explicit confirmation ("was this intentional?") before submitting.
+// Same modular-rule-list shape as validateDraft() above.
+export interface DraftReminder {
+  id: string;
+  message: string;
+  // What adding the missing thing means, so the UI can act on "yes, add
+  // it" without the caller needing its own switch statement per reminder.
+  timing: 'start' | 'end';
+}
+
+type ReminderRule = (draft: ProcessDraft) => DraftReminder[];
+
+function reminderMissingPreInterviewRecruiter(draft: ProcessDraft): DraftReminder[] {
+  const hasStart = draft.recruiterInteractions.some((s) => s.timing === 'start');
+  return hasStart
+    ? []
+    : [
+        {
+          id: 'missing-pre-interview-recruiter',
+          message: "You haven't added a pre-interview recruiter touchpoint.",
+          timing: 'start',
+        },
+      ];
+}
+
+function reminderMissingPostInterviewRecruiter(draft: ProcessDraft): DraftReminder[] {
+  const hasEnd = draft.recruiterInteractions.some((s) => s.timing === 'end');
+  return hasEnd
+    ? []
+    : [
+        {
+          id: 'missing-post-interview-recruiter',
+          message: "You haven't added a post-interview recruiter touchpoint.",
+          timing: 'end',
+        },
+      ];
+}
+
+const REMINDER_RULES: ReminderRule[] = [
+  reminderMissingPreInterviewRecruiter,
+  reminderMissingPostInterviewRecruiter,
+];
+
+export function collectDraftReminders(draft: ProcessDraft): DraftReminder[] {
+  return REMINDER_RULES.flatMap((rule) => rule(draft));
 }

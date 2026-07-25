@@ -1,6 +1,7 @@
 import {
   addRoundStep,
   addRecruiterStep,
+  collectDraftReminders,
   createDraft,
   deleteDraft,
   getDraft,
@@ -188,6 +189,54 @@ describe('draft-store', () => {
       draft = addRoundStep(draft, { sequenceNumber: 1, roundType: 'coding' });
 
       expect(validateDraft(draft)).toEqual([]);
+    });
+
+    it('requires at least one round before submission (GitHub issue #307)', () => {
+      let draft = createDraft(acme);
+      draft = { ...draft, process: { ...draft.process, roleTitle: 'Engineer' } };
+
+      const issues = validateDraft(draft);
+      expect(issues).toContainEqual({
+        stepId: 'process',
+        message: 'At least one round is required before you can submit.',
+      });
+    });
+  });
+
+  describe('collectDraftReminders (GitHub issue #307)', () => {
+    it('reminds about a missing pre-interview recruiter touchpoint', () => {
+      let draft = createDraft(acme);
+      draft = addRecruiterStep(draft, { recruiterIdentifier: 'bob@acme.example' }, 'end');
+
+      const reminders = collectDraftReminders(draft);
+      expect(reminders).toContainEqual({
+        id: 'missing-pre-interview-recruiter',
+        message: "You haven't added a pre-interview recruiter touchpoint.",
+        timing: 'start',
+      });
+      expect(reminders.find((r) => r.id === 'missing-post-interview-recruiter')).toBeUndefined();
+    });
+
+    it('reminds about a missing post-interview recruiter touchpoint', () => {
+      let draft = createDraft(acme);
+      draft = addRecruiterStep(draft, { recruiterIdentifier: 'jane@acme.example' }, 'start');
+
+      const reminders = collectDraftReminders(draft);
+      expect(reminders).toContainEqual({
+        id: 'missing-post-interview-recruiter',
+        message: "You haven't added a post-interview recruiter touchpoint.",
+        timing: 'end',
+      });
+      expect(reminders.find((r) => r.id === 'missing-pre-interview-recruiter')).toBeUndefined();
+    });
+
+    it('reminds about both when neither exists, and neither when both do', () => {
+      let draft = createDraft(acme);
+      expect(collectDraftReminders(draft)).toHaveLength(2);
+
+      draft = addRecruiterStep(draft, { recruiterIdentifier: 'jane@acme.example' }, 'start');
+      draft = addRecruiterStep(draft, { recruiterIdentifier: 'bob@acme.example' }, 'end');
+      expect(collectDraftReminders(draft)).toEqual([]);
     });
   });
 });

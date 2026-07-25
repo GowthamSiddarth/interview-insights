@@ -15,6 +15,7 @@ import {
   setOverallReview,
   updateRecruiterStep,
   updateRoundStep,
+  collectDraftReminders,
   validateDraft,
   DraftOverallReview,
   ProcessDraft,
@@ -405,6 +406,7 @@ export default function HomePage() {
   }
 
   const validationIssues = activeDraft ? validateDraft(activeDraft) : [];
+  const reminders = activeDraft ? collectDraftReminders(activeDraft) : [];
   const activeRoundStep = activeDraft?.rounds.find((r) => r.clientId === activeStepId);
   const activeRecruiterStep = activeDraft?.recruiterInteractions.find(
     (r) => r.clientId === activeStepId,
@@ -628,7 +630,9 @@ export default function HomePage() {
                   loggedIn={candidateSession}
                   submitting={submitting}
                   validationIssues={validationIssues}
+                  reminders={reminders}
                   onEditStep={setActiveStepId}
+                  onAddRecruiterStep={handleAddRecruiter}
                   onSubmit={handleSubmit}
                 />
               )}
