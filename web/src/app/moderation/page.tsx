@@ -44,10 +44,9 @@ function isSessionExpired(err: unknown): boolean {
 // appear.
 const SCORE_FIELDS = [
   'difficulty',
-  'fairness',
-  'communicationFluency',
-  'attentiveness',
-  'biasSignal',
+  'fluency',
+  'clarity',
+  'focus',
   'technicalDepth',
   'approachability',
   'responseTime',

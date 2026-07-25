@@ -13,10 +13,9 @@ export interface IndexableReview {
   freeText: string | null;
   createdAt: Date;
   difficulty: number;
-  fairness: number;
-  communicationFluency: number;
-  attentiveness: number;
-  biasSignal: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
 }
 
 export interface ReviewSearchParams {
@@ -66,10 +65,9 @@ export class ReviewSearchService implements OnModuleInit {
               freeText: { type: 'text' },
               createdAt: { type: 'date' },
               difficulty: { type: 'integer' },
-              fairness: { type: 'integer' },
-              communicationFluency: { type: 'integer' },
-              attentiveness: { type: 'integer' },
-              biasSignal: { type: 'integer' },
+              fluency: { type: 'integer' },
+              clarity: { type: 'integer' },
+              focus: { type: 'integer' },
             },
           },
         },
@@ -92,10 +90,9 @@ export class ReviewSearchService implements OnModuleInit {
         freeText: review.freeText,
         createdAt: review.createdAt.toISOString(),
         difficulty: review.difficulty,
-        fairness: review.fairness,
-        communicationFluency: review.communicationFluency,
-        attentiveness: review.attentiveness,
-        biasSignal: review.biasSignal,
+        fluency: review.fluency,
+        clarity: review.clarity,
+        focus: review.focus,
       },
       refresh: true,
     });

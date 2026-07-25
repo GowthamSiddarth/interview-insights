@@ -36,10 +36,9 @@ const roundRatingSubmission = [
         roundType: 'coding',
         status: 'approved',
         difficulty: 3,
-        fairness: 4,
-        communicationFluency: 4,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 4,
+        clarity: 4,
+        focus: 4,
         technicalDepth: null,
         freeText: null,
         createdAt: '2026-01-02T00:00:00.000Z',
@@ -104,10 +103,9 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
             roundType: 'coding',
             status: 'approved',
             difficulty: 3,
-            fairness: 4,
-            communicationFluency: 4,
-            attentiveness: 4,
-            biasSignal: 5,
+            fluency: 4,
+            clarity: 4,
+            focus: 4,
             technicalDepth: null,
             freeText: null,
             createdAt: '2026-01-02T00:00:00.000Z',
@@ -198,7 +196,7 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
 
     await waitFor(() => expect(patchCalls).toHaveLength(1));
     expect(patchCalls[0].url).toContain('/rounds/round-1/ratings/rating-1');
-    expect(patchCalls[0].body).toMatchObject({ difficulty: 3, fairness: 4 });
+    expect(patchCalls[0].body).toMatchObject({ difficulty: 3, fluency: 4 });
     // The list is refetched after a successful edit (fetch called for
     // /me/submissions twice: initial load + post-save reload).
     const fetchMock = global.fetch as jest.Mock;

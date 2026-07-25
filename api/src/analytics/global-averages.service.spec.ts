@@ -21,10 +21,9 @@ describe('GlobalAveragesService', () => {
       prisma.$queryRaw.mockResolvedValue([
         {
           avg_difficulty: '3.50',
-          avg_fairness: '4.00',
-          avg_communication_fluency: '4.20',
-          avg_attentiveness: '3.80',
-          avg_bias_signal: '4.10',
+          avg_fluency: '4.20',
+          avg_clarity: '4.00',
+          avg_focus: '3.80',
           sample_size: 42,
         },
       ]);
@@ -33,10 +32,9 @@ describe('GlobalAveragesService', () => {
 
       expect(result).toEqual({
         avgDifficulty: 3.5,
-        avgFairness: 4.0,
-        avgCommunicationFluency: 4.2,
-        avgAttentiveness: 3.8,
-        avgBiasSignal: 4.1,
+        avgFluency: 4.2,
+        avgClarity: 4.0,
+        avgFocus: 3.8,
         sampleSize: 42,
       });
     });
@@ -45,10 +43,9 @@ describe('GlobalAveragesService', () => {
       prisma.$queryRaw.mockResolvedValue([
         {
           avg_difficulty: null,
-          avg_fairness: null,
-          avg_communication_fluency: null,
-          avg_attentiveness: null,
-          avg_bias_signal: null,
+          avg_fluency: null,
+          avg_clarity: null,
+          avg_focus: null,
           sample_size: null,
         },
       ]);

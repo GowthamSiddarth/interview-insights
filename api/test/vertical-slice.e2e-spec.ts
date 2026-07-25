@@ -116,10 +116,9 @@ describe('Vertical slice (e2e)', () => {
       .set('Cookie', cookie)
       .send({
         difficulty: 3,
-        fairness: 4,
-        communicationFluency: 5,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 5,
+        clarity: 5,
+        focus: 4,
       })
       .expect(201);
     // Every rating starts pending — CLAUDE.md hard constraint #2 / D3.
@@ -131,10 +130,9 @@ describe('Vertical slice (e2e)', () => {
       .set('Cookie', cookie)
       .send({
         difficulty: 1,
-        fairness: 1,
-        communicationFluency: 1,
-        attentiveness: 1,
-        biasSignal: 1,
+        fluency: 1,
+        clarity: 1,
+        focus: 1,
       })
       .expect(409);
 
@@ -191,10 +189,9 @@ describe('Vertical slice (e2e)', () => {
       .set('Cookie', cookie)
       .send({
         difficulty: 6,
-        fairness: 4,
-        communicationFluency: 5,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 5,
+        clarity: 5,
+        focus: 4,
       })
       .expect(400);
   }, 15000);

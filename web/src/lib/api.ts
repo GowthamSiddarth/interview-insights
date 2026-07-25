@@ -54,10 +54,9 @@ export interface RoundRating {
   roundId: string;
   candidateId: string;
   difficulty: number;
-  fairness: number;
-  communicationFluency: number;
-  attentiveness: number;
-  biasSignal: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
   technicalDepth: number | null;
   freeText: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'flagged';
@@ -105,10 +104,9 @@ export interface ModerationQueueEntity {
   roundTitle?: string;
   roundType?: Round['roundType'];
   difficulty?: number;
-  fairness?: number;
-  communicationFluency?: number;
-  attentiveness?: number;
-  biasSignal?: number;
+  fluency?: number;
+  clarity?: number;
+  focus?: number;
   technicalDepth?: number | null;
   // recruiter_rating — recruiterLabel is the generated label, never a
   // real name (CLAUDE.md hard constraint #1)
@@ -142,10 +140,9 @@ export interface RoundTypeAnalytics {
   sampleSize: number;
   scores: {
     difficulty: number | null;
-    fairness: number | null;
-    communicationFluency: number | null;
-    attentiveness: number | null;
-    biasSignal: number | null;
+    fluency: number | null;
+    clarity: number | null;
+    focus: number | null;
   };
 }
 
@@ -184,10 +181,9 @@ export interface CompanyReviewItem {
   roundType: Round['roundType'];
   roleTitle: string;
   difficulty: number;
-  fairness: number;
-  communicationFluency: number;
-  attentiveness: number;
-  biasSignal: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
   technicalDepth: number | null;
   freeText: string | null;
 }
@@ -215,10 +211,9 @@ export interface ReviewSearchResult {
   freeText: string | null;
   createdAt: string;
   difficulty: number;
-  fairness: number;
-  communicationFluency: number;
-  attentiveness: number;
-  biasSignal: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
 }
 
 export interface ReviewSearchFilters {
@@ -251,10 +246,9 @@ export interface MySubmissionRoundRating {
   roundType: Round['roundType'];
   status: RoundRating['status'];
   difficulty: number;
-  fairness: number;
-  communicationFluency: number;
-  attentiveness: number;
-  biasSignal: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
   technicalDepth: number | null;
   freeText: string | null;
   createdAt: string;
@@ -356,10 +350,9 @@ export const api = {
     roundId: string,
     input: {
       difficulty: number;
-      fairness: number;
-      communicationFluency: number;
-      attentiveness: number;
-      biasSignal: number;
+      fluency: number;
+      clarity: number;
+      focus: number;
     },
   ) =>
     request<RoundRating>(`/rounds/${roundId}/ratings`, {
@@ -377,10 +370,9 @@ export const api = {
     id: string,
     input: {
       difficulty: number;
-      fairness: number;
-      communicationFluency: number;
-      attentiveness: number;
-      biasSignal: number;
+      fluency: number;
+      clarity: number;
+      focus: number;
       technicalDepth?: number;
       freeText?: string;
     },

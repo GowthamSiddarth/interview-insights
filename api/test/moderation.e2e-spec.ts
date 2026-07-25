@@ -100,10 +100,9 @@ describe('Moderation (e2e)', () => {
       .set('Cookie', cookie)
       .send({
         difficulty: 3,
-        fairness: 4,
-        communicationFluency: 5,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 5,
+        clarity: 4,
+        focus: 4,
       })
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;

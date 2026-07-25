@@ -42,8 +42,8 @@ function ReviewItem({ review }: { review: CompanyReviewItem }) {
         {review.roleTitle} · {roundTypeLabel(review.roundType)} ({review.roundTitle})
       </p>
       <p className="text-gray-600 dark:text-gray-400">
-        difficulty {review.difficulty} · fairness {review.fairness} · communication{' '}
-        {review.communicationFluency} · attentiveness {review.attentiveness}
+        difficulty {review.difficulty} · fluency {review.fluency} · clarity{' '}
+        {review.clarity} · focus {review.focus}
       </p>
       {review.freeText && <p className="italic">&quot;{review.freeText}&quot;</p>}
     </article>
@@ -162,14 +162,11 @@ export default function CompanyProfilePage() {
               {analytics.roundTypes.map((rt) => (
                 <div key={rt.roundType}>
                   <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
-                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <ScoreDisplay label="Difficulty" value={rt.scores.difficulty} sampleSize={rt.sampleSize} />
-                    <ScoreDisplay label="Fairness" value={rt.scores.fairness} sampleSize={rt.sampleSize} />
-                    <ScoreDisplay
-                      label="Communication"
-                      value={rt.scores.communicationFluency}
-                      sampleSize={rt.sampleSize}
-                    />
+                    <ScoreDisplay label="Fluency" value={rt.scores.fluency} sampleSize={rt.sampleSize} />
+                    <ScoreDisplay label="Clarity" value={rt.scores.clarity} sampleSize={rt.sampleSize} />
+                    <ScoreDisplay label="Focus" value={rt.scores.focus} sampleSize={rt.sampleSize} />
                   </dl>
                 </div>
               ))}

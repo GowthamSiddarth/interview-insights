@@ -23,7 +23,7 @@ const analytics = {
     {
       roundType: 'coding',
       sampleSize: 5,
-      scores: { difficulty: 3.5, fairness: 4.1, communicationFluency: 4.0, attentiveness: null, biasSignal: null },
+      scores: { difficulty: 3.5, fluency: 4.0, clarity: 4.1, focus: null },
     },
   ],
   recruiter: null,
@@ -41,10 +41,9 @@ const oneReview = {
   roundType: 'coding',
   roleTitle: 'Backend Engineer',
   difficulty: 3,
-  fairness: 4,
-  communicationFluency: 4,
-  attentiveness: 4,
-  biasSignal: 5,
+  fluency: 4,
+  clarity: 4,
+  focus: 4,
   technicalDepth: null,
   freeText: 'Solid, well-run round.',
 };

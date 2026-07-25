@@ -220,29 +220,30 @@ enum ModerationStatus {
 }
 
 model RoundRating {
-  id                   String           @id @default(uuid()) @db.Uuid
-  roundId              String           @map("round_id") @db.Uuid
-  candidateId          String           @map("candidate_id") @db.Uuid
-  difficulty           Int              @db.SmallInt
-  fairness             Int              @db.SmallInt
-  communicationFluency Int              @map("communication_fluency") @db.SmallInt
-  attentiveness        Int              @db.SmallInt
-  // Higher = less bias perceived. Polarity is intentional — do not flip
-  // without updating every aggregate/display consumer. See docs/DATA_MODEL.md.
-  biasSignal           Int              @map("bias_signal") @db.SmallInt
-  technicalDepth       Int?             @map("technical_depth") @db.SmallInt
-  freeText             String?          @map("free_text")
-  status               ModerationStatus @default(pending)
-  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  id             String           @id @default(uuid()) @db.Uuid
+  roundId        String           @map("round_id") @db.Uuid
+  candidateId    String           @map("candidate_id") @db.Uuid
+  // difficulty is a property of the round/problem, not the interviewer — a
+  // different axis from the three interviewer traits below (GitHub issue #247).
+  difficulty     Int              @db.SmallInt
+  // Interviewer traits, deliberately limited to three (GitHub issue #247,
+  // docs/DECISIONS.md). fairness/biasSignal were dropped — see D45.
+  fluency        Int              @db.SmallInt
+  clarity        Int              @db.SmallInt
+  focus          Int              @db.SmallInt
+  technicalDepth Int?             @map("technical_depth") @db.SmallInt
+  freeText       String?          @map("free_text")
+  status         ModerationStatus @default(pending)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
 
   round     Round     @relation(fields: [roundId], references: [id])
   candidate Candidate @relation(fields: [candidateId], references: [id])
 
   // One rating per candidate per round — docs/DECISIONS.md D8.
-  // 1-5 CHECK constraints (difficulty, fairness, communication_fluency,
-  // attentiveness, bias_signal, technical_depth) aren't expressible in Prisma
-  // schema language — they're added via raw SQL appended to the init
-  // migration, see prisma/migrations/*_init/migration.sql.
+  // 1-5 CHECK constraints (difficulty, fluency, clarity, focus,
+  // technical_depth) aren't expressible in Prisma schema language — they're
+  // added via raw SQL, see prisma/migrations/*_init/migration.sql and the
+  // GitHub issue #247 migration that renamed/dropped/added these.
   @@unique([roundId, candidateId])
   @@map("round_ratings")
 }

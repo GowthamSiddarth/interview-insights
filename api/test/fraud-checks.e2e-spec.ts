@@ -106,10 +106,9 @@ describe('Fraud checks (e2e)', () => {
       .set('Cookie', candidateCookie)
       .send({
         difficulty: 3,
-        fairness: 4,
-        communicationFluency: 5,
-        attentiveness: 4,
-        biasSignal: 5,
+        fluency: 5,
+        clarity: 5,
+        focus: 4,
         ...(freeText ? { freeText } : {}),
       })
       .expect(201);

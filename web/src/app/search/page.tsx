@@ -223,9 +223,8 @@ export default function SearchPage() {
                     </p>
                     {review.freeText && <p className="text-gray-500">{review.freeText}</p>}
                     <p className="text-xs text-gray-400">
-                      Difficulty {review.difficulty} · Fairness {review.fairness} ·
-                      Communication {review.communicationFluency} · Attentiveness{' '}
-                      {review.attentiveness} · Bias signal {review.biasSignal}
+                      Difficulty {review.difficulty} · Fluency {review.fluency} ·
+                      Clarity {review.clarity} · Focus {review.focus}
                     </p>
                   </li>
                 ))}

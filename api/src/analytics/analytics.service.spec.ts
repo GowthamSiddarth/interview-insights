@@ -46,10 +46,9 @@ describe('AnalyticsService', () => {
         {
           round_type: 'coding',
           avg_difficulty: '4.00',
-          avg_fairness: '4.00',
-          avg_communication_fluency: '4.00',
-          avg_attentiveness: '4.00',
-          avg_bias_signal: '4.00',
+          avg_fluency: '4.00',
+          avg_clarity: '4.00',
+          avg_focus: '4.00',
           sample_size: 10,
         },
       ])
@@ -57,10 +56,9 @@ describe('AnalyticsService', () => {
       .mockResolvedValueOnce([]); // overall rows
     globalAveragesService.getRoundTypeGlobalAverages.mockResolvedValue({
       avgDifficulty: 2.0,
-      avgFairness: 2.0,
-      avgCommunicationFluency: 2.0,
-      avgAttentiveness: 2.0,
-      avgBiasSignal: 2.0,
+      avgFluency: 2.0,
+      avgClarity: 2.0,
+      avgFocus: 2.0,
       sampleSize: 100,
     });
 
@@ -81,10 +79,9 @@ describe('AnalyticsService', () => {
         {
           round_type: 'behavioral',
           avg_difficulty: '5.00',
-          avg_fairness: '5.00',
-          avg_communication_fluency: '5.00',
-          avg_attentiveness: '5.00',
-          avg_bias_signal: '5.00',
+          avg_fluency: '5.00',
+          avg_clarity: '5.00',
+          avg_focus: '5.00',
           sample_size: 2,
         },
       ])
@@ -92,10 +89,9 @@ describe('AnalyticsService', () => {
       .mockResolvedValueOnce([]);
     globalAveragesService.getRoundTypeGlobalAverages.mockResolvedValue({
       avgDifficulty: 3.0,
-      avgFairness: 3.0,
-      avgCommunicationFluency: 3.0,
-      avgAttentiveness: 3.0,
-      avgBiasSignal: 3.0,
+      avgFluency: 3.0,
+      avgClarity: 3.0,
+      avgFocus: 3.0,
       sampleSize: 50,
     });
 
@@ -104,10 +100,9 @@ describe('AnalyticsService', () => {
     expect(result.roundTypes[0].sampleSize).toBe(2);
     expect(result.roundTypes[0].scores).toEqual({
       difficulty: null,
-      fairness: null,
-      communicationFluency: null,
-      attentiveness: null,
-      biasSignal: null,
+      fluency: null,
+      clarity: null,
+      focus: null,
     });
   });
 
@@ -156,10 +151,9 @@ describe('AnalyticsService', () => {
         {
           round_type: 'coding',
           avg_difficulty: '4.00',
-          avg_fairness: '4.00',
-          avg_communication_fluency: '4.00',
-          avg_attentiveness: '4.00',
-          avg_bias_signal: '4.00',
+          avg_fluency: '4.00',
+          avg_clarity: '4.00',
+          avg_focus: '4.00',
           sample_size: 10,
         },
       ])
@@ -171,10 +165,9 @@ describe('AnalyticsService', () => {
 
     expect(result.roundTypes[0].scores).toEqual({
       difficulty: null,
-      fairness: null,
-      communicationFluency: null,
-      attentiveness: null,
-      biasSignal: null,
+      fluency: null,
+      clarity: null,
+      focus: null,
     });
   });
 });

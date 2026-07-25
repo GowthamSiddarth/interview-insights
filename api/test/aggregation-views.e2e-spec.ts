@@ -66,10 +66,9 @@ describe('Aggregation materialized views (e2e)', () => {
       roundId,
       candidateId: candidate.id,
       difficulty,
-      fairness: difficulty,
-      communicationFluency: difficulty,
-      attentiveness: difficulty,
-      biasSignal: difficulty,
+      fluency: difficulty,
+      clarity: difficulty,
+      focus: difficulty,
       status,
     });
     // Only the first two (approved) should count — avg_difficulty = (4+2)/2 = 3.00.
@@ -111,10 +110,9 @@ describe('Aggregation materialized views (e2e)', () => {
         roundId: round.id,
         candidateId: candidate.id,
         difficulty: 3,
-        fairness: 3,
-        communicationFluency: 3,
-        attentiveness: 3,
-        biasSignal: 3,
+        fluency: 3,
+        clarity: 3,
+        focus: 3,
         status: 'rejected',
       },
     });

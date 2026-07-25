@@ -4,10 +4,9 @@ import { CreateRoundRatingDto } from './create-round-rating.dto';
 
 const valid = {
   difficulty: 3,
-  fairness: 4,
-  communicationFluency: 5,
-  attentiveness: 4,
-  biasSignal: 5,
+  fluency: 5,
+  clarity: 4,
+  focus: 4,
 };
 
 describe('CreateRoundRatingDto', () => {
@@ -38,9 +37,9 @@ describe('CreateRoundRatingDto', () => {
   });
 
   it('rejects a missing required rating field', async () => {
-    const { biasSignal: _biasSignal, ...rest } = valid;
+    const { clarity: _clarity, ...rest } = valid;
     const dto = plainToInstance(CreateRoundRatingDto, rest);
     const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'biasSignal')).toBe(true);
+    expect(errors.some((e) => e.property === 'clarity')).toBe(true);
   });
 });

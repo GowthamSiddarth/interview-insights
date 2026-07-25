@@ -174,7 +174,7 @@ describe('Full golden path (e2e smoke test)', () => {
       const ratingRes = await server()
         .post(`/rounds/${roundId}/ratings`)
         .set('Cookie', candidateA.cookie)
-        .send({ difficulty: 3, fairness: 4, communicationFluency: 4, attentiveness: 4, biasSignal: 5 })
+        .send({ difficulty: 3, fluency: 4, clarity: 5, focus: 4 })
         .expect(201);
       roundRatingIds.push(body<RatingBody>(ratingRes).id);
     }
@@ -252,7 +252,7 @@ describe('Full golden path (e2e smoke test)', () => {
     const editRes = await server()
       .patch(`/rounds/${firstRoundId}/ratings/${firstRatingId}`)
       .set('Cookie', candidateA.cookie)
-      .send({ difficulty: 5, fairness: 4, communicationFluency: 4, attentiveness: 4, biasSignal: 5 })
+      .send({ difficulty: 5, fluency: 4, clarity: 5, focus: 4 })
       .expect(200);
     expect(body<RatingBody>(editRes).status).toBe('pending');
 

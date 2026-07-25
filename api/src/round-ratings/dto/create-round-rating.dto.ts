@@ -4,31 +4,28 @@ import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 // comes from the authenticated session (CurrentCandidateId), never from
 // client input, so a candidate can't submit as another.
 export class CreateRoundRatingDto {
+  // Round/problem axis — not an interviewer trait (GitHub issue #247).
   @IsInt()
   @Min(1)
   @Max(5)
   difficulty!: number;
 
+  // Interviewer traits, deliberately limited to three (GitHub issue #247,
+  // docs/DECISIONS.md D45): fluency, clarity, focus.
   @IsInt()
   @Min(1)
   @Max(5)
-  fairness!: number;
+  fluency!: number;
 
   @IsInt()
   @Min(1)
   @Max(5)
-  communicationFluency!: number;
+  clarity!: number;
 
   @IsInt()
   @Min(1)
   @Max(5)
-  attentiveness!: number;
-
-  // Higher = less bias perceived — polarity per docs/DATA_MODEL.md.
-  @IsInt()
-  @Min(1)
-  @Max(5)
-  biasSignal!: number;
+  focus!: number;
 
   @IsOptional()
   @IsInt()
