@@ -189,6 +189,7 @@ export default function SearchPage() {
                 <option value="case_study">Case study</option>
                 <option value="assessment">Assessment</option>
                 <option value="take_home">Take-home</option>
+                <option value="tech_screening">Tech Screening</option>
                 <option value="other">Other</option>
               </select>
             </label>

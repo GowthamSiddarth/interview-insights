@@ -40,5 +40,9 @@ export const ROUND_TYPE_FIELD_SCHEMA: Record<RoundType, RoundTypeFieldDef[]> = {
     { key: 'projectType', kind: 'controlled-single' },
     { key: 'technologiesUsed', kind: 'controlled-multi' },
   ],
+  tech_screening: [
+    { key: 'screeningFormat', kind: 'controlled-single' },
+    { key: 'topicsCovered', kind: 'controlled-multi' },
+  ],
   other: [{ key: 'notes', kind: 'text' }],
 };

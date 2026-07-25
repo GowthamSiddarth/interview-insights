@@ -18,6 +18,7 @@ interface RoundBody {
 }
 interface FieldOptionsResponse {
   coding: { fields: Array<{ key: string; kind: string; options?: string[] }> };
+  tech_screening: { fields: Array<{ key: string; kind: string; options?: string[] }> };
   other: { fields: Array<{ key: string; kind: string; options?: string[] }> };
 }
 
@@ -28,8 +29,9 @@ function body<T>(res: request.Response): T {
 const unique = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 // GitHub issue #248 (Phase 24) — round-type registry + type_metadata
-// schemas for all 8 round types, with controlled-vocabulary values sourced
-// from the admin-manageable round_type_field_options table (D47).
+// schemas for all 9 round types (8 originally, plus "tech_screening" added
+// in Phase 28 issue #284), with controlled-vocabulary values sourced from
+// the admin-manageable round_type_field_options table (D47).
 describe('Round-type registry (e2e)', () => {
   let app: INestApplication;
 
@@ -78,11 +80,11 @@ describe('Round-type registry (e2e)', () => {
   }
 
   describe('GET /round-types/field-options', () => {
-    it('is public and returns all 8 round types with seeded options for controlled fields', async () => {
+    it('is public and returns all 9 round types with seeded options for controlled fields', async () => {
       const res = await server().get('/round-types/field-options').expect(200);
       const schema = body<FieldOptionsResponse>(res);
 
-      expect(Object.keys(schema)).toHaveLength(8);
+      expect(Object.keys(schema)).toHaveLength(9);
 
       const problemAlgorithms = schema.coding.fields.find((f) => f.key === 'problemAlgorithms');
       expect(problemAlgorithms?.kind).toBe('controlled-multi');
@@ -93,6 +95,14 @@ describe('Round-type registry (e2e)', () => {
       );
       expect(problemDescription?.kind).toBe('text');
       expect(problemDescription?.options).toBeUndefined();
+
+      const screeningFormat = schema.tech_screening.fields.find(
+        (f) => f.key === 'screeningFormat',
+      );
+      expect(screeningFormat?.kind).toBe('controlled-single');
+      expect(screeningFormat?.options).toEqual(
+        expect.arrayContaining(['Phone Call', 'Video Call', 'In Person']),
+      );
 
       expect(schema.other.fields).toEqual([{ key: 'notes', kind: 'text' }]);
     });
@@ -142,6 +152,41 @@ describe('Round-type registry (e2e)', () => {
       expect(body<RoundBody>(createRes).typeMetadata).toEqual({
         principlesAsked: ['Ownership', 'Deliver Results'],
       });
+    });
+
+    it('round-trips a tech_screening round using its own screeningFormat/topicsCovered fields (GitHub issue #284)', async () => {
+      const { processId } = await createProcess();
+
+      const createRes = await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({
+          sequenceNumber: 1,
+          title: 'Recruiter Tech Screen',
+          roundType: 'tech_screening',
+          typeMetadata: {
+            screeningFormat: 'Phone Call',
+            topicsCovered: ['Resume Walkthrough', 'Basic Technical Q&A'],
+          },
+        })
+        .expect(201);
+      expect(body<RoundBody>(createRes).typeMetadata).toEqual({
+        screeningFormat: 'Phone Call',
+        topicsCovered: ['Resume Walkthrough', 'Basic Technical Q&A'],
+      });
+    });
+
+    it('rejects an inactive tech_screening controlled-vocabulary value', async () => {
+      const { processId } = await createProcess();
+
+      await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({
+          sequenceNumber: 1,
+          title: 'Recruiter Tech Screen',
+          roundType: 'tech_screening',
+          typeMetadata: { screeningFormat: 'Carrier Pigeon' },
+        })
+        .expect(400);
     });
 
     it('rejects a controlled-vocabulary value that is not currently active', async () => {
