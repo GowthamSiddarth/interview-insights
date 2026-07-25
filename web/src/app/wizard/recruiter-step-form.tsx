@@ -1,0 +1,130 @@
+'use client';
+
+import { DraftRecruiterInteraction, DraftRecruiterRating, DraftRecruiterStep } from '@/lib/draft-store';
+import { Button } from '@/components/Button';
+
+const inputClass =
+  'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
+
+const RATING_FIELDS = ['reachability', 'responsiveness', 'guidelinesShared'] as const;
+
+interface RecruiterStepFormProps {
+  step: DraftRecruiterStep;
+  onChange: (interaction: DraftRecruiterInteraction, timing: DraftRecruiterStep['timing']) => void;
+  onRemove: () => void;
+}
+
+// GitHub issue #254 (Phase 26) — a recruiter touchpoint step. `timing`
+// (start/end) is client-only, never sent to the backend (issue #253/D50)
+// — it only decides where this step sorts on the chronological review
+// screen (issue #255).
+export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFormProps) {
+  const { interaction, timing } = step;
+
+  function update(patch: Partial<DraftRecruiterInteraction>) {
+    onChange({ ...interaction, ...patch }, timing);
+  }
+
+  function toggleRating(hasRating: boolean) {
+    update({
+      rating: hasRating
+        ? { reachability: 3, responsiveness: 3, guidelinesShared: 3 }
+        : undefined,
+    });
+  }
+
+  function updateRating(patch: Partial<DraftRecruiterRating>) {
+    if (!interaction.rating) return;
+    update({ rating: { ...interaction.rating, ...patch } });
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="font-medium">Recruiter touchpoint</h3>
+
+      <label className="flex flex-col text-sm">
+        When was this?
+        <select
+          value={timing}
+          onChange={(e) => onChange(interaction, e.target.value as DraftRecruiterStep['timing'])}
+          className={inputClass}
+        >
+          <option value="start">Before my interview rounds</option>
+          <option value="end">After my interview rounds</option>
+        </select>
+      </label>
+
+      <label className="flex flex-col text-sm">
+        Recruiter name or email
+        <input
+          value={interaction.recruiterIdentifier}
+          onChange={(e) => update({ recruiterIdentifier: e.target.value })}
+          className={inputClass}
+        />
+        <span className="text-xs text-gray-500">
+          Used only to tell recruiters apart — never shown publicly.
+        </span>
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={!!interaction.rating}
+          onChange={(e) => toggleRating(e.target.checked)}
+        />
+        I have a rating for this touchpoint
+      </label>
+
+      {interaction.rating && (
+        <div className="flex flex-col gap-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {RATING_FIELDS.map((field) => (
+              <label key={field} className="flex flex-col text-sm capitalize">
+                {field.replace(/([A-Z])/g, ' $1')}
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={interaction.rating![field]}
+                  onChange={(e) => updateRating({ [field]: Number(e.target.value) })}
+                  className={inputClass}
+                />
+              </label>
+            ))}
+          </div>
+          <label className="flex flex-col text-sm">
+            Rejection message authenticity (optional — only if this
+            touchpoint was about your rejection)
+            <input
+              type="number"
+              min={1}
+              max={5}
+              value={interaction.rating.rejectionMessageAuthenticity ?? ''}
+              onChange={(e) =>
+                updateRating({
+                  rejectionMessageAuthenticity: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-col text-sm">
+            Anything else about the recruiter experience? (optional)
+            <textarea
+              rows={2}
+              value={interaction.rating.freeText ?? ''}
+              onChange={(e) => updateRating({ freeText: e.target.value || undefined })}
+              className={inputClass}
+            />
+          </label>
+        </div>
+      )}
+
+      <Button type="button" variant="danger" onClick={onRemove} className="self-start">
+        Remove this touchpoint
+      </Button>
+    </div>
+  );
+}
