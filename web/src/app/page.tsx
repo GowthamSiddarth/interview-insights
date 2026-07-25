@@ -559,14 +559,9 @@ export default function HomePage() {
               {activeRecruiterStep && (
                 <RecruiterStepForm
                   step={activeRecruiterStep}
-                  onChange={(interaction, timing) =>
+                  onChange={(interaction) =>
                     persist(
-                      updateRecruiterStep(
-                        activeDraft,
-                        activeRecruiterStep.clientId,
-                        interaction,
-                        timing,
-                      ),
+                      updateRecruiterStep(activeDraft, activeRecruiterStep.clientId, interaction),
                     )
                   }
                   onRemove={() => handleRemoveRecruiter(activeRecruiterStep.clientId)}

@@ -70,7 +70,7 @@ export function StepNavigator({
               onClick={() => onSelect(step.clientId)}
               className={stepButtonClass(activeStepId === step.clientId)}
             >
-              Recruiter ({step.timing === 'start' ? 'before rounds' : 'after rounds'}):{' '}
+              Recruiter ({step.timing === 'start' ? 'pre-interview' : 'post-interview'}):{' '}
               {step.interaction.recruiterIdentifier || <em>untitled</em>}
             </button>
           </li>
@@ -114,10 +114,10 @@ export function StepNavigator({
           Add round
         </Button>
         <Button type="button" variant="neutral" onClick={() => onAddRecruiter('start')}>
-          + Recruiter (before rounds)
+          + Recruiter (pre-interview)
         </Button>
         <Button type="button" variant="neutral" onClick={() => onAddRecruiter('end')}>
-          + Recruiter (after rounds)
+          + Recruiter (post-interview)
         </Button>
       </div>
     </div>

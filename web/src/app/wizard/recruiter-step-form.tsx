@@ -8,21 +8,37 @@ const inputClass =
 
 const RATING_FIELDS = ['reachability', 'responsiveness', 'guidelinesShared'] as const;
 
+// GitHub issue #286 (Phase 28) — one-sentence definitions matching the
+// Phase 24 issue #249 field-redesign, shown as a tooltip on each trait so
+// a candidate knows what's actually being asked, not just a camelCase
+// label.
+const RATING_FIELD_TOOLTIPS: Record<(typeof RATING_FIELDS)[number], string> = {
+  reachability: 'How easy the recruiter was to reach or get a response from.',
+  responsiveness: 'How quickly and reliably they followed up or kept to promised timelines.',
+  guidelinesShared: 'How clearly they explained the process, format, and what to expect at each stage.',
+};
+const REJECTION_AUTHENTICITY_TOOLTIP =
+  'How genuine or personalized a rejection message felt, if this touchpoint was about a rejection.';
+
 interface RecruiterStepFormProps {
   step: DraftRecruiterStep;
-  onChange: (interaction: DraftRecruiterInteraction, timing: DraftRecruiterStep['timing']) => void;
+  onChange: (interaction: DraftRecruiterInteraction) => void;
   onRemove: () => void;
 }
 
 // GitHub issue #254 (Phase 26) — a recruiter touchpoint step. `timing`
 // (start/end) is client-only, never sent to the backend (issue #253/D50)
 // — it only decides where this step sorts on the chronological review
-// screen (issue #255).
+// screen (issue #255). It's chosen once, at add-time, via the step
+// navigator's two distinct "+ Recruiter (pre-interview/post-interview)"
+// buttons — GitHub issue #285 made it read-only here rather than an
+// in-place editable select, since a candidate would otherwise have two
+// different ways to set the same thing.
 export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFormProps) {
   const { interaction, timing } = step;
 
   function update(patch: Partial<DraftRecruiterInteraction>) {
-    onChange({ ...interaction, ...patch }, timing);
+    onChange({ ...interaction, ...patch });
   }
 
   function toggleRating(hasRating: boolean) {
@@ -42,17 +58,9 @@ export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFor
     <div className="flex flex-col gap-3">
       <h3 className="font-medium">Recruiter touchpoint</h3>
 
-      <label className="flex flex-col text-sm">
-        When was this?
-        <select
-          value={timing}
-          onChange={(e) => onChange(interaction, e.target.value as DraftRecruiterStep['timing'])}
-          className={inputClass}
-        >
-          <option value="start">Before my interview rounds</option>
-          <option value="end">After my interview rounds</option>
-        </select>
-      </label>
+      <p className="text-sm">
+        When was this? <span className="font-medium">{timing === 'start' ? 'Before my interview' : 'After my interview'}</span>
+      </p>
 
       <label className="flex flex-col text-sm">
         Recruiter name or email
@@ -79,8 +87,14 @@ export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFor
         <div className="flex flex-col gap-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {RATING_FIELDS.map((field) => (
-              <label key={field} className="flex flex-col text-sm capitalize">
-                {field.replace(/([A-Z])/g, ' $1')}
+              <label
+                key={field}
+                className="flex flex-col text-sm capitalize"
+                title={RATING_FIELD_TOOLTIPS[field]}
+              >
+                <span className="cursor-help underline decoration-dotted">
+                  {field.replace(/([A-Z])/g, ' $1')}
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -92,9 +106,11 @@ export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFor
               </label>
             ))}
           </div>
-          <label className="flex flex-col text-sm">
-            Rejection message authenticity (optional — only if this
-            touchpoint was about your rejection)
+          <label className="flex flex-col text-sm" title={REJECTION_AUTHENTICITY_TOOLTIP}>
+            <span className="cursor-help underline decoration-dotted">
+              Rejection message authenticity (optional — only if this
+              touchpoint was about your rejection)
+            </span>
             <input
               type="number"
               min={1}
