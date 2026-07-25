@@ -1893,9 +1893,55 @@ abandoned draft will never reach the database at all — this stays
 useful afterward too. **Phase 17 is now fully done** — issue #260
 closed via merged PR.
 
-- Next step: Phase 24, issue #248 (round-type registry + `type_
-  metadata` schemas for coding/system design) — issue #249 (recruiter
-  fields) still needs its kickoff brainstorm resolved first.
+**Phase 24, issue #248 (round-type registry, expanded to all 8 round
+types + admin-managed controlled values)** — before implementation,
+the project owner expanded this issue's scope directly: rather than
+just `coding`/`system_design`, all 8 `RoundType` values get a
+structured `type_metadata` schema, and the values behind
+controlled-vocabulary fields (which algorithms, which leadership
+principles, etc.) must be admin-manageable through a UI, not
+hardcoded — with a new phase for that admin gateway (D47). New
+`round_type_field_options` table (`roundType`, `fieldKey`, `value`,
+`sortOrder`, `isActive` — retire, never hard-delete, so historical
+`type_metadata` stays valid) seeded via migration with illustrative
+defaults across the 7 structured round types (`other` has no
+controlled field — it's the catch-all by definition, only a free-text
+`notes` key). New `api/src/round-type-registry/` module: a static
+config (round type → field → `text`/`controlled-single`/
+`controlled-multi`) plus `RoundTypeFieldOptionsService`, whose
+`validateTypeMetadata()` is called from `RoundsService.create()`
+(service-layer validation, matching `FraudChecksService`/
+`ModerationService`'s existing pattern, not an async DTO validator) —
+rejects an unknown key or an inactive/unknown controlled value with a
+400. New public `GET /round-types/field-options` returns the full
+schema with active options per field, for Phase 26's wizard rewrite to
+eventually consume. Deliberately backend-only, per the same scope
+discussion — the current wizard (`web/src/app/page.tsx`) is untouched,
+since Phase 26/issue #254 replaces its round-creation step entirely
+soon after. 16 new unit tests (281 total) + 6 new e2e tests (117
+total including 2 pre-existing unrelated skips) all green; live-verified
+via curl against the real dev Postgres: the new endpoint's shape, a
+valid coding round round-tripping with real algorithm/data-structure
+values, and an invalid algorithm value correctly rejected with a 400 —
+test data cleaned up directly afterward (D44 pattern).
+
+**Phase 27 planning (Admin Content Gateway)** — filed alongside issue
+#248 per the same conversation, since admin management of
+`round_type_field_options` is a new, separately-scoped body of work
+issue #248 itself doesn't need to unblock Phase 25/26 (which get real
+seeded defaults from issue #248 directly). Milestone "Phase 27 — Admin
+Content Gateway (Round-Type Field Options)", epic #262, issues #263
+(admin CRUD API, `AdminJwtAuthGuard`-gated same as
+`ModerationController`), #264 (admin UI page mirroring
+`moderation/page.tsx`'s session-check shape), #265 (engineering blog,
+last). Numbered after Phase 26 in filing order and implemented after
+it too — unlike several earlier non-linear phases, nothing in Phase
+25/26 depends on this admin UI existing yet. Epic #262 on the project
+board at "Todo" — planning only, no implementation started.
+
+- Next step: Phase 24, issue #249 (recruiter_ratings field redesign) —
+  still needs its own kickoff brainstorm resolved first, same pattern
+  Phase 16/17/21 each used, before implementation starts.
 
 ## Open decisions still to make
 

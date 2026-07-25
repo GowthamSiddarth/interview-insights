@@ -345,7 +345,32 @@ model ModerationQueueEntry {
 }
 
 // ---------------------------------------------------------------------------
-// 10. company_level_mappings — phase 2, schema-ready but unused at MVP (D5)
+// 10. round_type_field_options — Phase 24 issue #248, D47
+// ---------------------------------------------------------------------------
+// Admin-controlled selectable values for the round-type registry's
+// controlled-vocabulary type_metadata fields (see api/src/round-type-registry).
+// One row per selectable value, e.g. (coding, problemAlgorithms, "DFS").
+// This issue only reads/seeds this table; admin CRUD over it is Phase 27.
+
+model RoundTypeFieldOption {
+  id        String    @id @default(uuid()) @db.Uuid
+  roundType RoundType @map("round_type")
+  fieldKey  String    @map("field_key")
+  value     String
+  sortOrder Int       @default(0) @map("sort_order")
+  // Retiring a value flips this off rather than deleting the row, so
+  // historical type_metadata referencing it stays valid — see D47.
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([roundType, fieldKey, value])
+  @@index([roundType, fieldKey, isActive])
+  @@map("round_type_field_options")
+}
+
+// ---------------------------------------------------------------------------
+// 11. company_level_mappings — phase 2, schema-ready but unused at MVP (D5)
 // ---------------------------------------------------------------------------
 
 model CompanyLevelMapping {
@@ -362,7 +387,7 @@ model CompanyLevelMapping {
 }
 
 // ---------------------------------------------------------------------------
-// 11. Aggregation layer (materialized views) — NOT modeled here.
+// 12. Aggregation layer (materialized views) — NOT modeled here.
 // ---------------------------------------------------------------------------
 // company_round_type_aggregates, company_recruiter_aggregates, and
 // company_overall_aggregates (docs/DATA_MODEL.md "Aggregation layer") are

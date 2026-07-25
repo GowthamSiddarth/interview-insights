@@ -1,13 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RoundTypeFieldOptionsService } from '../round-type-registry/round-type-field-options.service';
 import { CreateRoundDto } from './dto/create-round.dto';
 
 @Injectable()
 export class RoundsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly roundTypeFieldOptionsService: RoundTypeFieldOptionsService,
+  ) {}
 
-  create(processId: string, dto: CreateRoundDto) {
+  async create(processId: string, dto: CreateRoundDto) {
+    await this.roundTypeFieldOptionsService.validateTypeMetadata(
+      dto.roundType,
+      dto.typeMetadata,
+    );
+
     return this.prisma.round.create({
       data: {
         ...dto,

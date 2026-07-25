@@ -893,8 +893,14 @@ Round-Type Registry & Rating Field Redesign". Epic: GitHub issue #244.
       `company_round_type_aggregates` materialized view, DTOs/services,
       every frontend surface showing these fields, and every existing
       test referencing the old names (GitHub issue #247, D45)
-- [ ] Round-type registry + `type_metadata` schemas for coding and
-      system design (GitHub issue #248)
+- [x] Round-type registry + `type_metadata` schemas for all 8 round
+      types (expanded from the original coding/system_design-only scope
+      at the project owner's direction before implementation — see
+      GitHub issue #248, D47). Controlled-vocabulary values are
+      admin-managed via a new `round_type_field_options` table; this
+      issue builds the read side (registry, service-layer validation,
+      public `GET /round-types/field-options`) and seeds illustrative
+      defaults — admin CRUD over the table itself is the new Phase 27.
 - [ ] Redesign `recruiter_ratings` fields — needs a kickoff brainstorm
       first (the mapping isn't a clean 1:1 rename the way issue #247's
       is) (GitHub issue #249)
@@ -936,3 +942,25 @@ Phase 25's bulk endpoint.
 - [ ] Chronological review screen + bulk-submit integration (GitHub
       issue #255)
 - [ ] Engineering blog (last) (GitHub issue #256)
+
+## Phase 27 — Admin Content Gateway (Round-Type Field Options)
+
+Filed alongside Phase 24 issue #248, at the project owner's direction:
+the round-type registry's controlled-vocabulary `type_metadata` values
+(which algorithms, which leadership principles, etc.) must be
+admin-manageable through a UI, not hardcoded. Issue #248 built only the
+read side — the registry, service-layer validation, and a public
+`GET /round-types/field-options` — plus seeded illustrative defaults
+into a new `round_type_field_options` table (`docs/DECISIONS.md` D47).
+This phase builds the write side: an admin CRUD API and UI to add,
+retire, and reorder those values. Numbered after Phase 26 in filing
+order and implemented after it too — unlike several earlier non-linear
+phases, nothing in Phase 25/26 depends on this admin UI existing, since
+Phase 24 already seeds working defaults. Milestone "Phase 27 — Admin
+Content Gateway (Round-Type Field Options)". Epic: GitHub issue #262.
+
+- [ ] Admin CRUD API for `round_type_field_options`, gated by
+      `AdminJwtAuthGuard` same as `ModerationController` (GitHub issue #263)
+- [ ] Admin UI page to manage round-type field options, mirroring
+      `moderation/page.tsx`'s session-check shape (GitHub issue #264)
+- [ ] Engineering blog (last) (GitHub issue #265)

@@ -30,9 +30,10 @@ export class CreateRoundDto {
   @Min(1)
   scheduledDurationMinutes?: number;
 
-  // Round-type-specific fields (docs/DATA_MODEL.md "type_metadata examples")
-  // — not validated against a per-type shape here; that can follow once
-  // round-type-specific forms exist.
+  // Round-type-specific fields — shape-only here (some object); the
+  // per-round-type semantic validation (right keys, controlled-vocabulary
+  // values active in round_type_field_options) lives in
+  // RoundsService.create(), see api/src/round-type-registry.
   @IsOptional()
   @IsObject()
   typeMetadata?: Record<string, unknown>;

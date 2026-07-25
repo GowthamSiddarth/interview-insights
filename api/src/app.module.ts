@@ -6,6 +6,7 @@ import { CandidatesModule } from './candidates/candidates.module';
 import { CompaniesModule } from './companies/companies.module';
 import { InterviewProcessesModule } from './interview-processes/interview-processes.module';
 import { RoundsModule } from './rounds/rounds.module';
+import { RoundTypeRegistryModule } from './round-type-registry/round-type-registry.module';
 import { RoundRatingsModule } from './round-ratings/round-ratings.module';
 import { RecruitersModule } from './recruiters/recruiters.module';
 import { RecruiterInteractionsModule } from './recruiter-interactions/recruiter-interactions.module';
@@ -26,6 +27,7 @@ import { MeModule } from './me/me.module';
     CompaniesModule,
     InterviewProcessesModule,
     RoundsModule,
+    RoundTypeRegistryModule,
     RoundRatingsModule,
     RecruitersModule,
     RecruiterInteractionsModule,
