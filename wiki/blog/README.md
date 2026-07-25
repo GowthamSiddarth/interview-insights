@@ -259,8 +259,11 @@ findings against the Phase 26 wizard: an unfriendly raw validation
 error on submit, round ratings requiring an opt-in click per round, no
 sequential step navigation, a missing round type, recruiter step
 wording/timing issues, no trait tooltips, and a mandatory round title
-displayed as "untitled." All seven feature issues are done — this
-phase's blog is complete.
+displayed as "untitled." Reopened once more for issue #301 (a
+follow-on found while explaining the wizard's session design: a fixed
+1h session expiry with no live re-check could leave a candidate
+looking logged-in long after their session actually died). All eight
+feature issues are done — this phase's blog is complete.
 
 1. [Issue #281 — Friendly, actionable validation errors on submit](phase-28-wizard-ux-refinements/issue-281-friendly-validation-errors/README.md)
 2. [Issue #282 — Round ratings default to available](phase-28-wizard-ux-refinements/issue-282-default-round-ratings/README.md)
@@ -269,3 +272,4 @@ phase's blog is complete.
 5. [Issue #285 — Recruiter step wording + read-only timing](phase-28-wizard-ux-refinements/issue-285-recruiter-wording-readonly-timing/README.md)
 6. [Issue #286 — Tooltips for recruiter trait ratings](phase-28-wizard-ux-refinements/issue-286-recruiter-trait-tooltips/README.md)
 7. [Issue #287 — Optional round title + "{Type} - {Title}" display](phase-28-wizard-ux-refinements/issue-287-optional-round-title/README.md)
+8. [Issue #301 — Warning candidates when their session expires mid-draft](phase-28-wizard-ux-refinements/issue-301-session-expiry-warning/README.md)
