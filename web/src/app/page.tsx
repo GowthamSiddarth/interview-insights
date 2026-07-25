@@ -282,7 +282,15 @@ export default function HomePage() {
     if (!activeDraft) return;
     const nextSequenceNumber = activeDraft.rounds.length + 1;
     const saved = persist(
-      addRoundStep(activeDraft, { sequenceNumber: nextSequenceNumber, title: '', roundType }),
+      addRoundStep(activeDraft, {
+        sequenceNumber: nextSequenceNumber,
+        title: '',
+        roundType,
+        // GitHub issue #282 (Phase 28) — a rating is available by default
+        // for every round, not an opt-in click per round; still removable
+        // via the round form's own checkbox.
+        rating: { difficulty: 3, fluency: 3, clarity: 3, focus: 3 },
+      }),
     );
     setActiveStepId(saved.rounds[saved.rounds.length - 1].clientId);
   }

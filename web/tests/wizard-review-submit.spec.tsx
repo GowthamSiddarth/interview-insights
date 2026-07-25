@@ -109,7 +109,9 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
     await user.type(await screen.findByLabelText('Title'), 'Screen');
-    await user.click(screen.getByLabelText('I have a rating for this round'));
+    // GitHub issue #282 — a rating is already attached by default, no
+    // opt-in click needed.
+    expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
 
     await user.click(screen.getByText('Review & Submit'));
     await user.click(await screen.findByRole('button', { name: 'Submit' }));
