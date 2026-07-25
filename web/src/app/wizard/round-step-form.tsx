@@ -3,6 +3,7 @@
 import { RoundTypeFieldOptions } from '@/lib/api';
 import { DraftRound, DraftRoundRating, DraftRoundStep } from '@/lib/draft-store';
 import { Button } from '@/components/Button';
+import { HelpTooltip } from '@/components/HelpTooltip';
 import { ROUND_TYPE_LABELS } from './round-type-labels';
 import { TypeMetadataFields } from './type-metadata-fields';
 
@@ -10,6 +11,17 @@ const inputClass =
   'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
 
 const RATING_FIELDS = ['difficulty', 'fluency', 'clarity', 'focus'] as const;
+
+// GitHub issue #305 (Phase 28) — one-sentence definitions for each round
+// trait, matching the Phase 24 issue #247 field-redesign reasoning.
+const RATING_FIELD_TOOLTIPS: Record<(typeof RATING_FIELDS)[number], string> = {
+  difficulty: 'How hard the round or problem itself was — a property of the round, not the interviewer.',
+  fluency: 'How clearly the interviewer communicated during the round.',
+  clarity: 'How clear the problem statement or prompt itself was, separate from the interviewer\'s own communication.',
+  focus: 'How attentive and present the interviewer was during the round.',
+};
+const TECHNICAL_DEPTH_TOOLTIP =
+  'How deep the technical questions or follow-ups went beyond the surface level.';
 
 interface RoundStepFormProps {
   step: DraftRoundStep;
@@ -91,7 +103,10 @@ export function RoundStepForm({ step, fieldOptions, onChange, onRemove }: RoundS
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {RATING_FIELDS.map((field) => (
               <label key={field} className="flex flex-col text-sm capitalize">
-                {field}
+                <span className="flex items-center gap-1">
+                  {field}
+                  <HelpTooltip label={`${field} help`} text={RATING_FIELD_TOOLTIPS[field]} />
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -104,7 +119,10 @@ export function RoundStepForm({ step, fieldOptions, onChange, onRemove }: RoundS
             ))}
           </div>
           <label className="flex flex-col text-sm">
-            Technical depth (optional)
+            <span className="flex items-center gap-1">
+              Technical depth (optional)
+              <HelpTooltip label="Technical depth help" text={TECHNICAL_DEPTH_TOOLTIP} />
+            </span>
             <input
               type="number"
               min={1}

@@ -2,16 +2,17 @@
 
 import { DraftRecruiterInteraction, DraftRecruiterRating, DraftRecruiterStep } from '@/lib/draft-store';
 import { Button } from '@/components/Button';
+import { HelpTooltip } from '@/components/HelpTooltip';
 
 const inputClass =
   'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
 
 const RATING_FIELDS = ['reachability', 'responsiveness', 'guidelinesShared'] as const;
 
-// GitHub issue #286 (Phase 28) — one-sentence definitions matching the
-// Phase 24 issue #249 field-redesign, shown as a tooltip on each trait so
-// a candidate knows what's actually being asked, not just a camelCase
-// label.
+// GitHub issue #286 (Phase 28), redesigned as a "?" button in issue #305 —
+// one-sentence definitions matching the Phase 24 issue #249 field-redesign,
+// shown as a tooltip on each trait so a candidate knows what's actually
+// being asked, not just a camelCase label.
 const RATING_FIELD_TOOLTIPS: Record<(typeof RATING_FIELDS)[number], string> = {
   reachability: 'How easy the recruiter was to reach or get a response from.',
   responsiveness: 'How quickly and reliably they followed up or kept to promised timelines.',
@@ -87,13 +88,10 @@ export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFor
         <div className="flex flex-col gap-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {RATING_FIELDS.map((field) => (
-              <label
-                key={field}
-                className="flex flex-col text-sm capitalize"
-                title={RATING_FIELD_TOOLTIPS[field]}
-              >
-                <span className="cursor-help underline decoration-dotted">
+              <label key={field} className="flex flex-col text-sm capitalize">
+                <span className="flex items-center gap-1">
                   {field.replace(/([A-Z])/g, ' $1')}
+                  <HelpTooltip label={`${field} help`} text={RATING_FIELD_TOOLTIPS[field]} />
                 </span>
                 <input
                   type="number"
@@ -106,10 +104,11 @@ export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFor
               </label>
             ))}
           </div>
-          <label className="flex flex-col text-sm" title={REJECTION_AUTHENTICITY_TOOLTIP}>
-            <span className="cursor-help underline decoration-dotted">
+          <label className="flex flex-col text-sm">
+            <span className="flex items-center gap-1">
               Rejection message authenticity (optional — only if this
               touchpoint was about your rejection)
+              <HelpTooltip label="Rejection message authenticity help" text={REJECTION_AUTHENTICITY_TOOLTIP} />
             </span>
             <input
               type="number"
