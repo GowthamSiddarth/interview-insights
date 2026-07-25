@@ -2281,21 +2281,37 @@ is displayed (also fixed a real pre-existing bug this surfaced: the
 moderation queue's round segment was gated on `roundTitle` truthiness,
 so a round with no title wouldn't show its round type either — now
 gated on `roundType`). #281-284 merged via CI-verified PRs (#290-293).
-**#285-287 (PRs #294-296) are code-complete, tests passing locally,
-but NOT YET MERGED** — GitHub Actions CI is blocked account-wide by a
-billing issue ("recent account payments have failed or your spending
-limit needs to be increased"), unrelated to this project's code;
-confirmed by the user to keep implementing but hold off merging until
-CI can actually run. #286/#287's branches are correctly based on
-`main` directly (not stacked on #285's branch) so they can merge
-independently once CI is restored, in numeric order. Issue #288
-(engineering blog, implemented last per convention) is blocked on
-#285-287 actually merging first.
-- Next step: once GitHub Actions billing is resolved, re-run CI on PRs
-  #294/#295/#296 and merge in order (285 -> 286 -> 287), verify CD
-  deploys the new migrations cleanly, then implement issue #288 (Phase
-  28's engineering blog). Phase 19 (Content Quality & Synthetic Data,
-  issues #162-165) and Phase 27 (Admin Content Gateway) remain planned
+
+**CI billing gap (standing, until the user says otherwise)** — a
+GitHub Actions billing issue on this account ("recent account payments
+have failed or your spending limit needs to be increased") blocks
+every GitHub-hosted job (`api`/`web`/`workers`/`infra` in `ci.yml`)
+from starting at all — confirmed 403/job-not-started, not a code
+failure. The user's explicit direction: keep implementing, keep
+opening PRs, and **merge without waiting for CI** until notified the
+billing limit is refreshed — this repo has no branch protection
+anyway (issue #18, free-plan limitation), so nothing actually gates a
+merge on checks passing. `cd.yml`'s `deploy` job runs on the
+**self-hosted runner** (issue #88), which is unaffected by this
+billing gap — CD kept deploying successfully through every merge in
+this window (confirmed via `api/health`'s `version` matching each
+merge SHA), so no manual local deploy step was actually needed on top
+of it. Local `npm test`/`lint`/`build` (both `api` and `web`) remain
+the real correctness gate while this lasts. PRs #294-297 (issues
+#285-287 + a docs status update) all merged this way. One real wrinkle
+found doing this: issue #286's branch had been created directly off
+#285's branch rather than off `main` (a `git checkout -b` run from the
+wrong starting branch), so its PR was silently stacked on #285's
+commit — harmless once merged in order, but issue #287's branch was
+made correctly from `main` and needed one real conflict resolution
+(a shared test file edited by both #285 and #287 on the same line)
+once #285/#286 had already landed ahead of it.
+- Next step: issue #288 (Phase 28's engineering blog, implemented last
+  per convention — #281-287 are all merged now). Continue merging
+  without waiting for CI on future work too, until the user says the
+  GitHub Actions billing limit has been refreshed. Phase 19 (Content
+  Quality & Synthetic Data, issues #162-165) and Phase 27 (Admin
+  Content Gateway) remain planned
   but not started, queued behind it.
 
 ## Open decisions still to make
