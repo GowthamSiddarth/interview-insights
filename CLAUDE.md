@@ -1994,9 +1994,56 @@ field names, confirmed `rejectionMessageAuthenticity` defaults to
 `null` when omitted and round-trips a real value when provided, and
 confirmed the analytics endpoint's recruiter scores use the new
 3-field shape.
-- Next step: Phase 24, issue #250 (engineering blog for Phase 24,
-  last) — the only remaining issue in Phase 24, written once #247-#249
-  are all merged.
+**Phase 24, issue #250 (engineering blog)** —
+`wiki/blog/phase-24-round-type-registry-rating-fields/` gained one post
+per feature issue (#247, #248, #249), covering the round rating trait
+reduction and its drop-view/rename/recreate-view migration shape, the
+round-type registry's mid-flight scope expansion to all 8 round types
+plus the admin-managed option values it split off into Phase 27, and
+the recruiter rating field redesign's kickoff-brainstorm decisions
+(D48) including the nullable self-reported `rejectionMessageAuthenticity`
+design. `wiki/blog/README.md`'s index updated to match.
+
+**Phase 24 is now fully done** — issues #247-250 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+**Phase 25, issue #251 (bulk process-submission endpoint)** — new
+`POST /companies/:companyId/processes/bulk` (candidate session
+required, `candidateId` from session per D31), accepting a whole
+process tree — process fields, `rounds` (each with an optional
+`rating`), `recruiterInteractions` (each with an optional `rating`),
+an optional `overallReview` — in one payload. New
+`api/src/bulk-process-submission/` module wraps the entire creation
+in one `prisma.$transaction()`: any failure rolls back everything,
+no partial success (D49) — confirmed directly with the project owner
+before implementation, resolving the one thing issue #251 itself
+flagged as "decide during implementation." Round ratings and
+recruiter ratings/interactions are created **sequentially inside the
+loop**, not in parallel — deliberately, since `FraudChecksService`'s
+rolling-window rate-limit check reads via the same transaction
+client, so later round ratings in the same bulk call correctly see
+earlier ones already inserted in that same transaction. Existing
+per-entity endpoints are untouched. Round-type registry validation
+(D47/#248) and fraud-check flagging (D13) both apply exactly as they
+do on the incremental path, just inside the one transaction. 7 new
+unit tests (mocked Prisma/services, every entity-type combination) +
+5 new e2e tests (401, process-only submission, full-tree creation
+with matching moderation_queue entries, atomic rollback on a nested
+validation failure — proven directly via a zero-row query after a
+deliberately invalid second round — and candidateId-whitelist
+rejection) all green. Also added the bulk endpoint as a sixth
+candidateId-bearing write path to `sessions-on-write-path.e2e-spec.ts`
+(issue #146's central enumeration file) — doing so pushed that file's
+shared-`beforeAll`-app instance over the 5-per-window magic-link
+throttle (it had been sitting exactly at the limit with its original
+five calls), fixed by converting it to a fresh app per test
+(`beforeEach`/`afterEach`), the same class of fix several other e2e
+specs already needed. 292 api unit tests, 125 e2e tests (123 passing
++ 2 pre-existing unrelated skips) all green; `api` build/lint clean.
+
+- Next step: Phase 25, issue #252 (engineering blog for Phase 25,
+  last) — the only remaining issue in Phase 25, followed by Phase 26
+  (Client-Side Draft Wizard).
 
 ## Open decisions still to make
 

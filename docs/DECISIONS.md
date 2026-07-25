@@ -1893,6 +1893,51 @@ they're collected, not what they mean.
 
 ---
 
+### D49 — Bulk process-submission endpoint: one atomic transaction, no partial success (GitHub issue #251, Phase 25)
+
+**Context:** issue #251 asked for a single endpoint that creates an
+entire interview-process tree (process, rounds+ratings, recruiter
+interactions+ratings, overall review) in one call — the backend
+counterpart Phase 26's draft wizard needs before it can submit a
+draft for real. The issue's own Scope section flagged one thing to
+"decide during implementation": whether a bulk submission that would
+trip something (originally framed around D13's rate limit) should
+roll back the whole transaction or partially succeed.
+
+**Decision:**
+- The entire tree is created inside one `prisma.$transaction()`. Any
+  failure — a DTO validation error, a round-type registry rejection
+  (D47/#248), a database constraint violation — rolls back everything
+  Postgres has touched so far in that transaction. Nothing partially
+  commits; a failed bulk submission leaves zero rows behind. This
+  matches the issue's own verification-plan wording ("partial failure
+  rolls back everything — no orphaned rows") and standard `$transaction`
+  semantics already used by every other write path in this codebase.
+- On closer look, D13's fraud/rate-limit checks were never actually a
+  rollback candidate at all: `FraudChecksService` never blocks a
+  write, it only attaches a `flagReason` to the moderation_queue entry
+  (D13 itself documents this). So there's no scenario where hitting
+  the rate limit inside a bulk call causes anything to fail — every
+  round rating in the payload still gets created, just possibly
+  flagged. What genuinely can fail and trigger a rollback is a real
+  validation/constraint error on any nested entity (an out-of-range
+  rating, an invalid `type_metadata` value, etc.).
+  Because `FraudChecksService.checkRateLimit()` counts rows via the
+  same transaction client (`tx`) passed through the whole bulk create,
+  and round ratings are created **sequentially, not in parallel**,
+  each round's fraud check correctly sees every sibling round rating
+  already inserted earlier in the same bulk call — the rolling-window
+  count is accurate within a single submission, not just across
+  separate requests.
+- Existing per-entity endpoints are untouched — this is an additive
+  path, not a replacement, exactly as scoped.
+
+**Revisit when:** never expected to need revisiting — full-transaction
+atomicity is the only sensible semantics for "submit one interview
+process as a unit."
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

@@ -17,6 +17,7 @@ import { CandidateAuthModule } from './candidate-auth/candidate-auth.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { SearchModule } from './search/search.module';
 import { MeModule } from './me/me.module';
+import { BulkProcessSubmissionModule } from './bulk-process-submission/bulk-process-submission.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { MeModule } from './me/me.module';
     AnalyticsModule,
     SearchModule,
     MeModule,
+    BulkProcessSubmissionModule,
   ],
 })
 export class AppModule {}

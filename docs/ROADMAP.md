@@ -919,9 +919,9 @@ per-entity endpoints stay unchanged; this is a new path, not a
 replacement. Milestone "Phase 25 — Bulk Process Submission API". Epic:
 GitHub issue #245. Depends on Phase 24's field shapes being finalized.
 
-- [ ] Bulk process-submission endpoint, single `$transaction`,
+- [x] Bulk process-submission endpoint, single `$transaction`,
       moderation-queue entries created per rateable entity exactly as
-      today's incremental writes, just batched (GitHub issue #251)
+      today's incremental writes, just batched (GitHub issue #251, D49)
 - [ ] Engineering blog (last) (GitHub issue #252)
 
 ## Phase 26 — Client-Side Draft Wizard (Flashcard Navigation)
