@@ -128,4 +128,31 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     await user.click(await screen.findByText(/Round 1: Screen/));
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
   });
+
+  it('"Next" advances process -> rounds -> recruiter steps -> overall -> review, live-recomputed as steps are added (GitHub issue #283)', async () => {
+    const user = userEvent.setup();
+    await openDraft(user);
+
+    // Still on "Process details" — Next should go straight to the round,
+    // since no recruiter step exists yet at this point.
+    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (before rounds)' }));
+    await user.type(await screen.findByLabelText(/Recruiter name or email/), 'jane@acme.example');
+
+    await user.click(screen.getByRole('button', { name: 'Process details' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByDisplayValue('Screen')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByDisplayValue('jane@acme.example')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('heading', { name: 'Overall review' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Review your submission')).toBeInTheDocument();
+    // Review & Submit is the final sequence step — no further Next button.
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+  });
 });

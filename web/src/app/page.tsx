@@ -89,6 +89,23 @@ function submitErrorMessage(err: unknown): string {
   return 'Something went wrong.';
 }
 
+// GitHub issue #283 (Phase 28) — a fixed sequence "Next" button, additive
+// to (not a replacement for) the step navigator's free-jump list. Computed
+// live from the draft's current array order on every call, never a stale
+// snapshot, so adding/removing/reordering steps is always reflected.
+function getNextStepId(draft: ProcessDraft, currentStepId: string): string | null {
+  const sequence = [
+    'process',
+    ...draft.rounds.map((s) => s.clientId),
+    ...draft.recruiterInteractions.map((s) => s.clientId),
+    'overall',
+    'review',
+  ];
+  const index = sequence.indexOf(currentStepId);
+  if (index === -1 || index === sequence.length - 1) return null;
+  return sequence[index + 1];
+}
+
 function OverallReviewForm({
   value,
   onChange,
@@ -358,6 +375,7 @@ export default function HomePage() {
   const activeRecruiterStep = activeDraft?.recruiterInteractions.find(
     (r) => r.clientId === activeStepId,
   );
+  const nextStepId = activeDraft ? getNextStepId(activeDraft, activeStepId) : null;
 
   return (
     <PageContainer size={activeDraft ? 'wide' : 'narrow'}>
@@ -574,6 +592,14 @@ export default function HomePage() {
                   onEditStep={setActiveStepId}
                   onSubmit={handleSubmit}
                 />
+              )}
+
+              {activeStepId !== 'review' && nextStepId && (
+                <div className="mt-4">
+                  <Button type="button" variant="neutral" onClick={() => setActiveStepId(nextStepId)}>
+                    Next
+                  </Button>
+                </div>
               )}
             </div>
           </div>
