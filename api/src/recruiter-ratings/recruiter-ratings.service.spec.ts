@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { RecruiterRatingsService } from './recruiter-ratings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 
 describe('RecruiterRatingsService', () => {
   let service: RecruiterRatingsService;
@@ -17,6 +18,7 @@ describe('RecruiterRatingsService', () => {
     $transaction: jest.Mock;
   };
   let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; removeQueueEntries: jest.Mock };
+  let fraudChecksService: { detectFlagReason: jest.Mock };
 
   const dto = {
     reachability: 4,
@@ -40,12 +42,14 @@ describe('RecruiterRatingsService', () => {
       reenqueue: jest.fn(),
       removeQueueEntries: jest.fn(),
     };
+    fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RecruiterRatingsService,
         { provide: PrismaService, useValue: prisma },
         { provide: ModerationService, useValue: moderationService },
+        { provide: FraudChecksService, useValue: fraudChecksService },
       ],
     }).compile();
 
@@ -60,10 +64,41 @@ describe('RecruiterRatingsService', () => {
     });
   });
 
-  it('enqueues the new rating for moderation', async () => {
+  // GitHub issue #317 (D52): fraud-check wiring, same shape as
+  // RoundRatingsService.create().
+  it('checks pre-existing rows for fraud signals before creating the rating', async () => {
     await service.create('interaction-1', 'candidate-1', dto);
 
-    expect(moderationService.enqueue).toHaveBeenCalledWith('recruiter_rating', 'rating-1', prisma);
+    expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
+      'candidate-1',
+      'recruiter_rating',
+      undefined,
+      prisma,
+    );
+  });
+
+  it('enqueues the new rating for moderation with no flagReason when nothing is flagged', async () => {
+    await service.create('interaction-1', 'candidate-1', dto);
+
+    expect(moderationService.enqueue).toHaveBeenCalledWith(
+      'recruiter_rating',
+      'rating-1',
+      prisma,
+      undefined,
+    );
+  });
+
+  it('passes the detected flagReason through to the moderation queue entry', async () => {
+    fraudChecksService.detectFlagReason.mockResolvedValue('rate_limit');
+
+    await service.create('interaction-1', 'candidate-1', dto);
+
+    expect(moderationService.enqueue).toHaveBeenCalledWith(
+      'recruiter_rating',
+      'rating-1',
+      prisma,
+      'rate_limit',
+    );
   });
 
   it('findApprovedForInteraction only queries approved ratings for that interaction', async () => {

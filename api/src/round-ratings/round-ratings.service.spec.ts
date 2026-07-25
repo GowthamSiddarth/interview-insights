@@ -64,6 +64,7 @@ describe('RoundRatingsService', () => {
 
     expect(fraudChecksService.detectFlagReason).toHaveBeenCalledWith(
       'candidate-1',
+      'round_rating',
       undefined,
       prisma,
     );

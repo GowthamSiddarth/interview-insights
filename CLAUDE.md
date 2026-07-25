@@ -2619,15 +2619,50 @@ which also resolves #317's original "shared vs. per-type counter"
 kickoff question by making it moot. Duplicate free-text detection
 (the other, count-independent half of `FraudChecksService`) still
 extends to `recruiter_rating.freeText`/`overall_review.reviewText` as
-originally planned. Not yet implemented — this session only updated
-the issue body/title and filed D52; the code change (replacing the
-entity-count check, wiring both new entity types, updating existing
-round-rating rate-limit tests to the new unit) is next.
+originally planned.
 
-- Next step: implement #317 per D52's resolved design, then #318 (the
-  phase's engineering blog, written last). Phase 19 (Content Quality &
-  Synthetic Data, issues #162-165) and Phase 27 (Admin Content
-  Gateway) remain planned but not started, after Phase 29. Continue
+**Phase 29, issue #317 implemented** — `FraudChecksService.
+checkRateLimit()` now counts `tx.interviewProcess.count()` per
+candidate per rolling 24h window (renamed constant
+`RATE_LIMIT_MAX_SUBMISSIONS`), replacing the old `roundRating.count()`.
+`checkDuplicateFreeText()`/`detectFlagReason()` both gained a
+`ModerationEntityType` parameter (reusing the existing Prisma enum
+rather than inventing a new type) and a new private
+`fetchExistingFreeText()` switches on entity type to scan the correct
+table/field (`roundRating.freeText`, `recruiterRating.freeText`, or
+`overallReview.reviewText`) — each type's duplicate check is scoped to
+its own field, never cross-type. `RecruiterRatingsService`/
+`OverallReviewsService` gained `FraudChecksService` as a constructor
+dependency (new for both — previously round-rating-only) and their
+`create()` methods now call `detectFlagReason()` before creating the
+entity, same shape as `RoundRatingsService.create()`; both modules
+gained a `FraudChecksModule` import. `BulkProcessSubmissionService`'s
+round-rating call gained the entity-type argument, and recruiter-
+rating/overall-review creation gained fraud-check wiring they never
+had before. 11 fraud-checks unit tests + 6 new/updated tests across
+the three services' + bulk-submission's spec files (301 api unit tests
+total) and a rewritten `fraud-checks.e2e-spec.ts` (8 tests, 134 e2e
+total) all green — including a new test proving the exact bug D52
+described is fixed (4 round ratings within one submission never trip
+`rate_limit`) and tests proving the rate limit/duplicate detection now
+apply identically to recruiter ratings and overall reviews, scoped
+per entity type. `api` build/lint clean.
+
+Live-verified against the real `kind` cluster (Postgres/OpenSearch/
+Mailpit via the persistent port-forward script): created 3 separate
+submissions for one candidate, rating each in turn — confirmed via
+both a direct Postgres query and the live `GET /moderation/queue`
+response that the first two submissions' round ratings were clean and
+the 3rd was flagged `rate_limit`, exactly matching the new design.
+Test data cleaned up afterward (direct erasure of the verification
+candidate/processes plus the `prune-orphaned-company-search-docs`
+script for a few stray companies from an earlier mis-ordered
+verification attempt).
+
+- Next step: #318 (the phase's engineering blog, written last, now
+  that #315-317 are all done). Phase 19 (Content Quality & Synthetic
+  Data, issues #162-165) and Phase 27 (Admin Content Gateway) remain
+  planned but not started, after Phase 29. Continue
   merging without waiting for CI until the user says the GitHub
   Actions billing limit has been refreshed.
 

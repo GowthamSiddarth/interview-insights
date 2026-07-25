@@ -14,11 +14,14 @@ import { CreateBulkProcessDto } from './dto/create-bulk-process.dto';
 // validation error, a constraint violation) rolls back the entire
 // submission with zero rows created — no partial success. Round ratings
 // and recruiter interactions/ratings are created sequentially (not in
-// parallel), not just incidentally: FraudChecksService's rolling-window
-// rate-limit check counts rows already inserted earlier in this same
-// transaction, so sequential creation is what makes "a bulk submission of
-// several round ratings in one call is evaluated against the existing
-// limit correctly" (the issue's own acceptance criterion) hold at all.
+// parallel): FraudChecksService's rate limit (GitHub issue #317, D52)
+// now counts `InterviewProcess` rows, not individual entities, so one
+// bulk submission's own several round ratings never trip it on each
+// other the way the old entity-count version could — but duplicate-text
+// detection still scans rows already inserted earlier in this same
+// transaction, so sequential creation is what lets two identical
+// freeText values within one submission correctly flag the second as a
+// duplicate of the first.
 @Injectable()
 export class BulkProcessSubmissionService {
   constructor(
@@ -54,6 +57,7 @@ export class BulkProcessSubmissionService {
         if (rating) {
           const flagReason = await this.fraudChecksService.detectFlagReason(
             candidateId,
+            'round_rating',
             rating.freeText,
             tx,
           );
@@ -76,18 +80,30 @@ export class BulkProcessSubmissionService {
         });
 
         if (rating) {
+          const flagReason = await this.fraudChecksService.detectFlagReason(
+            candidateId,
+            'recruiter_rating',
+            rating.freeText,
+            tx,
+          );
           const recruiterRating = await tx.recruiterRating.create({
             data: { ...rating, recruiterInteractionId: interaction.id, candidateId },
           });
-          await this.moderationService.enqueue('recruiter_rating', recruiterRating.id, tx);
+          await this.moderationService.enqueue('recruiter_rating', recruiterRating.id, tx, flagReason);
         }
       }
 
       if (overallReview) {
+        const flagReason = await this.fraudChecksService.detectFlagReason(
+          candidateId,
+          'overall_review',
+          overallReview.reviewText,
+          tx,
+        );
         const review = await tx.overallReview.create({
           data: { ...overallReview, processId: process.id, candidateId },
         });
-        await this.moderationService.enqueue('overall_review', review.id, tx);
+        await this.moderationService.enqueue('overall_review', review.id, tx, flagReason);
       }
 
       return process;

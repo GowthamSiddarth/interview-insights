@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 import { CreateOverallReviewDto } from './dto/create-overall-review.dto';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class OverallReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly moderationService: ModerationService,
+    private readonly fraudChecksService: FraudChecksService,
   ) {}
 
   // Same shape as RoundRatingsService/RecruiterRatingsService.create():
@@ -15,14 +17,21 @@ export class OverallReviewsService {
   // moderation_queue row created in the same transaction. The one-per-process
   // rule is the schema's UNIQUE(process_id) (docs/DATA_MODEL.md) — a second
   // submission surfaces as a 409 via PrismaExceptionFilter, not app logic.
-  // No fraud-check wiring, same scope note as recruiter ratings (D13's
-  // FraudChecksService is round_rating-specific today).
+  // Fraud-check wiring added in GitHub issue #317 (D52) — see
+  // RecruiterRatingsService.create()'s comment for why this now applies
+  // identically to round ratings.
   create(processId: string, candidateId: string, dto: CreateOverallReviewDto) {
     return this.prisma.$transaction(async (tx) => {
+      const flagReason = await this.fraudChecksService.detectFlagReason(
+        candidateId,
+        'overall_review',
+        dto.reviewText,
+        tx,
+      );
       const review = await tx.overallReview.create({
         data: { ...dto, processId, candidateId },
       });
-      await this.moderationService.enqueue('overall_review', review.id, tx);
+      await this.moderationService.enqueue('overall_review', review.id, tx, flagReason);
       return review;
     });
   }
