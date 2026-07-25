@@ -118,7 +118,9 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
     await user.type(await screen.findByLabelText('Title'), 'Screen');
-    await user.click(screen.getByLabelText('I have a rating for this round'));
+    // GitHub issue #282 — a new round's rating is available by default,
+    // no opt-in click needed.
+    expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
 
     cleanup(); // simulate a real reload: unmount the old tree first
     render(<HomePage />);
