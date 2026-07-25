@@ -562,6 +562,29 @@ this correctly every time; the gap only exists when verification work
 bypasses the app entirely via raw SQL, which is inherently a one-off,
 manual situation each time it happens.
 
+**Step 3 specifically (the `companies` index) has its own script now,
+not just a checklist.** A live sweep found this exact checklist step
+had been missed repeatedly across many past verification sessions: the
+`companies` OpenSearch index had accumulated 420 documents against only
+5 real Postgres rows — 415 orphaned "ghost" companies silently showing
+up in every `/search` query. Rather than trust the manual step alone
+going forward, `api/scripts/prune-orphaned-company-search-docs.js`
+diffs the index against Postgres and bulk-deletes anything with no
+matching row:
+
+```bash
+cd api
+DATABASE_URL=... OPENSEARCH_URL=... npm run prune:orphaned-company-search-docs -- --dry-run
+DATABASE_URL=... OPENSEARCH_URL=... npm run prune:orphaned-company-search-docs
+```
+
+Run the `--dry-run` form first to see what it would delete. This also
+catches up on *past* missed cleanups, not just future ones — run it any
+time `/search` looks like it's returning phantom companies. Still not
+wired into any automated job: company deletion itself is always a
+manual, deliberate test-cleanup action, so pruning its fallout stays
+manual and deliberate too.
+
 ## 7. Self-hosted GitHub Actions runner (on-demand, Phase 12)
 
 Registered once; started manually whenever a workflow needs to run on

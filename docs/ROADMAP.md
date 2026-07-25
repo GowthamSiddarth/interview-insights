@@ -796,6 +796,18 @@ GitHub issue #214.
       unblocking the stuck deploy (GitHub issue #240, D43)
 - [x] Engineering blog update for issue #240 (D43) — Phase 20 is now
       fully done
+- [x] `api/scripts/prune-orphaned-company-search-docs.js` diffs the
+      `companies` OpenSearch index against Postgres and bulk-deletes
+      anything with no matching row — a live sweep found 415 such
+      orphans (420 documents against 5 real rows), all accumulated from
+      test-cleanup sessions that only ever deleted the Postgres row
+      (D44's existing pattern) and never re-synced the index; deleted
+      the 415 confirmed orphans directly and added the script so this
+      doesn't require trusting a purely manual checklist step going
+      forward (GitHub issue #278, D51). Epic #214 reopened and
+      re-closed the same day, same precedent as #222/#240.
+- [x] Engineering blog update for issue #278 (D51) — Phase 20 is now
+      fully done
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

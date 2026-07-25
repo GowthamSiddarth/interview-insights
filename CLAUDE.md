@@ -1814,6 +1814,31 @@ now-clean cluster. **Phase 20 is now fully done** — issue #240 closed
 via merged PR, and every phase built so far has a complete engineering
 blog.
 
+**Phase 20 reopened a third time (GitHub issue #278, D51)** — a user
+report of stale/duplicated `/search` results ("co" returning one real
+company plus nine identical "Profile Co" ghosts) traced to the
+`companies` OpenSearch index holding 420 documents against only 5 real
+Postgres rows. Root cause: indexing (D16) only ever happens on
+company creation; the only thing that has ever deleted a company row
+is a manual `DELETE FROM companies` during live-verification test
+cleanup (D44's pattern), which only ever touched Postgres — nothing
+re-synced the index, so every uncleaned test company across many past
+phases' verification sessions accumulated as a permanent ghost. D44's
+own checklist (`wiki/deployment-guide.md` section 6.2) already named
+the correct manual step; it just wasn't being followed reliably at
+scale. Fixed by (1) deleting the 415 confirmed orphans directly, via a
+full ID diff against Postgres with zero false positives, and (2)
+adding `api/scripts/prune-orphaned-company-search-docs.js`
+(`npm run prune:orphaned-company-search-docs -- --dry-run` / without
+the flag) so this is a one-command diff-and-delete rather than a
+trust-the-checklist manual step — deliberately not wired into any
+automated job, since company deletion itself is always a manual,
+deliberate action. `wiki/deployment-guide.md` section 6.2 updated to
+reference the script. Epic #214 and milestone #17 reopened and
+re-closed the same day, same precedent as #222/#240. **Phase 20 is now
+fully done** — issue #278 closed via merged PR, and every phase built
+so far has a complete engineering blog.
+
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
 started (GitHub issues #162-165) — now queued behind Phases 24-26
 below, planned more recently and with a more immediate user priority.

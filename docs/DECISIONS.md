@@ -1985,6 +1985,57 @@ surfaces — out of scope today, explicitly called out in issue #253 as
 
 ---
 
+### D51 — Orphaned OpenSearch company documents get a script, not just a checklist (GitHub issue #278, Phase 20)
+
+**Context:** `/search` was returning obviously-duplicated, meaningless
+company results ("Profile Co" ×20 and a few similarly-named others). A
+direct diff against Postgres found the real scale of it: the
+`companies` OpenSearch index had 420 documents against only 5 real
+rows — 415 orphans with no backing company at all.
+
+**Root cause:** OpenSearch indexing (D16) only happens on company
+*creation* — there is no `DELETE /companies` endpoint, since companies
+are shared across candidates and never deleted through normal app
+usage. The only thing that has ever deleted a company row is a manual
+`DELETE FROM companies` during live-verification test cleanup (D44's
+documented pattern, used constantly throughout this project's
+history). That cleanup only ever touched Postgres — nothing re-synced
+the index afterward. D44 already documented the correct manual step
+(delete the OpenSearch doc by the company's UUID,
+`wiki/deployment-guide.md` section 6.2) — the gap wasn't a missing
+instruction, it's that a purely manual step, repeated across dozens of
+ad hoc verification sessions over many phases, was evidently skipped
+often enough to accumulate 415 ghosts.
+
+**Decision:**
+- Deleted the 415 confirmed orphans directly (full ID diff against
+  Postgres first — zero false positives, every real company's
+  OpenSearch doc was preserved) — the index now matches Postgres
+  exactly, 5 documents each.
+- Added `api/scripts/prune-orphaned-company-search-docs.js`: diffs the
+  `companies` index against Postgres and bulk-deletes anything with no
+  matching row, with a `--dry-run` mode. Exposed as
+  `npm run prune:orphaned-company-search-docs` in `api/package.json`.
+  Deliberately **not** wired into any automated job or CI step —
+  company deletion is always a manual, deliberate test-cleanup action,
+  so pruning its fallout stays manual and deliberate too; this just
+  makes the existing D44 checklist step reliable instead of
+  easy-to-forget.
+- `wiki/deployment-guide.md` section 6.2 updated to point at the
+  script as the recommended way to run step 3 (the OpenSearch cleanup
+  step) — the manual walkthrough stays as the underlying explanation of
+  what it's doing, not replaced.
+
+**Revisit when:** never expected to need revisiting for the
+`companies` index specifically. If a similar orphaning pattern ever
+surfaces for the `reviews` index (round ratings indexed via
+`ReviewSearchService`), note that one already has a real removal path
+(`removeReview()`, wired into `RoundRatingsService.remove()`, D17) —
+so it shouldn't be susceptible to the same class of gap, but worth
+checking if it ever is.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

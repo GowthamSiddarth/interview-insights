@@ -16,7 +16,8 @@
     "smoke:e2e": "jest --config ./test/jest-smoke.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prune:orphaned-company-search-docs": "node scripts/prune-orphaned-company-search-docs.js"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1089.0",
