@@ -939,8 +939,8 @@ kind in the same registry. Milestone "Phase 26 — Client-Side Draft
 Wizard (Flashcard Navigation)". Epic: GitHub issue #246. Depends on
 Phase 25's bulk endpoint.
 
-- [ ] Client-side draft state architecture, supporting multiple
-      simultaneous in-progress company drafts (GitHub issue #253)
+- [x] Client-side draft state architecture, supporting multiple
+      simultaneous in-progress company drafts (GitHub issue #253, D50)
 - [ ] Flashcard-style step navigation, consuming Phase 24's registry
       (GitHub issue #254)
 - [ ] Chronological review screen + bulk-submit integration (GitHub

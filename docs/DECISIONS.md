@@ -1938,6 +1938,53 @@ process as a unit."
 
 ---
 
+### D50 — Client-side draft store: one localStorage blob, no candidateId, feature-detected id generation (GitHub issue #253, Phase 26)
+
+**Context:** issue #253 needed a client-side draft store — the first
+use of any browser persistence anywhere in `web/` (confirmed zero prior
+`localStorage`/`sessionStorage` usage). A few small implementation
+decisions had no existing pattern to follow.
+
+**Decision:**
+- **One versioned localStorage key** (`interview-insights:drafts:v1`)
+  holding `Record<string, ProcessDraft>`, not one key per draft plus a
+  separate index. A candidate has at most a handful of drafts at once —
+  a single JSON blob is simpler and avoids an index that could drift
+  out of sync with the keys it's supposed to track.
+- **A draft never stores `candidateId`.** It's pure client-side state
+  belonging to whoever's browser it's in; the real `candidateId` is
+  only ever attributed server-side, at issue #255's bulk submit, from
+  the authenticated session — same no-client-supplied-identity rule
+  every other write path in this app already follows (D31).
+- **Draft editing itself requires no session at all** — only creating a
+  *new* company (already session-gated, D38) and the eventual bulk
+  submit (issue #255) do. An anonymous visitor can pick an existing
+  company and build up an entire draft; the login prompt only appears
+  when it actually matters. This falls directly out of the design
+  (nothing about editing a draft touches the network) rather than
+  being a deliberately engineered feature.
+- **`crypto.randomUUID()` needed a fallback, and not just for tests.**
+  It requires a secure context — true in jsdom (whose `crypto` shim
+  doesn't implement the method at all) but also true in every real
+  deployed environment this project has today: plain HTTP on a
+  non-`localhost` origin (D27, no TLS yet). A feature-detected
+  `generateId()` (real UUID when available, a timestamp+random string
+  otherwise) is the correct fix in both places at once — a client-only
+  draft/step id has no security requirement that would demand a real
+  UUID anyway.
+- **Recruiter touchpoint chronological placement is a plain
+  `'start' | 'end'` field, client-only, never submitted.** Directly
+  realizes issue #254's own "Recruiter — Start"/"Recruiter — End"
+  vocabulary for the review screen (issue #255) to sort by, instead of
+  inventing a numeric position scheme the candidate would have to
+  manage by hand.
+
+**Revisit when:** if a real need for cross-device draft sync ever
+surfaces — out of scope today, explicitly called out in issue #253 as
+"a local-only convenience, not a server-side save."
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
