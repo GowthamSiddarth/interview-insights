@@ -2356,11 +2356,63 @@ day, same precedent as every other epic reopening in this project.
 `wiki/blog/phase-28-wizard-ux-refinements/issue-301-session-expiry-warning/`
 added; `wiki/blog/README.md`'s index updated.
 
-**Phase 28 is now fully done** — issues #281-288 and #301 all merged
-(#281-284 via normal CI-verified PRs; #285-288 and #301 merged during
-the CI billing gap per the user's explicit direction, with local
-`npm test`/`lint`/`build` as the correctness gate instead), and every
-phase built so far now has a complete engineering blog.
+**Phase 28 was declared fully done, then reopened a third time** — a
+batch of three more follow-ons from live discussion of the wizard: (1)
+round rating traits (difficulty/fluency/clarity/focus/technicalDepth)
+had no tooltip at all, only recruiter traits did (issue #286); (2) the
+"Next" button (issue #283) could silently skip past adding a round
+entirely, since the sidebar's separate "Add a round" control was easy
+to never notice; (3) the user's requested fix for #2 also asked for
+draft validation to become genuinely modular, plus two new rules —
+never accept a submission with zero rounds, and remind (never force)
+on a missing pre/post-interview recruiter touchpoint.
+
+**Issue #305 (tooltip redesign)** — new `HelpTooltip` component: a
+small "?" button, state-driven (not pure CSS `:hover`) so it opens on
+both hover and keyboard focus and is reliably testable. Applied to
+every round trait (new one-sentence definitions matching Phase 24
+issue #247) and every recruiter trait, replacing issue #286's
+dotted-underline/`title`-attribute pattern for consistency.
+
+**Issue #307 (modular validation + new rules)** — `validateDraft()`
+refactored from one function into a list of independent rule
+functions combined via `.flatMap()`, so a future rule is just one more
+function added to the list; every existing rule's behavior is
+unchanged. New hard rule: a draft with zero rounds can never submit.
+New soft reminders (a parallel, equally modular `collectDraftReminders()`
+rule list): missing pre-interview or post-interview recruiter
+touchpoints prompt a dismissible confirmation on the review screen
+("+ Add now" creates the missing touchpoint with the right timing and
+jumps straight into editing it; "Submit anyway" proceeds) — never a
+hard block.
+
+**Issue #306 (Next-button add-round modal)** — clicking Next now opens
+a modal instead of navigating directly whenever doing so would leave
+round-adding territory for the first time (Process Details with zero
+rounds, or the last existing round); offers Add round / Finish draft &
+go to review / No, continue (the original Next behavior, needed once
+an existing recruiter/overall step should still just be advanced to
+normally — the first two-choice design broke exactly that case). Next
+is also blocked entirely while the current step has its own validation
+issue, same guarantee Submit already has — except issue #307's
+"at least one round" rule specifically, since that's a whole-draft
+completeness fact, not a defect of the process step itself; blocking
+Next on it would trap a candidate exactly where the modal exists to
+help. `DraftValidationIssue` gained a stable `id` per rule to make
+that exclusion explicit rather than message-matching.
+
+19 new web tests across the three issues (110 -> 114 -> back up
+through each PR); `wiki/blog/phase-28-wizard-ux-refinements/` gained
+posts for #305-307; `wiki/blog/README.md`'s index updated. Epic #280
+reopened and re-closed the same day, same precedent as every other
+epic reopening in this project.
+
+**Phase 28 is now fully done** — issues #281-288, #301, and #305-307
+all merged (#281-284 via normal CI-verified PRs; everything from #285
+onward merged during the CI billing gap per the user's explicit
+direction, with local `npm test`/`lint`/`build` as the correctness
+gate instead), and every phase built so far now has a complete
+engineering blog.
 
 - Next step: continue merging without waiting for CI until the user
   says the GitHub Actions billing limit has been refreshed. Phase 19

@@ -262,8 +262,14 @@ wording/timing issues, no trait tooltips, and a mandatory round title
 displayed as "untitled." Reopened once more for issue #301 (a
 follow-on found while explaining the wizard's session design: a fixed
 1h session expiry with no live re-check could leave a candidate
-looking logged-in long after their session actually died). All eight
-feature issues are done — this phase's blog is complete.
+looking logged-in long after their session actually died). Reopened a
+third time for three more follow-ons from live discussion of the
+wizard: round traits had no tooltip at all (only recruiter traits did,
+issue #286), "Next" could silently skip past adding a round entirely,
+and draft validation needed to be genuinely modular plus two new rules
+(require at least one round; remind, don't force, on missing
+pre/post-interview recruiter touchpoints). All eleven feature issues
+are done — this phase's blog is complete.
 
 1. [Issue #281 — Friendly, actionable validation errors on submit](phase-28-wizard-ux-refinements/issue-281-friendly-validation-errors/README.md)
 2. [Issue #282 — Round ratings default to available](phase-28-wizard-ux-refinements/issue-282-default-round-ratings/README.md)
@@ -273,3 +279,6 @@ feature issues are done — this phase's blog is complete.
 6. [Issue #286 — Tooltips for recruiter trait ratings](phase-28-wizard-ux-refinements/issue-286-recruiter-trait-tooltips/README.md)
 7. [Issue #287 — Optional round title + "{Type} - {Title}" display](phase-28-wizard-ux-refinements/issue-287-optional-round-title/README.md)
 8. [Issue #301 — Warning candidates when their session expires mid-draft](phase-28-wizard-ux-refinements/issue-301-session-expiry-warning/README.md)
+9. [Issue #305 — A question-mark button for every trait tooltip](phase-28-wizard-ux-refinements/issue-305-help-tooltip-button/README.md)
+10. [Issue #307 — Modular validation, a new hard rule, and a soft reminder](phase-28-wizard-ux-refinements/issue-307-modular-validation-reminders/README.md)
+11. [Issue #306 — A modal for the moment "Next" would skip past adding a round](phase-28-wizard-ux-refinements/issue-306-next-button-add-round-modal/README.md)
