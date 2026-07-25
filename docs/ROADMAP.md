@@ -1013,3 +1013,18 @@ displayed as the literal word "untitled" when absent. Milestone
       "{Type} - {Title}" (title segment omitted entirely when absent)
       (GitHub issue #287)
 - [x] Engineering blog (last) (GitHub issue #288)
+
+Reopened once more, same day: explaining why the wizard's write path
+isn't session-gated (Phase 26's deliberate design — a draft is pure
+client-side state until the one atomic submit) surfaced a related gap
+— the candidate session expires a fixed 1h after login with no live
+re-check, so a candidate on a long draft could see Submit as available
+long after their session actually died.
+
+- [x] Warn candidates when their session expires mid-draft — a live
+      30s poll (not just a mount-time check) detects the transition
+      and shows an inline warning across every step of the active
+      draft, with the review screen's existing session gate
+      correcting itself automatically; a submit that still hits a 401
+      shows the same clear message instead of the generic
+      validation-error fallback (GitHub issue #301)
