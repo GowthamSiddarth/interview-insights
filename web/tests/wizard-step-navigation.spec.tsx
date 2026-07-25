@@ -124,6 +124,30 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     expect(await screen.findByText('After my interview')).toBeInTheDocument();
   });
 
+  it('shows a tooltip explaining each recruiter trait rating (GitHub issue #286)', async () => {
+    const user = userEvent.setup();
+    await openDraft(user);
+
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
+    await user.click(await screen.findByLabelText('I have a rating for this touchpoint'));
+
+    expect(screen.getByText('reachability').closest('label')).toHaveAttribute(
+      'title',
+      'How easy the recruiter was to reach or get a response from.',
+    );
+    expect(screen.getByText('responsiveness').closest('label')).toHaveAttribute(
+      'title',
+      expect.stringContaining('followed up'),
+    );
+    expect(screen.getByText('guidelines Shared').closest('label')).toHaveAttribute(
+      'title',
+      expect.stringContaining('explained the process'),
+    );
+    expect(
+      screen.getByText(/Rejection message authenticity/).closest('label'),
+    ).toHaveAttribute('title', expect.stringContaining('genuine or personalized'));
+  });
+
   it('a round step survives a reload with its rating intact', async () => {
     const user = userEvent.setup();
     await openDraft(user);
