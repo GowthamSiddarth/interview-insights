@@ -2203,10 +2203,29 @@ interactions, 1 recruiter rating, and 1 overall review landed, all
 `pending` — zero console errors throughout. Test data cleaned up
 afterward.
 
-**All three Phase 26 feature issues (#253-255) are now done.**
+**Phase 26, issue #256 (engineering blog)** —
+`wiki/blog/phase-26-client-side-draft-wizard/` gained one post per
+feature issue (#253, #254, #255), covering the draft-store-mirrors-
+the-bulk-DTO design and the `crypto.randomUUID` secure-context finding
+(D50), the registry-driven flashcard step forms and the start/end
+recruiter timing model, and the chronological review screen's
+atomic-submit simplification (D49) and submit-only session gating.
+`wiki/blog/README.md`'s index updated to match.
 
-- Next step: Phase 26, issue #256 (engineering blog, last) — the only
-  remaining issue in Phase 26.
+**Phase 26 is now fully done** — issues #253-256 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+The wizard a candidate uses today (client-side draft state, free-jump
+flashcard navigation, a chronological review screen, one atomic bulk
+submit) no longer resembles the incremental, immediately-writing one
+this project shipped in Phase 2.
+
+- Next step: Phase 19 (Content Quality & Synthetic Data, issues
+  #162-165) — planned but not started, next in line now that Phases
+  24-26 (planned together, implemented ahead of it per the same
+  non-linear precedent Phase 6/8/18/20/21/22/23 already set) are all
+  done. Phase 27 (Admin Content Gateway, admin CRUD/UI for the
+  round-type registry's controlled-vocabulary values) is also planned
+  but not started, filed alongside issue #248.
 
 ## Open decisions still to make
 
