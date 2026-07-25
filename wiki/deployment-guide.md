@@ -33,9 +33,7 @@ This requires the `kind` cluster from section 3 to already be up.
 
 ```bash
 # 1. kind cluster must already exist (section 3) — all three live there
-kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
-kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
-kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025 &
+infra/scripts/dev-port-forwards.sh start
 
 cd api
 cp .env.example .env                     # URLs already point at localhost:5432/9200
@@ -52,7 +50,21 @@ npm run dev                              # http://localhost:3000
 
 Verify: `curl http://localhost:3001/health` → `{"status":"ok"}`.
 
-Stop: kill the port-forwards.
+Stop: `infra/scripts/dev-port-forwards.sh stop`.
+
+**Why a script instead of `kubectl port-forward ... &` directly:** a
+plain backgrounded port-forward only survives as long as the shell
+that started it — fine in an ordinary terminal, but not in an
+AI-assisted dev session, where each tool call can run in a fresh
+shell and silently kill anything backgrounded in a previous one (GitHub
+issue #312). `infra/scripts/dev-port-forwards.sh` wires all three into
+macOS launchd LaunchAgents instead — supervised independently of any
+shell, with `KeepAlive` auto-restarting a forward if the underlying
+`kubectl port-forward` process ever exits (e.g. a pod restart breaking
+the tunnel). `start`/`stop` are both idempotent; `status` reports each
+one; logs land in `/tmp/interview-insights-port-forwards/`. Written for
+bash 3.2 (macOS's actual default `/bin/bash`, no associative arrays),
+matching every other script in `infra/scripts/`.
 
 **Gotcha:** if `infra/docker-compose.yml`'s OpenSearch or Mailpit
 containers happen to also be running, both it (`0.0.0.0` via Docker)
@@ -260,9 +272,7 @@ section 1's actual local-dev Postgres access path now, not just an ad
 hoc DB-client shortcut (D24):
 
 ```bash
-kubectl -n interview-insights port-forward svc/postgres 5432:5432
-kubectl -n interview-insights port-forward svc/opensearch 9200:9200
-kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025
+infra/scripts/dev-port-forwards.sh start   # see section 1 for why not `... &` directly
 ```
 
 ### 3.6 k9s + metrics-server (cluster monitoring, Phase 12)
@@ -833,9 +843,7 @@ fresh cluster via its init-hook).
    kubectl -n interview-insights exec postgres-0 -- psql -U postgres -c "CREATE DATABASE interview_insights_test;"
    cd ../api && DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npx prisma migrate deploy
 
-   kubectl -n interview-insights port-forward svc/postgres 5432:5432 &
-   kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
-   kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025 &
+   infra/scripts/dev-port-forwards.sh start
    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
    OPENSEARCH_INDEX_PREFIX="e2etest-" npm run test:e2e
 
