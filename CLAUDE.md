@@ -2305,14 +2305,39 @@ wrong starting branch), so its PR was silently stacked on #285's
 commit — harmless once merged in order, but issue #287's branch was
 made correctly from `main` and needed one real conflict resolution
 (a shared test file edited by both #285 and #287 on the same line)
-once #285/#286 had already landed ahead of it.
-- Next step: issue #288 (Phase 28's engineering blog, implemented last
-  per convention — #281-287 are all merged now). Continue merging
-  without waiting for CI on future work too, until the user says the
-  GitHub Actions billing limit has been refreshed. Phase 19 (Content
-  Quality & Synthetic Data, issues #162-165) and Phase 27 (Admin
-  Content Gateway) remain planned
-  but not started, queued behind it.
+once #285/#286 had already landed ahead of it. That same conflict
+resolution (PR #296) silently reverted several already-correct
+`wizard-step-navigation.spec.tsx` assertions back to their pre-#287
+content, despite git not flagging them as conflicts — not caught until
+a direct check (running the tests against `main`'s actual committed
+state, not just the working tree at merge time) showed 5 of 6 tests in
+that file genuinely failing. Fixed in a follow-up PR (#298) that
+restored the correct assertions; every other file in the #285/#286/#287
+merge chain was confirmed unaffected by diffing each one individually
+against its pre-merge commit.
+
+**Phase 28, issue #288 (engineering blog)** —
+`wiki/blog/phase-28-wizard-ux-refinements/` gained one post per feature
+issue (#281-287), covering the block-first/humanize-what-slips-through
+design for validation errors, the default-available round rating as a
+one-line high-leverage fix, the live-recomputed "Next" sequence
+alongside free-jump navigation, the two-migration shape a new enum
+value plus its seeded options requires, the read-only recruiter timing
+fix, the trait tooltips matching Phase 24's field-redesign definitions,
+and optional round titles' shared `formatRoundLabel()` helper
+(including the real pre-existing moderation-queue bug it surfaced).
+`wiki/blog/README.md`'s index updated to match.
+
+**Phase 28 is now fully done** — issues #281-288 all merged (#281-284
+via normal CI-verified PRs; #285-288 merged during the CI billing gap
+per the user's explicit direction, with local `npm test`/`lint`/
+`build` as the correctness gate instead), and every phase built so far
+now has a complete engineering blog.
+
+- Next step: continue merging without waiting for CI until the user
+  says the GitHub Actions billing limit has been refreshed. Phase 19
+  (Content Quality & Synthetic Data, issues #162-165) and Phase 27
+  (Admin Content Gateway) remain planned but not started, next in line.
 
 ## Open decisions still to make
 
