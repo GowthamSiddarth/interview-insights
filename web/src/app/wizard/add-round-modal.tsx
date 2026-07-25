@@ -11,22 +11,27 @@ const selectClass =
 interface AddRoundModalProps {
   onAddRound: (roundType: Round['roundType']) => void;
   onFinishAndReview: () => void;
-  // Performs whatever Next would have done before this modal intercepted
-  // it — advancing to the next already-existing step (a recruiter
-  // touchpoint, overall review) if there is one. Distinct from just
-  // closing the modal: this one still moves forward.
-  onContinue: () => void;
+  // GitHub issue #319 (Phase 28) — closes the modal only, no navigation.
+  // The sidebar's separate "Add a round" control is gone (this modal is
+  // now the only way to add one), so the previous "No, continue"
+  // behavior of advancing to whatever Next would have done normally was
+  // removed too — a candidate who cancels stays exactly where they are
+  // and uses the free-jump step navigator if they want to go elsewhere.
+  onCancel: () => void;
 }
+
+const NO_ROUND_TYPE_SELECTED = '';
 
 // GitHub issue #306 (Phase 28) — shown when clicking "Next" would leave
 // round-adding territory for the first time (from Process Details with no
-// round yet, or from the last existing round), since the sidebar's
-// separate "Add a round" control was easy to miss entirely. A candidate
-// can add another round, jump straight to the review screen, or just
-// continue on to whatever's next in the existing sequence — the
-// free-jump step navigator is unaffected either way.
-export function AddRoundModal({ onAddRound, onFinishAndReview, onContinue }: AddRoundModalProps) {
-  const [roundTypeToAdd, setRoundTypeToAdd] = useState<Round['roundType']>('coding');
+// round yet, or from the last existing round). GitHub issue #319 made
+// this the *only* way to add a round (the sidebar's redundant direct
+// control was removed) and added the "must actually pick a type" gate
+// below — the free-jump step navigator is unaffected either way.
+export function AddRoundModal({ onAddRound, onFinishAndReview, onCancel }: AddRoundModalProps) {
+  const [roundTypeToAdd, setRoundTypeToAdd] = useState<Round['roundType'] | ''>(
+    NO_ROUND_TYPE_SELECTED,
+  );
 
   return (
     <div
@@ -41,9 +46,10 @@ export function AddRoundModal({ onAddRound, onFinishAndReview, onContinue }: Add
           Round type
           <select
             value={roundTypeToAdd}
-            onChange={(e) => setRoundTypeToAdd(e.target.value as Round['roundType'])}
+            onChange={(e) => setRoundTypeToAdd(e.target.value as Round['roundType'] | '')}
             className={selectClass}
           >
+            <option value={NO_ROUND_TYPE_SELECTED}>None</option>
             {ROUND_TYPES.map((rt) => (
               <option key={rt} value={rt}>
                 {ROUND_TYPE_LABELS[rt]}
@@ -52,14 +58,18 @@ export function AddRoundModal({ onAddRound, onFinishAndReview, onContinue }: Add
           </select>
         </label>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => onAddRound(roundTypeToAdd)}>
-            Add round
+          <Button
+            type="button"
+            onClick={() => onAddRound(roundTypeToAdd as Round['roundType'])}
+            disabled={roundTypeToAdd === NO_ROUND_TYPE_SELECTED}
+          >
+            Add new round
           </Button>
           <Button type="button" variant="neutral" onClick={onFinishAndReview}>
             Finish draft &amp; go to review
           </Button>
-          <Button type="button" variant="neutral" onClick={onContinue}>
-            No, continue
+          <Button type="button" variant="neutral" onClick={onCancel}>
+            Cancel
           </Button>
         </div>
       </div>

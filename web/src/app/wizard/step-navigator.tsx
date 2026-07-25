@@ -1,14 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Round } from '@/lib/api';
 import { ProcessDraft } from '@/lib/draft-store';
 import { Button } from '@/components/Button';
 import { formatRoundLabel } from '@/lib/format-round-label';
-import { ROUND_TYPE_LABELS, ROUND_TYPES } from './round-type-labels';
-
-const selectClass =
-  'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
+import { ROUND_TYPE_LABELS } from './round-type-labels';
 
 function stepButtonClass(active: boolean): string {
   return `w-full rounded-md px-2 py-1 text-left transition-colors ${
@@ -26,7 +21,6 @@ interface StepNavigatorProps {
   // #254; 'review' added in issue #255).
   activeStepId: string;
   onSelect: (stepId: string) => void;
-  onAddRound: (roundType: Round['roundType']) => void;
   onAddRecruiter: (timing: 'start' | 'end') => void;
 }
 
@@ -34,11 +28,8 @@ export function StepNavigator({
   draft,
   activeStepId,
   onSelect,
-  onAddRound,
   onAddRecruiter,
 }: StepNavigatorProps) {
-  const [roundTypeToAdd, setRoundTypeToAdd] = useState<Round['roundType']>('coding');
-
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-1 text-sm">
@@ -96,23 +87,6 @@ export function StepNavigator({
       </ul>
 
       <div className="flex flex-wrap items-end gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
-        <label className="flex flex-col text-xs">
-          Add a round
-          <select
-            value={roundTypeToAdd}
-            onChange={(e) => setRoundTypeToAdd(e.target.value as Round['roundType'])}
-            className={selectClass}
-          >
-            {ROUND_TYPES.map((rt) => (
-              <option key={rt} value={rt}>
-                {ROUND_TYPE_LABELS[rt]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button type="button" onClick={() => onAddRound(roundTypeToAdd)}>
-          Add round
-        </Button>
         <Button type="button" variant="neutral" onClick={() => onAddRecruiter('start')}>
           + Recruiter (pre-interview)
         </Button>
