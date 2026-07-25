@@ -14,6 +14,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
+import { formatRoundLabel } from '@/lib/format-round-label';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
@@ -108,7 +109,7 @@ function RoundRatingItem({
     return (
       <article className={itemClass}>
         <p>
-          <strong>{rating.roundTitle}</strong> ({roundTypeLabel(rating.roundType)})
+          <strong>{formatRoundLabel(roundTypeLabel(rating.roundType), rating.roundTitle)}</strong>
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(['difficulty', 'fluency', 'clarity', 'focus'] as const).map((field) => (
@@ -154,7 +155,7 @@ function RoundRatingItem({
   return (
     <article className={itemClass}>
       <p>
-        <strong>{rating.roundTitle}</strong> ({roundTypeLabel(rating.roundType)}) —{' '}
+        <strong>{formatRoundLabel(roundTypeLabel(rating.roundType), rating.roundTitle)}</strong> —{' '}
         <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
       </p>
       <p className="text-gray-600 dark:text-gray-400">

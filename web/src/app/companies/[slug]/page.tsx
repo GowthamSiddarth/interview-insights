@@ -17,6 +17,7 @@ import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
+import { formatRoundLabel } from '@/lib/format-round-label';
 
 const PAGE_SIZE = 10;
 
@@ -39,7 +40,7 @@ function ReviewItem({ review }: { review: CompanyReviewItem }) {
   return (
     <article className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700">
       <p className="font-medium">
-        {review.roleTitle} · {roundTypeLabel(review.roundType)} ({review.roundTitle})
+        {review.roleTitle} · {formatRoundLabel(roundTypeLabel(review.roundType), review.roundTitle)}
       </p>
       <p className="text-gray-600 dark:text-gray-400">
         difficulty {review.difficulty} · fluency {review.fluency} · clarity{' '}

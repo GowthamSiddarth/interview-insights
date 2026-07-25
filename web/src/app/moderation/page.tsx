@@ -13,6 +13,8 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
+import { formatRoundLabel } from '@/lib/format-round-label';
+import { ROUND_TYPE_LABELS } from '../wizard/round-type-labels';
 
 const ENTITY_TYPE_LABEL: Record<ModerationQueueEntry['entityType'], string> = {
   round_rating: 'Round rating',
@@ -66,10 +68,10 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
     <div className="flex flex-col gap-1 text-sm">
       <p>
         <strong>{entity.companyName}</strong> · {entity.roleTitle}
-        {entity.roundTitle && (
+        {entity.roundType && (
           <>
             {' '}
-            · {entity.roundTitle} ({entity.roundType})
+            · {formatRoundLabel(ROUND_TYPE_LABELS[entity.roundType], entity.roundTitle)}
           </>
         )}
         {/* Generated label only — a real recruiter name never reaches this

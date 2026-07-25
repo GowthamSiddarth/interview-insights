@@ -64,7 +64,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'end-recruiter@example.com');
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
-    await user.type(await screen.findByLabelText('Title'), 'Only Round');
+    await user.type(await screen.findByLabelText(/Title/), 'Only Round');
 
     await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'start-recruiter@example.com');
@@ -93,7 +93,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await openDraft(user);
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
-    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
 
     const editButtons = await screen.findAllByRole('button', { name: 'Edit' });
@@ -108,7 +108,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await openDraft(user);
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
-    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.type(await screen.findByLabelText(/Title/), 'Screen');
     // GitHub issue #282 — a rating is already attached by default, no
     // opt-in click needed.
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
@@ -138,7 +138,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await openDraft(user);
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
-    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
     await user.click(await screen.findByRole('button', { name: 'Submit' }));
 
@@ -154,7 +154,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.click(screen.getByRole('button', { name: 'Back to my drafts' }));
     expect(await screen.findByText('Your drafts')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resume' }));
-    expect((await screen.findAllByText(/Round 1: Screen/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Round 1: Coding - Screen/)).length).toBeGreaterThan(0);
   });
 
   it('blocks submit and shows a plain-English fix list for an incomplete draft (GitHub issue #281)', async () => {
@@ -206,7 +206,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     // path specifically, simulating a shape the client-side check itself
     // didn't catch.
     await user.click(screen.getByRole('button', { name: 'Add round' }));
-    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
     await user.click(await screen.findByRole('button', { name: 'Submit' }));
 
@@ -226,11 +226,11 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     // Company creation is gated, but selecting an *existing* company and
     // drafting needs no session at all (issue #253/#255) — only submit does.
     await user.click(screen.getByRole('button', { name: 'Add round' }));
-    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.type(await screen.findByLabelText(/Title/), 'Screen');
     await user.click(screen.getByText('Review & Submit'));
 
     expect(await screen.findByText('Review your submission')).toBeInTheDocument();
-    expect((await screen.findAllByText(/Round 1: Screen/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Round 1: Coding - Screen/)).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Log in to unlock' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submit' })).not.toBeInTheDocument();
   });

@@ -22,7 +22,9 @@ export interface DraftRoundRating {
 
 export interface DraftRound {
   sequenceNumber: number;
-  title: string;
+  // Optional (GitHub issue #287, Phase 28) — display sites fall back to
+  // just the round type when absent.
+  title?: string;
   roundType: Round['roundType'];
   description?: string;
   scheduledDurationMinutes?: number;
@@ -257,9 +259,7 @@ export function validateDraft(draft: ProcessDraft): DraftValidationIssue[] {
   }
 
   draft.rounds.forEach((step, index) => {
-    if (!step.round.title.trim()) {
-      issues.push({ stepId: step.clientId, message: `Round ${index + 1} needs a title.` });
-    }
+    // Title is optional (GitHub issue #287) — nothing to validate here.
     if (step.round.rating) {
       const { difficulty, fluency, clarity, focus } = step.round.rating;
       if (

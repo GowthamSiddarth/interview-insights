@@ -14,6 +14,7 @@ interface ProcessBody {
 }
 interface RoundBody {
   id: string;
+  title: string | null;
   typeMetadata: Record<string, unknown> | null;
 }
 interface FieldOptionsResponse {
@@ -215,6 +216,21 @@ describe('Round-type registry (e2e)', () => {
           typeMetadata: { principlesAsked: ['Ownership'] }, // a leadership field, not behavioral
         })
         .expect(400);
+    });
+
+    it('accepts a round with no title at all (GitHub issue #287 — optional)', async () => {
+      const { processId } = await createProcess();
+
+      const createRes = await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({ sequenceNumber: 1, roundType: 'coding' })
+        .expect(201);
+      const createdId = body<RoundBody>(createRes).id;
+      expect(body<RoundBody>(createRes).title).toBeNull();
+
+      const listRes = await server().get(`/processes/${processId}/rounds`).expect(200);
+      const created = body<RoundBody[]>(listRes).find((r) => r.id === createdId);
+      expect(created?.title).toBeNull();
     });
 
     it('accepts an `other` round with only its free-text notes field', async () => {

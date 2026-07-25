@@ -301,7 +301,6 @@ export default function HomePage() {
     const saved = persist(
       addRoundStep(activeDraft, {
         sequenceNumber: nextSequenceNumber,
-        title: '',
         roundType,
         // GitHub issue #282 (Phase 28) — a rating is available by default
         // for every round, not an opt-in click per round; still removable

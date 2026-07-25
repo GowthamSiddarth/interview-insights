@@ -48,10 +48,10 @@ export function RoundStepForm({ step, fieldOptions, onChange, onRemove }: RoundS
       <h3 className="font-medium">{ROUND_TYPE_LABELS[round.roundType]} round</h3>
 
       <label className="flex flex-col text-sm">
-        Title
+        Title (optional)
         <input
-          value={round.title}
-          onChange={(e) => update({ title: e.target.value })}
+          value={round.title ?? ''}
+          onChange={(e) => update({ title: e.target.value || undefined })}
           className={inputClass}
         />
       </label>

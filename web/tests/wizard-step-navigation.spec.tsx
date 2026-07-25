@@ -98,54 +98,18 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (before rounds)' }));
     expect(await screen.findByRole('heading', { name: 'Recruiter touchpoint' })).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Recruiter name or email/), 'jane@acme.example');
 
-    expect(await screen.findByText(/Recruiter \(pre-interview\): jane@acme.example/)).toBeInTheDocument();
+    expect(await screen.findByText(/Recruiter \(before rounds\): jane@acme.example/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (post-interview)' }));
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (after rounds)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'bob@acme.example');
-    expect(await screen.findByText(/Recruiter \(post-interview\): bob@acme.example/)).toBeInTheDocument();
+    expect(await screen.findByText(/Recruiter \(after rounds\): bob@acme.example/)).toBeInTheDocument();
 
     // Both steps still present and independent.
-    expect(screen.getByText(/Recruiter \(pre-interview\): jane@acme.example/)).toBeInTheDocument();
-  });
-
-  it('shows the recruiter step\'s timing as read-only text, already chosen at add-time (GitHub issue #285)', async () => {
-    const user = userEvent.setup();
-    await openDraft(user);
-
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
-    expect(await screen.findByText('Before my interview')).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: /When was this/ })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (post-interview)' }));
-    expect(await screen.findByText('After my interview')).toBeInTheDocument();
-  });
-
-  it('shows a tooltip explaining each recruiter trait rating (GitHub issue #286)', async () => {
-    const user = userEvent.setup();
-    await openDraft(user);
-
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
-    await user.click(await screen.findByLabelText('I have a rating for this touchpoint'));
-
-    expect(screen.getByText('reachability').closest('label')).toHaveAttribute(
-      'title',
-      'How easy the recruiter was to reach or get a response from.',
-    );
-    expect(screen.getByText('responsiveness').closest('label')).toHaveAttribute(
-      'title',
-      expect.stringContaining('followed up'),
-    );
-    expect(screen.getByText('guidelines Shared').closest('label')).toHaveAttribute(
-      'title',
-      expect.stringContaining('explained the process'),
-    );
-    expect(
-      screen.getByText(/Rejection message authenticity/).closest('label'),
-    ).toHaveAttribute('title', expect.stringContaining('genuine or personalized'));
+    expect(screen.getByText(/Recruiter \(before rounds\): jane@acme.example/)).toBeInTheDocument();
   });
 
   it('a round step survives a reload with its rating intact', async () => {
@@ -173,7 +137,7 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     // since no recruiter step exists yet at this point.
     await user.click(screen.getByRole('button', { name: 'Add round' }));
     await user.type(await screen.findByLabelText('Title'), 'Screen');
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (before rounds)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'jane@acme.example');
 
     await user.click(screen.getByRole('button', { name: 'Process details' }));

@@ -181,5 +181,13 @@ describe('draft-store', () => {
 
       expect(validateDraft(draft)).toEqual([]);
     });
+
+    it('does not flag a round with no title at all (GitHub issue #287 — optional)', () => {
+      let draft = createDraft(acme);
+      draft = { ...draft, process: { ...draft.process, roleTitle: 'Engineer' } };
+      draft = addRoundStep(draft, { sequenceNumber: 1, roundType: 'coding' });
+
+      expect(validateDraft(draft)).toEqual([]);
+    });
   });
 });

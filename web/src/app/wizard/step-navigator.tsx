@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Round } from '@/lib/api';
 import { ProcessDraft } from '@/lib/draft-store';
 import { Button } from '@/components/Button';
+import { formatRoundLabel } from '@/lib/format-round-label';
 import { ROUND_TYPE_LABELS, ROUND_TYPES } from './round-type-labels';
 
 const selectClass =
@@ -57,8 +58,8 @@ export function StepNavigator({
               onClick={() => onSelect(step.clientId)}
               className={stepButtonClass(activeStepId === step.clientId)}
             >
-              Round {index + 1}: {step.round.title || <em>untitled</em>} —{' '}
-              {ROUND_TYPE_LABELS[step.round.roundType]}
+              Round {index + 1}:{' '}
+              {formatRoundLabel(ROUND_TYPE_LABELS[step.round.roundType], step.round.title)}
             </button>
           </li>
         ))}

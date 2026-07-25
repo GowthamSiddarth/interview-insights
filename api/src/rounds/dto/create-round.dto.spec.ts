@@ -36,9 +36,14 @@ describe('CreateRoundDto', () => {
     expect(errors.some((e) => e.property === 'roundType')).toBe(true);
   });
 
-  it('rejects a missing title', async () => {
+  it('accepts a missing title (GitHub issue #287 — optional)', async () => {
     const { title: _title, ...rest } = valid;
     const dto = plainToInstance(CreateRoundDto, rest);
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
+  it('rejects a non-string title', async () => {
+    const dto = plainToInstance(CreateRoundDto, { ...valid, title: 123 });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'title')).toBe(true);
   });
