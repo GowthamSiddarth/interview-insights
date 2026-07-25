@@ -2701,13 +2701,32 @@ since its own trigger (first shared/staging deployment with real
 traffic) still hasn't fired. All three epics are on the project board
 at "Todo" — planning only, no implementation started yet.
 
-- Next step: #318 (Phase 29's engineering blog, written last, now
-  that #315-317 are all done). Phase 19 (Content Quality & Synthetic
-  Data, issues #162-165), Phase 27 (Admin Content Gateway), and Phases
-  30-32 (Event-Driven Foundation / Notification Service / Review
-  Analyzer Service) all remain planned but not started. Continue
-  merging without waiting for CI until the user says the GitHub
-  Actions billing limit has been refreshed.
+**Phase 29, issue #318 (engineering blog)** —
+`wiki/blog/phase-29-moderator-full-content-visibility/` gained one post
+per feature issue (#315, #316, #317), covering issue #315's mid-
+implementation scope expansion into grouping-by-submission and its two
+resolved kickoff questions (typeMetadata renders as direct key/value
+pairs; interviewer-label enrichment out of scope, no write path exists),
+issue #316's redundant-with-#315 closure, and issue #317's reframing
+from a straightforward extension into fixing a real rate-limit bug
+(D52) — including why moderation stays per-entity while rate-limiting
+moved to per-submission, and why the bulk-submission transaction needed
+no special-casing for the new submission-count check.
+`wiki/blog/README.md`'s index updated to match.
+
+**Phase 29 is now fully done** — issues #315-318 all closed via merged
+PRs (#316 closed without a dedicated PR, resolved as a side effect of
+#315), and every phase built so far now has a complete engineering
+blog.
+
+- Next step: Phase 27 (Admin Content Gateway, issues #263-265) — user
+  confirmed the issues are well-specified enough to implement directly,
+  no kickoff brainstorm needed. Phase 19 (Content Quality & Synthetic
+  Data, issues #162-165) and Phases 30-32 (Event-Driven Foundation /
+  Notification Service / Review Analyzer Service) remain planned but
+  not started, after Phase 27. Continue merging without waiting for CI
+  until the user says the GitHub Actions billing limit has been
+  refreshed.
 
 ## Open decisions still to make
 
