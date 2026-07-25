@@ -56,17 +56,17 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     const user = userEvent.setup();
     await openDraft(user);
 
-    // Add an "after rounds" recruiter step first, then a round, then a
-    // "before rounds" recruiter step — deliberately out of chronological
+    // Add a "post-interview" recruiter step first, then a round, then a
+    // "pre-interview" recruiter step — deliberately out of chronological
     // order to prove the review screen re-sorts rather than showing fill
     // order.
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (after rounds)' }));
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (post-interview)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'end-recruiter@example.com');
 
     await user.click(screen.getByRole('button', { name: 'Add round' }));
     await user.type(await screen.findByLabelText('Title'), 'Only Round');
 
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (before rounds)' }));
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
     await user.type(await screen.findByLabelText(/Recruiter name or email/), 'start-recruiter@example.com');
 
     await user.click(screen.getByText('Review & Submit'));
@@ -165,7 +165,7 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     // Deliberately leave Role title empty, add a recruiter touchpoint with
     // no identifier — the two required-field cases the original bug report
     // was about.
-    await user.click(screen.getByRole('button', { name: '+ Recruiter (before rounds)' }));
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
     await user.click(screen.getByText('Review & Submit'));
 
     expect(await screen.findByText('Role title is required.')).toBeInTheDocument();

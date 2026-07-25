@@ -92,7 +92,7 @@ export function ReviewScreen({
         {startSteps.map((step) => (
           <li key={step.clientId} className={rowFor(step.clientId)}>
             <span>
-              Recruiter (before rounds): {step.interaction.recruiterIdentifier || 'untitled'}
+              Recruiter (pre-interview): {step.interaction.recruiterIdentifier || 'untitled'}
             </span>
             <button type="button" onClick={() => onEditStep(step.clientId)} className={linkClass}>
               Edit
@@ -115,7 +115,7 @@ export function ReviewScreen({
         {endSteps.map((step) => (
           <li key={step.clientId} className={rowFor(step.clientId)}>
             <span>
-              Recruiter (after rounds): {step.interaction.recruiterIdentifier || 'untitled'}
+              Recruiter (post-interview): {step.interaction.recruiterIdentifier || 'untitled'}
             </span>
             <button type="button" onClick={() => onEditStep(step.clientId)} className={linkClass}>
               Edit

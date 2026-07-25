@@ -10,19 +10,23 @@ const RATING_FIELDS = ['reachability', 'responsiveness', 'guidelinesShared'] as 
 
 interface RecruiterStepFormProps {
   step: DraftRecruiterStep;
-  onChange: (interaction: DraftRecruiterInteraction, timing: DraftRecruiterStep['timing']) => void;
+  onChange: (interaction: DraftRecruiterInteraction) => void;
   onRemove: () => void;
 }
 
 // GitHub issue #254 (Phase 26) — a recruiter touchpoint step. `timing`
 // (start/end) is client-only, never sent to the backend (issue #253/D50)
 // — it only decides where this step sorts on the chronological review
-// screen (issue #255).
+// screen (issue #255). It's chosen once, at add-time, via the step
+// navigator's two distinct "+ Recruiter (pre-interview/post-interview)"
+// buttons — GitHub issue #285 made it read-only here rather than an
+// in-place editable select, since a candidate would otherwise have two
+// different ways to set the same thing.
 export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFormProps) {
   const { interaction, timing } = step;
 
   function update(patch: Partial<DraftRecruiterInteraction>) {
-    onChange({ ...interaction, ...patch }, timing);
+    onChange({ ...interaction, ...patch });
   }
 
   function toggleRating(hasRating: boolean) {
@@ -42,17 +46,9 @@ export function RecruiterStepForm({ step, onChange, onRemove }: RecruiterStepFor
     <div className="flex flex-col gap-3">
       <h3 className="font-medium">Recruiter touchpoint</h3>
 
-      <label className="flex flex-col text-sm">
-        When was this?
-        <select
-          value={timing}
-          onChange={(e) => onChange(interaction, e.target.value as DraftRecruiterStep['timing'])}
-          className={inputClass}
-        >
-          <option value="start">Before my interview rounds</option>
-          <option value="end">After my interview rounds</option>
-        </select>
-      </label>
+      <p className="text-sm">
+        When was this? <span className="font-medium">{timing === 'start' ? 'Before my interview' : 'After my interview'}</span>
+      </p>
 
       <label className="flex flex-col text-sm">
         Recruiter name or email
