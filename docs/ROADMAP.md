@@ -1119,7 +1119,11 @@ Submission Consistency". Epic: GitHub issue #314.
       `MySubmissionRoundRating` — resolved as a side effect of #315's
       own rewrite of the same type, closed without a dedicated PR
       (GitHub issue #316)
-- [ ] Extend fraud-check rate limiting to recruiter ratings and
-      overall reviews, in both the single-create and bulk-submission
-      paths — currently round-rating-only (GitHub issue #317)
+- [ ] Rework fraud-check rate limiting to count submissions
+      (`InterviewProcess` creations), not individual entities, and
+      extend it to recruiter ratings and overall reviews alongside
+      round ratings, in both the single-create and bulk-submission
+      paths — reframed per D52 after live data showed the entity-count
+      version could trip on a single legitimate multi-round submission
+      (GitHub issue #317)
 - [ ] Engineering blog (last) (GitHub issue #318)
