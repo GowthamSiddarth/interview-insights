@@ -2328,11 +2328,39 @@ and optional round titles' shared `formatRoundLabel()` helper
 (including the real pre-existing moderation-queue bug it surfaced).
 `wiki/blog/README.md`'s index updated to match.
 
-**Phase 28 is now fully done** — issues #281-288 all merged (#281-284
-via normal CI-verified PRs; #285-288 merged during the CI billing gap
-per the user's explicit direction, with local `npm test`/`lint`/
-`build` as the correctness gate instead), and every phase built so far
-now has a complete engineering blog.
+**Phase 28 was declared fully done, then reopened once more** — a
+user question about why the wizard's write path isn't session-gated
+(answer: Phase 26's deliberate design — a draft is pure client-side
+state until the one atomic submit) surfaced a real related gap: the
+candidate session (and its hint cookie) expire a fixed 1h after login
+with no sliding renewal, but the wizard's `candidateSession` state was
+only ever checked once at mount. A candidate spending over an hour on
+a multi-round draft could keep seeing Submit as available long after
+the session actually died, then hit a misleading generic
+validation-error message on submit instead of being told to log back
+in. **Issue #301** fixed this: `candidateSession` is now polled every
+30s (a cheap cookie read, no network call); a logged-in -> logged-out
+transition shows a warning banner on every step of the active draft
+("Your session has expired... your draft is saved and won't be
+lost"), clearing automatically once logged back in. The review
+screen's existing `GatedSection` already re-hides Submit once the
+state goes live — no separate fix needed there. Defense in depth: a
+submit that still reaches the network with an expired session (a
+timing edge case between polls) is now caught via `status === 401`
+specifically and shown the same clear message instead of issue #281's
+generic fallback. The draft itself is never touched by any of this.
+4 new component tests (fake-timer-driven: proactive detection,
+never-logged-in no-op, re-login clears the warning, the reactive 401
+path) — 100 web tests total. Epic #280 reopened and re-closed the same
+day, same precedent as every other epic reopening in this project.
+`wiki/blog/phase-28-wizard-ux-refinements/issue-301-session-expiry-warning/`
+added; `wiki/blog/README.md`'s index updated.
+
+**Phase 28 is now fully done** — issues #281-288 and #301 all merged
+(#281-284 via normal CI-verified PRs; #285-288 and #301 merged during
+the CI billing gap per the user's explicit direction, with local
+`npm test`/`lint`/`build` as the correctness gate instead), and every
+phase built so far now has a complete engineering blog.
 
 - Next step: continue merging without waiting for CI until the user
   says the GitHub Actions billing limit has been refreshed. Phase 19
