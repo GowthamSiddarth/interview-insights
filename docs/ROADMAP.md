@@ -656,8 +656,17 @@ candidates).
 - [x] GDPR erasure path: `DELETE /me` + retention policy decided and
       documented; clears session cookies; shared `Recruiter` rows
       excluded (GitHub issue #151) — see D34
-- [x] Engineering blog (last) (GitHub issue #152) — Phase 17 is now
-      fully done
+- [x] Engineering blog (last) (GitHub issue #152) — Phase 17 declared
+      fully done, then reopened while verifying Phase 24 issue #247:
+      abandoned, content-free processes had no cleanup path on `/me`
+      at all (GitHub issue #260, D46). Epic #183 reopened, same
+      precedent Phase 18/20 already set.
+- [x] Let a candidate delete an entirely-empty process (zero ratings/
+      reviews in any status) — deliberately narrower than issue #150's
+      own "never structural entities" scope, not a reversal of it;
+      structurally superseded once Phase 26 ships, since an abandoned
+      draft will never reach the database at all (GitHub issue #260,
+      D46). Phase 17 is now fully done
 
 ## Phase 18 — Admin Authentication
 

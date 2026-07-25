@@ -1867,6 +1867,32 @@ applied (a genuinely separate database from dev, needing its own
 from prior sessions blocking the `NOT NULL` column add — truncated,
 since it's disposable test data by design (D24).
 
+**Phase 17 reopened (GitHub issue #260, D46)** — a real user report
+while looking at their own `/me` page, found while live-verifying
+issue #247: several `InterviewProcess` rows had a `Round` created but
+were abandoned before ever submitting a rating, showing "No ratings
+submitted for this process yet." forever with no cleanup path. New
+`DELETE /processes/:id` (`CandidateJwtAuthGuard`, same ownership 403/
+404 pattern as `RoundRatingsService.remove()`) only succeeds when the
+process is genuinely empty — zero ratings/reviews across every
+status, a still-`pending` one included, since there's real content to
+lose either way; otherwise 409. Deliberately narrower than issue
+#150's own "never structural entities" scope decision, not a reversal
+of it — #150 is about not letting edits undermine moderation, this is
+about not letting truly-empty data sit forever, and the two don't
+actually conflict. `/me` gained a "Delete process" button exactly
+where the empty-state message already showed. 265 api unit tests, 111
+e2e tests (6 new), the golden-path smoke test, and 67 web tests (2
+new) all green; live-verified against the real cluster: a fresh
+abandoned process showed the button and deleted cleanly, a real
+submission never showed it, and the actual leftover rows from the
+original report were cleaned up directly (plus an orphaned
+moderation-queue entry the verification itself left behind, same D44
+pattern). Structurally superseded once Phase 26 ships, since an
+abandoned draft will never reach the database at all — this stays
+useful afterward too. **Phase 17 is now fully done** — issue #260
+closed via merged PR.
+
 - Next step: Phase 24, issue #248 (round-type registry + `type_
   metadata` schemas for coding/system design) — issue #249 (recruiter
   fields) still needs its kickoff brainstorm resolved first.

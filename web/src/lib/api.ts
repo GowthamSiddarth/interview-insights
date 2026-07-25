@@ -337,6 +337,12 @@ export const api = {
 
   getProcess: (processId: string) => request<InterviewProcess>(`/processes/${processId}`),
 
+  // Only ever succeeds for a genuinely empty process — no rating/review
+  // in any status. GitHub issue #260, deliberately narrower than issue
+  // #150's own "never structural entities" scope decision.
+  deleteProcess: (processId: string) =>
+    request<void>(`/processes/${processId}`, { method: 'DELETE' }),
+
   createRound: (
     processId: string,
     input: { sequenceNumber: number; title: string; roundType: Round['roundType'] },

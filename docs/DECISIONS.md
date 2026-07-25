@@ -1742,6 +1742,48 @@ deferred, not decided here.
 
 ---
 
+### D46 — A candidate can delete an entirely-empty process (GitHub issue #260, Phase 17)
+
+**Context:** live-verifying issue #247 surfaced real `/me` clutter: an
+`InterviewProcess` with a `Round` created but abandoned before ever
+submitting a rating shows "No ratings submitted for this process yet."
+forever, with no way to remove it. Issue #150 had already decided,
+deliberately, that Update/Delete stays scoped to the three moderated
+content types only — "never the structural entities," since there's
+no moderation status on a structural entity to protect. That reasoning
+is still correct for what #150 was actually about. This is a different
+concern: a person's own content-free, abandoned data shouldn't be
+permanently stuck with no cleanup path at all.
+
+**Decision:**
+- New `DELETE /processes/:id`, gated by `CandidateJwtAuthGuard`, same
+  ownership pattern as `RoundRatingsService.remove()` (404 if not
+  visible, 403 if owned by someone else).
+- Only succeeds when the process is genuinely empty — zero round
+  ratings, zero recruiter ratings, no overall review, across **every**
+  status. A still-`pending`, unmoderated rating counts as real content
+  — there's something to lose, so it's out of scope here exactly as
+  much as an approved one. Otherwise: 409 Conflict.
+- Deletes the process's (empty) rounds and recruiter interactions
+  along with it. No `moderation_queue` cleanup needed — an empty
+  process by definition never enqueued anything.
+- `/me` shows a "Delete process" button only in the exact spot it
+  already showed "No ratings submitted for this process yet." — same
+  `window.confirm`-gated pattern as every other delete on that page.
+- Deliberately narrower than issue #150, not a reversal of it: #150 is
+  about not letting edits undermine moderation; this is about not
+  letting truly-empty data sit forever. The two decisions don't
+  actually conflict, they're just answering different questions.
+- Structurally superseded once Phase 26 (client-side draft wizard)
+  ships — an abandoned draft will never reach the database at all.
+  This stays useful afterward too, for whatever residue Phase 26
+  doesn't fully prevent.
+
+**Revisit when:** never expected to need revisiting — this is a
+narrow, permanent capability, not a placeholder.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

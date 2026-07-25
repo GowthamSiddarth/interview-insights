@@ -166,6 +166,68 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     expect(await screen.findByText('No ratings submitted for this process yet.')).toBeInTheDocument();
   });
 
+  // GitHub issue #260: an empty process gets a delete affordance — found
+  // live while verifying issue #247's fields, an abandoned mid-wizard
+  // process had no cleanup path at all.
+  const emptyProcessSubmission = [
+    {
+      processId: 'process-1',
+      companyId: 'company-1',
+      companyName: 'Acme Corp',
+      companySlug: 'acme-corp',
+      roleTitle: 'Engineer',
+      outcome: 'in_progress',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      roundRatings: [],
+      recruiterRatings: [],
+      overallReview: null,
+    },
+  ];
+
+  it('deletes an empty process after confirming, then reloads the list', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    let deleteCalled = false;
+
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/me/submissions')) {
+        const body = deleteCalled ? [] : emptyProcessSubmission;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      }
+      if (url.endsWith('/processes/process-1') && init?.method === 'DELETE') {
+        deleteCalled = true;
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
+      }
+      throw new Error(`Unmocked fetch: ${url} ${init?.method ?? 'GET'}`);
+    }) as jest.Mock;
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete process' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(deleteCalled).toBe(true));
+    confirmSpy.mockRestore();
+  });
+
+  it('does not delete the process when the confirmation is declined', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    mockSubmissions(emptyProcessSubmission);
+
+    render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete process' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    const fetchMock = global.fetch as jest.Mock;
+    expect(
+      fetchMock.mock.calls.some((c: unknown[]) => (c[1] as RequestInit | undefined)?.method === 'DELETE'),
+    ).toBe(false);
+    confirmSpy.mockRestore();
+  });
+
   // GitHub issue #150: an edit resets the item to pending — this test
   // proves the client sends a PATCH to the right URL and reloads the list
   // afterward (which is why the list mock has to answer /me/submissions
