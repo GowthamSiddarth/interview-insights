@@ -980,3 +980,36 @@ Content Gateway (Round-Type Field Options)". Epic: GitHub issue #262.
 - [ ] Admin UI page to manage round-type field options, mirroring
       `moderation/page.tsx`'s session-check shape (GitHub issue #264)
 - [ ] Engineering blog (last) (GitHub issue #265)
+
+## Phase 28 — Wizard UX Refinements
+
+Filed 2026-07-25 from a batch of live-verification findings against the
+Phase 26 client-side draft wizard: an unfriendly raw validation-error
+message on submit, round ratings requiring an opt-in click on every
+round, no way to advance through steps without returning to the
+navigator each time, a missing "Tech Screening" round type, recruiter
+step wording/timing-editability issues, no explanation of what each
+recruiter trait measures, and a round's title being both mandatory and
+displayed as the literal word "untitled" when absent. Milestone
+"Phase 28 — Wizard UX Refinements". Epic: GitHub issue #280.
+
+- [ ] Client-side pre-submit validation + friendly fallback messages
+      for any backend validation error that still reaches the UI
+      (GitHub issue #281)
+- [ ] New rounds default to having a rating already available
+      (checked), not opt-in per round (GitHub issue #282)
+- [ ] "Next" button on every step, advancing through a fixed
+      process -> rounds -> recruiter steps -> overall review -> review
+      order, alongside the existing free-jump navigator (GitHub issue
+      #283)
+- [ ] "Tech Screening" added as a `RoundType`, with its own registry
+      fields and seeded default values (GitHub issue #284)
+- [ ] Recruiter step wording renamed to pre-interview/post-interview
+      throughout, and its timing field made read-only (already chosen
+      at add-time, not editable in place) (GitHub issue #285)
+- [ ] Tooltips explaining each recruiter trait rating (GitHub issue
+      #286)
+- [ ] Round title made optional; every display site reformatted to
+      "{Type} - {Title}" (title segment omitted entirely when absent)
+      (GitHub issue #287)
+- [ ] Engineering blog (last) (GitHub issue #288)
