@@ -2054,11 +2054,69 @@ load-bearing for the rolling rate-limit check, and the
 merged PRs, and every phase built so far now has a complete
 engineering blog.
 
-- Next step: Phase 26 (Client-Side Draft Wizard, epic #246, issues
-  #253-256) — a genuine wizard rewrite (draft-state persistence, a new
-  flashcard navigation paradigm, a chronological review screen wired
-  to Phase 25's bulk endpoint). Given the size, this goes through Plan
-  Mode before any code, same as issue #248's expanded scope did.
+**Phase 26 planning (Client-Side Draft Wizard)** — given the size (a
+genuine wizard rewrite: draft-state persistence, a new flashcard
+navigation paradigm, a chronological review screen wired to Phase 25's
+bulk endpoint), this went through Plan Mode before any code, same as
+issue #248's expanded scope did. Implemented as three sequential PRs,
+one per issue (#253 → #254 → #255), matching every other phase's
+per-issue granularity.
+
+**Phase 26, issue #253 (client-side draft state architecture)** — new
+`web/src/lib/draft-store.ts`: a `ProcessDraft` type mirroring Phase
+25's bulk-submission DTOs directly (`rounds`/`recruiterInteractions`/
+`overallReview`, each round/recruiter step wrapped with a client-only
+`clientId`) plus a client-only `timing: 'start' | 'end'` per recruiter
+step (realizing issue #254's "Recruiter — Start"/"Recruiter — End"
+vocabulary without a numeric position scheme — D50). Backed by one
+versioned localStorage key (`interview-insights:drafts:v1`) holding
+`Record<string, ProcessDraft>` — the first client-side persistence
+anywhere in `web/`. Pure CRUD + add/remove-step helper functions, no
+I/O side effects beyond the store itself. A draft never carries
+`candidateId` (D31-consistent) and needs no session to edit at all —
+only creating a brand-new company and the eventual bulk submit
+(issue #255) are session-gated, which falls directly out of the design
+rather than being deliberately engineered.
+
+`web/src/app/page.tsx` rewritten: company pick-or-create (now using
+the existing `GatedSection` component instead of a hand-rolled
+tri-state conditional) → a "Your drafts" list (resume/delete) once any
+exist → selecting/creating a company or resuming a draft opens a
+minimal editor for the process-detail fields only (auto-saved on every
+change), with a placeholder note where the old incremental round/
+rating/recruiter/overall-review steps used to be — those return, backed
+by the draft store, in issues #254/#255. `recruiter-overall-steps.spec.tsx`
+(tested the now-removed incremental steps) deleted; `page.spec.tsx`
+rewritten for the new flow. New `web/src/components/ErrorBanner.tsx`
+extracted from its previous inline definition, since upcoming wizard
+files need it too.
+
+Found and fixed a real bug while testing, not just a test-environment
+quirk: `crypto.randomUUID()` threw in jsdom, and on inspection also
+requires a secure context in real browsers — which every one of this
+project's deployed environments fails today (plain HTTP, non-`localhost`
+origin, D27, no TLS yet). Fixed with a feature-detected `generateId()`
+fallback (D50) — correct in both places at once, not a test-only shim.
+
+9 new unit tests (`draft-store.spec.ts` — creation, reload-persistence,
+two-simultaneous-companies non-corruption, ordering, delete, round/
+recruiter step add/remove, corrupted-data tolerance) + `page.spec.tsx`
+rewritten (6 tests) for the new company→drafts flow; 73 web tests
+total, build/lint clean. Live-verified with a real headless-browser
+(Playwright, installed ad hoc into an isolated scratch npm project to
+avoid an `npx`-resolved version/browser-binary mismatch) against the
+real `kind` cluster: anonymous visit shows the log-in prompt for
+create-company: real magic-link login → company creation opens a
+draft automatically → edited role title/outcome → full page reload →
+drafts list shows the edit intact → resume shows the field correctly
+pre-filled → delete removes the draft while the company itself
+(correctly) still exists in the picker — zero console errors
+throughout. Test data cleaned up afterward.
+
+- Next step: Phase 26, issue #254 (flashcard-style step navigation,
+  consuming Phase 24's round-type registry) — builds the actual round/
+  recruiter step forms and free-jump navigation on top of #253's data
+  layer.
 
 ## Open decisions still to make
 

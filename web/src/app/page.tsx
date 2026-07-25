@@ -2,31 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { api, ApiError, Company } from '@/lib/api';
 import {
-  api,
-  ApiError,
-  Company,
-  InterviewProcess,
-  OverallReview,
-  RecruiterRating,
-  Round,
-  RoundRating,
-} from '@/lib/api';
+  createDraft,
+  deleteDraft,
+  listDrafts,
+  saveDraft,
+  ProcessDraft,
+} from '@/lib/draft-store';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
+import { ErrorBanner } from '@/components/ErrorBanner';
+import { GatedSection } from '@/components/GatedSection';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
-
-function ErrorBanner({ message }: { message: string | null }) {
-  if (!message) return null;
-  return (
-    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-      {message}
-    </p>
-  );
-}
+const inputClass =
+  'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
@@ -34,23 +27,14 @@ function errorMessage(err: unknown): string {
 
 export default function HomePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [company, setCompany] = useState<Company | null>(null);
-  // null = still checking; false = no session — GitHub issue #147 gates
-  // step 2 on a real candidate session instead of collecting an email
-  // inline, now that candidate creation only happens via the magic-link
-  // auth flow (issue #145/#146). Also gates step 1's *create* form (not
-  // the existing-company picker, which is just a read) now that
-  // POST /companies requires a session too. Read from the session-hint
-  // cookie (see NavBar/api.ts) rather than a GET /auth/me call — no
-  // network 401 to log purely for rendering this gate on the platform's
-  // home page.
+  // null = still checking; false = no session. Only gates the *create a
+  // new company* form below (GitHub issue #217) — picking an existing
+  // company, and every bit of draft editing, needs no session at all.
+  // A draft is pure client-side state (issue #253) until issue #255's
+  // bulk submit, which is the only step that actually requires login.
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
-  const [process, setProcess] = useState<InterviewProcess | null>(null);
-  const [round, setRound] = useState<Round | null>(null);
-  const [rating, setRating] = useState<RoundRating | null>(null);
-  const [approvedRatings, setApprovedRatings] = useState<RoundRating[] | null>(null);
-  const [recruiterRating, setRecruiterRating] = useState<RecruiterRating | null>(null);
-  const [overallReview, setOverallReview] = useState<OverallReview | null>(null);
+  const [drafts, setDrafts] = useState<ProcessDraft[]>([]);
+  const [activeDraft, setActiveDraft] = useState<ProcessDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,17 +45,14 @@ export default function HomePage() {
     setCandidateSession(api.hasCandidateSessionHint());
   }, []);
 
-  function handleChangeCompany() {
-    // Reset every step that depended on the previous company — none of
-    // it applies once a different company is selected.
-    setCompany(null);
-    setProcess(null);
-    setRound(null);
-    setRating(null);
-    setApprovedRatings(null);
-    setRecruiterRating(null);
-    setOverallReview(null);
-    setError(null);
+  useEffect(() => {
+    setDrafts(listDrafts());
+  }, []);
+
+  function handleStartDraft(company: Company) {
+    const draft = createDraft(company);
+    setDrafts(listDrafts());
+    setActiveDraft(draft);
   }
 
   async function handleCreateCompany(formData: FormData) {
@@ -83,103 +64,34 @@ export default function HomePage() {
         sizeBucket: formData.get('sizeBucket') as Company['sizeBucket'],
       });
       setCompanies((prev) => [created, ...prev]);
-      setCompany(created);
+      handleStartDraft(created);
     } catch (err) {
       setError(errorMessage(err));
     }
   }
 
-  async function handleCreateProcess(formData: FormData) {
-    if (!company || !candidateSession) return;
-    setError(null);
-    try {
-      const created = await api.createProcess(company.id, {
-        roleTitle: String(formData.get('roleTitle')),
-        outcome: formData.get('outcome') as InterviewProcess['outcome'],
-      });
-      setProcess(created);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
+  function handleBackToDrafts() {
+    setActiveDraft(null);
   }
 
-  async function handleCreateRound(formData: FormData) {
-    if (!process) return;
-    setError(null);
-    try {
-      const created = await api.createRound(process.id, {
-        sequenceNumber: (process.rounds?.length ?? 0) + 1,
-        title: String(formData.get('title')),
-        roundType: formData.get('roundType') as Round['roundType'],
-      });
-      setRound(created);
-      setProcess({ ...process, rounds: [...(process.rounds ?? []), created] });
-    } catch (err) {
-      setError(errorMessage(err));
-    }
+  function handleDeleteDraft(id: string) {
+    if (!window.confirm('Delete this draft? This cannot be undone.')) return;
+    deleteDraft(id);
+    setDrafts(listDrafts());
+    if (activeDraft?.id === id) setActiveDraft(null);
   }
 
-  async function handleCreateRating(formData: FormData) {
-    if (!round) return;
-    setError(null);
-    const field = (name: string) => Number(formData.get(name));
-    try {
-      const created = await api.createRoundRating(round.id, {
-        difficulty: field('difficulty'),
-        fluency: field('fluency'),
-        clarity: field('clarity'),
-        focus: field('focus'),
-      });
-      setRating(created);
-      const approved = await api.listApprovedRatingsForRound(round.id);
-      setApprovedRatings(approved);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }
-
-  async function handleCreateRecruiterRating(formData: FormData) {
-    if (!process) return;
-    setError(null);
-    const field = (name: string) => Number(formData.get(name));
-    try {
-      // Two writes in sequence: the interaction resolves the recruiter's
-      // internal identity server-side (the identifier is hashed, never
-      // stored raw), then the rating attaches to that interaction.
-      const interaction = await api.createRecruiterInteraction(process.id, {
-        recruiterIdentifier: String(formData.get('recruiterIdentifier')),
-      });
-      const freeText = String(formData.get('freeText') ?? '').trim();
-      const rejectionMessageAuthenticityRaw = formData.get('rejectionMessageAuthenticity');
-      const created = await api.createRecruiterRating(interaction.id, {
-        reachability: field('reachability'),
-        responsiveness: field('responsiveness'),
-        guidelinesShared: field('guidelinesShared'),
-        ...(rejectionMessageAuthenticityRaw
-          ? { rejectionMessageAuthenticity: Number(rejectionMessageAuthenticityRaw) }
-          : {}),
-        ...(freeText ? { freeText } : {}),
-      });
-      setRecruiterRating(created);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }
-
-  async function handleCreateOverallReview(formData: FormData) {
-    if (!process) return;
-    setError(null);
-    try {
-      const reviewText = String(formData.get('reviewText') ?? '').trim();
-      const created = await api.createOverallReview(process.id, {
-        overallExperience: Number(formData.get('overallExperience')),
-        wouldRecommend: formData.get('wouldRecommend') === 'on',
-        ...(reviewText ? { reviewText } : {}),
-      });
-      setOverallReview(created);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
+  function updateProcessField<K extends keyof ProcessDraft['process']>(
+    key: K,
+    value: ProcessDraft['process'][K],
+  ) {
+    if (!activeDraft) return;
+    const updated = saveDraft({
+      ...activeDraft,
+      process: { ...activeDraft.process, [key]: value },
+    });
+    setActiveDraft(updated);
+    setDrafts(listDrafts());
   }
 
   return (
@@ -194,340 +106,147 @@ export default function HomePage() {
 
       <ErrorBanner message={error} />
 
-      <Card as="section" className="flex flex-col gap-3">
-        <h2 className="font-medium">1. Company</h2>
-        {companies.length > 0 && !company && (
-          <div className="flex flex-wrap gap-2">
-            {companies.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setCompany(c)}
-                className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+      {!activeDraft && (
+        <>
+          {drafts.length > 0 && (
+            <Card as="section" className="flex flex-col gap-3">
+              <h2 className="font-medium">Your drafts</h2>
+              <ul className="flex flex-col gap-2">
+                {drafts.map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  >
+                    <span>
+                      {d.companyName} — {d.process.roleTitle || 'Untitled process'}
+                    </span>
+                    <span className="flex gap-2">
+                      <Button type="button" onClick={() => setActiveDraft(d)}>
+                        Resume
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        onClick={() => handleDeleteDraft(d.id)}
+                      >
+                        Delete
+                      </Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <Card as="section" className="flex flex-col gap-3">
+            <h2 className="font-medium">Start a new draft</h2>
+            {companies.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {companies.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleStartDraft(c)}
+                    className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-sm text-gray-500">Don&apos;t see the company you interviewed with?</p>
+            <GatedSection
+              loggedIn={candidateSession}
+              prompt="Log in to add a company that isn't listed yet."
+            >
+              <form
+                action={handleCreateCompany}
+                className="flex flex-col gap-2 sm:flex-row sm:items-end"
               >
-                {c.name}
+                <label className="flex flex-col text-sm">
+                  Name
+                  <input name="name" required className={inputClass} />
+                </label>
+                <label className="flex flex-col text-sm">
+                  Slug
+                  <input
+                    name="slug"
+                    required
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                    placeholder="acme-corp"
+                    className={inputClass}
+                  />
+                </label>
+                <label className="flex flex-col text-sm">
+                  Size
+                  <select name="sizeBucket" className={inputClass}>
+                    <option value="startup">Startup</option>
+                    <option value="mid">Mid</option>
+                    <option value="large">Large</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                </label>
+                <Button type="submit">Create company</Button>
+              </form>
+            </GatedSection>
+          </Card>
+        </>
+      )}
+
+      {activeDraft && (
+        <Card as="section" className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-medium">{activeDraft.companyName}</h2>
+            <span className="flex flex-wrap gap-3 text-sm">
+              <Link href={`/companies/${activeDraft.companySlug}`} className={linkClass}>
+                View company profile
+              </Link>
+              <button type="button" onClick={handleBackToDrafts} className={linkClass}>
+                Back to my drafts
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => handleDeleteDraft(activeDraft.id)}
+                className={linkClass}
+              >
+                Delete this draft
+              </button>
+            </span>
           </div>
-        )}
-        {/* Selecting an existing company (above) is just a read/UI action —
-            no session needed. Creating a *new* one is a write, gated on a
-            real session same as every other write path (POST /companies
-            now requires CandidateJwtAuthGuard). */}
-        {!company && candidateSession === false && (
-          <p className="text-sm text-gray-500">
-            <Link href="/login" className={linkClass}>
-              Log in
-            </Link>{' '}
-            to add a company that isn&apos;t listed yet.
-          </p>
-        )}
-        {!company && candidateSession && (
-          <form
-            action={handleCreateCompany}
-            className="flex flex-col gap-2 sm:flex-row sm:items-end"
-          >
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="flex flex-col text-sm">
-              Name
-              <input name="name" required className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
-            </label>
-            <label className="flex flex-col text-sm">
-              Slug
+              Role title
               <input
-                name="slug"
-                required
-                pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                placeholder="acme-corp"
-                className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+                value={activeDraft.process.roleTitle}
+                onChange={(e) => updateProcessField('roleTitle', e.target.value)}
+                className={inputClass}
               />
             </label>
             <label className="flex flex-col text-sm">
-              Size
-              <select name="sizeBucket" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
-                <option value="startup">Startup</option>
-                <option value="mid">Mid</option>
-                <option value="large">Large</option>
-                <option value="enterprise">Enterprise</option>
+              Outcome
+              <select
+                value={activeDraft.process.outcome}
+                onChange={(e) =>
+                  updateProcessField('outcome', e.target.value as ProcessDraft['process']['outcome'])
+                }
+                className={inputClass}
+              >
+                <option value="in_progress">In progress</option>
+                <option value="offer">Offer</option>
+                <option value="rejected">Rejected</option>
+                <option value="withdrawn">Withdrawn</option>
+                <option value="ghosted">Ghosted</option>
               </select>
             </label>
-            <Button type="submit">Create company</Button>
-          </form>
-        )}
-        {company && (
-          <p className="text-sm text-green-700 dark:text-green-400">
-            Using {company.name}.{' '}
-            <Link href={`/companies/${company.slug}`} className={linkClass}>
-              View company profile
-            </Link>{' '}
-            ·{' '}
-            <Link href={`/companies/${company.slug}/analytics`} className={linkClass}>
-              View analytics dashboard
-            </Link>{' '}
-            ·{' '}
-            <button type="button" onClick={handleChangeCompany} className={linkClass}>
-              Change company
-            </button>
+          </div>
+
+          {/* Rounds, recruiter touchpoints, and the overall review — plus
+              final submission — land in the next update (GitHub issues
+              #254/#255). This draft already survives a reload and can sit
+              alongside drafts for other companies in the meantime. */}
+          <p className="text-sm text-gray-500 italic">
+            Add your first round or recruiter touchpoint once step navigation lands.
           </p>
-        )}
-      </Card>
-
-      {company && (
-        <Card as="section" className="flex flex-col gap-3">
-          <h2 className="font-medium">2. Interview process</h2>
-          {candidateSession === null && (
-            <p className="text-sm text-gray-500">Checking your session…</p>
-          )}
-          {candidateSession === false && (
-            <p className="text-sm text-gray-500">
-              <Link href="/login" className={linkClass}>
-                Log in
-              </Link>{' '}
-              to submit a review — no password, just a login link emailed to you.
-            </p>
-          )}
-          {candidateSession && !process && (
-            <form
-              action={handleCreateProcess}
-              className="flex flex-col gap-2 sm:flex-row sm:items-end"
-            >
-              <label className="flex flex-col text-sm">
-                Role title
-                <input
-                  name="roleTitle"
-                  required
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                />
-              </label>
-              <label className="flex flex-col text-sm">
-                Outcome
-                <select name="outcome" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
-                  <option value="in_progress">In progress</option>
-                  <option value="offer">Offer</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="withdrawn">Withdrawn</option>
-                  <option value="ghosted">Ghosted</option>
-                </select>
-              </label>
-              <Button type="submit">Create process</Button>
-            </form>
-          )}
-          {process && (
-            <p className="text-sm text-green-700 dark:text-green-400">
-              Process created for &quot;{process.roleTitle}&quot;.
-            </p>
-          )}
-        </Card>
-      )}
-
-      {process && (
-        <Card as="section" className="flex flex-col gap-3">
-          <h2 className="font-medium">3. Round</h2>
-          {!round && (
-            <form
-              action={handleCreateRound}
-              className="flex flex-col gap-2 sm:flex-row sm:items-end"
-            >
-              <label className="flex flex-col text-sm">
-                Title
-                <input
-                  name="title"
-                  required
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                />
-              </label>
-              <label className="flex flex-col text-sm">
-                Type
-                <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
-                  <option value="coding">Coding</option>
-                  <option value="system_design">System design</option>
-                  <option value="behavioral">Behavioral</option>
-                  <option value="leadership">Leadership</option>
-                  <option value="case_study">Case study</option>
-                  <option value="assessment">Assessment</option>
-                  <option value="take_home">Take-home</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
-              <Button type="submit">Add round</Button>
-            </form>
-          )}
-          {round && (
-            <p className="text-sm text-green-700 dark:text-green-400">
-              Round &quot;{round.title}&quot; added.
-            </p>
-          )}
-        </Card>
-      )}
-
-      {round && (
-        <Card as="section" className="flex flex-col gap-3">
-          <h2 className="font-medium">4. Rating</h2>
-          {!rating && (
-            <form action={handleCreateRating} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {(['difficulty', 'fluency', 'clarity', 'focus'] as const).map(
-                (field) => (
-                  <label key={field} className="flex flex-col text-sm capitalize">
-                    {field.replace(/([A-Z])/g, ' $1')}
-                    <input
-                      name={field}
-                      type="number"
-                      min={1}
-                      max={5}
-                      required
-                      defaultValue={3}
-                      className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                    />
-                  </label>
-                ),
-              )}
-              <Button type="submit" className="col-span-full">
-                Submit rating
-              </Button>
-            </form>
-          )}
-          {rating && (
-            <div className="flex flex-col gap-2 text-sm">
-              <p className="text-green-700 dark:text-green-400">
-                Rating submitted — status: <strong>{rating.status}</strong>.
-              </p>
-              {/* Every rating is moderated before it's public (docs/DECISIONS.md D3) —
-                  a pending rating won't count below until it's approved. */}
-              <p className="text-gray-500">
-                Thanks for sharing your experience. Every rating is reviewed before it
-                becomes public, so yours may not appear in the count below right away.
-              </p>
-              <p>
-                Public approved ratings for this round:{' '}
-                {/* null means still fetching, not "confirmed zero" — GitHub
-                    issue #61 found these looked identical (both rendered
-                    "0"), verified live against a deliberately delayed
-                    response. */}
-                <strong>{approvedRatings === null ? '…' : approvedRatings.length}</strong>
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {round && (
-        <Card as="section" className="flex flex-col gap-3">
-          <h2 className="font-medium">5. Recruiter experience</h2>
-          {!recruiterRating && (
-            <form action={handleCreateRecruiterRating} className="flex flex-col gap-2">
-              <label className="flex flex-col text-sm">
-                Recruiter name or email
-                <input
-                  name="recruiterIdentifier"
-                  required
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                />
-                <span className="text-xs text-gray-500">
-                  Used only to tell recruiters apart — never shown publicly.
-                </span>
-              </label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(['reachability', 'responsiveness', 'guidelinesShared'] as const).map((field) => (
-                  <label key={field} className="flex flex-col text-sm capitalize">
-                    {field.replace(/([A-Z])/g, ' $1')}
-                    <input
-                      name={field}
-                      type="number"
-                      min={1}
-                      max={5}
-                      required
-                      defaultValue={3}
-                      className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                    />
-                  </label>
-                ))}
-              </div>
-              <label className="flex flex-col text-sm">
-                Rejection message authenticity (optional — only if this
-                touchpoint was about your rejection)
-                <input
-                  name="rejectionMessageAuthenticity"
-                  type="number"
-                  min={1}
-                  max={5}
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                />
-              </label>
-              <label className="flex flex-col text-sm">
-                Anything else about the recruiter experience? (optional)
-                <textarea
-                  name="freeText"
-                  rows={2}
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                />
-              </label>
-              <Button type="submit" className="self-start">
-                Submit recruiter rating
-              </Button>
-            </form>
-          )}
-          {recruiterRating && (
-            <div className="flex flex-col gap-2 text-sm">
-              <p className="text-green-700 dark:text-green-400">
-                Recruiter rating submitted — status: <strong>{recruiterRating.status}</strong>.
-              </p>
-              <p className="text-gray-500">
-                Like round ratings, recruiter ratings are reviewed before they become
-                public.
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {round && (
-        <Card as="section" className="flex flex-col gap-3">
-          <h2 className="font-medium">6. Overall review</h2>
-          {!overallReview && (
-            <form action={handleCreateOverallReview} className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-end gap-4">
-                <label className="flex flex-col text-sm">
-                  Overall experience (1–5)
-                  <input
-                    name="overallExperience"
-                    type="number"
-                    min={1}
-                    max={5}
-                    required
-                    defaultValue={3}
-                    className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input name="wouldRecommend" type="checkbox" />
-                  I&apos;d recommend interviewing here
-                </label>
-              </div>
-              <label className="flex flex-col text-sm">
-                Summary of the whole process (optional)
-                <textarea
-                  name="reviewText"
-                  rows={2}
-                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                />
-              </label>
-              {/* One overall review per process (schema-enforced) — the form
-                  disappears after submission, and a duplicate attempt from a
-                  stale tab surfaces the API's 409 in the error banner. */}
-              <Button type="submit" className="self-start">
-                Submit overall review
-              </Button>
-            </form>
-          )}
-          {overallReview && (
-            <div className="flex flex-col gap-2 text-sm">
-              <p className="text-green-700 dark:text-green-400">
-                Overall review submitted — status: <strong>{overallReview.status}</strong>.
-              </p>
-              <p className="text-gray-500">
-                Reviewed before it becomes public, same as your ratings. That&apos;s the
-                whole flow — thanks for sharing your experience.
-              </p>
-            </div>
-          )}
         </Card>
       )}
     </PageContainer>
