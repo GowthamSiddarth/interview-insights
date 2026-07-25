@@ -1083,3 +1083,37 @@ the new modal, two redundant ways to do the same thing.
       close the modal without navigating, since the sidebar shortcut
       it used to fall back to no longer exists (GitHub issue #319)
 - [x] Engineering blog update for issue #319
+
+## Phase 29 — Moderator Full Content Visibility & Submission Consistency
+
+Filed 2026-07-25 after the user asked that moderators be able to see
+every data point a candidate submitted (not just highlights), that
+draft/moderation-queue/candidate-submission field shapes stay
+consistent, and that the existing fraud-check rate limit be verified.
+A read-only investigation confirmed all three concerns are real: a
+round rating's `description`, `typeMetadata` (the round-type
+registry's structured answers — arguably the most important content
+to actually moderate), `scheduledDurationMinutes`, and any interviewer
+display label are fetched by `ModerationService.listPending()` but
+silently dropped, never reaching the moderator; `web/src/lib/api.ts`'s
+`ModerationQueueEntity.roundTitle` is typed `string` instead of the
+correct `string | null` used by the other two read surfaces; and
+`FraudChecksService`'s 3-ratings/rolling-24h limit counts round
+ratings only — recruiter ratings and overall reviews (both
+single-create and bulk-submission paths) have no fraud-check wiring
+at all. Milestone "Phase 29 — Moderator Full Content Visibility &
+Submission Consistency". Epic: GitHub issue #314. Planning only, per
+the user's explicit request to brainstorm this in a separate phase —
+no implementation yet.
+
+- [ ] Moderation queue: surface a round's `description`, `typeMetadata`,
+      `scheduledDurationMinutes`, and an interviewer display label —
+      all fetched already but currently dropped before reaching the
+      moderator (GitHub issue #315)
+- [ ] Fix `ModerationQueueEntity.roundTitle`'s type (`string` ->
+      `string | null`), matching `CompanyReviewItem`/
+      `MySubmissionRoundRating` (GitHub issue #316)
+- [ ] Extend fraud-check rate limiting to recruiter ratings and
+      overall reviews, in both the single-create and bulk-submission
+      paths — currently round-rating-only (GitHub issue #317)
+- [ ] Engineering blog (last) (GitHub issue #318)
