@@ -1129,7 +1129,7 @@ Submission Consistency". Epic: GitHub issue #314.
       paths — reframed per D52 after live data showed the entity-count
       version could trip on a single legitimate multi-round submission
       (GitHub issue #317)
-- [ ] Engineering blog (last) (GitHub issue #318)
+- [x] Engineering blog (last) (GitHub issue #318)
 
 ## Phase 30 — Event-Driven Foundation
 

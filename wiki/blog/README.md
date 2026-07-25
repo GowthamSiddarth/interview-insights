@@ -287,3 +287,20 @@ complete.
 10. [Issue #307 — Modular validation, a new hard rule, and a soft reminder](phase-28-wizard-ux-refinements/issue-307-modular-validation-reminders/README.md)
 11. [Issue #306 — A modal for the moment "Next" would skip past adding a round](phase-28-wizard-ux-refinements/issue-306-next-button-add-round-modal/README.md)
 12. [Issue #319 — One way to add a round, not two](phase-28-wizard-ux-refinements/issue-319-consolidate-round-adding/README.md)
+
+## Phase 29 — Moderator Full Content Visibility & Submission Consistency
+
+See `docs/ROADMAP.md` Phase 29. Filed after the user asked that
+moderators be able to see every data point a candidate submitted, not
+just highlights, that draft/moderation-queue/candidate-submission field
+shapes stay consistent, and that the existing fraud-check rate limit be
+verified. Issue #315 expanded mid-implementation, per direct user
+feedback, from "surface more round fields" into restructuring the whole
+moderation queue to group by submission. Issue #317 was reframed
+mid-phase (D52) from a straightforward extension into fixing a real bug
+in how the rate limit counted candidate activity. All three feature
+issues are done — this phase's blog is complete.
+
+1. [Issue #315 — Moderation queue: full round content + group by submission](phase-29-moderator-full-content-visibility/issue-315-moderation-queue-grouping/README.md)
+2. [Issue #316 — Fix `ModerationQueueEntity.roundTitle`'s type](phase-29-moderator-full-content-visibility/issue-316-roundtitle-type-fix/README.md)
+3. [Issue #317 — Submission-scoped fraud-check rate limit (D52)](phase-29-moderator-full-content-visibility/issue-317-submission-scoped-rate-limit/README.md)
