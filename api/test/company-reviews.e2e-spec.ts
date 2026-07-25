@@ -31,6 +31,9 @@ interface QueueEntryBody {
   id: string;
   entityId: string;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 
 function body<T>(res: request.Response): T {
   return res.body as T;
@@ -120,7 +123,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
 
       if (i < counts.approved) {
         const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-        const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === ratingId);
+        const entry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === ratingId);
         if (!entry) throw new Error(`no queue entry for ${ratingId}`);
         await server()
           .post(`/moderation/queue/${entry.id}/approve`)

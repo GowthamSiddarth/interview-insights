@@ -23,6 +23,9 @@ interface QueueEntryBody {
   entityId: string;
   flagReason: string | null;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 
 function body<T>(res: request.Response): T {
   return res.body as T;
@@ -115,7 +118,7 @@ describe('Fraud checks (e2e)', () => {
     const ratingId = body<RatingBody>(ratingRes).id;
 
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const queueEntry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === ratingId);
+    const queueEntry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === ratingId);
     if (!queueEntry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
 
     return { ratingId, queueEntry };

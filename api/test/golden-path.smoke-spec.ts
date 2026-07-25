@@ -38,6 +38,9 @@ interface QueueEntryBody {
   entityId: string;
   reviewedAt: string | null;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 interface ReviewSearchResultBody {
   id: string;
 }
@@ -121,7 +124,7 @@ describe('Full golden path (e2e smoke test)', () => {
 
   async function findQueueEntryFor(entityId: string): Promise<QueueEntryBody> {
     const res = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const entry = body<QueueEntryBody[]>(res).find((e) => e.entityId === entityId);
+    const entry = body<QueueGroupBody[]>(res).flatMap((g) => g.entries).find((e) => e.entityId === entityId);
     if (!entry) throw new Error(`No moderation_queue entry found for entity ${entityId}`);
     return entry;
   }
@@ -267,7 +270,7 @@ describe('Full golden path (e2e smoke test)', () => {
       .expect(204);
 
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    expect(body<QueueEntryBody[]>(queueRes).some((e) => e.entityId === overallReviewId)).toBe(false);
+    expect(body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).some((e) => e.entityId === overallReviewId)).toBe(false);
   });
 
   it('12. candidate B resolves the same shared Recruiter row via the same identifier', async () => {

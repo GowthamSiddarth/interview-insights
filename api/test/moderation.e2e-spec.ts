@@ -29,6 +29,12 @@ interface QueueEntryBody {
   flagReason: string | null;
   entity: Record<string, unknown> | null;
 }
+interface QueueGroupBody {
+  processId: string | null;
+  companyName: string;
+  roleTitle: string;
+  entries: QueueEntryBody[];
+}
 
 function body<T>(res: request.Response): T {
   return res.body as T;
@@ -72,7 +78,7 @@ describe('Moderation (e2e)', () => {
   const uniqueSlug = () => `acme-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-  async function submitRating(): Promise<{ roundId: string; ratingId: string }> {
+  async function submitRating(): Promise<{ processId: string; roundId: string; ratingId: string }> {
     const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
     const companyRes = await server()
@@ -91,7 +97,14 @@ describe('Moderation (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
-      .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+      .send({
+        sequenceNumber: 1,
+        title: 'Technical Screen',
+        roundType: 'coding',
+        description: 'A live coding round over a shared editor',
+        scheduledDurationMinutes: 45,
+        typeMetadata: { problemAlgorithms: ['DFS'] },
+      })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;
 
@@ -107,12 +120,31 @@ describe('Moderation (e2e)', () => {
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;
 
+    return { processId, roundId, ratingId };
+  }
+
+  async function submitRatingUnderProcess(processId: string): Promise<{ roundId: string; ratingId: string }> {
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
+
+    const roundRes = await server()
+      .post(`/processes/${processId}/rounds`)
+      .send({ sequenceNumber: 2, title: 'Onsite', roundType: 'system_design' })
+      .expect(201);
+    const roundId = body<RoundBody>(roundRes).id;
+
+    const ratingRes = await server()
+      .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 4, fluency: 4, clarity: 4, focus: 4 })
+      .expect(201);
+    const ratingId = body<RatingBody>(ratingRes).id;
+
     return { roundId, ratingId };
   }
 
   async function findQueueEntryFor(ratingId: string): Promise<QueueEntryBody> {
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const entry = body<QueueEntryBody[]>(queueRes).find((e) => e.entityId === ratingId);
+    const entry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === ratingId);
     if (!entry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
     return entry;
   }
@@ -123,14 +155,49 @@ describe('Moderation (e2e)', () => {
     const entry = await findQueueEntryFor(ratingId);
     expect(entry.entityType).toBe('round_rating');
     expect(entry.reviewedAt).toBeNull();
-    // Enriched for the moderation UI (Phase 14 issue #128): the entity's
-    // own fields plus display context, no second lookup needed.
+    // Enriched for the moderation UI (Phase 14 issue #128, extended by
+    // #315 to surface the round's full submitted content — not just
+    // highlights): the entity's own fields plus display context, no
+    // second lookup needed.
     expect(entry.entity).toMatchObject({
       companyName: 'Acme Corp',
       roundTitle: 'Technical Screen',
       roundType: 'coding',
+      roundDescription: 'A live coding round over a shared editor',
+      roundTypeMetadata: { problemAlgorithms: ['DFS'] },
+      roundScheduledDurationMinutes: 45,
       difficulty: 3,
     });
+  });
+
+  // GitHub issue #315: the queue groups every pending entity by its
+  // InterviewProcess, so a moderator sees one collapsed row per
+  // submission rather than one row per round/rating.
+  it('groups multiple pending entities from the same process into one queue group', async () => {
+    const { processId, ratingId: ratingId1 } = await submitRating();
+    const { ratingId: ratingId2 } = await submitRatingUnderProcess(processId);
+
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+    const groups = body<QueueGroupBody[]>(queueRes);
+
+    const group = groups.find((g) => g.processId === processId);
+    if (!group) throw new Error(`No queue group found for process ${processId}`);
+    expect(group.companyName).toBe('Acme Corp');
+    expect(group.roleTitle).toBe('Senior Backend Engineer');
+
+    const groupEntityIds = group.entries.map((e) => e.entityId);
+    expect(groupEntityIds).toContain(ratingId1);
+    expect(groupEntityIds).toContain(ratingId2);
+
+    // A different process's own submission must never bleed into this group.
+    const { processId: otherProcessId, ratingId: otherRatingId } = await submitRating();
+    const queueResAfter = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+    const groupsAfter = body<QueueGroupBody[]>(queueResAfter);
+    const otherGroup = groupsAfter.find((g) => g.processId === otherProcessId);
+    if (!otherGroup) throw new Error(`No queue group found for process ${otherProcessId}`);
+    expect(otherGroup.entries.map((e) => e.entityId)).toEqual([otherRatingId]);
+    expect(otherGroup.entries.map((e) => e.entityId)).not.toContain(ratingId1);
+    expect(otherGroup.entries.map((e) => e.entityId)).not.toContain(ratingId2);
   });
 
   it('approving a pending rating makes it publicly visible', async () => {

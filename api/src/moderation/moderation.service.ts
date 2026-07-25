@@ -8,6 +8,63 @@ import { ModerationFlagDto } from './dto/moderation-flag.dto';
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
 
+// GitHub issue #315 (Phase 29) — every field a candidate could have
+// submitted for this entity, not just a "highlights" subset. `processId`
+// exists purely so listPending() can group entries by submission; it's
+// never rendered directly.
+export interface ModerationQueueEntity {
+  processId: string;
+  companyName: string;
+  roleTitle: string;
+  freeText?: string | null;
+  // round_rating
+  roundTitle?: string | null;
+  roundType?: string;
+  roundDescription?: string | null;
+  roundTypeMetadata?: Prisma.JsonValue | null;
+  roundScheduledDurationMinutes?: number | null;
+  difficulty?: number;
+  fluency?: number;
+  clarity?: number;
+  focus?: number;
+  technicalDepth?: number | null;
+  // recruiter_rating — recruiterLabel is the generated label, never a
+  // real name (CLAUDE.md hard constraint #1)
+  recruiterLabel?: string;
+  reachability?: number;
+  responsiveness?: number;
+  guidelinesShared?: number;
+  rejectionMessageAuthenticity?: number | null;
+  // overall_review
+  overallExperience?: number;
+  wouldRecommend?: boolean;
+  reviewText?: string | null;
+}
+
+export interface ModerationQueueEntry {
+  id: string;
+  entityType: ModerationEntityType;
+  entityId: string;
+  flagReason: ModerationFlagReason | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  entity: ModerationQueueEntity | null;
+}
+
+// GitHub issue #315 (Phase 29) — one group per InterviewProcess, mirroring
+// /me/submissions' own grouping (issue #149): a moderator thinks in terms
+// of "this candidate's submission for Company X," not three disjoint
+// entity-type lists. `processId` is null only for the rare degraded case
+// where an entity's own enrichment transiently failed (D37) — grouped
+// standalone rather than dropped.
+export interface ModerationQueueGroup {
+  processId: string | null;
+  companyName: string;
+  roleTitle: string;
+  entries: ModerationQueueEntry[];
+}
+
 // Runs in-process within `api` for now — no Kafka consumer/`workers` process
 // yet, since nothing else in the app produces to Redpanda either. Moving
 // this onto a separate worker is deferred until there's actual async load to
@@ -63,8 +120,10 @@ export class ModerationService {
   // unreadable through every public endpoint. Only generated labels ever
   // leave here (CLAUDE.md hard constraint #1) — never
   // internal_identifier_hash, and candidateId is omitted too since
-  // moderating content doesn't require knowing who wrote it.
-  async listPending() {
+  // moderating content doesn't require knowing who wrote it. Grouped by
+  // InterviewProcess (GitHub issue #315, Phase 29) rather than returned
+  // as a flat list — see ModerationQueueGroup's own comment.
+  async listPending(): Promise<ModerationQueueGroup[]> {
     const entries = await this.prisma.moderationQueueEntry.findMany({
       where: { reviewedAt: null },
       orderBy: { createdAt: 'asc' },
@@ -110,13 +169,22 @@ export class ModerationService {
     const recruiterRatings = this.settledOrEmpty(recruiterRatingsResult, 'recruiter_rating');
     const overallReviews = this.settledOrEmpty(overallReviewsResult, 'overall_review');
 
-    const entityById = new Map<string, unknown>();
+    const entityById = new Map<string, ModerationQueueEntity>();
     for (const r of roundRatings) {
       entityById.set(r.id, {
+        processId: r.round.process.id,
         companyName: r.round.process.company.name,
         roleTitle: r.round.process.roleTitle,
         roundTitle: r.round.title,
         roundType: r.round.roundType,
+        // Full round content (GitHub issue #315) — description,
+        // typeMetadata (the round-type registry's structured answers,
+        // already stored as human-readable strings — no registry lookup
+        // needed to render them), and scheduled duration were fetched by
+        // the include above all along but never surfaced before this.
+        roundDescription: r.round.description,
+        roundTypeMetadata: r.round.typeMetadata,
+        roundScheduledDurationMinutes: r.round.scheduledDurationMinutes,
         difficulty: r.difficulty,
         fluency: r.fluency,
         clarity: r.clarity,
@@ -127,6 +195,7 @@ export class ModerationService {
     }
     for (const r of recruiterRatings) {
       entityById.set(r.id, {
+        processId: r.recruiterInteraction.process.id,
         companyName: r.recruiterInteraction.process.company.name,
         roleTitle: r.recruiterInteraction.process.roleTitle,
         recruiterLabel: r.recruiterInteraction.recruiter.displayLabel,
@@ -139,6 +208,7 @@ export class ModerationService {
     }
     for (const r of overallReviews) {
       entityById.set(r.id, {
+        processId: r.process.id,
         companyName: r.process.company.name,
         roleTitle: r.process.roleTitle,
         overallExperience: r.overallExperience,
@@ -147,10 +217,34 @@ export class ModerationService {
       });
     }
 
-    return entries.map((entry) => ({
+    const enrichedEntries: ModerationQueueEntry[] = entries.map((entry) => ({
       ...entry,
       entity: entityById.get(entry.entityId) ?? null,
     }));
+
+    // Map preserves insertion order — groups naturally come out in the
+    // same createdAt-ascending order entries already had, since each
+    // group is created the moment its first (earliest) entry is seen.
+    // An entry whose entity failed to enrich (no processId to group by)
+    // gets its own standalone group keyed by the queue entry's own id,
+    // rather than being silently dropped from the response.
+    const groups = new Map<string, ModerationQueueGroup>();
+    for (const entry of enrichedEntries) {
+      const key = entry.entity?.processId ?? `unknown-${entry.id}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          processId: entry.entity?.processId ?? null,
+          companyName: entry.entity?.companyName ?? 'Unknown',
+          roleTitle: entry.entity?.roleTitle ?? 'Unknown',
+          entries: [],
+        };
+        groups.set(key, group);
+      }
+      group.entries.push(entry);
+    }
+
+    return Array.from(groups.values());
   }
 
   approve(id: string, dto: ModerationActionDto) {

@@ -19,6 +19,9 @@ interface QueueEntryBody {
   entityType: string;
   entityId: string;
 }
+interface QueueGroupBody {
+  entries: QueueEntryBody[];
+}
 
 function body<T>(res: request.Response): T {
   return res.body as T;
@@ -154,7 +157,7 @@ describe('Bulk process submission (e2e)', () => {
     expect(overallReview).not.toBeNull();
 
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-    const entries = body<QueueEntryBody[]>(queueRes);
+    const entries = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries);
     const entityIds = new Set(entries.map((e) => e.entityId));
     expect(entityIds.has(roundRatings[0].id)).toBe(true);
     expect(entityIds.has(recruiterRatings[0].id)).toBe(true);
