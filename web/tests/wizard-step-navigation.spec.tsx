@@ -124,28 +124,55 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     expect(await screen.findByText('After my interview')).toBeInTheDocument();
   });
 
-  it('shows a tooltip explaining each recruiter trait rating (GitHub issue #286)', async () => {
+  it('shows a "?" tooltip button explaining each recruiter trait rating on hover (GitHub issues #286, #305)', async () => {
     const user = userEvent.setup();
     await openDraft(user);
 
     await user.click(screen.getByRole('button', { name: '+ Recruiter (pre-interview)' }));
     await user.click(await screen.findByLabelText('I have a rating for this touchpoint'));
 
-    expect(screen.getByText('reachability').closest('label')).toHaveAttribute(
-      'title',
-      'How easy the recruiter was to reach or get a response from.',
-    );
-    expect(screen.getByText('responsiveness').closest('label')).toHaveAttribute(
-      'title',
-      expect.stringContaining('followed up'),
-    );
-    expect(screen.getByText('guidelines Shared').closest('label')).toHaveAttribute(
-      'title',
-      expect.stringContaining('explained the process'),
-    );
+    expect(screen.queryByText(/How easy the recruiter/)).not.toBeInTheDocument();
+    await user.hover(screen.getByRole('button', { name: 'reachability help' }));
     expect(
-      screen.getByText(/Rejection message authenticity/).closest('label'),
-    ).toHaveAttribute('title', expect.stringContaining('genuine or personalized'));
+      await screen.findByText('How easy the recruiter was to reach or get a response from.'),
+    ).toBeInTheDocument();
+    await user.unhover(screen.getByRole('button', { name: 'reachability help' }));
+    expect(screen.queryByText(/How easy the recruiter/)).not.toBeInTheDocument();
+
+    await user.hover(screen.getByRole('button', { name: 'responsiveness help' }));
+    expect(await screen.findByText(/followed up/)).toBeInTheDocument();
+
+    await user.hover(screen.getByRole('button', { name: 'guidelinesShared help' }));
+    expect(await screen.findByText(/explained the process/)).toBeInTheDocument();
+
+    await user.hover(
+      screen.getByRole('button', { name: 'Rejection message authenticity help' }),
+    );
+    expect(await screen.findByText(/genuine or personalized/)).toBeInTheDocument();
+  });
+
+  it('shows a "?" tooltip button explaining each round trait rating on hover (GitHub issue #305)', async () => {
+    const user = userEvent.setup();
+    await openDraft(user);
+
+    await user.click(screen.getByRole('button', { name: 'Add round' }));
+
+    await user.hover(screen.getByRole('button', { name: 'difficulty help' }));
+    expect(
+      await screen.findByText(/property of the round, not the interviewer/),
+    ).toBeInTheDocument();
+
+    await user.hover(screen.getByRole('button', { name: 'fluency help' }));
+    expect(await screen.findByText(/how clearly the interviewer communicated/i)).toBeInTheDocument();
+
+    await user.hover(screen.getByRole('button', { name: 'clarity help' }));
+    expect(await screen.findByText(/problem statement/)).toBeInTheDocument();
+
+    await user.hover(screen.getByRole('button', { name: 'focus help' }));
+    expect(await screen.findByText(/attentive and present/)).toBeInTheDocument();
+
+    await user.hover(screen.getByRole('button', { name: 'Technical depth help' }));
+    expect(await screen.findByText(/beyond the surface level/)).toBeInTheDocument();
   });
 
   it('a round step survives a reload with its rating intact', async () => {
