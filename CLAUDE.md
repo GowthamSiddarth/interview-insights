@@ -2659,10 +2659,53 @@ candidate/processes plus the `prune-orphaned-company-search-docs`
 script for a few stray companies from an earlier mis-ordered
 verification attempt).
 
-- Next step: #318 (the phase's engineering blog, written last, now
+**Phases 30-32 planning (Event-Driven Foundation; Notification Service;
+Review Analyzer Service)** — filed 2026-07-25 from a user brainstorm
+about shifting toward event-driven microservices (notification-service,
+review-analyzer, moderator-service each came up). Deliberately revisits
+`docs/DECISIONS.md` D12 ("moderation stays in-process, no event bus") —
+recorded as D53: not because organic load now demands it, but because
+the project owner wants real distributed-systems/microservices
+practice, the same category of trigger Phase 10/11 already accepted for
+LocalStack IAM/secrets work. Three phases planned together (mirroring
+the "Phases 15-17"/"Phases 24-26" precedent of planning a tightly
+sequential group in one pass), implemented strictly in order: Phase 30
+(epic #327, issues #330-333) introduces Redpanda + a best-effort,
+after-commit event-publishing pattern (matching D16/D17's OpenSearch
+"never block the write" shape exactly) — no new deployable service yet,
+and the synchronous write path (including `ModerationService.enqueue()`)
+is unchanged. Phase 31 (epic #328, issues #334-337) builds
+notification-service, the first real standalone microservice this
+project ships — deliberately the lowest-risk extraction, since `mail/`
+is already a clean-boundary module with no write-path dependencies.
+Phase 32 (epic #329, issues #338-341) depends on Phase 19 issue #163
+(LLM-assisted moderation triage, already planned, not yet built)
+shipping first — review-analyzer ports that same logic into an async,
+event-driven enrichment once both the logic and the event bus exist,
+rather than inventing the analysis rules and the service-extraction
+plumbing at the same time. A kickoff brainstorm (issue #338) is
+flagged, not resolved, for three real open questions: whether
+review-analyzer replaces or runs alongside `FraudChecksService`'s
+existing synchronous checks (leaning toward alongside, as a secondary
+arrives-later signal), which LLM/API to use, and data ownership
+(shared Postgres vs. an API call-back). Moderator-service — the third
+service named in the brainstorm — is deliberately **not** phased: no
+concrete extraction trigger has fired, and Phase 29 just reshaped
+`ModerationService` for exactly the opposite reason (keeping it a clean
+bounded context in-place). D53 also notes that shipping Phase 31 fires
+`docs/ROADMAP.md` Phase 8's own sub-area 8g trigger ("first real
+Kafka/Redpanda consumer") for the first time — that gets its own
+planning pass under Phase 8's existing menu once Phase 31 actually
+ships, not pre-filed now; Phase 8f (observability) stays untriggered,
+since its own trigger (first shared/staging deployment with real
+traffic) still hasn't fired. All three epics are on the project board
+at "Todo" — planning only, no implementation started yet.
+
+- Next step: #318 (Phase 29's engineering blog, written last, now
   that #315-317 are all done). Phase 19 (Content Quality & Synthetic
-  Data, issues #162-165) and Phase 27 (Admin Content Gateway) remain
-  planned but not started, after Phase 29. Continue
+  Data, issues #162-165), Phase 27 (Admin Content Gateway), and Phases
+  30-32 (Event-Driven Foundation / Notification Service / Review
+  Analyzer Service) all remain planned but not started. Continue
   merging without waiting for CI until the user says the GitHub
   Actions billing limit has been refreshed.
 

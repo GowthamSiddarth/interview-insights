@@ -719,7 +719,10 @@ Synthetic Data". Epic: GitHub issue #168.
 - [ ] LLM-assisted moderation triage: advisory spam/toxicity/
       rating-text-mismatch signal surfaced in the Phase 14 moderation UI —
       never auto-approves or auto-rejects, hard constraint #2 stays intact
-      (GitHub issue #163)
+      (GitHub issue #163) — built in-process/synchronous here
+      deliberately; Phase 32 (filed later, D53) depends on this issue
+      shipping first, then ports the same logic into an async
+      `review-analyzer` service once Phase 30's event bus exists
 - [ ] Synthetic data generator for lower environments: `@faker-js/faker`,
       walks the real create → moderate-approve → index path (not raw
       SQL/Prisma, avoiding the Phase 5 seed-script indexing bug),
@@ -1127,3 +1130,90 @@ Submission Consistency". Epic: GitHub issue #314.
       version could trip on a single legitimate multi-round submission
       (GitHub issue #317)
 - [ ] Engineering blog (last) (GitHub issue #318)
+
+## Phase 30 — Event-Driven Foundation
+
+Filed 2026-07-25 from a brainstorm about moving toward event-driven
+microservices — deliberately revisits `docs/DECISIONS.md` D12
+("moderation stays in-process, no event bus"), not because organic
+load now demands it, but because the project owner wants real
+distributed-systems/microservices practice, the same category of
+trigger Phase 10/11 already accepted for LocalStack IAM/secrets work.
+Recorded as D53, alongside the reasoning for why moderator-service
+(also discussed) is deliberately not phased. Milestone: "Phase 30 —
+Event-Driven Foundation". Epic: GitHub issue #327.
+
+This phase is deliberately narrow: the message broker (Redpanda) and a
+best-effort, after-commit event-publishing pattern — matching D16/D17's
+already-proven "never block the write" shape for OpenSearch indexing.
+No new deployable service ships in this phase; it's the plumbing
+Phases 31-32 build on. The synchronous write path itself (including
+`ModerationService.enqueue()`) is unchanged.
+
+- [ ] Add Redpanda to local infra (docker-compose + k8s), mirroring
+      how OpenSearch was added in Phase 5 (GitHub issue #330)
+- [ ] Shared event-publishing module (`api/src/events/`) + a versioned
+      event-schema contract, best-effort/after-commit per D16/D17
+      (GitHub issue #331)
+- [ ] Wire creation + moderation status-change events for all three
+      moderated entity types, in both the single-create and
+      bulk-submission paths (GitHub issue #332)
+- [ ] Engineering blog (last) (GitHub issue #333)
+
+## Phase 31 — Notification Service
+
+Filed alongside Phase 30 from the same brainstorm. Depends on Phase
+30's event bus existing first. Deliberately the lowest-risk of the two
+service extractions discussed (notification-service / review-analyzer)
+— `mail/` is already a clean-boundary module with no write-path
+dependencies, making this the right first proof that the whole pattern
+(broker, a real out-of-cluster consumer, independent deployment,
+idempotent consumption) works end to end on the `kind` cluster.
+Milestone: "Phase 31 — Notification Service". Epic: GitHub issue #328.
+
+Shipping this phase fires `docs/ROADMAP.md` Phase 8's own sub-area 8g
+trigger ("Distributed systems hardening... the first real Kafka/
+Redpanda consumer existing at all") for the first time — that gets its
+own planning pass under Phase 8's existing menu structure once this
+phase actually ships, per Phase 8's own "plan one sub-area at a time,
+only once its trigger fires" convention; not pre-filed here. Phase 8f
+(observability/tracing) is **not** triggered by this — its own stated
+trigger (first shared/staging deployment with real traffic) still
+hasn't fired.
+
+- [ ] `notification-service` skeleton + its own Dockerfile/k8s
+      manifest/CD step (GitHub issue #334)
+- [ ] Consume `*.created` events → "your submission is pending review"
+      email, idempotent (GitHub issue #335)
+- [ ] Consume `*.status_changed` events → approved/rejected
+      notification, idempotent (GitHub issue #336)
+- [ ] Engineering blog (last) (GitHub issue #337)
+
+## Phase 32 — Review Analyzer Service
+
+Filed alongside Phases 30-31 from the same brainstorm. Depends on
+Phase 19 issue #163 (LLM-assisted moderation triage) already being
+implemented in-process, and on Phase 30's event bus existing —
+deliberately sequenced so the analysis logic and the service-extraction
+plumbing aren't both being invented at once, the same "prove it simply
+first, extract once a trigger fires" pattern this project already used
+for OpenSearch (Phase 5). Phase 19 itself is unchanged in scope; this
+phase is about *where* issue #163's logic runs, not re-deciding *what*
+it does. Milestone: "Phase 32 — Review Analyzer Service". Epic: GitHub
+issue #329.
+
+Real open questions (review-analyzer vs. `FraudChecksService`'s
+existing synchronous checks, LLM/API choice, data ownership) are
+flagged for a kickoff brainstorm (issue #338) rather than resolved
+here, same pattern Phase 16/17/21/24/29 each used.
+
+- [ ] Kickoff brainstorm: review-analyzer's relationship to
+      `FraudChecksService`, LLM choice, data ownership (GitHub issue
+      #338)
+- [ ] `review-analyzer` service skeleton, consumes `*.created` events
+      (GitHub issue #339)
+- [ ] Port Phase 19 issue #163's LLM-assisted triage into
+      review-analyzer as an async, arrives-later enrichment — never
+      auto-approves/rejects, hard constraint #2 stays intact (GitHub
+      issue #340)
+- [ ] Engineering blog (last) (GitHub issue #341)
