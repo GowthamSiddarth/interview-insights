@@ -191,7 +191,7 @@ describe('Full golden path (e2e smoke test)', () => {
     const ratingRes = await server()
       .post(`/recruiter-interactions/${recruiterInteractionIdA}/ratings`)
       .set('Cookie', candidateA.cookie)
-      .send({ approachability: 4, responseTime: 3, timeliness: 5, communicationQuality: 4 })
+      .send({ reachability: 4, responsiveness: 3, guidelinesShared: 5 })
       .expect(201);
     recruiterRatingId = body<RatingBody>(ratingRes).id;
   });
@@ -287,7 +287,7 @@ describe('Full golden path (e2e smoke test)', () => {
     const ratingRes = await server()
       .post(`/recruiter-interactions/${interactionIdB}/ratings`)
       .set('Cookie', candidateB.cookie)
-      .send({ approachability: 5, responseTime: 5, timeliness: 5, communicationQuality: 5 })
+      .send({ reachability: 5, responsiveness: 5, guidelinesShared: 5 })
       .expect(201);
     recruiterRatingIdB = body<RatingBody>(ratingRes).id;
 

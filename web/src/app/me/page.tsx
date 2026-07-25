@@ -196,10 +196,10 @@ function RecruiterRatingItem({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    approachability: rating.approachability,
-    responseTime: rating.responseTime,
-    timeliness: rating.timeliness,
-    communicationQuality: rating.communicationQuality,
+    reachability: rating.reachability,
+    responsiveness: rating.responsiveness,
+    guidelinesShared: rating.guidelinesShared,
+    rejectionMessageAuthenticity: rating.rejectionMessageAuthenticity?.toString() ?? '',
     freeText: rating.freeText ?? '',
   });
 
@@ -208,7 +208,12 @@ function RecruiterRatingItem({
     setError(null);
     try {
       await api.updateRecruiterRating(rating.recruiterInteractionId, rating.id, {
-        ...form,
+        reachability: form.reachability,
+        responsiveness: form.responsiveness,
+        guidelinesShared: form.guidelinesShared,
+        ...(form.rejectionMessageAuthenticity
+          ? { rejectionMessageAuthenticity: Number(form.rejectionMessageAuthenticity) }
+          : {}),
         freeText: form.freeText || undefined,
       });
       setEditing(false);
@@ -238,9 +243,7 @@ function RecruiterRatingItem({
       <article className={itemClass}>
         <p>Recruiter experience</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(
-            ['approachability', 'responseTime', 'timeliness', 'communicationQuality'] as const
-          ).map((field) => (
+          {(['reachability', 'responsiveness', 'guidelinesShared'] as const).map((field) => (
             <label key={field} className="flex flex-col text-xs">
               {field}
               <input
@@ -254,6 +257,19 @@ function RecruiterRatingItem({
             </label>
           ))}
         </div>
+        <label className="flex flex-col text-xs">
+          Rejection message authenticity (optional)
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={form.rejectionMessageAuthenticity}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, rejectionMessageAuthenticity: e.target.value }))
+            }
+            className={inputClass}
+          />
+        </label>
         <label className="flex flex-col text-xs">
           Comments
           <textarea
@@ -286,8 +302,10 @@ function RecruiterRatingItem({
         Recruiter experience — <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
       </p>
       <p className="text-gray-600 dark:text-gray-400">
-        approachability {rating.approachability} · response time {rating.responseTime} · timeliness{' '}
-        {rating.timeliness} · communication {rating.communicationQuality}
+        reachability {rating.reachability} · responsiveness {rating.responsiveness} · guidelines
+        shared {rating.guidelinesShared}
+        {rating.rejectionMessageAuthenticity !== null &&
+          ` · rejection message authenticity ${rating.rejectionMessageAuthenticity}`}
       </p>
       {rating.freeText && <p className="italic">&quot;{rating.freeText}&quot;</p>}
       {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}

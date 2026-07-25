@@ -1964,9 +1964,39 @@ materialized view, DTOs/services, wizard/`/me`/analytics/moderation
 frontends, every test referencing the old field names) is now
 unblocked but not yet started.
 
-- Next step: Phase 24, issue #249 implementation (recruiter_ratings
-  field redesign) — kickoff brainstorm now resolved, scope recorded in
-  the issue body.
+**Phase 24, issue #249 (recruiter_ratings field redesign)** —
+implements the kickoff brainstorm's five resolved decisions (D48):
+`response_time`+`timeliness` merged into one `responsiveness` column
+(rename+drop); `communication_quality` dropped entirely;
+`approachability` renamed+reinterpreted as `reachability`;
+`guidelines_shared` added as a 1-5 rating; `rejection_message_
+authenticity` added as a nullable 1-5 column, self-reported with no
+backend gating against `InterviewProcess.outcome`. Migration mirrors
+issue #247's shape — `company_recruiter_aggregates` (materialized
+view) dropped/recreated with the new 3-column set
+(`avg_reachability`/`avg_responsiveness`/`avg_guidelines_shared`;
+`rejection_message_authenticity` deliberately excluded, same
+precedent `technical_depth` already set). Every consumer updated in
+the same pass: `CreateRecruiterRatingDto`, `RecruiterRatingsService`
+(field-agnostic, no change needed), `MeService`, `AnalyticsService`/
+`GlobalAveragesService`, `ModerationService`'s queue-detail
+serializer, the wizard's recruiter step, `/me`'s edit form, the
+moderation queue UI, the analytics dashboard's recruiter section, and
+every unit/e2e test referencing the old field names. 4 new unit tests
+(DTO validation for `rejectionMessageAuthenticity`'s bounds/
+optionality) + 2 new e2e tests (`rejectionMessageAuthenticity`
+null-when-omitted and real-value round-trips) added to the existing
+suites; 285 api unit tests, 119 e2e tests (117 passing + 2
+pre-existing unrelated skips), 67 web tests all green; `api`/`web`
+build/lint clean. Live-verified via curl
+against the real dev Postgres: created a recruiter rating with the new
+field names, confirmed `rejectionMessageAuthenticity` defaults to
+`null` when omitted and round-trips a real value when provided, and
+confirmed the analytics endpoint's recruiter scores use the new
+3-field shape.
+- Next step: Phase 24, issue #250 (engineering blog for Phase 24,
+  last) — the only remaining issue in Phase 24, written once #247-#249
+  are all merged.
 
 ## Open decisions still to make
 

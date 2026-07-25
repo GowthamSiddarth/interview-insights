@@ -46,10 +46,9 @@ const roundRatingPayload = {
   focus: 4,
 };
 const recruiterRatingPayload = {
-  approachability: 4,
-  responseTime: 3,
-  timeliness: 5,
-  communicationQuality: 4,
+  reachability: 4,
+  responsiveness: 3,
+  guidelinesShared: 5,
 };
 const overallReviewPayload = { overallExperience: 4, wouldRecommend: true };
 
@@ -288,7 +287,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
       await server()
         .patch(`/recruiter-interactions/${interactionId}/ratings/${ratingId}`)
         .set('Cookie', otherCookie)
-        .send({ ...recruiterRatingPayload, approachability: 5 })
+        .send({ ...recruiterRatingPayload, reachability: 5 })
         .expect(403);
     }, 20000);
 
@@ -299,7 +298,7 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
       const editRes = await server()
         .patch(`/recruiter-interactions/${interactionId}/ratings/${ratingId}`)
         .set('Cookie', cookie)
-        .send({ ...recruiterRatingPayload, approachability: 2 })
+        .send({ ...recruiterRatingPayload, reachability: 2 })
         .expect(200);
       expect(body<RatingBody>(editRes).status).toBe('pending');
 

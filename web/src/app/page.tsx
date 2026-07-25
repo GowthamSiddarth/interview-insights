@@ -150,11 +150,14 @@ export default function HomePage() {
         recruiterIdentifier: String(formData.get('recruiterIdentifier')),
       });
       const freeText = String(formData.get('freeText') ?? '').trim();
+      const rejectionMessageAuthenticityRaw = formData.get('rejectionMessageAuthenticity');
       const created = await api.createRecruiterRating(interaction.id, {
-        approachability: field('approachability'),
-        responseTime: field('responseTime'),
-        timeliness: field('timeliness'),
-        communicationQuality: field('communicationQuality'),
+        reachability: field('reachability'),
+        responsiveness: field('responsiveness'),
+        guidelinesShared: field('guidelinesShared'),
+        ...(rejectionMessageAuthenticityRaw
+          ? { rejectionMessageAuthenticity: Number(rejectionMessageAuthenticityRaw) }
+          : {}),
         ...(freeText ? { freeText } : {}),
       });
       setRecruiterRating(created);
@@ -422,23 +425,32 @@ export default function HomePage() {
                 </span>
               </label>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(['approachability', 'responseTime', 'timeliness', 'communicationQuality'] as const).map(
-                  (field) => (
-                    <label key={field} className="flex flex-col text-sm capitalize">
-                      {field.replace(/([A-Z])/g, ' $1')}
-                      <input
-                        name={field}
-                        type="number"
-                        min={1}
-                        max={5}
-                        required
-                        defaultValue={3}
-                        className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                      />
-                    </label>
-                  ),
-                )}
+                {(['reachability', 'responsiveness', 'guidelinesShared'] as const).map((field) => (
+                  <label key={field} className="flex flex-col text-sm capitalize">
+                    {field.replace(/([A-Z])/g, ' $1')}
+                    <input
+                      name={field}
+                      type="number"
+                      min={1}
+                      max={5}
+                      required
+                      defaultValue={3}
+                      className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+                    />
+                  </label>
+                ))}
               </div>
+              <label className="flex flex-col text-sm">
+                Rejection message authenticity (optional — only if this
+                touchpoint was about your rejection)
+                <input
+                  name="rejectionMessageAuthenticity"
+                  type="number"
+                  min={1}
+                  max={5}
+                  className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+                />
+              </label>
               <label className="flex flex-col text-sm">
                 Anything else about the recruiter experience? (optional)
                 <textarea

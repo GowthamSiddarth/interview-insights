@@ -140,7 +140,7 @@ describe('GDPR erasure (e2e)', () => {
     const recruiterRatingRes = await server()
       .post(`/recruiter-interactions/${interactionId}/ratings`)
       .set('Cookie', cookie)
-      .send({ approachability: 4, responseTime: 3, timeliness: 5, communicationQuality: 4 })
+      .send({ reachability: 4, responsiveness: 3, guidelinesShared: 4 })
       .expect(201);
     const recruiterRatingId = body<RatingBody>(recruiterRatingRes).id;
 
@@ -225,7 +225,7 @@ describe('GDPR erasure (e2e)', () => {
     await server()
       .post(`/recruiter-interactions/${interactionIdA}/ratings`)
       .set('Cookie', candidateA.cookie)
-      .send({ approachability: 5, responseTime: 5, timeliness: 5, communicationQuality: 5 })
+      .send({ reachability: 5, responsiveness: 5, guidelinesShared: 5 })
       .expect(201);
 
     const candidateB = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
@@ -243,7 +243,7 @@ describe('GDPR erasure (e2e)', () => {
     const ratingB = await server()
       .post(`/recruiter-interactions/${interactionIdB}/ratings`)
       .set('Cookie', candidateB.cookie)
-      .send({ approachability: 4, responseTime: 4, timeliness: 4, communicationQuality: 4 })
+      .send({ reachability: 4, responsiveness: 4, guidelinesShared: 4 })
       .expect(201);
     const ratingIdB = body<RatingBody>(ratingB).id;
 

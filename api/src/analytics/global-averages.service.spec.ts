@@ -64,19 +64,17 @@ describe('GlobalAveragesService', () => {
     it('parses numeric strings into numbers when data exists', async () => {
       prisma.$queryRaw.mockResolvedValue([
         {
-          avg_approachability: '4.50',
-          avg_response_time: '3.90',
-          avg_timeliness: '4.10',
-          avg_communication_quality: '4.00',
+          avg_reachability: '4.50',
+          avg_responsiveness: '3.90',
+          avg_guidelines_shared: '4.00',
           sample_size: 10,
         },
       ]);
 
       await expect(service.getRecruiterGlobalAverages()).resolves.toEqual({
-        avgApproachability: 4.5,
-        avgResponseTime: 3.9,
-        avgTimeliness: 4.1,
-        avgCommunicationQuality: 4.0,
+        avgReachability: 4.5,
+        avgResponsiveness: 3.9,
+        avgGuidelinesShared: 4.0,
         sampleSize: 10,
       });
     });
@@ -84,10 +82,9 @@ describe('GlobalAveragesService', () => {
     it('returns null when there is no platform data yet', async () => {
       prisma.$queryRaw.mockResolvedValue([
         {
-          avg_approachability: null,
-          avg_response_time: null,
-          avg_timeliness: null,
-          avg_communication_quality: null,
+          avg_reachability: null,
+          avg_responsiveness: null,
+          avg_guidelines_shared: null,
           sample_size: 0,
         },
       ]);

@@ -21,10 +21,10 @@ export interface MySubmissionRecruiterRating {
   id: string;
   recruiterInteractionId: string;
   status: string;
-  approachability: number;
-  responseTime: number;
-  timeliness: number;
-  communicationQuality: number;
+  reachability: number;
+  responsiveness: number;
+  guidelinesShared: number;
+  rejectionMessageAuthenticity: number | null;
   freeText: string | null;
   createdAt: Date;
 }
@@ -120,10 +120,10 @@ export class MeService {
           id: rating.id,
           recruiterInteractionId: interaction.id,
           status: rating.status,
-          approachability: rating.approachability,
-          responseTime: rating.responseTime,
-          timeliness: rating.timeliness,
-          communicationQuality: rating.communicationQuality,
+          reachability: rating.reachability,
+          responsiveness: rating.responsiveness,
+          guidelinesShared: rating.guidelinesShared,
+          rejectionMessageAuthenticity: rating.rejectionMessageAuthenticity,
           freeText: rating.freeText,
           createdAt: rating.createdAt,
         })),

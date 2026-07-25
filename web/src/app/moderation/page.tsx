@@ -48,10 +48,10 @@ const SCORE_FIELDS = [
   'clarity',
   'focus',
   'technicalDepth',
-  'approachability',
-  'responseTime',
-  'timeliness',
-  'communicationQuality',
+  'reachability',
+  'responsiveness',
+  'guidelinesShared',
+  'rejectionMessageAuthenticity',
   'overallExperience',
 ] as const;
 

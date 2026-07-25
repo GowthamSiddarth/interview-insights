@@ -111,10 +111,9 @@ describe('AnalyticsService', () => {
       .mockResolvedValueOnce([]) // round type rows
       .mockResolvedValueOnce([
         {
-          avg_approachability: '4.50',
-          avg_response_time: '4.00',
-          avg_timeliness: '4.00',
-          avg_communication_quality: '4.00',
+          avg_reachability: '4.50',
+          avg_responsiveness: '4.00',
+          avg_guidelines_shared: '4.00',
           sample_size: 5,
         },
       ])
@@ -122,10 +121,9 @@ describe('AnalyticsService', () => {
         { avg_overall_experience: '4.20', pct_would_recommend: '80.00', sample_size: 6 },
       ]);
     globalAveragesService.getRecruiterGlobalAverages.mockResolvedValue({
-      avgApproachability: 3.0,
-      avgResponseTime: 3.0,
-      avgTimeliness: 3.0,
-      avgCommunicationQuality: 3.0,
+      avgReachability: 3.0,
+      avgResponsiveness: 3.0,
+      avgGuidelinesShared: 3.0,
       sampleSize: 40,
     });
     globalAveragesService.getOverallGlobalAverages.mockResolvedValue({
@@ -139,7 +137,7 @@ describe('AnalyticsService', () => {
     expect(result.roundTypes).toEqual([]);
     expect(result.recruiter).not.toBeNull();
     expect(result.recruiter!.sampleSize).toBe(5);
-    expect(result.recruiter!.scores.approachability).not.toBeNull();
+    expect(result.recruiter!.scores.reachability).not.toBeNull();
     expect(result.overall).not.toBeNull();
     expect(result.overall!.sampleSize).toBe(6);
     expect(result.overall!.scores.wouldRecommendPct).not.toBeNull();
