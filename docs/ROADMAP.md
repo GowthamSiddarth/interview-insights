@@ -1114,9 +1114,11 @@ Submission Consistency". Epic: GitHub issue #314.
       detail. Interviewer display label judged out of scope: `Round.
       interviewerId` has no write path anywhere in the codebase today,
       so there is no data to enrich with (GitHub issue #315)
-- [ ] Fix `ModerationQueueEntity.roundTitle`'s type (`string` ->
+- [x] Fix `ModerationQueueEntity.roundTitle`'s type (`string` ->
       `string | null`), matching `CompanyReviewItem`/
-      `MySubmissionRoundRating` (GitHub issue #316)
+      `MySubmissionRoundRating` — resolved as a side effect of #315's
+      own rewrite of the same type, closed without a dedicated PR
+      (GitHub issue #316)
 - [ ] Extend fraud-check rate limiting to recruiter ratings and
       overall reviews, in both the single-create and bulk-submission
       paths — currently round-rating-only (GitHub issue #317)

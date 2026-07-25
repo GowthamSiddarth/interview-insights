@@ -2586,12 +2586,22 @@ delete and the existing `prune-orphaned-company-search-docs` script
 (D51's own tooling), confirming zero orphaned rows or search
 documents were left behind.
 
+**Phase 29, issue #316 (`ModerationQueueEntity.roundTitle` type fix)**
+— confirmed redundant, not implemented separately. #315's own rewrite
+of `ModerationQueueEntity` in `web/src/lib/api.ts` (adding `processId`/
+`roundDescription`/`roundTypeMetadata`/`roundScheduledDurationMinutes`)
+touched the same `roundTitle` line and already changed it from
+`string` to `string | null` (commit a5fda25, PR #323) — verified both
+sides match: the backend (`moderation.service.ts`) already declares
+and sets `roundTitle?: string | null` from the genuinely nullable
+`Round.title` (#287), matching `CompanyReviewItem`/
+`MySubmissionRoundRating`'s existing correct typing. Closed on GitHub
+with the diff cited, no dedicated PR.
+
 - Next step: continue merging without waiting for CI until the user
   says the GitHub Actions billing limit has been refreshed. Phase 29
-  issues #316-318 (the `roundTitle` type fix — likely now redundant
-  given #315 already fixed it opportunistically, worth confirming
-  before implementing — extending fraud-check rate limiting, and the
-  phase's engineering blog, written last once #316/#317 are also
+  issues #317-318 (extending fraud-check rate limiting, and the
+  phase's engineering blog, written last once #317 is also
   done) remain next in line, followed by Phase 19 (Content Quality &
   Synthetic Data, issues #162-165) and Phase 27 (Admin Content
   Gateway), both still planned but not started.
