@@ -352,6 +352,12 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    // The raw, un-joined validation messages (GitHub issue #281) — kept
+    // alongside the joined `message` (unchanged, still used by every
+    // existing display site) so a caller that wants to humanize each
+    // message individually (rather than parse a comma-joined string back
+    // apart) can do so.
+    public messages: string[] = [message],
   ) {
     super(message);
   }
@@ -368,8 +374,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string | string[] };
-    const message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
-    throw new ApiError(res.status, message ?? `Request to ${path} failed with ${res.status}`);
+    const messages = Array.isArray(body.message)
+      ? body.message
+      : [body.message ?? `Request to ${path} failed with ${res.status}`];
+    throw new ApiError(res.status, messages.join(', '), messages);
   }
   // 204 No Content (the update/delete DELETE routes, GitHub issue #150) has
   // no body to parse — res.json() would throw on the empty string.

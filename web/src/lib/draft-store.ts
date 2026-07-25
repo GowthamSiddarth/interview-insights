@@ -230,3 +230,77 @@ export function setOverallReview(
 ): ProcessDraft {
   return { ...draft, overallReview };
 }
+
+export interface DraftValidationIssue {
+  // 'process' | 'overall' | a round/recruiter step's clientId — matches
+  // StepNavigator's own step-id vocabulary, so a caller can jump straight
+  // to the offending step.
+  stepId: string;
+  message: string;
+}
+
+function isValidRating1to5(value: number | undefined): boolean {
+  return typeof value === 'number' && !Number.isNaN(value) && value >= 1 && value <= 5;
+}
+
+// Client-side pre-submit validation (GitHub issue #281, Phase 28) — mirrors
+// the backend's own required-field rules closely enough to catch the
+// common mistakes (an empty recruiter identifier, an out-of-range rating)
+// before the bulk endpoint ever sees them, so a candidate never has to
+// decode a raw class-validator message like
+// "recruiterInteractions.0.recruiterIdentifier should not be empty".
+export function validateDraft(draft: ProcessDraft): DraftValidationIssue[] {
+  const issues: DraftValidationIssue[] = [];
+
+  if (!draft.process.roleTitle.trim()) {
+    issues.push({ stepId: 'process', message: 'Role title is required.' });
+  }
+
+  draft.rounds.forEach((step, index) => {
+    if (!step.round.title.trim()) {
+      issues.push({ stepId: step.clientId, message: `Round ${index + 1} needs a title.` });
+    }
+    if (step.round.rating) {
+      const { difficulty, fluency, clarity, focus } = step.round.rating;
+      if (
+        !isValidRating1to5(difficulty) ||
+        !isValidRating1to5(fluency) ||
+        !isValidRating1to5(clarity) ||
+        !isValidRating1to5(focus)
+      ) {
+        issues.push({
+          stepId: step.clientId,
+          message: `Round ${index + 1}'s rating fields must all be between 1 and 5.`,
+        });
+      }
+    }
+  });
+
+  draft.recruiterInteractions.forEach((step, index) => {
+    if (!step.interaction.recruiterIdentifier.trim()) {
+      issues.push({
+        stepId: step.clientId,
+        message: `Recruiter touchpoint ${index + 1} needs a name or email.`,
+      });
+    }
+    if (step.interaction.rating) {
+      const { reachability, responsiveness, guidelinesShared } = step.interaction.rating;
+      if (
+        !isValidRating1to5(reachability) ||
+        !isValidRating1to5(responsiveness) ||
+        !isValidRating1to5(guidelinesShared)
+      ) {
+        issues.push({
+          stepId: step.clientId,
+          message: `Recruiter touchpoint ${index + 1}'s rating fields must all be between 1 and 5.`,
+        });
+      }
+    }
+  });
+
+  if (draft.overallReview && !isValidRating1to5(draft.overallReview.overallExperience)) {
+    issues.push({ stepId: 'overall', message: 'Overall experience rating must be between 1 and 5.' });
+  }
+
+  return issues;
+}

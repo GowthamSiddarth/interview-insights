@@ -45,6 +45,10 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     render(<HomePage />);
     await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
+    // Role title is required (GitHub issue #281's pre-submit validation) —
+    // fill it up front so every test below starts from a submittable draft
+    // unless it's deliberately testing an invalid one.
+    await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
   }
 
   it('sorts steps chronologically regardless of fill order (recruiter-start, rounds by sequence, recruiter-end)', async () => {
@@ -136,13 +140,78 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     await user.click(screen.getByText('Review & Submit'));
     await user.click(await screen.findByRole('button', { name: 'Submit' }));
 
-    expect(await screen.findByText(/Invalid value\(s\)/)).toBeInTheDocument();
+    // GitHub issue #281 — a backend error shape this app's own humanizer
+    // doesn't specifically recognize falls back to a plain-English message,
+    // never the raw string the backend actually sent.
+    expect(
+      await screen.findByText('Please check the highlighted fields and try again.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid value\(s\)/)).not.toBeInTheDocument();
     // Draft still exists (with its round still in it) — back to my drafts
     // should not lose it, and resuming shows the round untouched.
     await user.click(screen.getByRole('button', { name: 'Back to my drafts' }));
     expect(await screen.findByText('Your drafts')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resume' }));
     expect((await screen.findAllByText(/Round 1: Screen/)).length).toBeGreaterThan(0);
+  });
+
+  it('blocks submit and shows a plain-English fix list for an incomplete draft (GitHub issue #281)', async () => {
+    mockFetchByRoute();
+    const user = userEvent.setup();
+    render(<HomePage />);
+    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
+    // Deliberately leave Role title empty, add a recruiter touchpoint with
+    // no identifier — the two required-field cases the original bug report
+    // was about.
+    await user.click(screen.getByRole('button', { name: '+ Recruiter (before rounds)' }));
+    await user.click(screen.getByText('Review & Submit'));
+
+    expect(await screen.findByText('Role title is required.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Recruiter touchpoint 1 needs a name or email.'),
+    ).toBeInTheDocument();
+    const submitButton = screen.getByRole('button', { name: 'Submit' });
+    expect(submitButton).toBeDisabled();
+
+    // The network call must never even fire for an invalid draft.
+    const bulkCalls = (global.fetch as jest.Mock).mock.calls.filter(([input, init]) =>
+      String(input).includes('/processes/bulk') && (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(bulkCalls).toHaveLength(0);
+
+    // A "Fix" link jumps straight back to the offending step.
+    await user.click(screen.getAllByRole('button', { name: 'Fix' })[0]);
+    expect(await screen.findByLabelText('Role title')).toBeInTheDocument();
+  });
+
+  it('humanizes a "should not be empty" backend error instead of showing the raw dotted path (GitHub issue #281)', async () => {
+    mockFetchByRoute({
+      bulkSubmit: () =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () =>
+            Promise.resolve({
+              message: ['recruiterInteractions.0.recruiterIdentifier should not be empty'],
+            }),
+        }),
+    });
+    const user = userEvent.setup();
+    await openDraft(user);
+
+    // A round alone is enough to pass client-side validation (recruiter
+    // steps aren't added here) — this exercises the backend-error fallback
+    // path specifically, simulating a shape the client-side check itself
+    // didn't catch.
+    await user.click(screen.getByRole('button', { name: 'Add round' }));
+    await user.type(await screen.findByLabelText('Title'), 'Screen');
+    await user.click(screen.getByText('Review & Submit'));
+    await user.click(await screen.findByRole('button', { name: 'Submit' }));
+
+    expect(
+      await screen.findByText('Recruiter touchpoint 1: Recruiter name or email is required.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/recruiterInteractions\.0/)).not.toBeInTheDocument();
   });
 
   it('gates the submit button behind login, leaving the review content visible', async () => {
