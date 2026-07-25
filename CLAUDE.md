@@ -1939,9 +1939,34 @@ it too — unlike several earlier non-linear phases, nothing in Phase
 25/26 depends on this admin UI existing yet. Epic #262 on the project
 board at "Todo" — planning only, no implementation started.
 
-- Next step: Phase 24, issue #249 (recruiter_ratings field redesign) —
-  still needs its own kickoff brainstorm resolved first, same pattern
-  Phase 16/17/21 each used, before implementation starts.
+**Phase 24, issue #249 kickoff brainstorm (before implementing)** —
+resolved 2026-07-25, same pattern Phase 16/17/21 each used. Unlike
+issue #247's clean 1:1 rename, this one had five real open questions,
+all resolved directly with the project owner and recorded in the
+issue body: `response_time`+`timeliness` merge into one
+`responsiveness` field (candidates can't cleanly separate "replied
+fast" from "kept to promised dates" — same reasoning as #247 dropping
+overly-correlated axes); `communication_quality` dropped entirely,
+folding into `reachability`/`responsiveness`/free text rather than
+staying a 5th field; `reachability` is a rename+reinterpretation of
+`approachability` (friendliness → availability), not a new axis;
+`guidelines_shared` is a 1-5 rating (not boolean), keeping every
+column on the table uniform; `rejection_message_authenticity` is a
+nullable 1-5 column, self-reported with no backend gating against
+`InterviewProcess.outcome` (`RecruiterInteraction` has no outcome
+link of its own — a process-level fact, not interaction-scoped — so
+gating would need an extra join and risks a race if the interaction
+is logged before the process outcome is finalized). Final field set:
+`reachability`, `responsiveness`, `guidelinesShared`,
+`rejectionMessageAuthenticity` (nullable) — matches the issue's
+originally-proposed 4-field target exactly. Implementation (migration,
+materialized view, DTOs/services, wizard/`/me`/analytics/moderation
+frontends, every test referencing the old field names) is now
+unblocked but not yet started.
+
+- Next step: Phase 24, issue #249 implementation (recruiter_ratings
+  field redesign) — kickoff brainstorm now resolved, scope recorded in
+  the issue body.
 
 ## Open decisions still to make
 
