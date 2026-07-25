@@ -2041,9 +2041,24 @@ five calls), fixed by converting it to a fresh app per test
 specs already needed. 292 api unit tests, 125 e2e tests (123 passing
 + 2 pre-existing unrelated skips) all green; `api` build/lint clean.
 
-- Next step: Phase 25, issue #252 (engineering blog for Phase 25,
-  last) — the only remaining issue in Phase 25, followed by Phase 26
-  (Client-Side Draft Wizard).
+**Phase 25, issue #252 (engineering blog)** —
+`wiki/blog/phase-25-bulk-process-submission-api/` gained one post for
+issue #251, covering why the atomic-rollback decision (D49) was
+simpler than the issue's own framing suggested (D13's rate limit was
+never actually a rejection path), why sequential entity creation is
+load-bearing for the rolling rate-limit check, and the
+`sessions-on-write-path.e2e-spec.ts` throttle fix it surfaced.
+`wiki/blog/README.md`'s index updated.
+
+**Phase 25 is now fully done** — issues #251-252 both closed via
+merged PRs, and every phase built so far now has a complete
+engineering blog.
+
+- Next step: Phase 26 (Client-Side Draft Wizard, epic #246, issues
+  #253-256) — a genuine wizard rewrite (draft-state persistence, a new
+  flashcard navigation paradigm, a chronological review screen wired
+  to Phase 25's bulk endpoint). Given the size, this goes through Plan
+  Mode before any code, same as issue #248's expanded scope did.
 
 ## Open decisions still to make
 
