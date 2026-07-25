@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiError, Company, RoundTypeFieldOptions, Round } from '@/lib/api';
+import { api, ApiError, Company, CreateBulkProcessInput, RoundTypeFieldOptions, Round } from '@/lib/api';
 import {
   addRecruiterStep,
   addRoundStep,
@@ -26,6 +26,7 @@ import { GatedSection } from '@/components/GatedSection';
 import { StepNavigator } from './wizard/step-navigator';
 import { RoundStepForm } from './wizard/round-step-form';
 import { RecruiterStepForm } from './wizard/recruiter-step-form';
+import { ReviewScreen } from './wizard/review-screen';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
@@ -92,6 +93,51 @@ function OverallReviewForm({
   );
 }
 
+interface SubmissionSummary {
+  companyName: string;
+  roundRatings: number;
+  recruiterRatings: number;
+  hasOverallReview: boolean;
+}
+
+function SubmissionSuccess({
+  summary,
+  onDone,
+}: {
+  summary: SubmissionSummary;
+  onDone: () => void;
+}) {
+  const parts: string[] = [];
+  if (summary.roundRatings > 0) {
+    parts.push(`${summary.roundRatings} round rating${summary.roundRatings === 1 ? '' : 's'}`);
+  }
+  if (summary.recruiterRatings > 0) {
+    parts.push(
+      `${summary.recruiterRatings} recruiter rating${summary.recruiterRatings === 1 ? '' : 's'}`,
+    );
+  }
+  if (summary.hasOverallReview) parts.push('an overall review');
+
+  return (
+    <Card as="section" className="flex flex-col gap-3">
+      <h2 className="font-medium text-green-700 dark:text-green-400">Submitted!</h2>
+      <p className="text-sm text-gray-600 dark:text-gray-300">
+        Your process at {summary.companyName} has been created.
+        {parts.length > 0 && (
+          <>
+            {' '}
+            {parts.join(', ')} {parts.length === 1 ? 'is' : 'are'} pending moderation before
+            becoming public — same as every other rating on this platform.
+          </>
+        )}
+      </p>
+      <Button type="button" onClick={onDone}>
+        Back to my drafts
+      </Button>
+    </Card>
+  );
+}
+
 export default function HomePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   // null = still checking; false = no session. Only gates the *create a
@@ -105,6 +151,8 @@ export default function HomePage() {
   const [activeStepId, setActiveStepId] = useState<string>('process');
   const [fieldOptions, setFieldOptions] = useState<RoundTypeFieldOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState<SubmissionSummary | null>(null);
 
   useEffect(() => {
     api.listCompanies().then(setCompanies).catch((err: unknown) => setError(errorMessage(err)));
@@ -134,6 +182,7 @@ export default function HomePage() {
     setDrafts(listDrafts());
     setActiveDraft(draft);
     setActiveStepId('process');
+    setSubmitSuccess(null);
   }
 
   async function handleCreateCompany(formData: FormData) {
@@ -204,6 +253,46 @@ export default function HomePage() {
     setActiveStepId('process');
   }
 
+  // GitHub issue #255 — the only network call this whole draft flow ever
+  // makes before this point. Because the bulk endpoint is fully atomic
+  // (D49), any failure here leaves the draft completely untouched, so the
+  // candidate can just fix whatever's wrong and try again — no partial
+  // state to reconcile.
+  async function handleSubmit() {
+    if (!activeDraft) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const payload: CreateBulkProcessInput = {
+        ...activeDraft.process,
+        rounds: activeDraft.rounds.length > 0 ? activeDraft.rounds.map((s) => s.round) : undefined,
+        recruiterInteractions:
+          activeDraft.recruiterInteractions.length > 0
+            ? activeDraft.recruiterInteractions.map((s) => s.interaction)
+            : undefined,
+        overallReview: activeDraft.overallReview,
+      };
+      await api.createBulkProcess(activeDraft.companyId, payload);
+
+      const summary: SubmissionSummary = {
+        companyName: activeDraft.companyName,
+        roundRatings: activeDraft.rounds.filter((s) => s.round.rating).length,
+        recruiterRatings: activeDraft.recruiterInteractions.filter((s) => s.interaction.rating)
+          .length,
+        hasOverallReview: !!activeDraft.overallReview,
+      };
+      deleteDraft(activeDraft.id);
+      setDrafts(listDrafts());
+      setActiveDraft(null);
+      setActiveStepId('process');
+      setSubmitSuccess(summary);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const activeRoundStep = activeDraft?.rounds.find((r) => r.clientId === activeStepId);
   const activeRecruiterStep = activeDraft?.recruiterInteractions.find(
     (r) => r.clientId === activeStepId,
@@ -221,7 +310,11 @@ export default function HomePage() {
 
       <ErrorBanner message={error} />
 
-      {!activeDraft && (
+      {!activeDraft && submitSuccess && (
+        <SubmissionSuccess summary={submitSuccess} onDone={() => setSubmitSuccess(null)} />
+      )}
+
+      {!activeDraft && !submitSuccess && (
         <>
           {drafts.length > 0 && (
             <Card as="section" className="flex flex-col gap-3">
@@ -410,15 +503,18 @@ export default function HomePage() {
                   }
                 />
               )}
+
+              {activeStepId === 'review' && (
+                <ReviewScreen
+                  draft={activeDraft}
+                  loggedIn={candidateSession}
+                  submitting={submitting}
+                  onEditStep={setActiveStepId}
+                  onSubmit={handleSubmit}
+                />
+              )}
             </div>
           </div>
-
-          {/* The chronological review screen + final bulk-submit call land
-              in the next update (GitHub issue #255). */}
-          <p className="text-xs text-gray-500 italic">
-            Review &amp; submit lands in the next update — this draft keeps
-            saving locally in the meantime.
-          </p>
         </Card>
       )}
     </PageContainer>
