@@ -1067,3 +1067,19 @@ pre/post-interview recruiter touchpoints).
       step's own validation issues, same as Submit, except the
       whole-draft "at least one round" rule (GitHub issue #306)
 - [x] Engineering blog update for issues #305-307
+
+Reopened a fourth time, same day: the sidebar's original "Add a round"
+control (from before #306's modal existed) was left in place alongside
+the new modal, two redundant ways to do the same thing.
+
+- [x] Consolidated round-adding into the Next-button modal only —
+      removed the sidebar's "Add a round" section (its two recruiter
+      add buttons are unaffected); reordered the round-type select to
+      match a typical interview loop (Tech Screening/Assessment/
+      Take-home first, Other last) and defaulted it to an unselected
+      "None" with "Add new round" disabled until a real type is
+      chosen; renamed "Add round" -> "Add new round" and "No,
+      continue" -> "Cancel" — the latter also changed behavior to just
+      close the modal without navigating, since the sidebar shortcut
+      it used to fall back to no longer exists (GitHub issue #319)
+- [x] Engineering blog update for issue #319

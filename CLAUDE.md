@@ -2437,17 +2437,74 @@ posts for #305-307; `wiki/blog/README.md`'s index updated. Epic #280
 reopened and re-closed the same day, same precedent as every other
 epic reopening in this project.
 
-**Phase 28 is now fully done** — issues #281-288, #301, and #305-307
-all merged (#281-284 via normal CI-verified PRs; everything from #285
-onward merged during the CI billing gap per the user's explicit
-direction, with local `npm test`/`lint`/`build` as the correctness
-gate instead), and every phase built so far now has a complete
-engineering blog.
+**Phase 28 was declared fully done, then reopened a fourth time
+(GitHub issue #319)** — the user asked for several concrete wizard
+changes together: moderators seeing every candidate data point (see
+Phase 29 below), a consistency/rate-limit audit, and three direct UI
+requests. The first two UI requests (round-type reordering/default/
+validation, button renames) landed alongside a third the user
+described in the same breath: remove the sidebar's original "Add a
+round" control now that issue #306's Next-button modal exists — two
+working paths to the same action was itself confusing, not a
+neutral redundancy. Fix: the sidebar's round-type select + "Add
+round" button are gone entirely (its two recruiter add-step buttons
+are untouched); the modal's own select is reordered to match a
+typical interview loop (Tech Screening/Assessment/Take-home first,
+Other last) and defaults to an unselected "None" with "Add new round"
+disabled until a real type is picked; "Add round" renamed to "Add new
+round" (label only); "No, continue" renamed to "Cancel" *and*
+re-behaviored — it no longer navigates anywhere (it used to advance to
+whatever Next would have done normally), since that fallback made
+sense only while the sidebar shortcut still existed. Verified the
+capability wasn't actually lost: adding a round from any position is
+still reachable via the free-jump navigator (go to the last round or
+Process Details, then Next). 12 new/updated web tests across 6 files
+(117 total) — every existing test that used the removed sidebar button
+was rewritten to add rounds via the modal instead. Live-verified
+end to end against the real cluster: sidebar control gone, select
+defaults to None with the button disabled, order correct, Cancel
+doesn't navigate, adding a Tech Screening round works — zero console
+errors. `wiki/blog/phase-28-wizard-ux-refinements/
+issue-319-consolidate-round-adding/` added. Epic #280 reopened and
+re-closed the same day, same precedent as every prior reopening.
+
+**Phase 29 — Moderator Full Content Visibility & Submission
+Consistency (planned, not started)** — filed the same day, from the
+same user request. An investigation (read-only Explore agent)
+confirmed three real gaps: (1) `ModerationService.listPending()`
+fetches a round's full `Round` row but only surfaces `title`/
+`roundType` plus the rating fields — `description`, `typeMetadata`
+(the round-type registry's structured answers — arguably the most
+important content to actually moderate), `scheduledDurationMinutes`,
+and any interviewer display label are fetched then silently dropped,
+never reaching the moderator; recruiter ratings and overall reviews
+have no such gap. (2) `ModerationQueueEntity.roundTitle` is typed
+`string` (no `| null`) in `web/src/lib/api.ts`, inconsistent with
+`CompanyReviewItem`/`MySubmissionRoundRating`, both correctly
+`string | null` — not a runtime bug (the frontend already handles
+`null`), but a real type-safety gap. (3) `FraudChecksService`'s rate
+limit (3 ratings/rolling 24h, per candidate, non-blocking — only
+flags the moderation queue entry) counts `round_rating` rows only;
+`recruiter_rating` and `overall_review` creation (single-create and
+bulk-submission paths alike) have zero fraud-check wiring at all —
+D13 scoped this to round ratings when they were the only write path
+that existed, never revisited once Phase 14 added the other two.
+Milestone "Phase 29 — Moderator Full Content Visibility & Submission
+Consistency", epic #314, issues #315-318 filed together (moderation
+queue full-content enrichment; the `roundTitle` type fix; extending
+rate limiting to recruiter ratings/overall reviews, with two kickoff
+questions flagged for whenever implementation starts — a shared
+rolling-window counter across all three entity types vs. three
+independent ones, and whether duplicate-text detection should extend
+too; engineering blog). Planning only, per the user's explicit
+"brainstorm... in a separate phase" — no implementation yet.
 
 - Next step: continue merging without waiting for CI until the user
   says the GitHub Actions billing limit has been refreshed. Phase 19
-  (Content Quality & Synthetic Data, issues #162-165) and Phase 27
-  (Admin Content Gateway) remain planned but not started, next in line.
+  (Content Quality & Synthetic Data, issues #162-165), Phase 27 (Admin
+  Content Gateway), and Phase 29 (Moderator Full Content Visibility &
+  Submission Consistency) remain planned but not started, next in
+  line.
 
 ## Open decisions still to make
 
