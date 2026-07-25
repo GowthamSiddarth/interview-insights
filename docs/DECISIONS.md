@@ -2036,6 +2036,65 @@ checking if it ever is.
 
 ---
 
+### D52 — Fraud-check rate limiting moves from counting entities to counting submissions (GitHub issue #317, Phase 29)
+
+**Context:** while reviewing #315's moderation-queue grouping-by-
+submission work, the project owner asked a sharper question:
+should moderation and rate-limiting be scoped per-entity (per round/
+recruiter rating, per overall review) or per-submission (per
+`InterviewProcess`)? The two concerns turned out to have different
+correct answers.
+
+**Moderation actions (approve/reject/flag): stay per-entity, no
+change.** Live data from #315's own verification proved why — a real
+submission had 3 coding-round ratings, 2 clean and 1 auto-flagged
+`rate_limit`. A moderator needs to approve the 2 good ones and handle
+the 1 suspicious one separately; acting on the whole submission at
+once would force an all-or-nothing call that either loses legitimate
+content or waves through suspicious content alongside it.
+
+**Rate limiting: reframed, not just extended.** `FraudChecksService.
+checkRateLimit()` (D13) counts `round_rating` rows created by a
+candidate in a rolling 24h window — 3 trips the flag. But Phase 25/26
+built this platform specifically so one legitimate submission can
+contain several round ratings (a real multi-round interview loop).
+Counting per-entity means a single genuine submission can trip its
+own "abuse" signal — exactly what the live data showed: the 3rd round
+rating in one real 5-entity submission got auto-flagged purely for
+being the candidate's 3rd rating that day, not because anything about
+it was actually suspicious. The unit being counted was wrong, not just
+incomplete (it also never covered recruiter ratings/overall reviews,
+#317's original ask).
+
+**Decision:**
+- Replace the entity-count rate limit with a **submission-count**
+  one: count `InterviewProcess` rows the candidate has created in the
+  rolling 24h window, not individual round/recruiter/overall rows. One
+  interview loop with 5 rounds is 1 event under this model, not 5.
+- Apply this same submission-level check uniformly when creating any
+  of the three entity types (round rating, recruiter rating, overall
+  review) — every entity belonging to an over-the-limit submission
+  gets flagged `rate_limit` on its own moderation_queue entry, never
+  blocking the write (unchanged from D13).
+- This resolves #317's original kickoff question (shared vs. per-type
+  counter) by making it moot: there is exactly one counter
+  (submissions), and it doesn't depend on which entity type is being
+  created within a submission.
+- Duplicate free-text detection (the other half of
+  `FraudChecksService`, unrelated to the count-based limit above)
+  extends to `recruiter_rating.freeText` and
+  `overall_review.reviewText`, each compared only within its own
+  field/entity type — a straightforward mechanical extension, not
+  part of the rate-limit reframing.
+
+**Revisit when:** if real usage ever shows legitimate candidates
+submitting more than ~3 genuinely separate interview processes in a
+day (e.g. someone actively interviewing at several companies at once)
+— the threshold, not the unit, would be the thing to tune then, same
+placeholder-value spirit as D13's original constant.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

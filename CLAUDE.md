@@ -2598,13 +2598,38 @@ and sets `roundTitle?: string | null` from the genuinely nullable
 `MySubmissionRoundRating`'s existing correct typing. Closed on GitHub
 with the diff cited, no dedicated PR.
 
-- Next step: continue merging without waiting for CI until the user
-  says the GitHub Actions billing limit has been refreshed. Phase 29
-  issues #317-318 (extending fraud-check rate limiting, and the
-  phase's engineering blog, written last once #317 is also
-  done) remain next in line, followed by Phase 19 (Content Quality &
+**Phase 29, issue #317 reframed before implementation (D52)** — while
+discussing #315's grouping, the user asked whether moderation/rate-
+limiting should be scoped per-entity or per-submission. Answer differs
+by concern: moderation actions (approve/reject/flag) stay per-entity
+— #315's own live data showed why (a real submission had 3 coding-round
+ratings, 2 clean and 1 auto-flagged, needing independent moderator
+decisions). But the fraud-check rate limit was reframed, not just
+extended: `FraudChecksService.checkRateLimit()` counts `round_rating`
+rows per candidate per rolling 24h — 3 trips it — but Phase 25/26 built
+this platform specifically so one legitimate submission can contain
+several rounds, so a single genuine submission could trip its own
+"abuse" signal. That's exactly what the live data showed: the 3rd round
+rating in one real 5-entity submission was auto-flagged purely for
+being the candidate's 3rd rating that day. #317's issue body and title
+were updated to reflect the new design: count `InterviewProcess`
+creations (submissions) per candidate per rolling 24h window instead of
+individual entities, applied uniformly across all three entity types —
+which also resolves #317's original "shared vs. per-type counter"
+kickoff question by making it moot. Duplicate free-text detection
+(the other, count-independent half of `FraudChecksService`) still
+extends to `recruiter_rating.freeText`/`overall_review.reviewText` as
+originally planned. Not yet implemented — this session only updated
+the issue body/title and filed D52; the code change (replacing the
+entity-count check, wiring both new entity types, updating existing
+round-rating rate-limit tests to the new unit) is next.
+
+- Next step: implement #317 per D52's resolved design, then #318 (the
+  phase's engineering blog, written last). Phase 19 (Content Quality &
   Synthetic Data, issues #162-165) and Phase 27 (Admin Content
-  Gateway), both still planned but not started.
+  Gateway) remain planned but not started, after Phase 29. Continue
+  merging without waiting for CI until the user says the GitHub
+  Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 
