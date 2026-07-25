@@ -38,6 +38,15 @@ function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
+// GitHub issue #301 (Phase 28) — the candidate session cookie (and its
+// hint) both expire a fixed 1h after login, no sliding extension. A
+// candidate can easily spend longer than that filling out a multi-round
+// draft, so checking the session hint only once at mount would leave the
+// page believing it's still logged in long after the real session died.
+// Re-checked on this interval instead — cheap (a synchronous
+// document.cookie read, no network call).
+const SESSION_CHECK_INTERVAL_MS = 30_000;
+
 // GitHub issue #281 (Phase 28) — client-side pre-submit checks (see
 // validateDraft()) catch the common cases before the bulk endpoint ever
 // sees them, but this is the fallback for whatever validation error does
@@ -215,6 +224,11 @@ export default function HomePage() {
   // A draft is pure client-side state (issue #253) until issue #255's
   // bulk submit, which is the only step that actually requires login.
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
+  // GitHub issue #301 — set once a poll (or a submit's own 401) observes
+  // the session going from logged-in to logged-out, so the wizard can
+  // warn about it specifically ("your session expired") rather than
+  // just quietly re-gating the submit button. Cleared once logged back in.
+  const [sessionExpiredWarning, setSessionExpiredWarning] = useState(false);
   const [drafts, setDrafts] = useState<ProcessDraft[]>([]);
   const [activeDraft, setActiveDraft] = useState<ProcessDraft | null>(null);
   const [activeStepId, setActiveStepId] = useState<string>('process');
@@ -228,7 +242,17 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    setCandidateSession(api.hasCandidateSessionHint());
+    function checkSession() {
+      const hasSession = api.hasCandidateSessionHint();
+      setCandidateSession((prev) => {
+        if (prev === true && !hasSession) setSessionExpiredWarning(true);
+        else if (hasSession) setSessionExpiredWarning(false);
+        return hasSession;
+      });
+    }
+    checkSession();
+    const interval = setInterval(checkSession, SESSION_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -363,7 +387,18 @@ export default function HomePage() {
       setActiveStepId('process');
       setSubmitSuccess(summary);
     } catch (err) {
-      setError(submitErrorMessage(err));
+      // GitHub issue #301 — a 401 here always means the session expired
+      // between the last poll and this click, never an invalid draft.
+      // Correct the session state immediately (rather than waiting for
+      // the next poll) and show the same clear message the proactive
+      // warning uses, not the generic validation-error fallback.
+      if (err instanceof ApiError && err.status === 401) {
+        setCandidateSession(false);
+        setSessionExpiredWarning(true);
+        setError('Your session has expired. Log in again to submit — your draft hasn\'t been lost.');
+      } else {
+        setError(submitErrorMessage(err));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -504,6 +539,16 @@ export default function HomePage() {
               </button>
             </span>
           </div>
+
+          {sessionExpiredWarning && (
+            <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
+              Your session has expired.{' '}
+              <Link href="/login" className="font-medium underline">
+                Log in again
+              </Link>{' '}
+              before submitting — your draft is saved and won&apos;t be lost.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[220px_1fr]">
             <StepNavigator
