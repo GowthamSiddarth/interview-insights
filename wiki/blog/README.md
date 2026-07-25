@@ -150,12 +150,15 @@ phase's blog is complete.
 
 ## Phase 17 — Candidate Self-Service
 
-See `docs/ROADMAP.md` Phase 17. All three feature issues are done —
+See `docs/ROADMAP.md` Phase 17. Declared fully done, then reopened
+while verifying Phase 24's issue #247 — the same non-linear reopening
+precedent Phase 18/20 already set. All four feature issues are done —
 this phase's blog is complete.
 
 1. [Issue #149 — My reviews: own submissions grouped by InterviewProcess](phase-17-candidate-self-service/issue-149-my-reviews/README.md)
 2. [Issue #150 — Update/Delete under moderation-safe rules](phase-17-candidate-self-service/issue-150-update-delete/README.md)
 3. [Issue #151 — GDPR erasure path (D34)](phase-17-candidate-self-service/issue-151-gdpr-erasure/README.md)
+4. [Issue #260 — Deleting a process that never went anywhere (D46)](phase-17-candidate-self-service/issue-260-delete-empty-process/README.md)
 
 ## Phase 18 — Admin Authentication
 

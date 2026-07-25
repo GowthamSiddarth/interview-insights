@@ -446,6 +446,53 @@ function OverallReviewItem({
   );
 }
 
+// GitHub issue #260 — deliberately narrower than a general "delete my
+// process": only ever shown (and only ever succeeds server-side) when
+// the process has nothing in it at all. Lets a candidate clear an
+// abandoned mid-wizard attempt that would otherwise sit here forever —
+// issue #150 kept structural entities out of scope for edits/deletes
+// generally, but there's nothing to protect once there's truly no
+// rating or review to lose.
+function EmptyProcessNotice({
+  processId,
+  onChanged,
+}: {
+  processId: string;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove(): Promise<void> {
+    if (!window.confirm('Delete this process? This cannot be undone.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteProcess(processId);
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-sm text-gray-500 italic">No ratings submitted for this process yet.</p>
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+      <Button
+        type="button"
+        onClick={() => void remove()}
+        variant="danger"
+        className="self-start"
+        disabled={busy}
+      >
+        Delete process
+      </Button>
+    </div>
+  );
+}
+
 // GitHub issue #151 (GDPR erasure) — permanently deletes the account and
 // everything it submitted. A plain window.confirm (same as every other
 // delete on this page) but with wording explicit about scope and
@@ -594,11 +641,7 @@ export default function MyReviewsPage() {
               </Link>
             </header>
 
-            {isEmpty && (
-              <p className="text-sm text-gray-500 italic">
-                No ratings submitted for this process yet.
-              </p>
-            )}
+            {isEmpty && <EmptyProcessNotice processId={entry.processId} onChanged={reload} />}
 
             {entry.roundRatings.map((r) => (
               <RoundRatingItem key={r.id} rating={r} onChanged={reload} />
