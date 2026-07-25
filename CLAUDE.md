@@ -2728,6 +2728,39 @@ blog.
   until the user says the GitHub Actions billing limit has been
   refreshed.
 
+**Phase 27, issue #263 (admin CRUD API)** — analyzed before
+implementing (per the user's explicit request): both feature issues
+(#263-264) were already unusually well-specified, with no blocking
+questions to resolve. A new `AdminRoundTypeFieldOptionsController`
+(`admin/round-types/...`, `@UseGuards(AdminJwtAuthGuard)`), deliberately
+its own controller rather than added to the existing public
+`RoundTypeRegistryController` — that one has no guard at all, and
+admin routes need one, the same separation `ModerationController`
+already models. `RoundTypeFieldOptionsService` gained
+`listAllOptions()` (every value, active and inactive, for a round
+type), `createOption()` (validates `fieldKey` is a real
+`controlled-single`/`controlled-multi` field on that round type via a
+new `assertControlledField()`, defaults `sortOrder` to one past the
+current highest for that field when omitted), and `updateOption()`
+(a plain `prisma.update()` — a missing id or a duplicate
+`(roundType, fieldKey, value)` both already map to the right HTTP
+status via the existing global `PrismaExceptionFilter`, no new app-level
+checks needed). Reordering happens via repeated `PATCH .../field-
+options/:id` calls updating `sortOrder`, not a dedicated bulk-reorder
+endpoint — matching the issue's own scope (add/update/retire only).
+21 new/updated unit tests (301 -> 308 api unit tests total) + 7 new
+e2e tests (round-type-registry.e2e-spec.ts, 141 e2e total) prove:
+unauthenticated 401 on every route; a new value appears immediately in
+both the admin list and the public `GET /round-types/field-options`;
+an unknown or free-text `fieldKey` is rejected (400); a duplicate value
+409s; retiring a value (`isActive: false`) removes it from the public
+endpoint while the row stays visible (and still `isActive: false`) in
+the admin list; a non-existent id 404s on update. `api` build/lint
+clean. Live-verified against the real `kind` cluster: added a real
+`problemAlgorithms` value via curl, confirmed it appeared in the public
+endpoint immediately, retired it, confirmed it disappeared from public
+but stayed in the admin list — test data cleaned up afterward.
+
 ## Open decisions still to make
 
 - Exact value of `k` in the shrinkage scoring formula (start at 8, tune later)
