@@ -236,6 +236,55 @@ export interface RoundTypeFieldDef {
 
 export type RoundTypeFieldOptions = Record<Round['roundType'], { fields: RoundTypeFieldDef[] }>;
 
+// POST /companies/:companyId/processes/bulk (Phase 25 issue #251, D49) —
+// the whole tree in one atomic transaction. Mirrors the backend's
+// CreateBulkProcessDto field-for-field; the wizard's draft (issue #253)
+// already stores its rounds/recruiterInteractions in exactly this shape,
+// so submitting is just stripping the draft's client-only fields
+// (clientId, timing), not a real translation step.
+export interface CreateBulkRoundRatingInput {
+  difficulty: number;
+  fluency: number;
+  clarity: number;
+  focus: number;
+  technicalDepth?: number;
+  freeText?: string;
+}
+
+export interface CreateBulkRoundInput {
+  sequenceNumber: number;
+  title: string;
+  roundType: Round['roundType'];
+  description?: string;
+  scheduledDurationMinutes?: number;
+  typeMetadata?: Record<string, unknown>;
+  rating?: CreateBulkRoundRatingInput;
+}
+
+export interface CreateBulkRecruiterRatingInput {
+  reachability: number;
+  responsiveness: number;
+  guidelinesShared: number;
+  rejectionMessageAuthenticity?: number;
+  freeText?: string;
+}
+
+export interface CreateBulkRecruiterInteractionInput {
+  recruiterIdentifier: string;
+  rating?: CreateBulkRecruiterRatingInput;
+}
+
+export interface CreateBulkProcessInput {
+  roleTitle: string;
+  level?: string;
+  department?: string;
+  applicationDate?: string;
+  outcome: InterviewProcess['outcome'];
+  rounds?: CreateBulkRoundInput[];
+  recruiterInteractions?: CreateBulkRecruiterInteractionInput[];
+  overallReview?: { overallExperience: number; wouldRecommend: boolean; reviewText?: string };
+}
+
 export interface AdminSession {
   username: string;
 }
@@ -556,4 +605,10 @@ export const api = {
   },
 
   getRoundTypeFieldOptions: () => request<RoundTypeFieldOptions>('/round-types/field-options'),
+
+  createBulkProcess: (companyId: string, input: CreateBulkProcessInput) =>
+    request<InterviewProcess>(`/companies/${companyId}/processes/bulk`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };

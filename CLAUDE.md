@@ -2155,9 +2155,58 @@ shell invocation leaked the api's `.env`-sourced `PORT=3001` into the
 web server's environment via `set -a`, causing a port collision —
 fixed by starting each dev server in its own separate shell invocation.)
 
-- Next step: Phase 26, issue #255 (chronological review screen +
-  bulk-submit integration) — the last feature issue in Phase 26, wiring
-  the draft to Phase 25's bulk endpoint for the one real submit call.
+**Phase 26, issue #255 (chronological review screen + bulk-submit
+integration)** — new `web/src/app/wizard/review-screen.tsx`: every
+filled step in chronological order — recruiter steps with
+`timing: 'start'` first (in add-order), then rounds sorted by their
+own `sequenceNumber`, then `timing: 'end'` recruiter steps, then the
+overall review last, always. This is a display-only merge; the
+submitted payload keeps `rounds`/`recruiterInteractions` as the two
+separate arrays the bulk endpoint already expects — no translation
+step. Each row has an "Edit" link that jumps straight back to that
+step via the navigator (issue #254), and the Submit button itself is
+the only thing on the whole draft flow gated behind login
+(`GatedSection`, reusing the same tri-state session-hint pattern as
+everywhere else) — picking a company and filling out an entire draft
+anonymously is fully supported, exactly as issue #253 set up.
+
+`api.ts` gained `createBulkProcess()` (`POST /companies/:companyId/
+processes/bulk`) plus the matching `CreateBulkProcessInput`/
+`CreateBulkRoundInput`/`CreateBulkRecruiterInteractionInput` types
+mirroring the backend DTOs field-for-field. Submitting strips every
+client-only field (`clientId`, `timing`) by just mapping each step
+wrapper down to its inner `round`/`interaction` object. Because D49
+already guarantees the bulk endpoint is fully atomic, issue #255's
+"handle a partial rejection" requirement simplified to: any failure
+leaves the draft completely untouched and shows the error via
+`ErrorBanner`; only a real success clears the draft and shows a
+summary card listing exactly which entities were created and that
+they're all `pending` — reusing the same status framing `/me` already
+established, computed from the draft's own local counts (no need for
+the bulk endpoint to echo back nested rows).
+
+10 new component tests (`wizard-review-submit.spec.tsx` — chronological
+sort with steps filled out of order, an edit link jumps back correctly,
+successful submit clears the draft and shows the right summary, a
+failed submit leaves the draft intact, the submit button specifically
+is gated behind login while the review content stays visible) all
+green; 83 web tests total, build/lint clean. Live-verified with a real
+headless browser (Playwright) against the real `kind` cluster end to
+end: real magic-link login → company creation → process details →
+two rounds (one rated, one deliberately left unrated, to prove that's
+fine) and two recruiter touchpoints added in deliberately non-
+chronological order → overall review → a full page reload mid-draft,
+resumed successfully → the review screen showing the correct
+chronological order → a real submit → confirmed via direct Postgres
+queries that exactly 2 rounds, 1 round rating, 2 recruiter
+interactions, 1 recruiter rating, and 1 overall review landed, all
+`pending` — zero console errors throughout. Test data cleaned up
+afterward.
+
+**All three Phase 26 feature issues (#253-255) are now done.**
+
+- Next step: Phase 26, issue #256 (engineering blog, last) — the only
+  remaining issue in Phase 26.
 
 ## Open decisions still to make
 

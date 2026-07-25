@@ -943,7 +943,7 @@ Phase 25's bulk endpoint.
       simultaneous in-progress company drafts (GitHub issue #253, D50)
 - [x] Flashcard-style step navigation, consuming Phase 24's registry
       (GitHub issue #254)
-- [ ] Chronological review screen + bulk-submit integration (GitHub
+- [x] Chronological review screen + bulk-submit integration (GitHub
       issue #255)
 - [ ] Engineering blog (last) (GitHub issue #256)
 

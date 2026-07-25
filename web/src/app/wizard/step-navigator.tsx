@@ -19,9 +19,10 @@ function stepButtonClass(active: boolean): string {
 
 interface StepNavigatorProps {
   draft: ProcessDraft;
-  // 'process' and 'overall' are fixed sentinel steps; anything else is a
-  // round/recruiter step's clientId. Free jumping between any of them —
-  // explicitly reversible, not a one-way flow (GitHub issue #254).
+  // 'process', 'overall', and 'review' are fixed sentinel steps; anything
+  // else is a round/recruiter step's clientId. Free jumping between any
+  // of them — explicitly reversible, not a one-way flow (GitHub issue
+  // #254; 'review' added in issue #255).
   activeStepId: string;
   onSelect: (stepId: string) => void;
   onAddRound: (roundType: Round['roundType']) => void;
@@ -80,6 +81,15 @@ export function StepNavigator({
             className={stepButtonClass(activeStepId === 'overall')}
           >
             Overall review
+          </button>
+        </li>
+        <li>
+          <button
+            type="button"
+            onClick={() => onSelect('review')}
+            className={stepButtonClass(activeStepId === 'review')}
+          >
+            Review &amp; Submit
           </button>
         </li>
       </ul>
