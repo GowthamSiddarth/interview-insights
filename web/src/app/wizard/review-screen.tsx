@@ -1,6 +1,7 @@
 'use client';
 
-import { DraftValidationIssue, ProcessDraft } from '@/lib/draft-store';
+import { useState } from 'react';
+import { DraftReminder, DraftValidationIssue, ProcessDraft } from '@/lib/draft-store';
 import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
 import { formatRoundLabel } from '@/lib/format-round-label';
@@ -22,7 +23,11 @@ interface ReviewScreenProps {
   // disabled while any issue exists, so an invalid draft never reaches the
   // bulk endpoint at all.
   validationIssues: DraftValidationIssue[];
+  // Non-blocking (GitHub issue #307) — never disables Submit, only
+  // prompts for explicit confirmation first.
+  reminders: DraftReminder[];
   onEditStep: (stepId: string) => void;
+  onAddRecruiterStep: (timing: 'start' | 'end') => void;
   onSubmit: () => void;
 }
 
@@ -38,9 +43,17 @@ export function ReviewScreen({
   loggedIn,
   submitting,
   validationIssues,
+  reminders,
   onEditStep,
+  onAddRecruiterStep,
   onSubmit,
 }: ReviewScreenProps) {
+  // Once acknowledged in this review visit, re-clicking Submit doesn't
+  // re-show the same reminder — reminders are recomputed live from the
+  // draft, so this naturally clears itself if the candidate does add the
+  // missing thing instead.
+  const [reminderAcknowledged, setReminderAcknowledged] = useState(false);
+  const activeReminders = reminderAcknowledged ? [] : reminders;
   const startSteps = draft.recruiterInteractions.filter((s) => s.timing === 'start');
   const endSteps = draft.recruiterInteractions.filter((s) => s.timing === 'end');
   const sortedRounds = [...draft.rounds].sort(
@@ -138,13 +151,44 @@ export function ReviewScreen({
         loggedIn={loggedIn}
         prompt="Log in to submit — this is the only step in the whole draft that needs a session."
       >
-        <Button
-          type="button"
-          onClick={onSubmit}
-          disabled={submitting || isEmpty || validationIssues.length > 0}
-        >
-          {submitting ? 'Submitting…' : 'Submit'}
-        </Button>
+        {validationIssues.length === 0 && !isEmpty && activeReminders.length > 0 ? (
+          <div className="rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
+            <p className="font-medium">Before you submit — was this intentional?</p>
+            <ul className="mt-1 list-inside list-disc">
+              {activeReminders.map((reminder) => (
+                <li key={reminder.id}>
+                  {reminder.message}{' '}
+                  <button
+                    type="button"
+                    onClick={() => onAddRecruiterStep(reminder.timing)}
+                    className={linkClass}
+                  >
+                    + Add now
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <Button
+              type="button"
+              onClick={() => {
+                setReminderAcknowledged(true);
+                onSubmit();
+              }}
+              disabled={submitting}
+              className="mt-2"
+            >
+              {submitting ? 'Submitting…' : 'Submit anyway'}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            onClick={onSubmit}
+            disabled={submitting || isEmpty || validationIssues.length > 0}
+          >
+            {submitting ? 'Submitting…' : 'Submit'}
+          </Button>
+        )}
       </GatedSection>
     </div>
   );
