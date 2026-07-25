@@ -253,6 +253,19 @@ issues are done — this phase's blog is complete.
 2. [Issue #254 — Flashcard-style step navigation](phase-26-client-side-draft-wizard/issue-254-flashcard-navigation/README.md)
 3. [Issue #255 — Chronological review screen + bulk-submit integration](phase-26-client-side-draft-wizard/issue-255-review-screen-bulk-submit/README.md)
 
+## Phase 27 — Admin Content Gateway (Round-Type Field Options)
+
+See `docs/ROADMAP.md` Phase 27. Filed alongside Phase 24 issue #248,
+at the project owner's direction: the round-type registry's
+controlled-vocabulary values must be admin-manageable through a UI,
+not hardcoded. Issue #248 built the read side only; this phase builds
+the write side — an admin CRUD API and UI to add, retire, and reorder
+those values. Both feature issues are done — this phase's blog is
+complete.
+
+1. [Issue #263 — Admin CRUD API for round_type_field_options](phase-27-admin-content-gateway/issue-263-admin-crud-api/README.md)
+2. [Issue #264 — Admin UI page for round-type field options](phase-27-admin-content-gateway/issue-264-admin-ui-page/README.md)
+
 ## Phase 28 — Wizard UX Refinements
 
 See `docs/ROADMAP.md` Phase 28. Filed from a batch of live-verification
