@@ -348,6 +348,7 @@ unaffected by D24.
 | GET    | `/companies/:id/reviews`                             | Approved-only, paginated, Postgres-sourced (D16 note)   |
 | GET    | `/companies/:companyId/analytics`                    | Shrinkage-scored aggregates (Phase 4)                   |
 | POST   | `/companies/:companyId/processes`                    | Candidate session required (Phase 16 issue #146); candidateId from session |
+| POST   | `/companies/:companyId/processes/bulk`               | Phase 25 — whole process tree in one atomic transaction (D49); candidate session required |
 | GET    | `/companies/:companyId/processes` / `/processes/:id` |                                                         |
 | POST   | `/processes/:processId/rounds`                       |                                                         |
 | GET    | `/processes/:processId/rounds`                       |                                                         |

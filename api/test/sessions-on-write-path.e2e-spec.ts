@@ -36,7 +36,12 @@ function body<T>(res: request.Response): T {
 describe('Sessions on the write path (e2e)', () => {
   let app: INestApplication;
 
-  beforeAll(async () => {
+  // Fresh app per test — a shared instance's cumulative /auth/request-link
+  // calls across this file's six tests exceed the 5-per-window magic-link
+  // throttle (GitHub issue #251 added a sixth candidateId-bearing write
+  // path here, tipping a file that was already sitting exactly at the
+  // limit), the same class of issue several other e2e specs already hit.
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -50,7 +55,7 @@ describe('Sessions on the write path (e2e)', () => {
     await app.init();
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -135,6 +140,23 @@ describe('Sessions on the write path (e2e)', () => {
       await server()
         .post(`/processes/${processId}/overall-review`)
         .send({ overallExperience: 4, wouldRecommend: true })
+        .expect(401);
+    }, 15000);
+
+    // GitHub issue #251 (Phase 25) — a fifth candidateId-bearing write
+    // path, added after this file's original four.
+    it('POST /companies/:companyId/processes/bulk', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const companyRes = await server()
+        .post('/companies')
+        .set('Cookie', cookie)
+        .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
+        .expect(201);
+      const companyId = body<CompanyBody>(companyRes).id;
+
+      await server()
+        .post(`/companies/${companyId}/processes/bulk`)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
         .expect(401);
     }, 15000);
   });
