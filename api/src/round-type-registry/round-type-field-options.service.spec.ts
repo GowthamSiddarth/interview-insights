@@ -5,12 +5,22 @@ import { PrismaService } from '../prisma/prisma.service';
 
 describe('RoundTypeFieldOptionsService', () => {
   let service: RoundTypeFieldOptionsService;
-  let prisma: { roundTypeFieldOption: { findMany: jest.Mock } };
+  let prisma: {
+    roundTypeFieldOption: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
+  };
 
   beforeEach(async () => {
     prisma = {
       roundTypeFieldOption: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -143,6 +153,83 @@ describe('RoundTypeFieldOptionsService', () => {
       await expect(
         service.validateTypeMetadata('other', { problemAlgorithms: ['DFS'] }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // GitHub issue #263 (Phase 27): admin CRUD for round_type_field_options.
+  describe('listAllOptions', () => {
+    it('queries every row for the round type, active and inactive alike', async () => {
+      await service.listAllOptions('coding');
+
+      expect(prisma.roundTypeFieldOption.findMany).toHaveBeenCalledWith({
+        where: { roundType: 'coding' },
+        orderBy: [{ fieldKey: 'asc' }, { sortOrder: 'asc' }],
+      });
+    });
+  });
+
+  describe('createOption', () => {
+    it('rejects an unknown fieldKey', async () => {
+      await expect(
+        service.createOption('coding', { fieldKey: 'notAField', value: 'x' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.roundTypeFieldOption.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a text field — no admin-managed vocabulary exists for it', async () => {
+      await expect(
+        service.createOption('coding', { fieldKey: 'problemDescription', value: 'x' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('defaults sortOrder to one past the current highest for that field', async () => {
+      prisma.roundTypeFieldOption.findFirst.mockResolvedValue({ sortOrder: 3 });
+      prisma.roundTypeFieldOption.create.mockResolvedValue({ id: 'opt-1' });
+
+      await service.createOption('coding', { fieldKey: 'problemAlgorithms', value: 'A*' });
+
+      expect(prisma.roundTypeFieldOption.create).toHaveBeenCalledWith({
+        data: { roundType: 'coding', fieldKey: 'problemAlgorithms', value: 'A*', sortOrder: 4 },
+      });
+    });
+
+    it('defaults sortOrder to 0 when no options exist yet for that field', async () => {
+      prisma.roundTypeFieldOption.findFirst.mockResolvedValue(null);
+      prisma.roundTypeFieldOption.create.mockResolvedValue({ id: 'opt-1' });
+
+      await service.createOption('coding', { fieldKey: 'problemAlgorithms', value: 'A*' });
+
+      expect(prisma.roundTypeFieldOption.create).toHaveBeenCalledWith({
+        data: { roundType: 'coding', fieldKey: 'problemAlgorithms', value: 'A*', sortOrder: 0 },
+      });
+    });
+
+    it('uses an explicitly given sortOrder instead of computing one', async () => {
+      prisma.roundTypeFieldOption.create.mockResolvedValue({ id: 'opt-1' });
+
+      await service.createOption('coding', {
+        fieldKey: 'problemAlgorithms',
+        value: 'A*',
+        sortOrder: 10,
+      });
+
+      expect(prisma.roundTypeFieldOption.findFirst).not.toHaveBeenCalled();
+      expect(prisma.roundTypeFieldOption.create).toHaveBeenCalledWith({
+        data: { roundType: 'coding', fieldKey: 'problemAlgorithms', value: 'A*', sortOrder: 10 },
+      });
+    });
+  });
+
+  describe('updateOption', () => {
+    it('updates by id, including retiring via isActive: false', async () => {
+      prisma.roundTypeFieldOption.update.mockResolvedValue({ id: 'opt-1', isActive: false });
+
+      await service.updateOption('opt-1', { isActive: false });
+
+      expect(prisma.roundTypeFieldOption.update).toHaveBeenCalledWith({
+        where: { id: 'opt-1' },
+        data: { isActive: false },
+      });
     });
   });
 });

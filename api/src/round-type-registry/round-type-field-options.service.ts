@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { RoundType } from '@prisma/client';
+import { RoundType, RoundTypeFieldOption } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ROUND_TYPE_FIELD_SCHEMA, RoundTypeFieldDef } from './round-type-field-schema';
+import { CreateRoundTypeFieldOptionDto } from './dto/create-round-type-field-option.dto';
+import { UpdateRoundTypeFieldOptionDto } from './dto/update-round-type-field-option.dto';
 
 export interface RoundTypeFieldWithOptions extends RoundTypeFieldDef {
   options?: string[];
@@ -106,5 +108,63 @@ export class RoundTypeFieldOptionsService {
         `Invalid value(s) for "${fieldKey}": ${invalid.join(', ')}.`,
       );
     }
+  }
+
+  // GitHub issue #263 (Phase 27): a fieldKey must be a real
+  // controlled-single/controlled-multi field on that round type — never
+  // an unknown key, and never a `text` field (those have no admin-managed
+  // vocabulary at all, by design).
+  private assertControlledField(roundType: RoundType, fieldKey: string): void {
+    const fieldDefs = ROUND_TYPE_FIELD_SCHEMA[roundType];
+    const field = fieldDefs.find((f) => f.key === fieldKey);
+    if (!field) {
+      throw new BadRequestException(
+        `Unknown field "${fieldKey}" for round type "${roundType}".`,
+      );
+    }
+    if (field.kind === 'text') {
+      throw new BadRequestException(
+        `"${fieldKey}" is a free-text field on round type "${roundType}" — it has no admin-managed vocabulary.`,
+      );
+    }
+  }
+
+  // Admin listing (GitHub issue #263) — every value, active and inactive,
+  // unlike getActiveOptions()/getFullSchemaWithOptions() which only ever
+  // surface active ones to the public read path.
+  listAllOptions(roundType: RoundType): Promise<RoundTypeFieldOption[]> {
+    return this.prisma.roundTypeFieldOption.findMany({
+      where: { roundType },
+      orderBy: [{ fieldKey: 'asc' }, { sortOrder: 'asc' }],
+    });
+  }
+
+  async createOption(
+    roundType: RoundType,
+    dto: CreateRoundTypeFieldOptionDto,
+  ): Promise<RoundTypeFieldOption> {
+    this.assertControlledField(roundType, dto.fieldKey);
+
+    let sortOrder = dto.sortOrder;
+    if (sortOrder === undefined) {
+      const highest = await this.prisma.roundTypeFieldOption.findFirst({
+        where: { roundType, fieldKey: dto.fieldKey },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      });
+      sortOrder = (highest?.sortOrder ?? -1) + 1;
+    }
+
+    // A duplicate (roundType, fieldKey, value) surfaces as a 409 via the
+    // global PrismaExceptionFilter (P2002) — no app-level check needed.
+    return this.prisma.roundTypeFieldOption.create({
+      data: { roundType, fieldKey: dto.fieldKey, value: dto.value, sortOrder },
+    });
+  }
+
+  // A missing id surfaces as a 404 via the global PrismaExceptionFilter
+  // (P2025) — no app-level existence check needed.
+  updateOption(id: string, dto: UpdateRoundTypeFieldOptionDto): Promise<RoundTypeFieldOption> {
+    return this.prisma.roundTypeFieldOption.update({ where: { id }, data: dto });
   }
 }

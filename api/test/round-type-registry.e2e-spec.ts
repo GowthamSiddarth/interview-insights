@@ -5,6 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsCandidate } from './support/candidate-session';
+import { loginAsAdmin } from './support/admin-session';
 
 interface CompanyBody {
   id: string;
@@ -21,6 +22,14 @@ interface FieldOptionsResponse {
   coding: { fields: Array<{ key: string; kind: string; options?: string[] }> };
   tech_screening: { fields: Array<{ key: string; kind: string; options?: string[] }> };
   other: { fields: Array<{ key: string; kind: string; options?: string[] }> };
+}
+interface FieldOptionRow {
+  id: string;
+  roundType: string;
+  fieldKey: string;
+  value: string;
+  sortOrder: number;
+  isActive: boolean;
 }
 
 function body<T>(res: request.Response): T {
@@ -245,6 +254,133 @@ describe('Round-type registry (e2e)', () => {
           typeMetadata: { notes: 'Take-home followed by a live walkthrough' },
         })
         .expect(201);
+    });
+  });
+
+  // GitHub issue #263 (Phase 27) — the admin write side of the registry
+  // issue #248 only built the read side of.
+  describe('Admin round-type field-options CRUD', () => {
+    const unique2 = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+    it('rejects unauthenticated requests with 401', async () => {
+      await server().get('/admin/round-types/coding/field-options').expect(401);
+      await server()
+        .post('/admin/round-types/coding/field-options')
+        .send({ fieldKey: 'problemAlgorithms', value: 'A*' })
+        .expect(401);
+      await server()
+        .patch('/admin/round-types/field-options/123e4567-e89b-12d3-a456-426614174000')
+        .send({ isActive: false })
+        .expect(401);
+    });
+
+    it('adds a new value that immediately appears in both the admin list and the public read endpoint', async () => {
+      const adminCookie = await loginAsAdmin(app);
+      const value = `Custom Algo ${unique2()}`;
+
+      const createRes = await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .send({ fieldKey: 'problemAlgorithms', value })
+        .expect(201);
+      const created = body<FieldOptionRow>(createRes);
+      expect(created).toMatchObject({
+        roundType: 'coding',
+        fieldKey: 'problemAlgorithms',
+        value,
+        isActive: true,
+      });
+
+      const adminListRes = await server()
+        .get('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .expect(200);
+      expect(body<FieldOptionRow[]>(adminListRes).some((r) => r.id === created.id)).toBe(true);
+
+      const publicRes = await server().get('/round-types/field-options').expect(200);
+      const problemAlgorithms = body<FieldOptionsResponse>(publicRes).coding.fields.find(
+        (f) => f.key === 'problemAlgorithms',
+      );
+      expect(problemAlgorithms?.options).toContain(value);
+    });
+
+    it('rejects an unknown fieldKey', async () => {
+      const adminCookie = await loginAsAdmin(app);
+
+      await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .send({ fieldKey: 'notAField', value: 'x' })
+        .expect(400);
+    });
+
+    it('rejects a text field — no admin-managed vocabulary exists for it', async () => {
+      const adminCookie = await loginAsAdmin(app);
+
+      await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .send({ fieldKey: 'problemDescription', value: 'x' })
+        .expect(400);
+    });
+
+    it('rejects a duplicate (roundType, fieldKey, value) with a 409', async () => {
+      const adminCookie = await loginAsAdmin(app);
+      const value = `Dup Algo ${unique2()}`;
+
+      await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .send({ fieldKey: 'problemAlgorithms', value })
+        .expect(201);
+
+      await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .send({ fieldKey: 'problemAlgorithms', value })
+        .expect(409);
+    });
+
+    it('retiring a value removes it from the public endpoint but keeps the row (and it) visible to admins', async () => {
+      const adminCookie = await loginAsAdmin(app);
+      const value = `Retire Me ${unique2()}`;
+
+      const createRes = await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .send({ fieldKey: 'problemAlgorithms', value })
+        .expect(201);
+      const { id } = body<FieldOptionRow>(createRes);
+
+      await server()
+        .patch(`/admin/round-types/field-options/${id}`)
+        .set('Cookie', adminCookie)
+        .send({ isActive: false })
+        .expect(200);
+
+      const publicRes = await server().get('/round-types/field-options').expect(200);
+      const problemAlgorithms = body<FieldOptionsResponse>(publicRes).coding.fields.find(
+        (f) => f.key === 'problemAlgorithms',
+      );
+      expect(problemAlgorithms?.options).not.toContain(value);
+
+      const adminListRes = await server()
+        .get('/admin/round-types/coding/field-options')
+        .set('Cookie', adminCookie)
+        .expect(200);
+      const retired = body<FieldOptionRow[]>(adminListRes).find((r) => r.id === id);
+      expect(retired).toBeDefined();
+      expect(retired?.isActive).toBe(false);
+    });
+
+    it('returns 404 for updating a non-existent option', async () => {
+      const adminCookie = await loginAsAdmin(app);
+
+      await server()
+        .patch('/admin/round-types/field-options/123e4567-e89b-12d3-a456-426614174000')
+        .set('Cookie', adminCookie)
+        .send({ isActive: false })
+        .expect(404);
     });
   });
 });

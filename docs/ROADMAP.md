@@ -991,7 +991,7 @@ phases, nothing in Phase 25/26 depends on this admin UI existing, since
 Phase 24 already seeds working defaults. Milestone "Phase 27 — Admin
 Content Gateway (Round-Type Field Options)". Epic: GitHub issue #262.
 
-- [ ] Admin CRUD API for `round_type_field_options`, gated by
+- [x] Admin CRUD API for `round_type_field_options`, gated by
       `AdminJwtAuthGuard` same as `ModerationController` (GitHub issue #263)
 - [ ] Admin UI page to manage round-type field options, mirroring
       `moderation/page.tsx`'s session-check shape (GitHub issue #264)
