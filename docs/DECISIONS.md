@@ -2284,6 +2284,81 @@ platform's primary navigation shape now.
 
 ---
 
+### D57 — Wizard moves again, off /search onto /write-review; drafts list gets its own login-gated /drafts route (GitHub issues #358-359, Phase 34)
+
+**Context:** D56 (Phase 33) had already moved the wizard from `/` to
+`/search`. A follow-up batch of five UI/UX requests asked to make
+`/search`'s result rows homogeneous with "Browse reviews"/"View
+profile"/"Write a review" actions (issue #357) — which meant `/search`
+needed to go back to being purely the search/browse experience, not
+also secretly host the wizard. Rather than swap a third time, the
+wizard gets a genuinely distinct route, `/write-review`, and `/search`
+stops existing as a route at all (browse/search already lives at `/`
+since D56 — no need for a duplicate). Resolved directly with the
+project owner: (1) drafts visibility should be gated behind candidate
+login even though a draft is just localStorage, not a real session —
+"keep it in such a way that they're not exposed without user login";
+(2) a dedicated `/drafts` path was suggested and adopted, since no
+existing route was a better fit; (3) the wizard must not keep living
+at `/search` — it needed its own name.
+
+**Decision:**
+- `web/src/app/search/page.tsx` (the wizard, since D56) is moved to
+  `web/src/app/write-review/page.tsx`; the now-empty `search/`
+  directory is deleted. `/search` no longer exists as a route.
+- `/write-review` keeps every existing wizard behavior (rounds,
+  ratings, recruiter steps, review screen, bulk submit, session-expiry
+  warning, add-round modal) unchanged, but its "no company context"
+  state is narrowed to exactly one action: redirect to `/`. The old
+  inline drafts list and create-company form are removed from this
+  page entirely — they don't belong on a route whose whole job is "a
+  company or a draft was already chosen upstream."
+- `/write-review` now accepts a second, alternative query param shape:
+  `?draftId=X` (resume this exact draft by id) alongside the existing
+  `?companyId=&companySlug=&companyName=` (start-or-resume by company)
+  — `/drafts`'s Resume links use the former, every "Write a review"
+  link elsewhere still uses the latter.
+- A **redirect-loop bug**, found and fixed during implementation: after
+  the query-param effect consumes context and calls
+  `router.replace('/write-review')`, the resulting empty
+  `URLSearchParams` re-triggers the same effect (D56 already flagged
+  this hook fires on every params change, not just mount) — naively,
+  this would then redirect home even though a draft is already active.
+  Fixed with a `useRef` flag (`consumedContextRef`), not state,
+  synchronously set the instant context is consumed and checked before
+  the redirect-home branch — a ref is guaranteed visible on the very
+  next synchronous read, where a state update could in principle lag
+  behind the effect's next firing.
+- New `web/src/app/drafts/page.tsx`: the drafts list, displaced from
+  the wizard, gated with the existing `GatedSection` component (same
+  visibility rule as `/me`'s "My reviews" and the wizard's own
+  session-hint gates) — a presentation-layer gate only, since the
+  underlying `listDrafts()`/localStorage read needs no session at all.
+  NavBar gains a "My drafts" link (shown only when logged in, mirroring
+  "My reviews") and loses its standalone "Write a review" link entirely
+  — writing a review is always company-specific now, never a bare nav
+  entry point.
+- The create-company form, also displaced from the wizard, does **not**
+  move to `/drafts` — it moves to issue #360's search-failure flow
+  instead (not yet implemented as of this entry).
+
+**Testing note (a repeat of D56's own lesson, applied again):** the
+new `write-review-page.spec.tsx` mocks `useSearchParams()` with a
+stable, reassignable module-level reference
+(`mockSearchParams.current`), not a fresh `URLSearchParams(...)` per
+call — required again here for the same reason D56 first documented,
+plus RTL's `rerender()` (not `cleanup()` + a fresh `render()`) to
+simulate "params get stripped, same component instance persists"
+without resetting `consumedContextRef` and defeating the test.
+
+**Revisit when:** issue #360 lands (the create-company-request flow,
+redirecting to `/write-review?companyId=...` on success) — worth
+confirming `/write-review`'s existing company-handoff logic needs no
+change to serve a freshly-created company the same way it already
+serves an existing one.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

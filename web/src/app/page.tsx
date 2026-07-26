@@ -206,7 +206,7 @@ export default function SearchPage() {
               (view profile)
             </Link>{' '}
             <Link
-              href={`/search?companyId=${selectedCompany.id}&companySlug=${selectedCompany.slug}&companyName=${encodeURIComponent(selectedCompany.name)}`}
+              href={`/write-review?companyId=${selectedCompany.id}&companySlug=${selectedCompany.slug}&companyName=${encodeURIComponent(selectedCompany.name)}`}
               className="text-sm font-normal text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
               Write a review

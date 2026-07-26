@@ -103,7 +103,7 @@ describe('SearchPage (the landing page, now at /)', () => {
     const writeReviewLink = screen.getByRole('link', { name: 'Write a review' });
     expect(writeReviewLink).toHaveAttribute(
       'href',
-      '/search?companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
+      '/write-review?companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
     );
   });
 

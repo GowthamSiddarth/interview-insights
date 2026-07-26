@@ -1258,3 +1258,50 @@ Landing Page". Epic: GitHub issue #351.
       wizard via query params; NavBar's link relabeled "Write a
       review" (GitHub issue #352, D56)
 - [x] Engineering blog (last) (GitHub issue #353)
+
+## Phase 34 — Write-a-Review Flow Refinements
+
+Filed 2026-07-25, from a batch of five direct UI/UX requests following
+Phase 33's search-first swap: homogeneous company-list rows (a plain
+"Browse reviews" button instead of a clickable company name, "Write a
+review" alongside "View profile", applied identically to both the
+typed-search-results list and the quick-select button grid); dropping
+the parenthesized "(view profile)" styling so it matches the plain
+"View profile" link elsewhere; removing NavBar's standalone "Write a
+review" link entirely, since writing a review is now always
+company-specific; and a search-failure-triggered "request a new
+company" flow, deliberately unreachable from anywhere except a
+zero-results search. Resolving these also surfaced two more open
+questions (both resolved directly with the project owner before
+filing): the wizard's own drafts list and create-company form, both
+displaced by the above, needed a new home — a dedicated, login-gated
+`/drafts` route was chosen over folding them elsewhere — and the
+wizard itself needed a distinct route name rather than continuing to
+live at `/search` now that `/search` is gone (folded into `/`, no
+duplicate route). Milestone: "Phase 34 — Write-a-Review Flow
+Refinements". Epic: GitHub issue #356.
+
+- [x] New `/write-review` route replaces the wizard's use of
+      `/search`; supports both `?companyId=&companySlug=&companyName=`
+      (start-or-resume by company) and `?draftId=` (resume an exact
+      draft, used by `/drafts`'s Resume links); redirects home if
+      visited with neither; the create-company form and inline drafts
+      list are dropped from its no-context state entirely (they move
+      to issues #359/#360); NavBar's "Write a review" link removed
+      (GitHub issue #358)
+- [x] New `/drafts` page — login-gated (`GatedSection`, presentation-layer
+      only: drafts are still plain localStorage, not a real session)
+      list of every in-progress draft with Resume/Delete actions;
+      NavBar gains a "My drafts" link, shown only when logged in
+      (GitHub issue #359)
+- [ ] Homogeneous company-list rows: a `CompanyResultRow`-shaped
+      "Browse reviews" + "View profile" + "Write a review" action set,
+      applied identically to the typed-search-results list and the
+      quick-select button grid; step 2's "(view profile)" restyled to
+      match plain "View profile" (GitHub issue #357)
+- [ ] Search-failure "request a new company" flow: a button on the
+      zero-results empty state opening an inline create-company
+      section (rewritten copy for the request framing, not "write a
+      review"), redirecting to `/write-review?companyId=...` on
+      success; never reachable any other way (GitHub issue #360)
+- [ ] Engineering blog (last) (GitHub issue #361)

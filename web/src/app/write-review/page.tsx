@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { api, ApiError, Company, CreateBulkProcessInput, RoundTypeFieldOptions, Round } from '@/lib/api';
+import { api, ApiError, CreateBulkProcessInput, RoundTypeFieldOptions, Round } from '@/lib/api';
 import {
   addRecruiterStep,
   addRoundStep,
@@ -25,7 +25,6 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { GatedSection } from '@/components/GatedSection';
 import { StepNavigator } from '../wizard/step-navigator';
 import { RoundStepForm } from '../wizard/round-step-form';
 import { RecruiterStepForm } from '../wizard/recruiter-step-form';
@@ -231,26 +230,23 @@ function SubmissionSuccess({
   );
 }
 
-// The write-a-review wizard — reachable via NavBar's "Write a review" link,
-// or (the common path) via a "Write a review" link on the search/landing
-// page or a company's profile page, which carries the chosen company here
-// as query params so this page never needs its own company-picker. Wrapped
-// in Suspense because useSearchParams() requires it (Next.js App Router).
+// The write-a-review wizard — always arrived at with a company or a
+// specific draft already chosen upstream (a "Write a review" link on
+// search results/a company profile, or "Resume" on /drafts), never its own
+// picker. Wrapped in Suspense because useSearchParams() requires it
+// (Next.js App Router).
 function WizardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  // null = still checking; false = no session. Only gates the *create a
-  // new company* form below (GitHub issue #217) — picking an existing
-  // company, and every bit of draft editing, needs no session at all.
-  // A draft is pure client-side state (issue #253) until issue #255's
-  // bulk submit, which is the only step that actually requires login.
+  // null = still checking; false = no session. Only gates the *submit*
+  // step (GitHub issue #217/#255) — picking an existing company, and
+  // every bit of draft editing, needs no session at all.
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
   // GitHub issue #301 — set once a poll (or a submit's own 401) observes
   // the session going from logged-in to logged-out, so the wizard can
   // warn about it specifically ("your session expired") rather than
   // just quietly re-gating the submit button. Cleared once logged back in.
   const [sessionExpiredWarning, setSessionExpiredWarning] = useState(false);
-  const [drafts, setDrafts] = useState<ProcessDraft[]>([]);
   const [activeDraft, setActiveDraft] = useState<ProcessDraft | null>(null);
   const [activeStepId, setActiveStepId] = useState<string>('process');
   const [fieldOptions, setFieldOptions] = useState<RoundTypeFieldOptions | null>(null);
@@ -260,6 +256,12 @@ function WizardContent() {
   // GitHub issue #306 — the add-round modal Next opens instead of
   // navigating directly, at the round-adding boundary.
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
+  // Set synchronously the moment this mount consumes a company/draftId
+  // param, so the "nothing to do here" redirect below can't fire again
+  // once the params are stripped from the URL right after — a ref, not
+  // state, since it has to be correct before the next effect run, not
+  // after a render round-trip.
+  const consumedContextRef = useRef(false);
 
   useEffect(() => {
     function checkSession() {
@@ -275,10 +277,6 @@ function WizardContent() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    setDrafts(listDrafts());
-  }, []);
-
   // Fetched once — the round-type registry (GitHub issue #248) drives the
   // "add round" menu and every round step's type_metadata fields, so
   // there's nothing to hardcode here as new round types/fields are added
@@ -290,66 +288,65 @@ function WizardContent() {
       .catch((err: unknown) => setError(errorMessage(err)));
   }, []);
 
-  function handleStartDraft(company: Pick<Company, 'id' | 'name' | 'slug'>) {
+  function handleStartDraft(company: { id: string; name: string; slug: string }) {
     const draft = createDraft(company);
-    setDrafts(listDrafts());
     setActiveDraft(draft);
     setActiveStepId('process');
     setSubmitSuccess(null);
   }
 
-  // A company chosen upstream (search results, a company profile page)
-  // arrives here via query params instead of this page having its own
-  // picker — resumes an existing draft for that company if one's already
-  // in progress, otherwise starts a fresh one. The params are stripped
-  // from the URL afterward so refreshing/navigating back doesn't
-  // re-trigger this.
+  // A company or an exact draft chosen upstream arrives here via query
+  // params — this page never has its own picker. `companyId` resumes any
+  // existing draft for that company or starts a fresh one (from a "Write
+  // a review" link); `draftId` resumes that exact draft (from /drafts'
+  // "Resume" button). Neither present, and nothing already active in this
+  // session, means there's nothing useful to do here — a stale bookmark,
+  // typed URL, or browser back button — so redirect home rather than show
+  // a placeholder.
   useEffect(() => {
+    const draftId = searchParams.get('draftId');
+    if (draftId) {
+      consumedContextRef.current = true;
+      const existing = listDrafts().find((d) => d.id === draftId);
+      if (existing) {
+        setActiveDraft(existing);
+        setActiveStepId('process');
+      }
+      router.replace('/write-review');
+      return;
+    }
+
     const companyId = searchParams.get('companyId');
     const companySlug = searchParams.get('companySlug');
     const companyName = searchParams.get('companyName');
-    if (!companyId || !companySlug || !companyName) return;
-
-    const existing = listDrafts().find((d) => d.companyId === companyId);
-    if (existing) {
-      setActiveDraft(existing);
-      setActiveStepId('process');
-    } else {
-      handleStartDraft({ id: companyId, slug: companySlug, name: companyName });
+    if (companyId && companySlug && companyName) {
+      consumedContextRef.current = true;
+      const existing = listDrafts().find((d) => d.companyId === companyId);
+      if (existing) {
+        setActiveDraft(existing);
+        setActiveStepId('process');
+      } else {
+        handleStartDraft({ id: companyId, slug: companySlug, name: companyName });
+      }
+      router.replace('/write-review');
+      return;
     }
-    router.replace('/search');
+
+    if (!consumedContextRef.current) {
+      router.replace('/');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per incoming query-param set, not on every render
   }, [searchParams]);
-
-  async function handleCreateCompany(formData: FormData) {
-    setError(null);
-    try {
-      const created = await api.createCompany({
-        name: String(formData.get('name')),
-        slug: String(formData.get('slug')),
-        sizeBucket: formData.get('sizeBucket') as Company['sizeBucket'],
-      });
-      handleStartDraft(created);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }
-
-  function handleBackToDrafts() {
-    setActiveDraft(null);
-  }
 
   function handleDeleteDraft(id: string) {
     if (!window.confirm('Delete this draft? This cannot be undone.')) return;
     deleteDraft(id);
-    setDrafts(listDrafts());
     if (activeDraft?.id === id) setActiveDraft(null);
   }
 
   function persist(updated: ProcessDraft) {
     const saved = saveDraft(updated);
     setActiveDraft(saved);
-    setDrafts(listDrafts());
     return saved;
   }
 
@@ -424,7 +421,6 @@ function WizardContent() {
         hasOverallReview: !!activeDraft.overallReview,
       };
       deleteDraft(activeDraft.id);
-      setDrafts(listDrafts());
       setActiveDraft(null);
       setActiveStepId('process');
       setSubmitSuccess(summary);
@@ -497,93 +493,7 @@ function WizardContent() {
       <ErrorBanner message={error} />
 
       {!activeDraft && submitSuccess && (
-        <SubmissionSuccess summary={submitSuccess} onDone={() => setSubmitSuccess(null)} />
-      )}
-
-      {!activeDraft && !submitSuccess && (
-        <>
-          {drafts.length > 0 && (
-            <Card as="section" className="flex flex-col gap-3">
-              <h2 className="font-medium">Your drafts</h2>
-              <ul className="flex flex-col gap-2">
-                {drafts.map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                  >
-                    <span>
-                      {d.companyName} — {d.process.roleTitle || 'Untitled process'}
-                    </span>
-                    <span className="flex gap-2">
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setActiveDraft(d);
-                          setActiveStepId('process');
-                        }}
-                      >
-                        Resume
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="danger"
-                        onClick={() => handleDeleteDraft(d.id)}
-                      >
-                        Delete
-                      </Button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          <Card as="section" className="flex flex-col gap-3">
-            <h2 className="font-medium">Start a new draft</h2>
-            <p className="text-sm text-gray-500">
-              Find your company from the{' '}
-              <Link href="/" className={linkClass}>
-                search page
-              </Link>{' '}
-              and use its &quot;Write a review&quot; link, or add a new company below if it isn&apos;t
-              listed yet.
-            </p>
-            <GatedSection
-              loggedIn={candidateSession}
-              prompt="Log in to add a company that isn't listed yet."
-            >
-              <form
-                action={handleCreateCompany}
-                className="flex flex-col gap-2 sm:flex-row sm:items-end"
-              >
-                <label className="flex flex-col text-sm">
-                  Name
-                  <input name="name" required className={inputClass} />
-                </label>
-                <label className="flex flex-col text-sm">
-                  Slug
-                  <input
-                    name="slug"
-                    required
-                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                    placeholder="acme-corp"
-                    className={inputClass}
-                  />
-                </label>
-                <label className="flex flex-col text-sm">
-                  Size
-                  <select name="sizeBucket" className={inputClass}>
-                    <option value="startup">Startup</option>
-                    <option value="mid">Mid</option>
-                    <option value="large">Large</option>
-                    <option value="enterprise">Enterprise</option>
-                  </select>
-                </label>
-                <Button type="submit">Create company</Button>
-              </form>
-            </GatedSection>
-          </Card>
-        </>
+        <SubmissionSuccess summary={submitSuccess} onDone={() => router.push('/drafts')} />
       )}
 
       {activeDraft && (
@@ -594,9 +504,9 @@ function WizardContent() {
               <Link href={`/companies/${activeDraft.companySlug}`} className={linkClass}>
                 View company profile
               </Link>
-              <button type="button" onClick={handleBackToDrafts} className={linkClass}>
+              <Link href="/drafts" className={linkClass}>
                 Back to my drafts
-              </button>
+              </Link>
               <button
                 type="button"
                 onClick={() => handleDeleteDraft(activeDraft.id)}

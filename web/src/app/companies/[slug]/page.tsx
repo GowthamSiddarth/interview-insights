@@ -162,7 +162,7 @@ export default function CompanyProfilePage() {
             Full analytics breakdown
           </Link>
           <Link
-            href={`/search?companyId=${company.id}&companySlug=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
+            href={`/write-review?companyId=${company.id}&companySlug=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
             className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             Write a review
