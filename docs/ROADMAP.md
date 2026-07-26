@@ -1238,3 +1238,23 @@ here, same pattern Phase 16/17/21/24/29 each used.
       auto-approves/rejects, hard constraint #2 stays intact (GitHub
       issue #340)
 - [ ] Engineering blog (last) (GitHub issue #341)
+
+## Phase 33 — Search-First Landing Page
+
+Filed retroactively, 2026-07-26, per the user's direct request: the
+landing page should be for searching/browsing reviews, not writing
+one — a deliberate product pivot, the same category of direct-request
+pivot Phase 21 (anonymous visitor soft-gating) already used as
+precedent for getting its own phase rather than folding into Phase
+20's operational-hardening epic. Milestone: "Phase 33 — Search-First
+Landing Page". Epic: GitHub issue #351.
+
+- [x] Swap `/` and `/search`'s body content (search/browse becomes the
+      landing experience, the write-a-review wizard moves to
+      `/search`); add a quick-select company-button grid to the new
+      landing page; remove the wizard's own company-picker entirely,
+      replaced by a "Write a review" link on search results and a
+      company's profile page that carries the chosen company into the
+      wizard via query params; NavBar's link relabeled "Write a
+      review" (GitHub issue #352, D56)
+- [ ] Engineering blog (last) (GitHub issue #353)

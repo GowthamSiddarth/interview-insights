@@ -26,10 +26,10 @@ describe('NavBar', () => {
     await screen.findByRole('link', { name: 'Log in' });
   });
 
-  it('links to the search page', async () => {
+  it('links to the write-a-review wizard', async () => {
     setLoggedInCookie(false);
     render(<NavBar />);
-    expect(screen.getByRole('link', { name: /search companies/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /write a review/i })).toHaveAttribute(
       'href',
       '/search',
     );

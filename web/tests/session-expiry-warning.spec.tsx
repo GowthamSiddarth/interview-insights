@@ -1,7 +1,19 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/page';
+import HomePage from '../src/app/search/page';
+
+// The wizard now receives its company via query params instead of its own
+// picker (a "Write a review" link from the search/landing page).
+jest.mock('next/navigation', () => {
+  const params = new URLSearchParams(
+    'companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
+  );
+  return {
+    useRouter: () => ({ replace: jest.fn() }),
+    useSearchParams: () => params,
+  };
+});
 
 const fieldOptionsResponse = {
   coding: { fields: [] },
@@ -54,7 +66,6 @@ describe('Session-expiry warning mid-draft (GitHub issue #301)', () => {
   it('warns within one poll interval once the session cookie disappears, without losing the draft', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
 
     await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
@@ -81,7 +92,6 @@ describe('Session-expiry warning mid-draft (GitHub issue #301)', () => {
     logOut();
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
 
     await act(async () => {
       jest.advanceTimersByTime(60_000);
@@ -93,7 +103,6 @@ describe('Session-expiry warning mid-draft (GitHub issue #301)', () => {
   it('clears the warning once a later poll sees a valid session again', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
 
     logOut();
@@ -122,7 +131,6 @@ describe('Session-expiry warning mid-draft (GitHub issue #301)', () => {
     });
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
     await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
     // GitHub issue #319 — adding a round is only reachable via the

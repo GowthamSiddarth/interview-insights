@@ -43,8 +43,12 @@ export function NavBar() {
           <BrandMark />
           Interview Insights
         </Link>
+        {/* The wizard lives at /search now — the landing page (/) is the
+            search/browse experience, so this is the write-a-review entry
+            point instead (searching companies & reviews is now the
+            default landing experience, no separate nav link needed). */}
         <Link href="/search" className={linkClass}>
-          Search companies &amp; reviews
+          Write a review
         </Link>
         {/* Internal/admin page — gated by its own login screen (Phase 18
             issue #160), not linked to here based on session state. */}
