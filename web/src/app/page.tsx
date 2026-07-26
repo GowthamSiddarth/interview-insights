@@ -177,11 +177,17 @@ export default function SearchPage() {
         {companies.length > 0 && (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-gray-500">Or pick one directly:</p>
-            <ul className="flex flex-col gap-1">
+            <div className="flex flex-wrap gap-2">
               {companies.map((c) => (
-                <CompanyResultRow key={c.id} company={c} onBrowseReviews={handleSelectCompany} />
+                <button
+                  key={c.id}
+                  onClick={() => handleSelectCompany(c)}
+                  className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+                >
+                  {c.name}
+                </button>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 

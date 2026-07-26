@@ -3062,8 +3062,31 @@ actually-session-tied `/drafts` design (D57), and the search-failure
 create-company-request flow's copy/redirect design. `wiki/blog/
 README.md`'s index updated to match.
 
-**Phase 34 is now fully done** — issues #357-361 all closed via merged
-PRs, and every phase built so far now has a complete engineering blog.
+**Phase 34 was declared fully done, then reopened once more (GitHub
+issue #366)** — direct user feedback on issue #357's own result: giving
+every quick-select company button (the "Or pick one directly" grid)
+the full `CompanyResultRow` treatment (Browse reviews/View profile/
+Write a review per row) made an already-long company list read as
+repetitive, since the whole point of that grid was a fast, low-noise
+shortcut. Fixed by reverting the quick-select grid back to plain,
+name-only buttons — clicking one still selects the company for step 2,
+unchanged — while the typed-search-results list keeps the full
+homogeneous row shape issue #357 introduced. `page.spec.tsx`'s
+"quick-select company rows" describe block reverted to its pre-#357
+"quick-select company buttons" shape and assertions; `company-result-
+row.spec.tsx` untouched, since the shared component itself didn't
+change, only where it's used. 143 web tests, build, lint all green.
+Live-verified against the real `kind` cluster via headless-browser
+(Playwright): quick-select shows plain name-only buttons with zero
+Browse-reviews/View-profile/Write-a-review noise, clicking one still
+reveals step 2, and a typed search still shows the full 3-action row —
+zero console errors. Epic #356 and milestone #31 reopened and re-closed
+the same day, same precedent as every other epic reopening in this
+project.
+
+**Phase 34 is now fully done** — issues #357-361 and #366 all closed
+via merged PRs, and every phase built so far now has a complete
+engineering blog.
 
 - Next step: Phase 19 (Content Quality & Synthetic Data, issues
   #162-165) and Phases 30-32 (Event-Driven Foundation / Notification

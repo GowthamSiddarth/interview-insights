@@ -1295,13 +1295,19 @@ Refinements". Epic: GitHub issue #356.
       NavBar gains a "My drafts" link, shown only when logged in
       (GitHub issue #359)
 - [x] Homogeneous company-list rows: a `CompanyResultRow`-shaped
-      "Browse reviews" + "View profile" + "Write a review" action set,
-      applied identically to the typed-search-results list and the
-      quick-select button grid; step 2's "(view profile)" restyled to
-      match plain "View profile" (GitHub issue #357)
+      "Browse reviews" + "View profile" + "Write a review" action set
+      for the typed-search-results list; step 2's "(view profile)"
+      restyled to match plain "View profile" (GitHub issue #357 —
+      originally also applied to the quick-select button grid, reverted
+      there by GitHub issue #366, see below)
 - [x] Search-failure "request a new company" flow: a button on the
       zero-results empty state opening an inline create-company
       section (rewritten copy for the request framing, not "write a
       review"), redirecting to `/write-review?companyId=...` on
       success; never reachable any other way (GitHub issue #360)
 - [x] Engineering blog (last) (GitHub issue #361)
+- [x] Revert the quick-select ("Or pick one directly") company grid
+      back to plain, name-only buttons — direct user feedback that
+      issue #357's homogeneous-row shape there created redundancy on an
+      already-long company list; the typed-search-results list keeps
+      the full `CompanyResultRow` shape unchanged (GitHub issue #366)
