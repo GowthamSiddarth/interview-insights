@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   api,
   ApiError,
@@ -12,6 +11,7 @@ import {
   Round,
 } from '@/lib/api';
 import { CompanyResultRow } from '@/components/CompanyResultRow';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -38,7 +38,6 @@ function roundTypeLabel(roundType: string): string {
 // itself lives at /search (see that file), receiving the chosen company via
 // query params so it never needs its own company-picker.
 export default function SearchPage() {
-  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyQuery, setCompanyQuery] = useState('');
   // null = haven't searched yet; [] = searched, zero matches.
@@ -59,6 +58,11 @@ export default function SearchPage() {
   // from page load or a nav link (see this state's one setter below).
   const [showCreateCompanyRequest, setShowCreateCompanyRequest] = useState(false);
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
+  // GitHub issue #372 (Phase 35) — a successful creation no longer means
+  // "ready to use" now that company creation is moderation-gated (issue
+  // #369); this replaces the old auto-redirect into /write-review with a
+  // plain acknowledgment.
+  const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setCandidateSession(api.hasCandidateSessionHint());
@@ -95,22 +99,29 @@ export default function SearchPage() {
   }
 
   // Reuses the wizard's former create-company form (moved here, not
-  // duplicated, per issue #358/#360) — the only difference is where a
-  // successful creation sends the candidate next.
+  // duplicated, per issue #358/#360). GitHub issue #372: a successful
+  // creation just confirms the request was submitted — it doesn't
+  // navigate anywhere, since the new company is pending review, not
+  // usable yet (issue #369).
   async function handleCreateCompanyRequest(formData: FormData) {
     setError(null);
     try {
-      const created = await api.createCompany({
+      await api.createCompany({
         name: String(formData.get('name')),
         slug: String(formData.get('slug')),
         sizeBucket: formData.get('sizeBucket') as Company['sizeBucket'],
       });
-      router.push(
-        `/write-review?companyId=${created.id}&companySlug=${created.slug}&companyName=${encodeURIComponent(created.name)}`,
-      );
+      setConfirmationMessage('A create company request has been submitted.');
     } catch (err) {
       setError(errorMessage(err));
     }
+  }
+
+  // Collapses the request section back to just its trigger button once
+  // the confirmation is dismissed, restoring the page's pre-request state.
+  function handleCloseConfirmation() {
+    setConfirmationMessage(null);
+    setShowCreateCompanyRequest(false);
   }
 
   function handleSelectCompany(company: CompanySearchResult) {
@@ -344,6 +355,14 @@ export default function SearchPage() {
             )))
           }
         </Card>
+      )}
+
+      {confirmationMessage && (
+        <ConfirmationModal
+          title="Request submitted"
+          message={confirmationMessage}
+          onClose={handleCloseConfirmation}
+        />
       )}
     </PageContainer>
   );

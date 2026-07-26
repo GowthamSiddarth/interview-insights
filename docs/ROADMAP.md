@@ -1368,7 +1368,7 @@ under epic #368.
       `/moderation`, calling the new endpoint; each result shows a
       category badge; existing per-entry approve/reject/flag controls
       reused (GitHub issue #371)
-- [ ] Confirmation modal replaces the create-company-request flow's
+- [x] Confirmation modal replaces the create-company-request flow's
       auto-redirect into `/write-review` — a plain "request submitted"
       modal (OK + corner close), no navigation (GitHub issue #372)
 - [ ] Engineering blog (last) (GitHub issue #373)

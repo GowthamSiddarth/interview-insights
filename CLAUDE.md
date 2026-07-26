@@ -3254,12 +3254,36 @@ disappeared, and confirmed clearing filters restored the grouped view
 — zero console errors. Test data (candidate, company) cleaned up
 afterward.
 
-- Next step: Phase 35 issue #372 (confirmation modal) is next,
-  followed by #373 (blog, last). Phase 19 (Content Quality &
-  Synthetic Data, issues #162-165) and Phases 30-32 (Event-Driven
-  Foundation / Notification Service / Review Analyzer Service) remain
-  planned but not started. Continue merging without waiting for CI
-  until the user says the GitHub
+**Phase 35, issue #372 (confirmation modal replaces the create-company
+auto-redirect)** — the first real custom modal in this app,
+`web/src/components/ConfirmationModal.tsx` (title, message, `onClose`
+— an OK button and a corner ✕, both call the same handler; no
+navigation either way). `web/src/app/page.tsx`'s
+`handleCreateCompanyRequest` no longer calls `router.push()` on
+success — it shows the modal with "A create company request has been
+submitted." and, once dismissed, collapses the create-company-request
+section back to just its trigger button, restoring the page's
+pre-request state. `useRouter` is no longer imported in this file at
+all, since nothing in it navigates anymore. 4 new web tests
+(`confirmation-modal.spec.tsx`: renders title/message, OK calls
+`onClose`, the corner close calls `onClose`) plus the old
+redirect-assertion test in `page.spec.tsx` rewritten into three (shows
+the modal without navigating, OK dismisses + collapses, corner close
+dismisses identically) — 154 web tests total, build/lint clean.
+Live-verified against the real `kind` cluster with a real headless
+browser (Playwright): created a company request, confirmed the modal
+appeared with no navigation (URL stayed on `/`), OK dismissed it and
+restored the trigger button, and a second request's corner ✕ dismissed
+identically — zero console errors. Test data cleaned up afterward.
+
+**Phase 35 is now fully done except its engineering blog** — issues
+#369-372 all closed via merged PRs.
+
+- Next step: Phase 35 issue #373 (engineering blog, last) remains.
+  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
+  Phases 30-32 (Event-Driven Foundation / Notification Service /
+  Review Analyzer Service) remain planned but not started. Continue
+  merging without waiting for CI until the user says the GitHub
   Actions billing limit has been refreshed.
 
 ## Open decisions still to make

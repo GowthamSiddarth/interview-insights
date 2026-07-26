@@ -3,11 +3,6 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import SearchPage from '../src/app/page';
 
-const push = jest.fn();
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
-}));
-
 function setLoggedInCookie(loggedIn: boolean) {
   document.cookie = loggedIn
     ? 'candidate_logged_in=1'
@@ -30,7 +25,6 @@ function mockFetchByRoute(companies: unknown[] = []) {
 describe('SearchPage (the landing page, now at /)', () => {
   beforeEach(() => {
     mockFetchByRoute();
-    push.mockClear();
     setLoggedInCookie(false);
   });
 
@@ -210,7 +204,10 @@ describe('SearchPage (the landing page, now at /)', () => {
       expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     });
 
-    it('creates the company and redirects into /write-review for it, when logged in', async () => {
+    // GitHub issue #372 (Phase 35) — a successful creation no longer
+    // redirects anywhere (the created company is pending review, not
+    // usable yet, issue #369); it shows a plain confirmation instead.
+    async function createCompany(user: ReturnType<typeof userEvent.setup>) {
       setLoggedInCookie(true);
       global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
@@ -225,7 +222,6 @@ describe('SearchPage (the landing page, now at /)', () => {
         throw new Error(`Unmocked fetch: ${method} ${url}`);
       }) as jest.Mock;
 
-      const user = userEvent.setup();
       await searchWithNoResults(user);
       await user.click(screen.getByRole('button', { name: 'Want to file a create company request?' }));
       await screen.findByText('Request a new company');
@@ -233,12 +229,42 @@ describe('SearchPage (the landing page, now at /)', () => {
       await user.type(screen.getByLabelText('Name'), 'Meta');
       await user.type(screen.getByLabelText('Slug'), 'meta');
       await user.click(screen.getByRole('button', { name: 'Create company' }));
+    }
 
-      await waitFor(() =>
-        expect(push).toHaveBeenCalledWith(
-          '/write-review?companyId=new-co&companySlug=meta&companyName=Meta',
-        ),
-      );
+    it('shows a confirmation modal and does not navigate anywhere', async () => {
+      const user = userEvent.setup();
+      await createCompany(user);
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText('A create company request has been submitted.')).toBeInTheDocument();
+      // Still on the landing page — the create-company-request section
+      // (and therefore the page itself) is untouched behind the modal.
+      expect(screen.getByText('Interview Insights')).toBeInTheDocument();
+    });
+
+    it('the OK button dismisses the modal and collapses the request section', async () => {
+      const user = userEvent.setup();
+      await createCompany(user);
+      await screen.findByRole('dialog');
+
+      await user.click(screen.getByRole('button', { name: 'OK' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.queryByText('Request a new company')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Want to file a create company request?' }),
+      ).toBeInTheDocument();
+    });
+
+    it('the corner close button dismisses the modal identically', async () => {
+      const user = userEvent.setup();
+      await createCompany(user);
+      await screen.findByRole('dialog');
+
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.queryByText('Request a new company')).not.toBeInTheDocument();
     });
   });
 });
