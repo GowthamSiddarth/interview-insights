@@ -14,13 +14,13 @@ export class RoundRatingsService {
     private readonly reviewSearchService: ReviewSearchService,
   ) {}
 
-  create(roundId: string, candidateId: string, dto: CreateRoundRatingDto) {
+  async create(roundId: string, candidateId: string, dto: CreateRoundRatingDto) {
     // status defaults to 'pending' (schema default) — every rating starts
     // gated behind moderation, see CLAUDE.md hard constraint #2 and
     // docs/DECISIONS.md D3. The moderation_queue row is created in the same
     // transaction so a rating can never exist without one (docs/DATA_MODEL.md
     // notes this pairing isn't enforced by an FK).
-    return this.prisma.$transaction(async (tx) => {
+    const rating = await this.prisma.$transaction(async (tx) => {
       // Runs against pre-existing rows only (before this one is inserted),
       // so it never flags a rating as a duplicate of itself.
       const flagReason = await this.fraudChecksService.detectFlagReason(
@@ -33,6 +33,9 @@ export class RoundRatingsService {
       await this.moderationService.enqueue('round_rating', rating.id, tx, flagReason);
       return rating;
     });
+    // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
+    await this.moderationService.indexForSearch('round_rating', rating.id);
+    return rating;
   }
 
   // Public read — only ever returns moderation-approved ratings. Will be
@@ -59,7 +62,7 @@ export class RoundRatingsService {
       throw new ForbiddenException('You can only edit your own rating.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.roundRating.update({
         where: { id },
         data: { ...dto, status: 'pending' },
@@ -67,6 +70,8 @@ export class RoundRatingsService {
       await this.moderationService.reenqueue('round_rating', id, tx);
       return updated;
     });
+    await this.moderationService.indexForSearch('round_rating', id);
+    return updated;
   }
 
   // A candidate may delete their own rating at any status. Also removes
@@ -86,6 +91,7 @@ export class RoundRatingsService {
       await tx.roundRating.delete({ where: { id } });
     });
 
+    await this.moderationService.removeFromSearchIndex('round_rating', id);
     if (rating.status === 'approved') {
       await this.reviewSearchService.removeReview(id);
     }

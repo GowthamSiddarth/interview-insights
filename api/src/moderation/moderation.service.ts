@@ -3,11 +3,27 @@ import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/clie
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
 import { CompanySearchService } from '../search/company-search.service';
+import {
+  ModerationQueueCategory,
+  ModerationQueueSearchService,
+} from '../search/moderation-queue-search.service';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
+
+// The raw shape moderationQueueEntry.findMany() returns — the input
+// enrichEntries() takes, shared by listPending() and search() alike.
+interface RawQueueEntry {
+  id: string;
+  entityType: ModerationEntityType;
+  entityId: string;
+  flagReason: ModerationFlagReason | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+}
 
 // GitHub issue #315 (Phase 29) — every field a candidate could have
 // submitted for this entity, not just a "highlights" subset. `processId`
@@ -84,6 +100,7 @@ export class ModerationService {
     private readonly prisma: PrismaService,
     private readonly reviewSearchService: ReviewSearchService,
     private readonly companySearchService: CompanySearchService,
+    private readonly moderationQueueSearchService: ModerationQueueSearchService,
   ) {}
 
   // Called by the write path right after creating a rating/review — accepts
@@ -136,24 +153,75 @@ export class ModerationService {
       where: { reviewedAt: null },
       orderBy: { createdAt: 'asc' },
     });
+    const enrichedEntries = await this.enrichEntries(entries);
 
+    // Map preserves insertion order — groups naturally come out in the
+    // same createdAt-ascending order entries already had, since each
+    // group is created the moment its first (earliest) entry is seen.
+    // An entry whose entity failed to enrich (no processId to group by)
+    // gets its own standalone group keyed by the queue entry's own id,
+    // rather than being silently dropped from the response.
+    const groups = new Map<string, ModerationQueueGroup>();
+    for (const entry of enrichedEntries) {
+      const key = entry.entity?.processId ?? `unknown-${entry.id}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          processId: entry.entity?.processId ?? null,
+          companyName: entry.entity?.companyName ?? 'Unknown',
+          roleTitle: entry.entity?.roleTitle ?? 'Unknown',
+          entries: [],
+        };
+        groups.set(key, group);
+      }
+      group.entries.push(entry);
+    }
+
+    return Array.from(groups.values());
+  }
+
+  // GitHub issue #370 (Phase 35) — a fuzzy search/filter over the same
+  // *pending* universe listPending() covers, backed by a dedicated
+  // OpenSearch index rather than scanning Postgres. Returned as a flat
+  // list (not grouped by submission, unlike listPending()) — a query can
+  // legitimately match entries from many different, unrelated
+  // submissions, so grouping would mostly just produce many one-entry
+  // groups. Relevance order from OpenSearch is preserved; a hit whose
+  // underlying moderation_queue row was resolved between the OpenSearch
+  // query and this lookup (a genuine but rare race, same class as D37)
+  // is simply absent from the final list rather than erroring.
+  async search(
+    q: string | undefined,
+    category: ModerationQueueCategory | undefined,
+  ): Promise<ModerationQueueEntry[]> {
+    const hits = await this.moderationQueueSearchService.search(q, category);
+    if (hits.length === 0) return [];
+
+    const entries = await this.prisma.moderationQueueEntry.findMany({
+      where: {
+        reviewedAt: null,
+        OR: hits.map((h) => ({ entityType: h.entityType, entityId: h.entityId })),
+      },
+    });
+    const enrichedEntries = await this.enrichEntries(entries);
+
+    const orderIndex = new Map(hits.map((h, i) => [`${h.entityType}:${h.entityId}`, i]));
+    return [...enrichedEntries].sort(
+      (a, b) =>
+        (orderIndex.get(`${a.entityType}:${a.entityId}`) ?? 0) -
+        (orderIndex.get(`${b.entityType}:${b.entityId}`) ?? 0),
+    );
+  }
+
+  // Shared by listPending() and search() alike — every field a candidate
+  // could have submitted for each entity type, plus display context
+  // (company, role, generated labels). See listPending()'s own comment
+  // for the D37 Promise.allSettled reasoning, which applies identically
+  // here regardless of which caller asked for these particular entries.
+  private async enrichEntries(entries: RawQueueEntry[]): Promise<ModerationQueueEntry[]> {
     const idsFor = (type: ModerationEntityType) =>
       entries.filter((e) => e.entityType === type).map((e) => e.entityId);
 
-    // Promise.allSettled, not Promise.all — each entity type's enrichment
-    // query is isolated from the other two. A required-relation include
-    // (e.g. recruiterRating -> recruiterInteraction -> process) can
-    // transiently fail with "Field X is required to return data, got null
-    // instead" if Prisma splits the nested include across multiple round
-    // trips and a concurrent delete (e.g. GDPR erasure, issue #151, or
-    // Update/Delete, issue #150) commits in between them — the FK itself
-    // is real and DB-enforced (ON DELETE RESTRICT), so this is a
-    // query-time race, not a durable orphaned row; see docs/DECISIONS.md
-    // D37. One entity type transiently failing to enrich must never crash
-    // the other two, or the whole moderation queue for every admin
-    // request — its entries just fall back to `entity: null` for that
-    // page, same as the pre-existing "underlying row genuinely missing"
-    // case below.
     const [roundRatingsResult, recruiterRatingsResult, overallReviewsResult, companiesResult] =
       await Promise.allSettled([
         this.prisma.roundRating.findMany({
@@ -242,34 +310,10 @@ export class ModerationService {
       });
     }
 
-    const enrichedEntries: ModerationQueueEntry[] = entries.map((entry) => ({
+    return entries.map((entry) => ({
       ...entry,
       entity: entityById.get(entry.entityId) ?? null,
     }));
-
-    // Map preserves insertion order — groups naturally come out in the
-    // same createdAt-ascending order entries already had, since each
-    // group is created the moment its first (earliest) entry is seen.
-    // An entry whose entity failed to enrich (no processId to group by)
-    // gets its own standalone group keyed by the queue entry's own id,
-    // rather than being silently dropped from the response.
-    const groups = new Map<string, ModerationQueueGroup>();
-    for (const entry of enrichedEntries) {
-      const key = entry.entity?.processId ?? `unknown-${entry.id}`;
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          processId: entry.entity?.processId ?? null,
-          companyName: entry.entity?.companyName ?? 'Unknown',
-          roleTitle: entry.entity?.roleTitle ?? 'Unknown',
-          entries: [],
-        };
-        groups.set(key, group);
-      }
-      group.entries.push(entry);
-    }
-
-    return Array.from(groups.values());
   }
 
   approve(id: string, dto: ModerationActionDto) {
@@ -343,6 +387,11 @@ export class ModerationService {
     if (decision === 'approved' && entry.entityType === 'company') {
       await this.indexApprovedCompany(entry.entityId);
     }
+    // GitHub issue #370 (Phase 35) — any resolution (approved, rejected,
+    // or flagged) means this entry is no longer part of the *pending*
+    // universe the moderator search box covers, regardless of which
+    // public-facing index (if any) it also just got added to above.
+    await this.removeFromSearchIndex(entry.entityType, entry.entityId);
 
     return updatedEntry;
   }
@@ -394,6 +443,117 @@ export class ModerationService {
         'Failed to index approved review in OpenSearch',
         err instanceof Error ? err.stack : err,
       );
+    }
+  }
+
+  // GitHub issue #370 (Phase 35) — called by every write-path service
+  // right after its own transaction commits (enqueue()/reenqueue() run
+  // *inside* that transaction, but OpenSearch indexing must never happen
+  // before the row it describes is actually durable — same D16/D17
+  // reasoning as indexApprovedReview/indexApprovedCompany above). Fully
+  // best-effort: builds the document fresh from Postgres rather than
+  // trusting whatever the caller already had in scope, so it stays
+  // correct even if called from a context that doesn't have the joined
+  // company/process fields handy.
+  async indexForSearch(entityType: ModerationEntityType, entityId: string): Promise<void> {
+    try {
+      const doc = await this.buildIndexableEntry(entityType, entityId);
+      // The entity may have already been deleted (or resolved) by the
+      // time this runs, in a fast create-then-delete sequence — nothing
+      // to index, not an error.
+      if (!doc) return;
+      await this.moderationQueueSearchService.indexEntry(doc);
+    } catch (err) {
+      this.logger.error(
+        `Failed to index ${entityType} ${entityId} for moderator search`,
+        err instanceof Error ? err.stack : err,
+      );
+    }
+  }
+
+  // Thin delegation — ModerationQueueSearchService.removeEntry() already
+  // handles its own not-found/error cases internally (same shape as
+  // ReviewSearchService.removeReview()), so callers throughout this
+  // service and every write-path service only ever need to know about
+  // ModerationService, never the search service directly.
+  removeFromSearchIndex(entityType: ModerationEntityType, entityId: string): Promise<void> {
+    return this.moderationQueueSearchService.removeEntry(entityType, entityId);
+  }
+
+  private async buildIndexableEntry(
+    entityType: ModerationEntityType,
+    entityId: string,
+  ): Promise<{
+    entityType: ModerationEntityType;
+    entityId: string;
+    category: ModerationQueueCategory;
+    companyName: string;
+    roleTitle: string | null;
+    freeTextPreview: string | null;
+    createdAt: Date;
+  } | null> {
+    switch (entityType) {
+      case 'round_rating': {
+        const r = await this.prisma.roundRating.findUnique({
+          where: { id: entityId },
+          include: { round: { include: { process: { include: { company: true } } } } },
+        });
+        if (!r) return null;
+        return {
+          entityType,
+          entityId,
+          category: 'interview-review',
+          companyName: r.round.process.company.name,
+          roleTitle: r.round.process.roleTitle,
+          freeTextPreview: r.freeText,
+          createdAt: r.createdAt,
+        };
+      }
+      case 'recruiter_rating': {
+        const r = await this.prisma.recruiterRating.findUnique({
+          where: { id: entityId },
+          include: { recruiterInteraction: { include: { process: { include: { company: true } } } } },
+        });
+        if (!r) return null;
+        return {
+          entityType,
+          entityId,
+          category: 'interview-review',
+          companyName: r.recruiterInteraction.process.company.name,
+          roleTitle: r.recruiterInteraction.process.roleTitle,
+          freeTextPreview: r.freeText,
+          createdAt: r.createdAt,
+        };
+      }
+      case 'overall_review': {
+        const r = await this.prisma.overallReview.findUnique({
+          where: { id: entityId },
+          include: { process: { include: { company: true } } },
+        });
+        if (!r) return null;
+        return {
+          entityType,
+          entityId,
+          category: 'interview-review',
+          companyName: r.process.company.name,
+          roleTitle: r.process.roleTitle,
+          freeTextPreview: r.reviewText,
+          createdAt: r.createdAt,
+        };
+      }
+      case 'company': {
+        const c = await this.prisma.company.findUnique({ where: { id: entityId } });
+        if (!c) return null;
+        return {
+          entityType,
+          entityId,
+          category: 'create-company',
+          companyName: c.name,
+          roleTitle: null,
+          freeTextPreview: null,
+          createdAt: c.createdAt,
+        };
+      }
     }
   }
 }

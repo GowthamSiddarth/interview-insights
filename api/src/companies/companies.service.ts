@@ -33,6 +33,8 @@ export class CompaniesService {
 
     const company = await this.prisma.company.create({ data: dto });
     await this.moderationService.enqueue('company', company.id);
+    // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
+    await this.moderationService.indexForSearch('company', company.id);
     return company;
   }
 

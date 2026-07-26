@@ -4,6 +4,7 @@ import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
 import { CompanySearchService } from '../search/company-search.service';
+import { ModerationQueueSearchService } from '../search/moderation-queue-search.service';
 
 describe('ModerationService', () => {
   let service: ModerationService;
@@ -15,14 +16,29 @@ describe('ModerationService', () => {
       update: jest.Mock;
       deleteMany: jest.Mock;
     };
-    roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock; findMany: jest.Mock };
-    recruiterRating: { update: jest.Mock; findMany: jest.Mock };
-    overallReview: { update: jest.Mock; findMany: jest.Mock };
-    company: { update: jest.Mock; findUniqueOrThrow: jest.Mock; findMany: jest.Mock };
+    roundRating: {
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      findMany: jest.Mock;
+    };
+    recruiterRating: { update: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock };
+    overallReview: { update: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock };
+    company: {
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      findMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
   let companySearchService: { indexCompany: jest.Mock };
+  let moderationQueueSearchService: {
+    indexEntry: jest.Mock;
+    removeEntry: jest.Mock;
+    search: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -35,13 +51,23 @@ describe('ModerationService', () => {
       },
       roundRating: {
         update: jest.fn(),
+        findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
-      recruiterRating: { update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      overallReview: { update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      recruiterRating: {
+        update: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      overallReview: {
+        update: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       company: {
         update: jest.fn(),
+        findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -49,6 +75,11 @@ describe('ModerationService', () => {
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
     companySearchService = { indexCompany: jest.fn().mockResolvedValue(undefined) };
+    moderationQueueSearchService = {
+      indexEntry: jest.fn().mockResolvedValue(undefined),
+      removeEntry: jest.fn().mockResolvedValue(undefined),
+      search: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -56,6 +87,7 @@ describe('ModerationService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ReviewSearchService, useValue: reviewSearchService },
         { provide: CompanySearchService, useValue: companySearchService },
+        { provide: ModerationQueueSearchService, useValue: moderationQueueSearchService },
       ],
     }).compile();
 
@@ -621,6 +653,229 @@ describe('ModerationService', () => {
         data: { status: 'rejected' },
       });
       expect(companySearchService.indexCompany).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #370 (Phase 35) — any resolution removes the entry
+    // from the moderator search index, since it's no longer part of the
+    // *pending* universe that index covers.
+    it('approve() removes the entry from the moderator search index', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approve('queue-1', {});
+
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
+    });
+
+    it('reject() removes the entry from the moderator search index', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.reject('queue-1', {});
+
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
+    });
+
+    it('flag() removes the entry from the moderator search index', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.flag('queue-1', { flagReason: 'spam_pattern' });
+
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
+    });
+
+    it('reject() on a company removes it from the moderator search index too', async () => {
+      mockPendingCompanyEntry();
+
+      await service.reject('queue-4', {});
+
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('company', 'company-1');
+    });
+  });
+
+  // GitHub issue #370 (Phase 35) — indexing happens after the caller's own
+  // transaction has committed, so ModerationService re-derives the
+  // display fields fresh from Postgres rather than trusting anything the
+  // caller might already have in scope.
+  describe('indexForSearch', () => {
+    it('indexes a round_rating as category interview-review', async () => {
+      prisma.roundRating.findUnique.mockResolvedValue({
+        id: 'rating-1',
+        freeText: 'Great round',
+        createdAt: new Date('2026-01-01'),
+        round: { process: { roleTitle: 'Engineer', company: { name: 'Acme' } } },
+      });
+
+      await service.indexForSearch('round_rating', 'rating-1');
+
+      expect(moderationQueueSearchService.indexEntry).toHaveBeenCalledWith({
+        entityType: 'round_rating',
+        entityId: 'rating-1',
+        category: 'interview-review',
+        companyName: 'Acme',
+        roleTitle: 'Engineer',
+        freeTextPreview: 'Great round',
+        createdAt: new Date('2026-01-01'),
+      });
+    });
+
+    it('indexes a recruiter_rating as category interview-review', async () => {
+      prisma.recruiterRating.findUnique.mockResolvedValue({
+        id: 'rating-2',
+        freeText: null,
+        createdAt: new Date('2026-01-02'),
+        recruiterInteraction: { process: { roleTitle: 'Manager', company: { name: 'Globex' } } },
+      });
+
+      await service.indexForSearch('recruiter_rating', 'rating-2');
+
+      expect(moderationQueueSearchService.indexEntry).toHaveBeenCalledWith({
+        entityType: 'recruiter_rating',
+        entityId: 'rating-2',
+        category: 'interview-review',
+        companyName: 'Globex',
+        roleTitle: 'Manager',
+        freeTextPreview: null,
+        createdAt: new Date('2026-01-02'),
+      });
+    });
+
+    it('indexes an overall_review as category interview-review', async () => {
+      prisma.overallReview.findUnique.mockResolvedValue({
+        id: 'review-1',
+        reviewText: 'Loved it',
+        createdAt: new Date('2026-01-03'),
+        process: { roleTitle: 'Staff Engineer', company: { name: 'Initech' } },
+      });
+
+      await service.indexForSearch('overall_review', 'review-1');
+
+      expect(moderationQueueSearchService.indexEntry).toHaveBeenCalledWith({
+        entityType: 'overall_review',
+        entityId: 'review-1',
+        category: 'interview-review',
+        companyName: 'Initech',
+        roleTitle: 'Staff Engineer',
+        freeTextPreview: 'Loved it',
+        createdAt: new Date('2026-01-03'),
+      });
+    });
+
+    it('indexes a company as category create-company, with no roleTitle/freeTextPreview', async () => {
+      prisma.company.findUnique.mockResolvedValue({
+        id: 'company-1',
+        name: 'Acme Corp',
+        createdAt: new Date('2026-01-04'),
+      });
+
+      await service.indexForSearch('company', 'company-1');
+
+      expect(moderationQueueSearchService.indexEntry).toHaveBeenCalledWith({
+        entityType: 'company',
+        entityId: 'company-1',
+        category: 'create-company',
+        companyName: 'Acme Corp',
+        roleTitle: null,
+        freeTextPreview: null,
+        createdAt: new Date('2026-01-04'),
+      });
+    });
+
+    it('does nothing when the entity no longer exists (a fast create-then-delete race)', async () => {
+      prisma.roundRating.findUnique.mockResolvedValue(null);
+
+      await service.indexForSearch('round_rating', 'gone');
+
+      expect(moderationQueueSearchService.indexEntry).not.toHaveBeenCalled();
+    });
+
+    it('never throws when indexing fails', async () => {
+      prisma.roundRating.findUnique.mockResolvedValue({
+        id: 'rating-1',
+        freeText: null,
+        createdAt: new Date('2026-01-01'),
+        round: { process: { roleTitle: 'Engineer', company: { name: 'Acme' } } },
+      });
+      moderationQueueSearchService.indexEntry.mockRejectedValue(new Error('OpenSearch unreachable'));
+
+      await expect(service.indexForSearch('round_rating', 'rating-1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('removeFromSearchIndex', () => {
+    it('delegates to ModerationQueueSearchService.removeEntry', async () => {
+      await service.removeFromSearchIndex('round_rating', 'rating-1');
+
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
+    });
+  });
+
+  describe('search', () => {
+    it('returns an empty array without querying Postgres when there are no search hits', async () => {
+      moderationQueueSearchService.search.mockResolvedValue([]);
+
+      const result = await service.search('acme', undefined);
+
+      expect(result).toEqual([]);
+      expect(prisma.moderationQueueEntry.findMany).not.toHaveBeenCalled();
+    });
+
+    it('passes q and category through to the search index, and enriches matching pending entries in relevance order', async () => {
+      moderationQueueSearchService.search.mockResolvedValue([
+        { entityType: 'overall_review', entityId: 'ov1' },
+        { entityType: 'round_rating', entityId: 'rr1' },
+      ]);
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },
+        { id: 'q2', entityType: 'overall_review', entityId: 'ov1', reviewedAt: null },
+      ]);
+      prisma.roundRating.findMany.mockResolvedValue([
+        {
+          id: 'rr1',
+          difficulty: 3,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
+          technicalDepth: null,
+          freeText: null,
+          round: {
+            title: 'Screen',
+            roundType: 'coding',
+            description: null,
+            typeMetadata: null,
+            scheduledDurationMinutes: null,
+            process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
+          },
+        },
+      ]);
+      prisma.overallReview.findMany.mockResolvedValue([
+        {
+          id: 'ov1',
+          overallExperience: 4,
+          wouldRecommend: true,
+          reviewText: 'good loop',
+          process: { id: 'process-2', roleTitle: 'Manager', company: { name: 'Acme' } },
+        },
+      ]);
+
+      const result = await service.search('acme', 'interview-review');
+
+      expect(moderationQueueSearchService.search).toHaveBeenCalledWith('acme', 'interview-review');
+      // Relevance order from the search hits (overall_review first, then
+      // round_rating) is preserved, not the grouped/createdAt order
+      // listPending() would use.
+      expect(result.map((e) => e.entityId)).toEqual(['ov1', 'rr1']);
+    });
+
+    it('silently drops a hit whose queue entry was resolved between the search and the enrichment lookup', async () => {
+      moderationQueueSearchService.search.mockResolvedValue([
+        { entityType: 'round_rating', entityId: 'rr1' },
+      ]);
+      // Simulates the race: the entry no longer matches reviewedAt: null
+      // by the time this query runs, so findMany returns nothing for it.
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.search('acme', undefined);
+
+      expect(result).toEqual([]);
     });
   });
 });

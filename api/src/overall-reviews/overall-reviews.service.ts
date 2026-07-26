@@ -20,8 +20,8 @@ export class OverallReviewsService {
   // Fraud-check wiring added in GitHub issue #317 (D52) — see
   // RecruiterRatingsService.create()'s comment for why this now applies
   // identically to round ratings.
-  create(processId: string, candidateId: string, dto: CreateOverallReviewDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async create(processId: string, candidateId: string, dto: CreateOverallReviewDto) {
+    const review = await this.prisma.$transaction(async (tx) => {
       const flagReason = await this.fraudChecksService.detectFlagReason(
         candidateId,
         'overall_review',
@@ -34,6 +34,9 @@ export class OverallReviewsService {
       await this.moderationService.enqueue('overall_review', review.id, tx, flagReason);
       return review;
     });
+    // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
+    await this.moderationService.indexForSearch('overall_review', review.id);
+    return review;
   }
 
   // Public read — the process's approved overall review, or null (empty
@@ -56,7 +59,7 @@ export class OverallReviewsService {
       throw new ForbiddenException('You can only edit your own review.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.overallReview.update({
         where: { processId },
         data: { ...dto, status: 'pending' },
@@ -64,6 +67,8 @@ export class OverallReviewsService {
       await this.moderationService.reenqueue('overall_review', review.id, tx);
       return updated;
     });
+    await this.moderationService.indexForSearch('overall_review', review.id);
+    return updated;
   }
 
   async remove(processId: string, candidateId: string): Promise<void> {
@@ -76,5 +81,6 @@ export class OverallReviewsService {
       await this.moderationService.removeQueueEntries('overall_review', review.id, tx);
       await tx.overallReview.delete({ where: { processId } });
     });
+    await this.moderationService.removeFromSearchIndex('overall_review', review.id);
   }
 }
