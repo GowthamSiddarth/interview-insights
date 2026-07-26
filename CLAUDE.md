@@ -3088,11 +3088,37 @@ project.
 via merged PRs, and every phase built so far now has a complete
 engineering blog.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data, issues
-  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
-  Service / Review Analyzer Service) remain planned but not started.
-  Continue merging without waiting for CI until the user says the
-  GitHub Actions billing limit has been refreshed.
+**Phase 35 planning (Moderated Company Creation & Moderator Search)**
+— filed 2026-07-26, from direct user feedback on issue #360's
+create-company-request flow: `POST /companies` has never been
+moderation-gated (`Company` has no `candidateId`, so it was never on
+Phase 16's write-path list; issue #217/D38 only added session + rate-
+limit gating, not a moderation queue) — a real gap against CLAUDE.md
+hard constraint #2. Separately, the moderation queue has no search/
+filter capability at all. Four questions resolved directly with the
+project owner before filing: `Company` gets a real `status` column
+(reusing the existing `ModerationStatus` enum) rather than a separate
+request table; the moderator's new fuzzy search is backed by a new
+dedicated OpenSearch index over the moderation queue, not Postgres
+trigram matching; the category filter is two buckets (interview-review
+= round+recruiter+overall combined, vs. create-company), not four;
+and a rejected company request's row is kept (`status: rejected`) for
+an audit trail rather than deleted, permanently occupying its slug
+unless an admin intervenes. Also motivated by the same change: issue
+#360's auto-redirect into `/write-review` after creation no longer
+makes sense once the created company is pending, not public — it's
+replaced with a plain confirmation modal, no navigation. Milestone
+"Phase 35 — Moderated Company Creation & Moderator Search", issues
+#369-373 filed under epic #368. Epic on the project board at "Todo" —
+planning only, no implementation started.
+
+- Next step: Phase 35 implementation, starting with issue #369
+  (company creation moves behind moderation). Phase 19 (Content
+  Quality & Synthetic Data, issues #162-165) and Phases 30-32
+  (Event-Driven Foundation / Notification Service / Review Analyzer
+  Service) remain planned but not started. Continue merging without
+  waiting for CI until the user says the GitHub Actions billing limit
+  has been refreshed.
 
 ## Open decisions still to make
 
