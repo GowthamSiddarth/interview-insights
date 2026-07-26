@@ -3001,14 +3001,35 @@ draft via `?draftId=`, Delete removed it, logging out both gated
 console errors throughout. Test candidate cleaned up via the real
 `DELETE /me` GDPR-erasure endpoint afterward.
 
-- Next step: Phase 34 issues #357 (homogeneous company-list rows) and
-  #360 (search-failure create-company-request flow) remain next in
-  line, followed by #361 (blog, last). Phase 19 (Content Quality &
-  Synthetic Data, issues #162-165) and Phases 30-32 (Event-Driven
-  Foundation / Notification Service / Review Analyzer Service) remain
-  planned but not started. Continue merging without waiting for CI
-  until the user says the GitHub Actions billing limit has been
-  refreshed.
+**Phase 34, issue #357 (homogeneous company-list rows)** — a new shared
+`web/src/components/CompanyResultRow.tsx` renders the one row shape a
+company is ever listed in: plain-text name + size bucket, a "Browse
+reviews" button (does what clicking the name used to do — selects the
+company for step 2), "View profile", and "Write a review" — used by
+both the typed-search-results list and the quick-select grid, so the
+two can no longer drift out of sync (previously the quick-select grid
+was a single clickable name-only button with no profile/review-writing
+links at all). Step 2's "Browse reviews for {company}" header dropped
+its parenthesized "(view profile)" styling in favor of a plain "View
+profile" link, textually and visually identical to the row links above.
+3 test files updated/added (`page.spec.tsx` rewritten for the new row
+shape and renamed "quick-select company rows" describe block, plus a
+new `company-result-row.spec.tsx` unit-testing the shared component
+directly) — 139 web tests total, build/lint clean. Live-verified with a
+real headless browser (Playwright) against the real `kind` cluster:
+quick-select rows show all three actions with the name as plain text
+(no button), clicking "Browse reviews" reveals step 2, step 2's header
+shows plain "View profile" with no parentheses, and a typed search for
+"Amazon" shows the identical row shape as a second, independent match
+alongside the quick-select row — zero console errors.
+
+- Next step: Phase 34 issue #360 (search-failure create-company-request
+  flow) remains next in line, followed by #361 (blog, last). Phase 19
+  (Content Quality & Synthetic Data, issues #162-165) and Phases 30-32
+  (Event-Driven Foundation / Notification Service / Review Analyzer
+  Service) remain planned but not started. Continue merging without
+  waiting for CI until the user says the GitHub Actions billing limit
+  has been refreshed.
 
 ## Open decisions still to make
 

@@ -72,7 +72,11 @@ describe('SearchPage (the landing page, now at /)', () => {
     expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
   });
 
-  it('links each company result to its public profile page, and to writing a review for it (Phase 15 issue #142)', async () => {
+  // GitHub issue #357 (Phase 34) — every company row (search results and
+  // quick-select alike) shows the identical "Browse reviews" / "View
+  // profile" / "Write a review" action set; the company name itself is
+  // plain text, not a click target.
+  it('shows a homogeneous row (Browse reviews, View profile, Write a review) for each search result', async () => {
     global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       const respond = (body: unknown) =>
@@ -94,46 +98,52 @@ describe('SearchPage (the landing page, now at /)', () => {
 
     const profileLink = await screen.findByRole('link', { name: 'View profile' });
     expect(profileLink).toHaveAttribute('href', '/companies/acme-corp');
-
-    // Selecting the company for step 2 surfaces a profile link and a
-    // "Write a review" link in its header, distinct from the select button.
-    await user.click(screen.getByRole('button', { name: /Acme Corp/ }));
-    const headerProfileLink = await screen.findByRole('link', { name: '(view profile)' });
-    expect(headerProfileLink).toHaveAttribute('href', '/companies/acme-corp');
     const writeReviewLink = screen.getByRole('link', { name: 'Write a review' });
     expect(writeReviewLink).toHaveAttribute(
       'href',
       '/write-review?companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
     );
+    // The company name is plain text, not a button — only "Browse reviews"
+    // selects the company for step 2.
+    expect(screen.queryByRole('button', { name: /Acme Corp/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Browse reviews' }));
+    expect(await screen.findByText(/Browse reviews for Acme Corp/)).toBeInTheDocument();
+    // Step 2's header link reads plain "View profile" too — no parentheses,
+    // matching the row above (homogeneous, per direct request).
+    expect(screen.queryByText('(view profile)')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'View profile' })).toHaveLength(2);
   });
 
-  // The quick-select company buttons, relocated here from the wizard's old
-  // "Start a new draft" picker (which no longer exists — see search/page.tsx).
-  describe('quick-select company buttons', () => {
-    it('lists every existing company as a button, alongside the text search', async () => {
+  // The quick-select company rows, relocated here from the wizard's old
+  // "Start a new draft" picker (which no longer exists — see write-review/page.tsx).
+  describe('quick-select company rows', () => {
+    it('lists every existing company as a homogeneous row, alongside the text search', async () => {
       mockFetchByRoute([
         { id: 'company-1', name: 'Amazon', slug: 'amazon', industry: null, sizeBucket: 'large' },
         { id: 'company-2', name: 'Walmart Tech', slug: 'walmart-tech', industry: null, sizeBucket: 'large' },
       ]);
       render(<SearchPage />);
 
-      expect(await screen.findByRole('button', { name: 'Amazon' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Walmart Tech' })).toBeInTheDocument();
+      expect(await screen.findByText('Amazon')).toBeInTheDocument();
+      expect(screen.getByText('Walmart Tech')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Browse reviews' })).toHaveLength(2);
+      expect(screen.getAllByRole('link', { name: 'Write a review' })).toHaveLength(2);
     });
 
-    it('selecting a quick-button company reveals step 2 for browsing its reviews', async () => {
+    it('selecting a quick-row company reveals step 2 for browsing its reviews', async () => {
       mockFetchByRoute([
         { id: 'company-1', name: 'Amazon', slug: 'amazon', industry: null, sizeBucket: 'large' },
       ]);
       const user = userEvent.setup();
       render(<SearchPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Amazon' }));
+      await user.click(await screen.findByRole('button', { name: 'Browse reviews' }));
 
       expect(await screen.findByText(/Browse reviews for Amazon/)).toBeInTheDocument();
     });
 
-    it('does not show any quick buttons when there are no companies yet', async () => {
+    it('does not show any quick rows when there are no companies yet', async () => {
       mockFetchByRoute([]);
       render(<SearchPage />);
 

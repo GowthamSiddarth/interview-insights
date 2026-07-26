@@ -1294,7 +1294,7 @@ Refinements". Epic: GitHub issue #356.
       list of every in-progress draft with Resume/Delete actions;
       NavBar gains a "My drafts" link, shown only when logged in
       (GitHub issue #359)
-- [ ] Homogeneous company-list rows: a `CompanyResultRow`-shaped
+- [x] Homogeneous company-list rows: a `CompanyResultRow`-shaped
       "Browse reviews" + "View profile" + "Write a review" action set,
       applied identically to the typed-search-results list and the
       quick-select button grid; step 2's "(view profile)" restyled to
