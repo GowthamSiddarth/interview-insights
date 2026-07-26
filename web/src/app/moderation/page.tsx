@@ -7,6 +7,7 @@ import {
   api,
   ApiError,
   ModerationFlagReason,
+  ModerationQueueCategory,
   ModerationQueueEntity,
   ModerationQueueEntry,
   ModerationQueueGroup,
@@ -31,6 +32,26 @@ const FLAG_REASONS: ModerationFlagReason[] = [
   'rate_limit',
   'duplicate',
 ];
+
+// GitHub issue #371 (Phase 35) — the wire response never carries its own
+// category field (see api.ts's own comment); it's derived purely from
+// entityType, same rule the backend itself uses to build the index.
+function categoryFor(entityType: ModerationQueueEntry['entityType']): ModerationQueueCategory {
+  return entityType === 'company' ? 'create-company' : 'interview-review';
+}
+
+const CATEGORY_LABEL: Record<ModerationQueueCategory, string> = {
+  'interview-review': 'Interview Review',
+  'create-company': 'Create Company Request',
+};
+
+function CategoryBadge({ category }: { category: ModerationQueueCategory }) {
+  return (
+    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+      {CATEGORY_LABEL[category]}
+    </span>
+  );
+}
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
@@ -133,6 +154,50 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
   );
 }
 
+// GitHub issue #371 (Phase 35) — shared by both the grouped queue view
+// and the flat search-results view, so approve/reject/flag behave
+// identically no matter which one a moderator is looking at.
+function EntryActions({
+  entry,
+  flagReason,
+  onFlagReasonChange,
+  onAct,
+}: {
+  entry: ModerationQueueEntry;
+  flagReason: ModerationFlagReason;
+  onFlagReasonChange: (reason: ModerationFlagReason) => void;
+  onAct: (action: 'approve' | 'reject' | 'flag') => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button type="button" onClick={() => onAct('approve')}>
+        Approve
+      </Button>
+      <Button type="button" onClick={() => onAct('reject')} variant="danger">
+        Reject
+      </Button>
+      <Button type="button" onClick={() => onAct('flag')} variant="warning">
+        Flag
+      </Button>
+      <label className="flex items-center gap-1 text-xs text-gray-500">
+        flag reason
+        <select
+          aria-label={`Flag reason for ${entry.id}`}
+          value={flagReason}
+          onChange={(e) => onFlagReasonChange(e.target.value as ModerationFlagReason)}
+          className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+        >
+          {FLAG_REASONS.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 export default function ModerationPage() {
   const router = useRouter();
   // 'checking' never renders the queue (or the login redirect race) — a
@@ -144,6 +209,16 @@ export default function ModerationPage() {
   const [reviewedBy, setReviewedBy] = useState('');
   const [flagReasonById, setFlagReasonById] = useState<Record<string, ModerationFlagReason>>({});
   const [error, setError] = useState<string | null>(null);
+  // GitHub issue #371 (Phase 35) — a query and/or a category filter puts
+  // the page into "search mode": the grouped-by-submission view is
+  // replaced by a flat list of matches. Category alone (empty query)
+  // still searches — "Any" category with an empty query is the only
+  // combination that falls back to the normal grouped view.
+  const [query, setQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<ModerationQueueCategory | ''>('');
+  const [searchResults, setSearchResults] = useState<ModerationQueueEntry[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const isSearching = query.trim() !== '' || categoryFilter !== '';
 
   useEffect(() => {
     api
@@ -162,6 +237,33 @@ export default function ModerationPage() {
         else setError(errorMessage(err));
       });
   }, [sessionChecked, router]);
+
+  // Debounced — a query changes on every keystroke, and each search hits
+  // real OpenSearch, not a client-side filter of already-loaded data.
+  useEffect(() => {
+    if (!sessionChecked) return;
+    if (!isSearching) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    const timeout = setTimeout(() => {
+      api
+        .searchModerationQueue(query.trim(), categoryFilter)
+        .then((results) => {
+          setSearchResults(results);
+          setSearchLoading(false);
+        })
+        .catch((err: unknown) => {
+          setSearchLoading(false);
+          if (isSessionExpired(err)) router.push('/moderation/login');
+          else setError(errorMessage(err));
+        });
+    }, 300);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isSearching is derived from query/categoryFilter, already in the dep list
+  }, [sessionChecked, query, categoryFilter, router]);
 
   async function logout(): Promise<void> {
     await api.adminLogout().catch(() => undefined);
@@ -198,6 +300,7 @@ export default function ModerationPage() {
             ?.map((g) => ({ ...g, entries: g.entries.filter((e) => e.id !== entry.id) }))
             .filter((g) => g.entries.length > 0) ?? null,
       );
+      setSearchResults((prev) => prev?.filter((e) => e.id !== entry.id) ?? null);
     } catch (err) {
       if (isSessionExpired(err)) router.push('/moderation/login');
       else setError(errorMessage(err));
@@ -235,101 +338,143 @@ export default function ModerationPage() {
         </p>
       )}
 
-      <label className="flex flex-col text-sm sm:w-64">
-        Your moderator name (optional)
-        <input
-          value={reviewedBy}
-          onChange={(e) => setReviewedBy(e.target.value)}
-          className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-        />
-      </label>
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="flex flex-col text-sm sm:w-64">
+          Your moderator name (optional)
+          <input
+            value={reviewedBy}
+            onChange={(e) => setReviewedBy(e.target.value)}
+            className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+          />
+        </label>
 
-      {/* null = still loading — must never look identical to an empty queue
-          (the Phase 9 issue #61 rule). */}
-      {groups === null && <p className="text-sm text-gray-500">Loading…</p>}
-      {groups?.length === 0 && <EmptyState message="Queue is clear — nothing pending." />}
+        {/* GitHub issue #371 (Phase 35) — a query and/or category puts the
+            page into search mode (see isSearching), replacing the grouped
+            view below with a flat list of fuzzy matches. */}
+        <label className="flex flex-col text-sm sm:w-64">
+          Search
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Company, role, or review text…"
+            className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+          />
+        </label>
+        <label className="flex flex-col text-sm">
+          Category
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as ModerationQueueCategory | '')}
+            className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+          >
+            <option value="">Any</option>
+            <option value="interview-review">Interview review</option>
+            <option value="create-company">Create company request</option>
+          </select>
+        </label>
+      </div>
 
-      {groups?.map((group, index) => {
-        const isExpanded = expanded.has(index);
-        return (
-          <Card key={group.processId ?? `unknown-${index}`} as="section" className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => toggleExpanded(index)}
-              className="flex w-full items-center justify-between gap-4 text-left"
-              aria-expanded={isExpanded}
-            >
-              <div>
-                <h2 className="font-medium">
-                  {group.companyName} · {group.roleTitle}
-                </h2>
-                <p className="text-xs text-gray-500">
-                  {group.entries.length} pending item{group.entries.length === 1 ? '' : 's'}
-                </p>
-              </div>
-              <span className="text-sm text-gray-500">{isExpanded ? 'Hide details' : 'Review'}</span>
-            </button>
-
-            {isExpanded && (
-              <div className="flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
-                {group.entries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex flex-col gap-3 rounded-md border border-gray-100 p-3 dark:border-gray-800"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium">{ENTITY_TYPE_LABEL[entry.entityType]}</h3>
-                      <span className="text-xs text-gray-500">
-                        submitted {new Date(entry.createdAt).toLocaleString()}
-                      </span>
+      {isSearching ? (
+        <>
+          {/* Loading is distinct from "zero matches" (Phase 9 issue #61
+              rule) — a search in flight must never look identical to a
+              confirmed-empty result. */}
+          {searchLoading && <p className="text-sm text-gray-500">Searching…</p>}
+          {!searchLoading && searchResults?.length === 0 && (
+            <EmptyState message="No matches for this search." />
+          )}
+          {!searchLoading &&
+            searchResults?.map((entry) => {
+              const category = categoryFor(entry.entityType);
+              const label =
+                category === 'create-company'
+                  ? entry.entity?.companyName
+                  : `${entry.entity?.companyName ?? 'Unknown'} · ${entry.entity?.roleTitle ?? 'Unknown'}`;
+              return (
+                <Card key={entry.id} as="section" className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-medium">{label}</h2>
+                      <CategoryBadge category={category} />
                     </div>
-                    <EntityDetails entry={entry} />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button type="button" onClick={() => void act(entry, 'approve')}>
-                        Approve
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => void act(entry, 'reject')}
-                        variant="danger"
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => void act(entry, 'flag')}
-                        variant="warning"
-                      >
-                        Flag
-                      </Button>
-                      <label className="flex items-center gap-1 text-xs text-gray-500">
-                        flag reason
-                        <select
-                          aria-label={`Flag reason for ${entry.id}`}
-                          value={flagReasonById[entry.id] ?? 'manual_report'}
-                          onChange={(e) =>
-                            setFlagReasonById((prev) => ({
-                              ...prev,
-                              [entry.id]: e.target.value as ModerationFlagReason,
-                            }))
-                          }
-                          className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-                        >
-                          {FLAG_REASONS.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
+                    <span className="text-xs text-gray-500">
+                      submitted {new Date(entry.createdAt).toLocaleString()}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        );
-      })}
+                  <h3 className="text-sm font-medium">{ENTITY_TYPE_LABEL[entry.entityType]}</h3>
+                  <EntityDetails entry={entry} />
+                  <EntryActions
+                    entry={entry}
+                    flagReason={flagReasonById[entry.id] ?? 'manual_report'}
+                    onFlagReasonChange={(reason) =>
+                      setFlagReasonById((prev) => ({ ...prev, [entry.id]: reason }))
+                    }
+                    onAct={(action) => void act(entry, action)}
+                  />
+                </Card>
+              );
+            })}
+        </>
+      ) : (
+        <>
+          {/* null = still loading — must never look identical to an empty
+              queue (the Phase 9 issue #61 rule). */}
+          {groups === null && <p className="text-sm text-gray-500">Loading…</p>}
+          {groups?.length === 0 && <EmptyState message="Queue is clear — nothing pending." />}
+
+          {groups?.map((group, index) => {
+            const isExpanded = expanded.has(index);
+            return (
+              <Card key={group.processId ?? `unknown-${index}`} as="section" className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(index)}
+                  className="flex w-full items-center justify-between gap-4 text-left"
+                  aria-expanded={isExpanded}
+                >
+                  <div>
+                    <h2 className="font-medium">
+                      {group.companyName} · {group.roleTitle}
+                    </h2>
+                    <p className="text-xs text-gray-500">
+                      {group.entries.length} pending item{group.entries.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <span className="text-sm text-gray-500">{isExpanded ? 'Hide details' : 'Review'}</span>
+                </button>
+
+                {isExpanded && (
+                  <div className="flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                    {group.entries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex flex-col gap-3 rounded-md border border-gray-100 p-3 dark:border-gray-800"
+                      >
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-medium">{ENTITY_TYPE_LABEL[entry.entityType]}</h3>
+                          <span className="text-xs text-gray-500">
+                            submitted {new Date(entry.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <EntityDetails entry={entry} />
+                        <EntryActions
+                          entry={entry}
+                          flagReason={flagReasonById[entry.id] ?? 'manual_report'}
+                          onFlagReasonChange={(reason) =>
+                            setFlagReasonById((prev) => ({ ...prev, [entry.id]: reason }))
+                          }
+                          onAct={(action) => void act(entry, action)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </>
+      )}
     </PageContainer>
   );
 }

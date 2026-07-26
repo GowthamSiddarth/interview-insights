@@ -139,6 +139,13 @@ export type ModerationEntityType =
   | 'overall_review'
   | 'company';
 export type ModerationFlagReason = 'spam_pattern' | 'rate_limit' | 'duplicate' | 'manual_report';
+// GitHub issue #370/#371 (Phase 35) — the moderator search box's two
+// buckets: every interview-review entity type collapses into one value,
+// a create-company request is the other. Derived client-side from
+// entityType (round_rating/recruiter_rating/overall_review -> 'interview-review',
+// company -> 'create-company') — the wire response never carries this
+// as its own field.
+export type ModerationQueueCategory = 'interview-review' | 'create-company';
 
 export interface ModerationQueueEntry {
   id: string;
@@ -613,6 +620,16 @@ export const api = {
   getAdminSession: () => request<AdminSession>('/auth/admin/me'),
 
   listModerationQueue: () => request<ModerationQueueGroup[]>('/moderation/queue'),
+
+  // GitHub issue #371 (Phase 35) — a flat list (not grouped by
+  // submission, unlike listModerationQueue), in the backend's own
+  // OpenSearch-relevance order.
+  searchModerationQueue: (q: string, category: ModerationQueueCategory | '') => {
+    const query = new URLSearchParams();
+    if (q) query.set('q', q);
+    if (category) query.set('category', category);
+    return request<ModerationQueueEntry[]>(`/moderation/search?${query.toString()}`);
+  },
 
   approveModerationEntry: (id: string, reviewedBy?: string) =>
     request<ModerationQueueEntry>(`/moderation/queue/${id}/approve`, {
