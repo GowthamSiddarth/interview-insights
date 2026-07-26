@@ -128,35 +128,38 @@ describe('SearchPage (the landing page, now at /)', () => {
     expect(screen.getAllByRole('link', { name: 'View profile' })).toHaveLength(2);
   });
 
-  // The quick-select company rows, relocated here from the wizard's old
-  // "Start a new draft" picker (which no longer exists — see write-review/page.tsx).
-  describe('quick-select company rows', () => {
-    it('lists every existing company as a homogeneous row, alongside the text search', async () => {
+  // The quick-select company buttons — deliberately simple (plain,
+  // name-only buttons), unlike the CompanyResultRow shape typed search
+  // results use. GitHub issue #357 originally applied the homogeneous row
+  // shape here too, but the project owner asked for it to be reverted:
+  // the "Or pick one directly" quick-select list is meant to be a fast,
+  // low-noise shortcut, and giving every company its own 3-action row
+  // made an already-long company list read as redundant/repetitive.
+  describe('quick-select company buttons', () => {
+    it('lists every existing company as a plain button, alongside the text search', async () => {
       mockFetchByRoute([
         { id: 'company-1', name: 'Amazon', slug: 'amazon', industry: null, sizeBucket: 'large' },
         { id: 'company-2', name: 'Walmart Tech', slug: 'walmart-tech', industry: null, sizeBucket: 'large' },
       ]);
       render(<SearchPage />);
 
-      expect(await screen.findByText('Amazon')).toBeInTheDocument();
-      expect(screen.getByText('Walmart Tech')).toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: 'Browse reviews' })).toHaveLength(2);
-      expect(screen.getAllByRole('link', { name: 'Write a review' })).toHaveLength(2);
+      expect(await screen.findByRole('button', { name: 'Amazon' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Walmart Tech' })).toBeInTheDocument();
     });
 
-    it('selecting a quick-row company reveals step 2 for browsing its reviews', async () => {
+    it('selecting a quick-button company reveals step 2 for browsing its reviews', async () => {
       mockFetchByRoute([
         { id: 'company-1', name: 'Amazon', slug: 'amazon', industry: null, sizeBucket: 'large' },
       ]);
       const user = userEvent.setup();
       render(<SearchPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Browse reviews' }));
+      await user.click(await screen.findByRole('button', { name: 'Amazon' }));
 
       expect(await screen.findByText(/Browse reviews for Amazon/)).toBeInTheDocument();
     });
 
-    it('does not show any quick rows when there are no companies yet', async () => {
+    it('does not show any quick buttons when there are no companies yet', async () => {
       mockFetchByRoute([]);
       render(<SearchPage />);
 
