@@ -3,6 +3,17 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import SearchPage from '../src/app/page';
 
+const push = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+}));
+
+function setLoggedInCookie(loggedIn: boolean) {
+  document.cookie = loggedIn
+    ? 'candidate_logged_in=1'
+    : 'candidate_logged_in=; expires=Thu, 01 Jan 1970 00:00:00 UTC';
+}
+
 function mockFetchByRoute(companies: unknown[] = []) {
   global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input);
@@ -19,6 +30,8 @@ function mockFetchByRoute(companies: unknown[] = []) {
 describe('SearchPage (the landing page, now at /)', () => {
   beforeEach(() => {
     mockFetchByRoute();
+    push.mockClear();
+    setLoggedInCookie(false);
   });
 
   it('shows an explicit empty state — not a blank list — when a company search matches nothing', async () => {
@@ -149,6 +162,80 @@ describe('SearchPage (the landing page, now at /)', () => {
 
       await waitFor(() => expect(screen.getByText('1. Find a company')).toBeInTheDocument());
       expect(screen.queryByText('Or pick one directly:')).not.toBeInTheDocument();
+    });
+  });
+
+  // GitHub issue #360 (Phase 34) — a search-failure-triggered path to
+  // requesting a new company, unreachable any other way.
+  describe('search-failure "request a new company" flow', () => {
+    async function searchWithNoResults(user: ReturnType<typeof userEvent.setup>) {
+      render(<SearchPage />);
+      await user.type(screen.getByPlaceholderText('Company name'), 'Meta');
+      await user.click(screen.getByRole('button', { name: 'Search' }));
+      await screen.findByText('No companies match "Meta".');
+    }
+
+    it('never shows the create-company-request section on load, only after a failed search plus its own button', async () => {
+      render(<SearchPage />);
+      await waitFor(() => expect(screen.getByText('1. Find a company')).toBeInTheDocument());
+      expect(screen.queryByText('Request a new company')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Want to file a create company request?' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows the button only once a search has zero results, and reveals the section on click', async () => {
+      const user = userEvent.setup();
+      await searchWithNoResults(user);
+
+      const button = screen.getByRole('button', { name: 'Want to file a create company request?' });
+      expect(screen.queryByText('Request a new company')).not.toBeInTheDocument();
+
+      await user.click(button);
+
+      expect(await screen.findByText('Request a new company')).toBeInTheDocument();
+    });
+
+    it('shows the login-gate prompt instead of the form when logged out', async () => {
+      setLoggedInCookie(false);
+      const user = userEvent.setup();
+      await searchWithNoResults(user);
+      await user.click(screen.getByRole('button', { name: 'Want to file a create company request?' }));
+
+      await screen.findByText('Request a new company');
+      expect(screen.getByRole('link', { name: 'Log in to unlock' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    });
+
+    it('creates the company and redirects into /write-review for it, when logged in', async () => {
+      setLoggedInCookie(true);
+      global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        const respond = (body: unknown) =>
+          Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+        if (url.endsWith('/companies') && method === 'GET') return respond([]);
+        if (url.includes('/search/companies')) return respond([]);
+        if (url.endsWith('/companies') && method === 'POST') {
+          return respond({ id: 'new-co', name: 'Meta', slug: 'meta', sizeBucket: 'enterprise' });
+        }
+        throw new Error(`Unmocked fetch: ${method} ${url}`);
+      }) as jest.Mock;
+
+      const user = userEvent.setup();
+      await searchWithNoResults(user);
+      await user.click(screen.getByRole('button', { name: 'Want to file a create company request?' }));
+      await screen.findByText('Request a new company');
+
+      await user.type(screen.getByLabelText('Name'), 'Meta');
+      await user.type(screen.getByLabelText('Slug'), 'meta');
+      await user.click(screen.getByRole('button', { name: 'Create company' }));
+
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith(
+          '/write-review?companyId=new-co&companySlug=meta&companyName=Meta',
+        ),
+      );
     });
   });
 });

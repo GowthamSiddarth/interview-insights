@@ -1299,7 +1299,7 @@ Refinements". Epic: GitHub issue #356.
       applied identically to the typed-search-results list and the
       quick-select button grid; step 2's "(view profile)" restyled to
       match plain "View profile" (GitHub issue #357)
-- [ ] Search-failure "request a new company" flow: a button on the
+- [x] Search-failure "request a new company" flow: a button on the
       zero-results empty state opening an inline create-company
       section (rewritten copy for the request framing, not "write a
       review"), redirecting to `/write-review?companyId=...` on
