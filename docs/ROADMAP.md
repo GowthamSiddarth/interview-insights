@@ -1304,4 +1304,4 @@ Refinements". Epic: GitHub issue #356.
       section (rewritten copy for the request framing, not "write a
       review"), redirecting to `/write-review?companyId=...` on
       success; never reachable any other way (GitHub issue #360)
-- [ ] Engineering blog (last) (GitHub issue #361)
+- [x] Engineering blog (last) (GitHub issue #361)

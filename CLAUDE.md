@@ -3051,15 +3051,25 @@ company cleaned up directly via `kubectl exec` psql plus the existing
 `prune-orphaned-company-search-docs` script (D51's tooling) to remove
 its now-orphaned OpenSearch document, confirmed via a dry run first.
 
-**Phase 34 is now fully done except its engineering blog** — issues
-#357-360 all closed via merged PRs.
+**Phase 34, issue #361 (engineering blog)** —
+`wiki/blog/phase-34-write-a-review-flow-refinements/` gained one post
+per feature issue (#357, #358-359 combined into one post since they
+were implemented and merged together, #360), covering the shared
+`CompanyResultRow` component and the name-stops-being-a-click-target
+redesign, the `/write-review`/`/drafts` route split with the
+redirect-loop `consumedContextRef` fix and the login-gated-but-not-
+actually-session-tied `/drafts` design (D57), and the search-failure
+create-company-request flow's copy/redirect design. `wiki/blog/
+README.md`'s index updated to match.
 
-- Next step: Phase 34 issue #361 (engineering blog, last) remains.
-  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
-  Phases 30-32 (Event-Driven Foundation / Notification Service /
-  Review Analyzer Service) remain planned but not started. Continue
-  merging without waiting for CI until the user says the GitHub
-  Actions billing limit has been refreshed.
+**Phase 34 is now fully done** — issues #357-361 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+- Next step: Phase 19 (Content Quality & Synthetic Data, issues
+  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
+  Service / Review Analyzer Service) remain planned but not started.
+  Continue merging without waiting for CI until the user says the
+  GitHub Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 
