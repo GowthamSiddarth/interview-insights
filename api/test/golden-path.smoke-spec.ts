@@ -147,13 +147,23 @@ describe('Full golden path (e2e smoke test)', () => {
       .expect(201);
   }
 
-  it('1. creates a company', async () => {
+  it('1. creates a company (pending moderation)', async () => {
     const res = await server()
       .post('/companies')
       .set('Cookie', candidateA.cookie)
       .send({ name: 'Golden Path Corp', slug: `golden-path-${unique()}`, sizeBucket: 'mid' })
       .expect(201);
     companyId = body<CompanyBody>(res).id;
+  });
+
+  // GitHub issue #369 (Phase 35) — company creation now goes through
+  // moderation like everything else; nothing can be written against it
+  // until a moderator approves it.
+  it('1b. moderation approves the company', async () => {
+    await approve(companyId);
+
+    const found = await server().get(`/companies/${companyId}`).expect(200);
+    expect(body<CompanyBody>(found).id).toBe(companyId);
   });
 
   it('2. creates an interview process for candidate A', async () => {

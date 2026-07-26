@@ -3112,13 +3112,75 @@ replaced with a plain confirmation modal, no navigation. Milestone
 #369-373 filed under epic #368. Epic on the project board at "Todo" —
 planning only, no implementation started.
 
-- Next step: Phase 35 implementation, starting with issue #369
-  (company creation moves behind moderation). Phase 19 (Content
-  Quality & Synthetic Data, issues #162-165) and Phases 30-32
-  (Event-Driven Foundation / Notification Service / Review Analyzer
-  Service) remain planned but not started. Continue merging without
-  waiting for CI until the user says the GitHub Actions billing limit
-  has been refreshed.
+**Phase 35, issue #369 (company creation moves behind moderation)** —
+`Company` gains a `status` column (Prisma migration, reusing the
+existing `ModerationStatus` enum rather than a new one) plus a fourth
+`ModerationEntityType` value, `company`; `CompaniesService.create()`
+now enqueues via `ModerationService` instead of indexing to OpenSearch
+directly (indexing moves to approval time); every public read path
+(`findAll`/quick-select, `findBySlug`, the existence checks backing
+`GET /companies/:id/reviews` and `.../analytics`) filters to
+`status: approved`, 404ing a pending/rejected company exactly like one
+that doesn't exist; `InterviewProcess` creation (both the single and
+bulk endpoints) rejects a non-approved `companyId` with 404;
+`ModerationService.review()`'s switch and `listPending()`'s enrichment
+both handle the new entity type (a company request stands in its own
+group, keyed by a synthetic `company-request-<id>`, since it has no
+`InterviewProcess` to group under). Two direct-feedback refinements
+folded in before implementation: `POST /companies`'s existing session
+gate (issue #217/D38) is unaffected; and a duplicate request for a
+still-**pending** slug now gets a distinct, friendly 409 ("already
+requested, pending review — check back later") instead of the generic
+unique-constraint conflict, checked via a pre-insert `findUnique`
+lookup — an approved duplicate still gets the generic conflict, a
+rejected one is left as the generic conflict for now (explicitly
+unresolved). Per the earlier-resolved design decision, **a rejected
+company's row is kept** (`status: rejected`) for an audit trail rather
+than deleted — permanently occupying its slug. See D58 for the full
+write-up.
+
+16 existing e2e spec files updated to approve a company before using
+it (a new shared `test/support/companies.ts` helper —
+`createApprovedCompany`/`createPendingCompany`/
+`findCompanyQueueEntryId` — centralizes the create-then-approve dance);
+two files that seed a company via raw Prisma (bypassing the API
+entirely) needed `status: 'approved'` set explicitly in their seed
+data, the same "raw-Prisma seeding skips API-layer side effects" class
+of gap D51 already hit once. A new dedicated
+`company-moderation.e2e-spec.ts` (7 tests) covers the gate's own
+business rules end to end: hidden from every read path, process
+creation blocked, the rejected-row-kept behavior, and both duplicate-
+slug cases. `moderation.e2e-spec.ts` also gained 3 tests mirroring its
+existing per-entity-type coverage for the new `company` type. 326 api
+unit tests (12 new: `CompaniesService`, `InterviewProcessesService`,
+`BulkProcessSubmissionService`, `ModerationService`,
+`FraudChecksService`'s now-exhaustive switch), the golden-path smoke
+test (a new step "1b" approving the company before the walkthrough
+continues), and 144 web tests (a new company-entry-type test on the
+moderation page, plus `ENTITY_TYPE_LABEL`/a `CompanyRequestDetails`
+renderer) all green; `api`/`web` build/lint clean. Live-verified
+against the real `kind` cluster (local dev servers pointed at kind's
+Postgres/OpenSearch/Mailpit, since the in-cluster `api` pod still runs
+pre-merge code): full curl-driven walkthrough (create → hidden
+everywhere → duplicate-pending 409 → process-creation 404 → approve →
+visible + searchable + process-creation allowed; a second company
+rejected → row kept with `status: rejected`, confirmed via direct
+`kubectl exec` psql) plus a real headless-browser (Playwright) pass
+through the actual moderation UI (login → expand the "Company creation
+request" group → see its slug/size/industry detail → Approve → group
+disappears → company now publicly searchable) — zero console errors.
+Test data cleaned up afterward (GDPR erasure for the candidate, direct
+company-row deletes, and the `prune-orphaned-company-search-docs`
+script for the two approved test companies' OpenSearch documents).
+
+- Next step: Phase 35 issue #370 (new moderation-queue OpenSearch index
+  + fuzzy search endpoint) is next, followed by #371 (moderation UI
+  search/filter), #372 (confirmation modal), #373 (blog, last). Phase
+  19 (Content Quality & Synthetic Data, issues #162-165) and Phases
+  30-32 (Event-Driven Foundation / Notification Service / Review
+  Analyzer Service) remain planned but not started. Continue merging
+  without waiting for CI until the user says the GitHub Actions
+  billing limit has been refreshed.
 
 ## Open decisions still to make
 

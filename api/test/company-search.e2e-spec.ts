@@ -5,11 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsCandidate } from './support/candidate-session';
+import { createApprovedCompany, createPendingCompany } from './support/companies';
 
-interface CompanyBody {
-  id: string;
-  name: string;
-}
 interface SearchResultBody {
   id: string;
   name: string;
@@ -22,9 +19,11 @@ function body<T>(res: request.Response): T {
 
 const unique = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-// Proves GitHub issue #21's acceptance criteria: creating a company makes
-// it findable via search within the same request cycle — no indexing lag
-// to account for (CompanySearchService.indexCompany uses refresh: true).
+// Proves GitHub issue #21's acceptance criteria: an *approved* company is
+// findable via search within the same request cycle — no indexing lag to
+// account for (CompanySearchService.indexCompany uses refresh: true).
+// Since GitHub issue #369 (Phase 35), indexing moves from creation time
+// to approval time, so every test here approves the company first.
 describe('Company search (e2e)', () => {
   let app: INestApplication;
   let candidateCookie: string;
@@ -54,14 +53,12 @@ describe('Company search (e2e)', () => {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
   const server = () => request(app.getHttpServer());
 
-  it('makes a newly created company searchable immediately', async () => {
+  it('makes a newly approved company searchable immediately', async () => {
     const uniqueName = `Zephyrion Analytics ${unique()}`;
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', candidateCookie)
-      .send({ name: uniqueName, slug: `zephyrion-${unique()}`, sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const company = await createApprovedCompany(app, candidateCookie, {
+      name: uniqueName,
+      slug: `zephyrion-${unique()}`,
+    });
 
     const searchRes = await server()
       .get('/search/companies')
@@ -69,7 +66,25 @@ describe('Company search (e2e)', () => {
       .expect(200);
     const results = body<SearchResultBody[]>(searchRes);
 
-    expect(results.some((r) => r.id === companyId)).toBe(true);
+    expect(results.some((r) => r.id === company.id)).toBe(true);
+  });
+
+  // GitHub issue #369 (Phase 35) — a pending company must never leak into
+  // public search, since it hasn't been approved by a moderator yet.
+  it('never surfaces a still-pending company', async () => {
+    const uniqueName = `PendingCo ${unique()}`;
+    await createPendingCompany(app, candidateCookie, {
+      name: uniqueName,
+      slug: `pending-${unique()}`,
+    });
+
+    const searchRes = await server()
+      .get('/search/companies')
+      .query({ q: uniqueName })
+      .expect(200);
+    const results = body<SearchResultBody[]>(searchRes);
+
+    expect(results.some((r) => r.name === uniqueName)).toBe(false);
   });
 
   it('ranks a closer name match above a looser one', async () => {
@@ -77,16 +92,14 @@ describe('Company search (e2e)', () => {
     const exactName = `Marker${marker} Corp`;
     const looseName = `Something Else Mentioning Marker${marker} In Passing`;
 
-    const exactRes = await server()
-      .post('/companies')
-      .set('Cookie', candidateCookie)
-      .send({ name: exactName, slug: `exact-${marker}`, sizeBucket: 'mid' })
-      .expect(201);
-    const looseRes = await server()
-      .post('/companies')
-      .set('Cookie', candidateCookie)
-      .send({ name: looseName, slug: `loose-${marker}`, sizeBucket: 'mid' })
-      .expect(201);
+    const exact = await createApprovedCompany(app, candidateCookie, {
+      name: exactName,
+      slug: `exact-${marker}`,
+    });
+    const loose = await createApprovedCompany(app, candidateCookie, {
+      name: looseName,
+      slug: `loose-${marker}`,
+    });
 
     const searchRes = await server()
       .get('/search/companies')
@@ -94,10 +107,8 @@ describe('Company search (e2e)', () => {
       .expect(200);
     const results = body<SearchResultBody[]>(searchRes);
 
-    const exactId = body<CompanyBody>(exactRes).id;
-    const looseId = body<CompanyBody>(looseRes).id;
-    const exactIndex = results.findIndex((r) => r.id === exactId);
-    const looseIndex = results.findIndex((r) => r.id === looseId);
+    const exactIndex = results.findIndex((r) => r.id === exact.id);
+    const looseIndex = results.findIndex((r) => r.id === loose.id);
 
     expect(exactIndex).toBeGreaterThanOrEqual(0);
     expect(looseIndex).toBeGreaterThanOrEqual(0);

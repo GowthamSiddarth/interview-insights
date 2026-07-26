@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { BulkProcessSubmissionService } from './bulk-process-submission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
@@ -11,6 +12,7 @@ describe('BulkProcessSubmissionService', () => {
   let service: BulkProcessSubmissionService;
   let prisma: {
     interviewProcess: { create: jest.Mock };
+    company: { findUnique: jest.Mock };
     round: { create: jest.Mock };
     roundRating: { create: jest.Mock };
     recruiterInteraction: { create: jest.Mock };
@@ -31,6 +33,7 @@ describe('BulkProcessSubmissionService', () => {
   beforeEach(async () => {
     prisma = {
       interviewProcess: { create: jest.fn().mockResolvedValue({ id: 'process-1' }) },
+      company: { findUnique: jest.fn().mockResolvedValue({ status: 'approved' }) },
       round: { create: jest.fn().mockResolvedValue({ id: 'round-1' }) },
       roundRating: { create: jest.fn().mockResolvedValue({ id: 'round-rating-1' }) },
       recruiterInteraction: { create: jest.fn().mockResolvedValue({ id: 'interaction-1' }) },
@@ -67,6 +70,21 @@ describe('BulkProcessSubmissionService', () => {
     expect(prisma.recruiterInteraction.create).not.toHaveBeenCalled();
     expect(prisma.overallReview.create).not.toHaveBeenCalled();
     expect(result).toEqual({ id: 'process-1' });
+  });
+
+  // GitHub issue #369 (Phase 35) — a pending/rejected company doesn't
+  // publicly exist yet; nothing in the payload should get created.
+  it('rejects with 404 and creates nothing when the company is not approved', async () => {
+    prisma.company.findUnique.mockResolvedValue({ status: 'pending' });
+
+    await expect(
+      service.create('company-1', 'candidate-1', {
+        ...baseDto,
+        rounds: [{ sequenceNumber: 1, title: 'Screen', roundType: 'coding' }],
+      }),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.interviewProcess.create).not.toHaveBeenCalled();
+    expect(prisma.round.create).not.toHaveBeenCalled();
   });
 
   it('creates a round without a rating when none is provided', async () => {

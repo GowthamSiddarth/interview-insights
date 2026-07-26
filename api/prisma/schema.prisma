@@ -29,6 +29,13 @@ model Company {
   industry   String?
   sizeBucket CompanySizeBucket @map("size_bucket")
   logoUrl    String?           @map("logo_url")
+  // Moderation gate (GitHub issue #369, Phase 35) — reuses the existing
+  // ModerationStatus enum rather than a new one, mirroring
+  // RoundRating/RecruiterRating/OverallReview exactly: the row exists
+  // immediately on creation, just hidden from every public read until
+  // approved. A rejected request keeps its row (status: rejected) for an
+  // audit trail rather than being deleted.
+  status     ModerationStatus  @default(pending)
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz
 
   interviewProcesses   InterviewProcess[]
@@ -332,6 +339,8 @@ enum ModerationEntityType {
   round_rating
   recruiter_rating
   overall_review
+  // GitHub issue #369, Phase 35 — company creation moves behind moderation.
+  company
 }
 
 enum ModerationFlagReason {

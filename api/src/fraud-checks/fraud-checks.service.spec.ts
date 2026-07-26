@@ -117,6 +117,17 @@ describe('FraudChecksService', () => {
         false,
       );
     });
+
+    // GitHub issue #369 (Phase 35) — company creation requests never go
+    // through fraud checks (out of scope: a company isn't a review), but
+    // the switch must stay exhaustive over ModerationEntityType rather
+    // than silently falling through.
+    it('never flags a duplicate for the company entity type', async () => {
+      await expect(service.checkDuplicateFreeText('company', 'Acme Corp')).resolves.toBe(false);
+      expect(prisma.roundRating.findMany).not.toHaveBeenCalled();
+      expect(prisma.recruiterRating.findMany).not.toHaveBeenCalled();
+      expect(prisma.overallReview.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe('detectFlagReason', () => {

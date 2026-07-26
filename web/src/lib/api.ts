@@ -125,9 +125,19 @@ export interface ModerationQueueEntity {
   overallExperience?: number;
   wouldRecommend?: boolean;
   reviewText?: string | null;
+  // company (GitHub issue #369, Phase 35) — a create-company request has
+  // no InterviewProcess/roleTitle of its own; companyName holds the
+  // *requested* name instead.
+  requestedCompanySlug?: string;
+  requestedCompanySizeBucket?: string;
+  requestedCompanyIndustry?: string | null;
 }
 
-export type ModerationEntityType = 'round_rating' | 'recruiter_rating' | 'overall_review';
+export type ModerationEntityType =
+  | 'round_rating'
+  | 'recruiter_rating'
+  | 'overall_review'
+  | 'company';
 export type ModerationFlagReason = 'spam_pattern' | 'rate_limit' | 'duplicate' | 'manual_report';
 
 export interface ModerationQueueEntry {

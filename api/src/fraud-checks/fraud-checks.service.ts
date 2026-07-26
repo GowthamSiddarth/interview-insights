@@ -88,6 +88,12 @@ export class FraudChecksService {
         });
         return rows.map((r) => r.reviewText);
       }
+      // GitHub issue #369 (Phase 35) — company creation requests never go
+      // through fraud checks at all (out of scope: a company isn't a
+      // review, and its create() path never calls detectFlagReason()),
+      // but the switch must stay exhaustive over ModerationEntityType.
+      case 'company':
+        return [];
     }
   }
 

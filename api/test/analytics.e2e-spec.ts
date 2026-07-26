@@ -55,9 +55,12 @@ describe('Analytics (e2e)', () => {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
   const server = () => request(app.getHttpServer());
 
+  // Seeded directly via Prisma (bypassing the API), so status must be set
+  // explicitly to 'approved' — it defaults to 'pending' now (GitHub issue
+  // #369, Phase 35), and the analytics endpoint 404s a non-approved company.
   async function seedCompany(): Promise<string> {
     const company = await prisma.company.create({
-      data: { name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' },
+      data: { name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid', status: 'approved' },
     });
     return company.id;
   }

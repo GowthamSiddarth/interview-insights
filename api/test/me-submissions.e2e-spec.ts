@@ -6,10 +6,8 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
+import { createApprovedCompany } from './support/companies';
 
-interface CompanyBody {
-  id: string;
-}
 interface ProcessBody {
   id: string;
 }
@@ -112,12 +110,10 @@ describe('My submissions (e2e)', () => {
   it('groups a full submission (round rating, recruiter rating, overall review) under its process, with every status visible to the owner', async () => {
     const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
 
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
@@ -191,12 +187,10 @@ describe('My submissions (e2e)', () => {
     const candidateA = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
     const candidateB = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
 
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', candidateA.cookie)
-      .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, candidateA.cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
 
     await server()
       .post(`/companies/${companyId}/processes`)
@@ -211,12 +205,10 @@ describe('My submissions (e2e)', () => {
   it('includes a process with no ratings yet, with empty nested arrays', async () => {
     const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
 
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
 
     await server()
       .post(`/companies/${companyId}/processes`)

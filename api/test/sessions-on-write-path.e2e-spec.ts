@@ -5,10 +5,8 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsCandidate } from './support/candidate-session';
+import { createApprovedCompany } from './support/companies';
 
-interface CompanyBody {
-  id: string;
-}
 interface ProcessBody {
   id: string;
 }
@@ -65,12 +63,10 @@ describe('Sessions on the write path (e2e)', () => {
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
   async function setUpProcessAndRound(cookie: string): Promise<{ processId: string; roundId: string }> {
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: uniqueSlug(),
+    });
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
@@ -94,12 +90,10 @@ describe('Sessions on the write path (e2e)', () => {
       // unrelated to what this test is about) — only the process-creation
       // call below is the actual unauthenticated case under test.
       const { cookie } = await loginAsCandidate(app, uniqueEmail());
-      const companyRes = await server()
-        .post('/companies')
-        .set('Cookie', cookie)
-        .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-        .expect(201);
-      const companyId = body<CompanyBody>(companyRes).id;
+      const { id: companyId } = await createApprovedCompany(app, cookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
 
       await server()
         .post(`/companies/${companyId}/processes`)
@@ -147,12 +141,10 @@ describe('Sessions on the write path (e2e)', () => {
     // path, added after this file's original four.
     it('POST /companies/:companyId/processes/bulk', async () => {
       const { cookie } = await loginAsCandidate(app, uniqueEmail());
-      const companyRes = await server()
-        .post('/companies')
-        .set('Cookie', cookie)
-        .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-        .expect(201);
-      const companyId = body<CompanyBody>(companyRes).id;
+      const { id: companyId } = await createApprovedCompany(app, cookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
 
       await server()
         .post(`/companies/${companyId}/processes/bulk`)

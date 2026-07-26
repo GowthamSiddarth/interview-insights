@@ -97,6 +97,32 @@ const queueGroups = [
       },
     ],
   },
+  // GitHub issue #369 (Phase 35) — a create-company request has no
+  // InterviewProcess of its own, so it stands alone in its own group.
+  {
+    processId: 'company-request-comp1',
+    companyName: 'Globex Corp',
+    roleTitle: 'New company request',
+    entries: [
+      {
+        id: 'q-company',
+        entityType: 'company',
+        entityId: 'comp1',
+        flagReason: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: '2026-07-19T00:03:00Z',
+        entity: {
+          processId: 'company-request-comp1',
+          companyName: 'Globex Corp',
+          roleTitle: 'New company request',
+          requestedCompanySlug: 'globex-corp',
+          requestedCompanySizeBucket: 'large',
+          requestedCompanyIndustry: 'Manufacturing',
+        },
+      },
+    ],
+  },
 ];
 
 function mockFetch() {
@@ -210,11 +236,29 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
 
     expect(await screen.findByText('Acme Corp · Engineer')).toBeInTheDocument();
     expect(screen.getByText('Acme Corp · Manager')).toBeInTheDocument();
+    expect(screen.getByText('Globex Corp · New company request')).toBeInTheDocument();
     expect(screen.getByText('2 pending items')).toBeInTheDocument();
-    expect(screen.getByText('1 pending item')).toBeInTheDocument();
+    // Manager's submission and the standalone company request each show
+    // exactly one pending item.
+    expect(screen.getAllByText('1 pending item')).toHaveLength(2);
     // Nothing about the individual entities is visible until expanded.
     expect(screen.queryByText('Round rating')).not.toBeInTheDocument();
     expect(screen.queryByText('tough but fair')).not.toBeInTheDocument();
+  });
+
+  // GitHub issue #369 (Phase 35) — a create-company request renders with
+  // its own label and detail fields, standing alone since it has no
+  // InterviewProcess to group under.
+  it('expanding a company creation request reveals its requested slug/size/industry', async () => {
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Globex Corp · New company request/ }));
+
+    expect(screen.getByText('Company creation request')).toBeInTheDocument();
+    expect(screen.getByText('slug: globex-corp')).toBeInTheDocument();
+    expect(screen.getByText('size: large')).toBeInTheDocument();
+    expect(screen.getByText('industry: Manufacturing')).toBeInTheDocument();
   });
 
   it('expanding a submission reveals its full entity detail, including round content beyond the highlighted scores', async () => {
@@ -275,9 +319,10 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     await waitFor(() => expect(screen.queryByText('Recruiter rating')).not.toBeInTheDocument());
     // The round rating in the same submission is still there.
     expect(screen.getByText('Round rating')).toBeInTheDocument();
-    // Both groups now show exactly one remaining pending item (Engineer's
-    // count dropped from 2 to 1; Manager's was already 1).
-    expect(screen.getAllByText('1 pending item')).toHaveLength(2);
+    // All three groups now show exactly one remaining pending item
+    // (Engineer's count dropped from 2 to 1; Manager's and the standalone
+    // company request were already 1 each).
+    expect(screen.getAllByText('1 pending item')).toHaveLength(3);
   });
 
   it('flag sends the selected reason and removes the entry', async () => {

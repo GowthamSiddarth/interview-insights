@@ -6,10 +6,8 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
+import { createApprovedCompany, createPendingCompany } from './support/companies';
 
-interface CompanyBody {
-  id: string;
-}
 interface ProcessBody {
   id: string;
 }
@@ -81,12 +79,10 @@ describe('Moderation (e2e)', () => {
   async function submitRating(): Promise<{ processId: string; roundId: string; ratingId: string }> {
     const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: uniqueSlug(),
+    });
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
@@ -270,5 +266,63 @@ describe('Moderation (e2e)', () => {
   it('rejects an unauthenticated request with 401', async () => {
     await server().get('/moderation/queue').expect(401);
     await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/approve').send({}).expect(401);
+  });
+
+  // GitHub issue #369 (Phase 35) — company creation now goes through the
+  // same moderation loop as every other entity type, mirroring the
+  // round_rating tests above.
+  describe('company creation requests', () => {
+    it('submitting a company creation request enqueues a matching moderation_queue entry', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const company = await createPendingCompany(app, cookie, {
+        name: 'Pending Co',
+        slug: uniqueSlug(),
+      });
+
+      const entry = await findQueueEntryFor(company.id);
+      expect(entry.entityType).toBe('company');
+      expect(entry.reviewedAt).toBeNull();
+      expect(entry.entity).toMatchObject({
+        companyName: 'Pending Co',
+        requestedCompanySlug: company.slug,
+        requestedCompanySizeBucket: 'mid',
+      });
+    });
+
+    it('approving a pending company makes it publicly visible', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const company = await createPendingCompany(app, cookie, {
+        name: 'Pending Co',
+        slug: uniqueSlug(),
+      });
+      const entry = await findQueueEntryFor(company.id);
+
+      await server()
+        .post(`/moderation/queue/${entry.id}/approve`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+
+      const publicCompanies = await server().get('/companies').expect(200);
+      expect(body<Array<{ id: string }>>(publicCompanies).map((c) => c.id)).toContain(company.id);
+    });
+
+    it('rejecting a pending company keeps it out of the public list', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const company = await createPendingCompany(app, cookie, {
+        name: 'Pending Co',
+        slug: uniqueSlug(),
+      });
+      const entry = await findQueueEntryFor(company.id);
+
+      await server()
+        .post(`/moderation/queue/${entry.id}/reject`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+
+      const publicCompanies = await server().get('/companies').expect(200);
+      expect(body<Array<{ id: string }>>(publicCompanies).map((c) => c.id)).not.toContain(company.id);
+    });
   });
 });

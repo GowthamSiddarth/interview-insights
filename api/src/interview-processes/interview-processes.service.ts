@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInterviewProcessDto } from './dto/create-interview-process.dto';
 
@@ -6,10 +6,25 @@ import { CreateInterviewProcessDto } from './dto/create-interview-process.dto';
 export class InterviewProcessesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(companyId: string, candidateId: string, dto: CreateInterviewProcessDto) {
+  // GitHub issue #369 (Phase 35) — a company creation request that's
+  // still pending (or was rejected) doesn't publicly exist yet; writing
+  // real review data against it would let that data leak the company's
+  // existence before a moderator ever approves it.
+  async create(companyId: string, candidateId: string, dto: CreateInterviewProcessDto) {
+    await this.assertCompanyApproved(companyId);
     return this.prisma.interviewProcess.create({
       data: { ...dto, companyId, candidateId },
     });
+  }
+
+  private async assertCompanyApproved(companyId: string): Promise<void> {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { status: true },
+    });
+    if (!company || company.status !== 'approved') {
+      throw new NotFoundException('Company not found.');
+    }
   }
 
   findAllForCompany(companyId: string) {

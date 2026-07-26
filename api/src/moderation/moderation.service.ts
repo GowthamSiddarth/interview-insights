@@ -2,6 +2,7 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
+import { CompanySearchService } from '../search/company-search.service';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 
@@ -39,6 +40,12 @@ export interface ModerationQueueEntity {
   overallExperience?: number;
   wouldRecommend?: boolean;
   reviewText?: string | null;
+  // company (GitHub issue #369, Phase 35) — a create-company request has
+  // no InterviewProcess/roleTitle of its own; companyName holds the
+  // *requested* name instead.
+  requestedCompanySlug?: string;
+  requestedCompanySizeBucket?: string;
+  requestedCompanyIndustry?: string | null;
 }
 
 export interface ModerationQueueEntry {
@@ -76,6 +83,7 @@ export class ModerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reviewSearchService: ReviewSearchService,
+    private readonly companySearchService: CompanySearchService,
   ) {}
 
   // Called by the write path right after creating a rating/review — accepts
@@ -146,28 +154,31 @@ export class ModerationService {
     // request — its entries just fall back to `entity: null` for that
     // page, same as the pre-existing "underlying row genuinely missing"
     // case below.
-    const [roundRatingsResult, recruiterRatingsResult, overallReviewsResult] = await Promise.allSettled([
-      this.prisma.roundRating.findMany({
-        where: { id: { in: idsFor('round_rating') } },
-        include: { round: { include: { process: { include: { company: true } } } } },
-      }),
-      this.prisma.recruiterRating.findMany({
-        where: { id: { in: idsFor('recruiter_rating') } },
-        include: {
-          recruiterInteraction: {
-            include: { recruiter: true, process: { include: { company: true } } },
+    const [roundRatingsResult, recruiterRatingsResult, overallReviewsResult, companiesResult] =
+      await Promise.allSettled([
+        this.prisma.roundRating.findMany({
+          where: { id: { in: idsFor('round_rating') } },
+          include: { round: { include: { process: { include: { company: true } } } } },
+        }),
+        this.prisma.recruiterRating.findMany({
+          where: { id: { in: idsFor('recruiter_rating') } },
+          include: {
+            recruiterInteraction: {
+              include: { recruiter: true, process: { include: { company: true } } },
+            },
           },
-        },
-      }),
-      this.prisma.overallReview.findMany({
-        where: { id: { in: idsFor('overall_review') } },
-        include: { process: { include: { company: true } } },
-      }),
-    ]);
+        }),
+        this.prisma.overallReview.findMany({
+          where: { id: { in: idsFor('overall_review') } },
+          include: { process: { include: { company: true } } },
+        }),
+        this.prisma.company.findMany({ where: { id: { in: idsFor('company') } } }),
+      ]);
 
     const roundRatings = this.settledOrEmpty(roundRatingsResult, 'round_rating');
     const recruiterRatings = this.settledOrEmpty(recruiterRatingsResult, 'recruiter_rating');
     const overallReviews = this.settledOrEmpty(overallReviewsResult, 'overall_review');
+    const companies = this.settledOrEmpty(companiesResult, 'company');
 
     const entityById = new Map<string, ModerationQueueEntity>();
     for (const r of roundRatings) {
@@ -214,6 +225,20 @@ export class ModerationService {
         overallExperience: r.overallExperience,
         wouldRecommend: r.wouldRecommend,
         reviewText: r.reviewText,
+      });
+    }
+    for (const c of companies) {
+      // A create-company request has no InterviewProcess to group by —
+      // a synthetic per-request key keeps each one in its own standalone
+      // group, the same shape the enrichment-failure fallback already
+      // uses, just keyed by this request's own id rather than a fallback.
+      entityById.set(c.id, {
+        processId: `company-request-${c.id}`,
+        companyName: c.name,
+        roleTitle: 'New company request',
+        requestedCompanySlug: c.slug,
+        requestedCompanySizeBucket: c.sizeBucket,
+        requestedCompanyIndustry: c.industry,
       });
     }
 
@@ -296,6 +321,9 @@ export class ModerationService {
         case 'overall_review':
           await tx.overallReview.update(statusUpdate);
           break;
+        case 'company':
+          await tx.company.update(statusUpdate);
+          break;
       }
       return updated;
     });
@@ -307,6 +335,13 @@ export class ModerationService {
     // (docs/ROADMAP.md Phase 14, issue #125's explicit scope note).
     if (decision === 'approved' && entry.entityType === 'round_rating') {
       await this.indexApprovedReview(entry.entityId);
+    }
+    // GitHub issue #369 (Phase 35) — indexing a company moves from
+    // creation time to approval time; rejecting never indexes anything,
+    // and the row is kept (status: rejected) for an audit trail rather
+    // than deleted.
+    if (decision === 'approved' && entry.entityType === 'company') {
+      await this.indexApprovedCompany(entry.entityId);
     }
 
     return updatedEntry;
@@ -322,6 +357,18 @@ export class ModerationService {
       result.reason instanceof Error ? result.reason.stack : result.reason,
     );
     return [];
+  }
+
+  private async indexApprovedCompany(companyId: string) {
+    try {
+      const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+      await this.companySearchService.indexCompany(company);
+    } catch (err) {
+      this.logger.error(
+        'Failed to index approved company in OpenSearch',
+        err instanceof Error ? err.stack : err,
+      );
+    }
   }
 
   private async indexApprovedReview(roundRatingId: string) {

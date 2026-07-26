@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
@@ -36,6 +36,16 @@ export class BulkProcessSubmissionService {
     const { rounds, recruiterInteractions, overallReview, ...processFields } = dto;
 
     return this.prisma.$transaction(async (tx) => {
+      // GitHub issue #369 (Phase 35) — same guard as the single-process
+      // endpoint: a pending/rejected company doesn't publicly exist yet.
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { status: true },
+      });
+      if (!company || company.status !== 'approved') {
+        throw new NotFoundException('Company not found.');
+      }
+
       const process = await tx.interviewProcess.create({
         data: { ...processFields, companyId, candidateId },
       });

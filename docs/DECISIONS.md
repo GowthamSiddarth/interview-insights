@@ -2359,6 +2359,89 @@ serves an existing one.
 
 ---
 
+### D58 — Company creation moves behind moderation, reusing `ModerationStatus`; a rejected row is kept, not deleted (GitHub issue #369, Phase 35)
+
+**Context:** `POST /companies` had never been moderation-gated — a real
+gap predating Phase 16 (`Company` has no `candidateId`, so it was never
+on that phase's write-path list; issue #217/D38 only added session +
+rate-limit gating, not a moderation queue). Direct user feedback during
+Phase 35 planning flagged this as a genuine violation of CLAUDE.md hard
+constraint #2 ("every review/rating write goes through moderation
+before it's public") and asked for it to be closed.
+
+**Decision:**
+- `Company` gets a real `status` column, reusing the existing
+  `ModerationStatus` enum (`pending`/`approved`/`rejected`/`flagged`)
+  rather than inventing a separate one or a parallel "request" table —
+  mirrors `RoundRating`/`RecruiterRating`/`OverallReview` exactly. The
+  row exists immediately on creation (`status: pending`, the schema
+  default), just hidden from every public read until approved. Chosen
+  directly with the project owner over a separate-request-record
+  design specifically to reuse the existing pattern rather than add a
+  new concept the schema doesn't have anywhere else.
+- `ModerationEntityType` gains a fourth value, `company` — added in its
+  own migration alongside the `status` column (both DDL-only, no data
+  using the new enum value within the same migration, so — unlike the
+  `tech_screening` two-migration split, issue #284 — this one didn't
+  actually need to be split across two files; it just happens to be one
+  migration doing two independent things).
+- `CompaniesService.create()` now enqueues via `ModerationService`
+  instead of calling `CompanySearchService.indexCompany()` directly;
+  indexing moves to approval time (`ModerationService.review()`'s new
+  `company` case), the same D16/D17 "index only what's actually public"
+  shape every other search-indexed entity already follows.
+- Every public read path (`findAll`/quick-select list, `findBySlug`,
+  the existence checks backing `GET /companies/:id/reviews` and
+  `GET /companies/:companyId/analytics`) filters to `status: approved`
+  — a pending or rejected company 404s exactly like a company that
+  doesn't exist, never leaking that a request is in flight.
+- Creating an `InterviewProcess` (both the single and bulk endpoints)
+  against a non-approved `companyId` is rejected with 404 — otherwise a
+  candidate could write real review data against a company nobody else
+  can see yet.
+- **A rejected company's row is kept** (`status: rejected`), not
+  deleted — a deliberate trade favoring an audit trail over slug
+  reuse, decided directly with the project owner over the "delete,
+  not anonymize" GDPR-erasure precedent (D34) that would otherwise
+  seem like the obvious default. The slug stays permanently occupied
+  unless an admin manually intervenes later; no such intervention path
+  exists yet.
+- A duplicate `POST /companies` request for a slug that already has a
+  **pending** row gets a distinct, friendly 409
+  ("this company has already been requested and is pending review —
+  please check back later.") instead of the generic unique-constraint
+  conflict — direct user feedback, checked via a pre-insert
+  `findUnique` lookup in `CompaniesService.create()`. A duplicate of an
+  **approved** company still gets the generic conflict (the company
+  genuinely already exists); a duplicate of a **rejected** one is left
+  as the same generic conflict for now, an explicitly unresolved
+  question noted in the issue rather than guessed at.
+
+**Test-suite impact:** every e2e spec that previously created a company
+via a raw `POST /companies` and immediately used it (searched for it, or
+created a process against it) needed an admin-approve step inserted —
+16 existing spec files updated, plus two files (`analytics.e2e-spec.ts`,
+a raw-Prisma seed helper) that seed a company directly via Prisma and
+needed `status: 'approved'` set explicitly in the seed data, since they
+bypass the API (and its default `pending` status) entirely — the same
+class of "raw-Prisma seeding skips API-layer side effects" gap this
+project has hit before (D51's search-indexing gap was the same root
+cause). A new shared `test/support/companies.ts` helper
+(`createApprovedCompany`/`createPendingCompany`/
+`findCompanyQueueEntryId`) centralizes the create-then-approve dance so
+it isn't duplicated per file. A new dedicated `company-moderation.e2e-spec.ts`
+covers the gate's own business rules (hidden from every read path,
+process-creation blocked, the rejected-row-kept behavior, the
+duplicate-pending message) that don't fit naturally into any existing
+file's narrative.
+
+**Revisit when:** issue #372 (the confirmation-modal replacement for
+issue #360's create-company auto-redirect) lands — that issue exists
+specifically because a successful creation no longer means "ready to
+use" now that this decision has shipped.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

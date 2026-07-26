@@ -3,6 +3,7 @@ import { ConflictException } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
+import { CompanySearchService } from '../search/company-search.service';
 
 describe('ModerationService', () => {
   let service: ModerationService;
@@ -17,9 +18,11 @@ describe('ModerationService', () => {
     roundRating: { update: jest.Mock; findUniqueOrThrow: jest.Mock; findMany: jest.Mock };
     recruiterRating: { update: jest.Mock; findMany: jest.Mock };
     overallReview: { update: jest.Mock; findMany: jest.Mock };
+    company: { update: jest.Mock; findUniqueOrThrow: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
+  let companySearchService: { indexCompany: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -37,15 +40,22 @@ describe('ModerationService', () => {
       },
       recruiterRating: { update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       overallReview: { update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      company: {
+        update: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
+    companySearchService = { indexCompany: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ModerationService,
         { provide: PrismaService, useValue: prisma },
         { provide: ReviewSearchService, useValue: reviewSearchService },
+        { provide: CompanySearchService, useValue: companySearchService },
       ],
     }).compile();
 
@@ -321,6 +331,50 @@ describe('ModerationService', () => {
       expect(failedGroup?.entries[0].entity).toBeNull();
       expect(overallGroup?.entries[0].entity).toMatchObject({ overallExperience: 4 });
     });
+
+    // GitHub issue #369 (Phase 35) — a pending company-creation request
+    // has no InterviewProcess to group by; each one gets its own
+    // standalone group instead.
+    it('enriches a pending company-creation request in its own standalone group', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'company', entityId: 'company-1', reviewedAt: null },
+      ]);
+      prisma.company.findMany.mockResolvedValue([
+        {
+          id: 'company-1',
+          name: 'Acme Corp',
+          slug: 'acme-corp',
+          sizeBucket: 'mid',
+          industry: 'Tech',
+        },
+      ]);
+
+      const result = await service.listPending();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].companyName).toBe('Acme Corp');
+      expect(result[0].entries[0].entity).toMatchObject({
+        companyName: 'Acme Corp',
+        requestedCompanySlug: 'acme-corp',
+        requestedCompanySizeBucket: 'mid',
+        requestedCompanyIndustry: 'Tech',
+      });
+    });
+
+    it('puts two separate company-creation requests into two separate groups', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'company', entityId: 'company-1', reviewedAt: null },
+        { id: 'q2', entityType: 'company', entityId: 'company-2', reviewedAt: null },
+      ]);
+      prisma.company.findMany.mockResolvedValue([
+        { id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid', industry: null },
+        { id: 'company-2', name: 'Globex', slug: 'globex', sizeBucket: 'large', industry: null },
+      ]);
+
+      const result = await service.listPending();
+
+      expect(result).toHaveLength(2);
+    });
   });
 
   describe('approve / reject / flag', () => {
@@ -507,6 +561,66 @@ describe('ModerationService', () => {
         where: { id: 'review-1' },
         data: { status: 'rejected' },
       });
+    });
+
+    function mockPendingCompanyEntry() {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-4',
+        entityType: 'company',
+        entityId: 'company-1',
+        reviewedAt: null,
+        flagReason: null,
+      });
+      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
+        Promise.resolve({ id: 'queue-4', ...args.data }),
+      );
+      prisma.company.update.mockResolvedValue({ id: 'company-1', status: 'approved' });
+      prisma.company.findUniqueOrThrow.mockResolvedValue({
+        id: 'company-1',
+        name: 'Acme Corp',
+        slug: 'acme-corp',
+        industry: null,
+        sizeBucket: 'mid',
+      });
+    }
+
+    // GitHub issue #369 (Phase 35) — approving a company creation request
+    // moves D16's indexing trigger from creation-time to approval-time.
+    it('approve() flips a company to approved and indexes it into OpenSearch', async () => {
+      mockPendingCompanyEntry();
+
+      await service.approve('queue-4', { reviewedBy: 'gowtham' });
+
+      expect(prisma.company.update).toHaveBeenCalledWith({
+        where: { id: 'company-1' },
+        data: { status: 'approved' },
+      });
+      expect(companySearchService.indexCompany).toHaveBeenCalledWith({
+        id: 'company-1',
+        name: 'Acme Corp',
+        slug: 'acme-corp',
+        industry: null,
+        sizeBucket: 'mid',
+      });
+    });
+
+    it('approve() on a company still succeeds even if search indexing fails', async () => {
+      mockPendingCompanyEntry();
+      companySearchService.indexCompany.mockRejectedValue(new Error('OpenSearch unreachable'));
+
+      await expect(service.approve('queue-4', {})).resolves.toBeDefined();
+    });
+
+    it('reject() flips a company to rejected and never indexes it', async () => {
+      mockPendingCompanyEntry();
+
+      await service.reject('queue-4', {});
+
+      expect(prisma.company.update).toHaveBeenCalledWith({
+        where: { id: 'company-1' },
+        data: { status: 'rejected' },
+      });
+      expect(companySearchService.indexCompany).not.toHaveBeenCalled();
     });
   });
 });

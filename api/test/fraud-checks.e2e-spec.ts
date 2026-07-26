@@ -6,10 +6,8 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
+import { createApprovedCompany } from './support/companies';
 
-interface CompanyBody {
-  id: string;
-}
 interface ProcessBody {
   id: string;
 }
@@ -78,12 +76,10 @@ describe('Fraud checks (e2e)', () => {
   }
 
   async function createProcess(candidateCookie: string): Promise<string> {
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', candidateCookie)
-      .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, candidateCookie, {
+      name: 'Acme Corp',
+      slug: uniqueSlug(),
+    });
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
