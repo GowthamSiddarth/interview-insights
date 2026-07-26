@@ -20,11 +20,14 @@ interface ReviewsPage {
   page: number;
   pageSize: number;
   items: Array<{
-    id: string;
-    roundTitle: string;
-    roundType: string;
+    processId: string;
     roleTitle: string;
-    freeText: string | null;
+    entries: Array<{
+      id: string;
+      roundTitle: string;
+      roundType: string;
+      freeText: string | null;
+    }>;
   }>;
 }
 interface QueueEntryBody {
@@ -155,11 +158,11 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     const pageData = body<ReviewsPage>(res);
 
     expect(pageData.total).toBe(1);
-    expect(pageData.items.map((i) => i.id)).toEqual(approvedIds);
-    expect(pageData.items[0]).toMatchObject({
+    expect(pageData.items[0].entries.map((e) => e.id)).toEqual(approvedIds);
+    expect(pageData.items[0]).toMatchObject({ roleTitle: 'Backend Engineer' });
+    expect(pageData.items[0].entries[0]).toMatchObject({
       roundTitle: 'Tech Screen',
       roundType: 'coding',
-      roleTitle: 'Backend Engineer',
     });
     expect(JSON.stringify(pageData)).not.toContain('candidateId');
   }, 20000);
@@ -177,8 +180,69 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     expect(page1.total).toBe(3);
     expect(page1.items).toHaveLength(2);
     expect(page2.items).toHaveLength(1);
-    const allIds = [...page1.items, ...page2.items].map((i) => i.id);
-    expect(new Set(allIds).size).toBe(3);
+    const allProcessIds = [...page1.items, ...page2.items].map((i) => i.processId);
+    expect(new Set(allProcessIds).size).toBe(3);
+  }, 20000);
+
+  // GitHub issue #347: a candidate's own multi-round submission must
+  // appear as one grouped item, not one row per round — the exact
+  // flat-list problem Phase 29 issue #315 already fixed for the
+  // moderation queue.
+  it('groups multiple approved round ratings from the same submission into one item', async () => {
+    const slug = uniqueSlug();
+    const { cookie: setupCookie } = await loginAsCandidate(app, uniqueEmail());
+    const companyRes = await server()
+      .post('/companies')
+      .set('Cookie', setupCookie)
+      .send({ name: 'Profile Co', slug, sizeBucket: 'mid' })
+      .expect(201);
+    const companyId = body<CompanyBody>(companyRes).id;
+
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
+    const processRes = await server()
+      .post(`/companies/${companyId}/processes`)
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Staff Engineer', outcome: 'offer' })
+      .expect(201);
+    const processId = body<IdBody>(processRes).id;
+
+    const ratingIds: string[] = [];
+    for (const [seq, roundType] of [
+      [1, 'coding'],
+      [2, 'system_design'],
+    ] as const) {
+      const roundRes = await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({ sequenceNumber: seq, title: `Round ${seq}`, roundType })
+        .expect(201);
+      const roundId = body<IdBody>(roundRes).id;
+      const ratingRes = await server()
+        .post(`/rounds/${roundId}/ratings`)
+        .set('Cookie', cookie)
+        .send({ difficulty: 3, fluency: 4, clarity: 4, focus: 4 })
+        .expect(201);
+      const ratingId = body<IdBody>(ratingRes).id;
+
+      const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+      const entry = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries).find((e) => e.entityId === ratingId);
+      if (!entry) throw new Error(`no queue entry for ${ratingId}`);
+      await server()
+        .post(`/moderation/queue/${entry.id}/approve`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+      ratingIds.push(ratingId);
+    }
+
+    const res = await server().get(`/companies/${companyId}/reviews`).expect(200);
+    const pageData = body<ReviewsPage>(res);
+
+    expect(pageData.total).toBe(1);
+    expect(pageData.items).toHaveLength(1);
+    expect(pageData.items[0]).toMatchObject({ processId, roleTitle: 'Staff Engineer' });
+    // Order isn't the point here (the service sorts entries createdAt-desc)
+    // — grouping both ratings under one item is.
+    expect(new Set(pageData.items[0].entries.map((e) => e.id))).toEqual(new Set(ratingIds));
   }, 20000);
 
   it('404s reviews for a company that does not exist', async () => {

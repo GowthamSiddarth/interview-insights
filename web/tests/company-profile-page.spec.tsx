@@ -34,18 +34,25 @@ function reviewsPage(page: number, total: number, items: unknown[]) {
   return { total, page, pageSize: 10, items };
 }
 
-const oneReview = {
-  id: 'review-1',
-  createdAt: '2026-01-01T00:00:00Z',
-  roundTitle: 'Technical Screen',
-  roundType: 'coding',
+// GitHub issue #347: reviews are grouped by submission, one collapsed
+// item per group, expanding on click to reveal each round's full detail.
+const oneReviewGroup = {
+  processId: 'process-1',
   roleTitle: 'Backend Engineer',
-  difficulty: 3,
-  fluency: 4,
-  clarity: 4,
-  focus: 4,
-  technicalDepth: null,
-  freeText: 'Solid, well-run round.',
+  entries: [
+    {
+      id: 'review-1',
+      createdAt: '2026-01-01T00:00:00Z',
+      roundTitle: 'Technical Screen',
+      roundType: 'coding',
+      difficulty: 3,
+      fluency: 4,
+      clarity: 4,
+      focus: 4,
+      technicalDepth: null,
+      freeText: 'Solid, well-run round.',
+    },
+  ],
 };
 
 function mockFetchByRoute(reviewsResponse: ReturnType<typeof reviewsPage>) {
@@ -77,12 +84,17 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
   });
 
   it('renders company header, aggregate scores, and reviews', async () => {
-    mockFetchByRoute(reviewsPage(1, 1, [oneReview]));
+    mockFetchByRoute(reviewsPage(1, 1, [oneReviewGroup]));
+    const user = userEvent.setup();
     renderPage();
 
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument();
     expect(screen.getByText(/Fintech/)).toBeInTheDocument();
     expect(screen.getByText('4.20')).toBeInTheDocument(); // overall experience
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+    // Round detail (including freeText) is collapsed by default (issue #347).
+    expect(screen.queryByText('Solid, well-run round.', { exact: false })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /View details/ }));
     expect(screen.getByText('Solid, well-run round.', { exact: false })).toBeInTheDocument();
   });
 
@@ -112,7 +124,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
 
   it('paginates the reviews list when logged in', async () => {
     setLoggedInCookie(true);
-    mockFetchByRoute(reviewsPage(1, 15, [oneReview]));
+    mockFetchByRoute(reviewsPage(1, 15, [oneReviewGroup]));
     const user = userEvent.setup();
     renderPage();
 
@@ -131,7 +143,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
   });
 
   it('links to the full analytics dashboard by slug', async () => {
-    mockFetchByRoute(reviewsPage(1, 1, [oneReview]));
+    mockFetchByRoute(reviewsPage(1, 1, [oneReviewGroup]));
     renderPage();
 
     const link = await screen.findByRole('link', { name: /Full analytics breakdown/ });
@@ -140,7 +152,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
 
   describe('anonymous visitor soft-gating (GitHub issue #226, Phase 21)', () => {
     it('shows the overall-experience hook but gates the round-type breakdown', async () => {
-      mockFetchByRoute(reviewsPage(1, 1, [oneReview]));
+      mockFetchByRoute(reviewsPage(1, 1, [oneReviewGroup]));
       renderPage();
 
       expect(await screen.findByText('4.20')).toBeInTheDocument(); // overall experience — the free hook
@@ -148,19 +160,29 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       expect(screen.queryByText('3.50')).not.toBeInTheDocument(); // round-type difficulty score
     });
 
-    it('shows the first review and the real total, gating the rest', async () => {
-      const secondReview = { ...oneReview, id: 'review-2', freeText: 'A second, gated review.' };
-      mockFetchByRoute(reviewsPage(1, 2, [oneReview, secondReview]));
+    it('shows the first review group and the real total, gating the rest', async () => {
+      const secondGroup = {
+        processId: 'process-2',
+        roleTitle: 'Staff Engineer',
+        entries: [{ ...oneReviewGroup.entries[0], id: 'review-2', freeText: 'A second, gated review.' }],
+      };
+      mockFetchByRoute(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+      const user = userEvent.setup();
       renderPage();
 
-      expect(await screen.findByText('Solid, well-run round.', { exact: false })).toBeInTheDocument();
+      expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
       expect(screen.getByText('2 reviews')).toBeInTheDocument();
       expect(screen.getByText('Log in to see the other 1 review')).toBeInTheDocument();
+      // Free-preview group's own content is expandable...
+      await user.click(screen.getByRole('button', { name: /View details/ }));
+      expect(screen.getByText('Solid, well-run round.', { exact: false })).toBeInTheDocument();
+      // ...but the second group is gated entirely, never rendered at all.
+      expect(screen.queryByText('Staff Engineer')).not.toBeInTheDocument();
       expect(screen.queryByText('A second, gated review.', { exact: false })).not.toBeInTheDocument();
     });
 
     it('gates pagination controls entirely when logged out', async () => {
-      mockFetchByRoute(reviewsPage(1, 15, [oneReview]));
+      mockFetchByRoute(reviewsPage(1, 15, [oneReviewGroup]));
       renderPage();
 
       await screen.findByText(/Log in to see the other 14 reviews/);
@@ -168,15 +190,25 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     });
 
-    it('shows the full round-type breakdown and all reviews when logged in', async () => {
+    it('shows the full round-type breakdown and all review groups when logged in', async () => {
       setLoggedInCookie(true);
-      const secondReview = { ...oneReview, id: 'review-2', freeText: 'A second, visible review.' };
-      mockFetchByRoute(reviewsPage(1, 2, [oneReview, secondReview]));
+      const secondGroup = {
+        processId: 'process-2',
+        roleTitle: 'Staff Engineer',
+        entries: [{ ...oneReviewGroup.entries[0], id: 'review-2', freeText: 'A second, visible review.' }],
+      };
+      mockFetchByRoute(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+      const user = userEvent.setup();
       renderPage();
 
       expect(await screen.findByText('3.50')).toBeInTheDocument(); // round-type difficulty score
-      expect(screen.getByText('A second, visible review.', { exact: false })).toBeInTheDocument();
+      expect(screen.getByText('Staff Engineer')).toBeInTheDocument();
       expect(screen.queryByText(/Log in to see/)).not.toBeInTheDocument();
+
+      const detailButtons = screen.getAllByRole('button', { name: /View details/ });
+      expect(detailButtons).toHaveLength(2);
+      await user.click(detailButtons[1]);
+      expect(screen.getByText('A second, visible review.', { exact: false })).toBeInTheDocument();
     });
   });
 });

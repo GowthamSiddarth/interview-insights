@@ -824,6 +824,17 @@ GitHub issue #214.
       #240/#278.
 - [x] Engineering blog update for issue #312 — Phase 20 is now fully
       done
+- [x] Public company Reviews section groups approved round ratings by
+      their submission (`InterviewProcess`), not raw row count — a
+      user report found a 3-round submission plus 1 separate one
+      showing as "4 reviews" instead of the real 2; the same flat-list
+      problem Phase 29 issue #315 already fixed for the moderation
+      queue. Pagination moves with the grouping (submissions, not raw
+      rows, so one submission's rounds are never split across a page
+      boundary) (GitHub issue #347, D54). Epic #214 reopened and
+      re-closed the same day, same precedent as #222/#240/#278/#312.
+- [x] Engineering blog update for issue #347 (D54) — Phase 20 is now
+      fully done
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

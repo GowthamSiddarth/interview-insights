@@ -1869,6 +1869,41 @@ reopened and re-closed the same day, same precedent as #222/#240/
 #278. **Phase 20 is now fully done** — issue #312 closed via merged
 PR, and every phase built so far has a complete engineering blog.
 
+**Phase 20 reopened a fifth time (GitHub issue #347, D54)** — a user
+report on the public company profile page: the Reviews section listed
+every approved round rating as its own row and labeled the count "N
+reviews," so a single 3-round submission plus one separate 1-round
+submission read as "4 reviews" instead of the real 2 — the exact
+flat-list problem Phase 29 issue #315 already fixed for the moderation
+queue, now on the public-facing surface. Fixed by grouping approved
+round ratings by their parent `InterviewProcess` in
+`CompaniesService.findApprovedReviews()`, the same `Map`-keyed
+grouping shape `ModerationService.listPending()` already uses. The
+harder part was pagination: `total`/`page`/`pageSize` now describe
+submissions, not raw rows — rows are fetched unpaginated, grouped, then
+the *group* array is sliced for the requested page, so one submission's
+rounds can never be split across a page boundary the way paginating
+raw rows first would risk. `CompanyReviewItem` (frontend) dropped
+`roleTitle` to a new group-level `CompanyReviewGroup`; the company
+profile page gained a `ReviewGroupItem` component (one collapsed card
+per submission, expanding on click to reveal every round's detail) in
+place of the old flat `ReviewItem` — Phase 21's existing `GatedSection`
+soft-gating needed zero changes, since it already operated generically
+on `items[0]` vs. `items.slice(1)` regardless of what an item contains.
+4 new/updated api unit tests + 3 new e2e tests (310 api unit tests, 142
+e2e tests total) prove grouping and the page-boundary guarantee
+directly; 9 web component tests updated for the grouped/expandable
+shape (125 web tests total). Live-verified against the real `kind`
+cluster via both a direct API check and a real headless-browser
+(Playwright) run against the exact data the report was about:
+confirmed "2 reviews" (not 4), the free-preview group collapsed by
+default, expanding it revealed all 3 rated rounds, and the second
+submission stayed properly gated for an anonymous visitor — zero
+console errors. Epic #214 reopened and re-closed the same day, same
+precedent as #222/#240/#278/#312. **Phase 20 is now fully done** —
+issue #347 closed via merged PR, and every phase built so far has a
+complete engineering blog.
+
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
 started (GitHub issues #162-165) — now queued behind Phases 24-26
 below, planned more recently and with a more immediate user priority.

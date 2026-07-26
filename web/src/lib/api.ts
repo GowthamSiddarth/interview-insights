@@ -188,13 +188,14 @@ export interface CompanyAnalytics {
 
 // Public display shape for GET /companies/:id/reviews — no candidateId,
 // read from Postgres, not OpenSearch (D16/D17: a profile page is a
-// source-of-truth read, not a search).
+// source-of-truth read, not a search). Grouped by submission (GitHub
+// issue #347) — the same flat-list problem Phase 29 issue #315 already
+// fixed for the moderation queue, on the public-facing surface too.
 export interface CompanyReviewItem {
   id: string;
   createdAt: string;
   roundTitle: string | null;
   roundType: Round['roundType'];
-  roleTitle: string;
   difficulty: number;
   fluency: number;
   clarity: number;
@@ -203,11 +204,17 @@ export interface CompanyReviewItem {
   freeText: string | null;
 }
 
+export interface CompanyReviewGroup {
+  processId: string;
+  roleTitle: string;
+  entries: CompanyReviewItem[];
+}
+
 export interface CompanyReviewsPage {
   total: number;
   page: number;
   pageSize: number;
-  items: CompanyReviewItem[];
+  items: CompanyReviewGroup[];
 }
 
 export interface CompanySearchResult {

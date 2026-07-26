@@ -2162,6 +2162,50 @@ than deferring it).
 
 ---
 
+### D54 — Public company Reviews section groups approved round ratings by submission (GitHub issue #347, Phase 20)
+
+**Context:** a user live-usage report — the same flat-list problem
+Phase 29 issue #315 already fixed for the moderation queue, now spotted
+on the public-facing company profile page. `GET /companies/:id/reviews`
+listed every approved `round_rating` as its own row and labeled the
+count "N reviews"; a single interview loop with 3 rated rounds (2
+coding + 1 tech screening, all one submission) inflated the visible
+count to include itself 3 times over, alongside one genuinely separate
+submission — 4 rows read as "4 reviews" when it was really 2.
+
+**Decision:**
+- Group approved round ratings by their parent `InterviewProcess` in
+  application code (`CompaniesService.findApprovedReviews()`) — the
+  same `Map`-keyed grouping shape `ModerationService.listPending()`
+  already uses (#315), and the same accepted full-table-scan tradeoff
+  D13 already established for fraud-check duplicate detection: fine at
+  today's volume, revisit if a company's review count ever makes this
+  measurably slow.
+- **Pagination moves with the grouping, not just the display.**
+  `total`/`page`/`pageSize` now describe submissions, not raw rows —
+  paginating over raw rows first and grouping the current page's rows
+  afterward would risk splitting one submission's rounds across a page
+  boundary, showing half a submission on page 1 and the rest on page 2.
+  Rows are fetched unpaginated, grouped, then the *group* array is
+  sliced for the requested page.
+- `CompanyReviewItem` (the frontend type) dropped `roleTitle` — it
+  moved to the new group-level `CompanyReviewGroup.roleTitle`, since
+  every round in one submission shares the same role. The company
+  profile page renders one collapsed card per group (role title + a
+  real round count), expanding on click to reveal each round's full
+  detail — reusing Phase 21's existing `GatedSection` soft-gating
+  (D40) unchanged, since gating a group of entries works identically to
+  gating a group of one.
+- The "N reviews" count phrasing itself is unchanged — only what it
+  counts changes, matching exactly what was reported: "each submission
+  is 1 review."
+
+**Revisit when:** never expected to need revisiting — this closes the
+same class of gap #315 already closed for the admin-facing queue, on
+the last remaining flat list in the app.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
