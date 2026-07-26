@@ -3,11 +3,15 @@ import { CompaniesController } from './companies.controller';
 import { CompaniesService } from './companies.service';
 import { CompanyCreationThrottleGuard } from './company-creation-throttle.guard';
 import { CompanyCreationThrottleService } from './company-creation-throttle.service';
-import { SearchModule } from '../search/search.module';
+import { ModerationModule } from '../moderation/moderation.module';
 import { CandidateAuthModule } from '../candidate-auth/candidate-auth.module';
 
 @Module({
-  imports: [SearchModule, CandidateAuthModule],
+  // ModerationModule replaces SearchModule here (GitHub issue #369,
+  // Phase 35) — company creation now enqueues via ModerationService
+  // instead of indexing to OpenSearch directly; indexing happens at
+  // approval time from within ModerationService itself.
+  imports: [ModerationModule, CandidateAuthModule],
   controllers: [CompaniesController],
   providers: [CompaniesService, CompanyCreationThrottleService, CompanyCreationThrottleGuard],
   exports: [CompaniesService],

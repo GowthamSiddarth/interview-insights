@@ -83,8 +83,10 @@ export class AnalyticsService {
   ) {}
 
   async getCompanyAnalytics(companyId: string): Promise<CompanyAnalytics> {
-    // 404s via PrismaExceptionFilter (P2025) if the company doesn't exist.
-    await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+    // 404s via PrismaExceptionFilter (P2025) if the company doesn't exist
+    // or isn't approved yet (GitHub issue #369, Phase 35) — a pending
+    // company's analytics must never leak that it exists.
+    await this.prisma.company.findFirstOrThrow({ where: { id: companyId, status: 'approved' } });
 
     const roundTypeRows = await this.prisma.$queryRaw<CompanyRoundTypeRow[]>`
       SELECT round_type, avg_difficulty, avg_fluency, avg_clarity, avg_focus, sample_size

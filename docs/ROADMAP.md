@@ -1350,7 +1350,7 @@ plain confirmation modal, no navigation. Milestone "Phase 35 —
 Moderated Company Creation & Moderator Search", issues #369-373 filed
 under epic #368.
 
-- [ ] Company creation moves behind moderation: `Company.status`
+- [x] Company creation moves behind moderation: `Company.status`
       (migration), `CompaniesService.create()` enqueues instead of
       indexing immediately, every public read path (list/by-slug/
       analytics/reviews/search) filters to `approved` only,
@@ -1358,7 +1358,7 @@ under epic #368.
       (`company`) — approve indexes to the existing `companies`
       OpenSearch index, reject keeps the row as `rejected`; creating an
       `InterviewProcess` against a non-approved `companyId` is rejected
-      (GitHub issue #369)
+      (GitHub issue #369, D58)
 - [ ] New moderation-queue OpenSearch index + fuzzy search endpoint:
       one document per pending queue entry (category, company name,
       role title, free-text preview), indexed/removed alongside

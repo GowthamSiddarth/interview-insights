@@ -5,7 +5,7 @@ import { GlobalAveragesService } from './global-averages.service';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
-  let prisma: { company: { findUniqueOrThrow: jest.Mock }; $queryRaw: jest.Mock };
+  let prisma: { company: { findFirstOrThrow: jest.Mock }; $queryRaw: jest.Mock };
   let globalAveragesService: {
     getRoundTypeGlobalAverages: jest.Mock;
     getRecruiterGlobalAverages: jest.Mock;
@@ -14,7 +14,7 @@ describe('AnalyticsService', () => {
 
   beforeEach(async () => {
     prisma = {
-      company: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'company-1' }) },
+      company: { findFirstOrThrow: jest.fn().mockResolvedValue({ id: 'company-1' }) },
       $queryRaw: jest.fn(),
     };
     globalAveragesService = {
@@ -35,9 +35,21 @@ describe('AnalyticsService', () => {
   });
 
   it('propagates a not-found company lookup rather than swallowing it', async () => {
-    prisma.company.findUniqueOrThrow.mockRejectedValue(new Error('P2025'));
+    prisma.company.findFirstOrThrow.mockRejectedValue(new Error('P2025'));
 
     await expect(service.getCompanyAnalytics('missing-company')).rejects.toThrow('P2025');
+  });
+
+  // GitHub issue #369 (Phase 35) — a pending/rejected company's analytics
+  // must never leak that it exists.
+  it('only looks up an approved company', async () => {
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    await service.getCompanyAnalytics('company-1');
+
+    expect(prisma.company.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: 'company-1', status: 'approved' },
+    });
   });
 
   it('shrinkage-scores each round type using its own global averages, and returns null with recruiter/overall when neither exists', async () => {

@@ -7,10 +7,8 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsCandidate } from './support/candidate-session';
 import { loginAsAdmin } from './support/admin-session';
+import { createApprovedCompany } from './support/companies';
 
-interface CompanyBody {
-  id: string;
-}
 interface ProcessBody {
   id: string;
 }
@@ -69,12 +67,11 @@ describe('Bulk process submission (e2e)', () => {
 
   async function createCompanyAndCandidate(): Promise<{ cookie: string; companyId: string }> {
     const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: `acme-${unique()}`, sizeBucket: 'mid' })
-      .expect(201);
-    return { cookie, companyId: body<CompanyBody>(companyRes).id };
+    const company = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
+    return { cookie, companyId: company.id };
   }
 
   it('401s without a candidate session', async () => {

@@ -22,6 +22,7 @@ const ENTITY_TYPE_LABEL: Record<ModerationQueueEntry['entityType'], string> = {
   round_rating: 'Round rating',
   recruiter_rating: 'Recruiter rating',
   overall_review: 'Overall review',
+  company: 'Company creation request',
 };
 
 const FLAG_REASONS: ModerationFlagReason[] = [
@@ -80,6 +81,19 @@ function RoundContentDetails({ entity }: { entity: ModerationQueueEntity }) {
   );
 }
 
+// GitHub issue #369 (Phase 35) — a create-company request's own details,
+// same shape as RoundContentDetails: the raw fields a moderator needs to
+// decide whether to approve, nothing more.
+function CompanyRequestDetails({ entity }: { entity: ModerationQueueEntity }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md bg-gray-50 p-2 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+      {entity.requestedCompanySlug && <p>slug: {entity.requestedCompanySlug}</p>}
+      {entity.requestedCompanySizeBucket && <p>size: {entity.requestedCompanySizeBucket}</p>}
+      {entity.requestedCompanyIndustry && <p>industry: {entity.requestedCompanyIndustry}</p>}
+    </div>
+  );
+}
+
 function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
   const entity: ModerationQueueEntity | null = entry.entity;
   if (!entity) {
@@ -98,6 +112,7 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
         {entity.recruiterLabel && <>{entity.recruiterLabel}</>}
       </p>
       {entry.entityType === 'round_rating' && <RoundContentDetails entity={entity} />}
+      {entry.entityType === 'company' && <CompanyRequestDetails entity={entity} />}
       {scores.length > 0 && (
         <p className="text-gray-600 dark:text-gray-400">
           {scores.map((f) => `${f.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${entity[f]}`).join(' · ')}

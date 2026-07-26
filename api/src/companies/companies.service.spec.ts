@@ -1,15 +1,21 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CompaniesService } from './companies.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CompanySearchService } from '../search/company-search.service';
+import { ModerationService } from '../moderation/moderation.service';
 
 describe('CompaniesService', () => {
   let service: CompaniesService;
   let prisma: {
-    company: { create: jest.Mock; findUniqueOrThrow: jest.Mock };
+    company: {
+      create: jest.Mock;
+      findUnique: jest.Mock;
+      findFirstOrThrow: jest.Mock;
+      findMany: jest.Mock;
+    };
     roundRating: { count: jest.Mock; findMany: jest.Mock };
   };
-  let companySearchService: { indexCompany: jest.Mock };
+  let moderationService: { enqueue: jest.Mock };
 
   const dto = { name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' as const };
   const createdCompany = {
@@ -19,6 +25,7 @@ describe('CompaniesService', () => {
     industry: null,
     sizeBucket: 'mid',
     logoUrl: null,
+    status: 'pending',
     createdAt: new Date('2026-01-01'),
   };
 
@@ -26,56 +33,97 @@ describe('CompaniesService', () => {
     prisma = {
       company: {
         create: jest.fn().mockResolvedValue(createdCompany),
-        findUniqueOrThrow: jest.fn().mockResolvedValue(createdCompany),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirstOrThrow: jest.fn().mockResolvedValue(createdCompany),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       roundRating: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
-    companySearchService = { indexCompany: jest.fn().mockResolvedValue(undefined) };
+    moderationService = { enqueue: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CompaniesService,
         { provide: PrismaService, useValue: prisma },
-        { provide: CompanySearchService, useValue: companySearchService },
+        { provide: ModerationService, useValue: moderationService },
       ],
     }).compile();
 
     service = module.get(CompaniesService);
   });
 
-  it('indexes the newly created company in OpenSearch', async () => {
-    await service.create(dto);
+  // GitHub issue #369 (Phase 35) — company creation moves behind
+  // moderation: the row is created (status defaults to pending) and
+  // enqueued, never indexed to OpenSearch directly.
+  describe('create', () => {
+    it('creates the company and enqueues it for moderation', async () => {
+      const result = await service.create(dto);
 
-    expect(companySearchService.indexCompany).toHaveBeenCalledWith(createdCompany);
+      expect(prisma.company.create).toHaveBeenCalledWith({ data: dto });
+      expect(moderationService.enqueue).toHaveBeenCalledWith('company', createdCompany.id);
+      expect(result).toEqual(createdCompany);
+    });
+
+    it('checks for an existing row by slug first', async () => {
+      await service.create(dto);
+
+      expect(prisma.company.findUnique).toHaveBeenCalledWith({ where: { slug: dto.slug } });
+    });
+
+    it('rejects with a friendly message when a pending duplicate already exists', async () => {
+      prisma.company.findUnique.mockResolvedValue({ ...createdCompany, status: 'pending' });
+
+      await expect(service.create(dto)).rejects.toThrow(ConflictException);
+      await expect(service.create(dto)).rejects.toThrow(/already been requested and is pending review/);
+      expect(prisma.company.create).not.toHaveBeenCalled();
+    });
+
+    it('falls through to a normal create attempt when the existing duplicate is approved', async () => {
+      prisma.company.findUnique.mockResolvedValue({ ...createdCompany, status: 'approved' });
+
+      await service.create(dto);
+
+      expect(prisma.company.create).toHaveBeenCalled();
+    });
+
+    it('falls through to a normal create attempt when the existing duplicate is rejected', async () => {
+      prisma.company.findUnique.mockResolvedValue({ ...createdCompany, status: 'rejected' });
+
+      await service.create(dto);
+
+      expect(prisma.company.create).toHaveBeenCalled();
+    });
   });
 
-  it('still returns the created company even if search indexing fails', async () => {
-    companySearchService.indexCompany.mockRejectedValue(new Error('OpenSearch unreachable'));
+  describe('findAll', () => {
+    it('only lists approved companies', async () => {
+      await service.findAll();
 
-    const result = await service.create(dto);
-
-    expect(result).toEqual(createdCompany);
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status: 'approved' } }),
+      );
+    });
   });
 
   describe('findBySlug', () => {
-    it('looks the company up by its unique slug', async () => {
+    it('looks the company up by its unique slug, approved only', async () => {
       await service.findBySlug('acme-corp');
 
-      expect(prisma.company.findUniqueOrThrow).toHaveBeenCalledWith({
-        where: { slug: 'acme-corp' },
+      expect(prisma.company.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { slug: 'acme-corp', status: 'approved' },
       });
     });
   });
 
   describe('findApprovedReviews', () => {
-    it('verifies the company exists before querying (404 rather than an empty page)', async () => {
+    it('verifies the company exists and is approved before querying (404 rather than an empty page)', async () => {
       await service.findApprovedReviews('company-1', 1, 10);
 
-      expect(prisma.company.findUniqueOrThrow).toHaveBeenCalledWith({
-        where: { id: 'company-1' },
+      expect(prisma.company.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: 'company-1', status: 'approved' },
       });
     });
 

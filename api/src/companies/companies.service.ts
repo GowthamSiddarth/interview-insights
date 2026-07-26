@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
-import { CompanySearchService } from '../search/company-search.service';
+import { ModerationService } from '../moderation/moderation.service';
 
 @Injectable()
 export class CompaniesService {
@@ -9,36 +9,49 @@ export class CompaniesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly companySearchService: CompanySearchService,
+    private readonly moderationService: ModerationService,
   ) {}
 
+  // GitHub issue #369 (Phase 35) — company creation now goes through
+  // moderation, same as every other write path in this app (CLAUDE.md
+  // hard constraint #2): the row is created with status: pending (the
+  // schema default) and enqueued, rather than indexed to OpenSearch
+  // immediately. Indexing happens at approval time instead (see
+  // ModerationService.review()'s 'company' case).
   async create(dto: CreateCompanyDto) {
-    const company = await this.prisma.company.create({ data: dto });
-
-    // Best-effort, in-process (docs/DECISIONS.md D16): Postgres is the
-    // source of truth for companies, OpenSearch is a derived index. A
-    // transient search-indexing failure must never fail the underlying
-    // company write.
-    try {
-      await this.companySearchService.indexCompany(company);
-    } catch (err) {
-      this.logger.error('Failed to index company in OpenSearch', err instanceof Error ? err.stack : err);
+    // A friendlier response for the specific case of a duplicate slug
+    // that's already pending review — direct user feedback. An existing
+    // *approved* row still falls through to the generic unique-constraint
+    // 409 below (the company genuinely already exists); a *rejected* row
+    // does too for now (unresolved, see the issue's own note).
+    const existing = await this.prisma.company.findUnique({ where: { slug: dto.slug } });
+    if (existing?.status === 'pending') {
+      throw new ConflictException(
+        'This company has already been requested and is pending review — please check back later.',
+      );
     }
 
+    const company = await this.prisma.company.create({ data: dto });
+    await this.moderationService.enqueue('company', company.id);
     return company;
   }
 
   findAll() {
-    return this.prisma.company.findMany({ orderBy: { createdAt: 'desc' } });
+    return this.prisma.company.findMany({
+      where: { status: 'approved' },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   findOne(id: string) {
-    return this.prisma.company.findUniqueOrThrow({ where: { id } });
+    return this.prisma.company.findFirstOrThrow({ where: { id, status: 'approved' } });
   }
 
   // Profile pages are addressed by slug (unique since Phase 1), not UUID.
+  // A pending/rejected company doesn't publicly exist yet — 404, not the
+  // real row, so its existence isn't leaked before approval.
   findBySlug(slug: string) {
-    return this.prisma.company.findUniqueOrThrow({ where: { slug } });
+    return this.prisma.company.findFirstOrThrow({ where: { slug, status: 'approved' } });
   }
 
   // A company's approved round ratings, grouped by their InterviewProcess
@@ -54,8 +67,10 @@ export class CompaniesService {
   // not a search. Never includes candidateId or any interviewer identity
   // (hard constraint #1).
   async findApprovedReviews(companyId: string, page: number, pageSize: number) {
-    // 404 (not an empty page) for a company that doesn't exist.
-    await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+    // 404 (not an empty page) for a company that doesn't exist or isn't
+    // approved yet — a pending/rejected company's reviews endpoint must
+    // never leak that the company exists at all.
+    await this.prisma.company.findFirstOrThrow({ where: { id: companyId, status: 'approved' } });
 
     // Grouped in application code, same pattern as ModerationService's
     // Map-keyed grouping (#315) and D13's accepted full-table-scan

@@ -5,6 +5,9 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsCandidate } from './support/candidate-session';
+import { loginAsAdmin } from './support/admin-session';
+import { createApprovedCompany } from './support/companies';
+import { findQueueEntry, QueueGroupBody } from './support/moderation-queue';
 
 interface CompanyBody {
   id: string;
@@ -72,6 +75,19 @@ describe('Vertical slice (e2e)', () => {
     const companyId = body<CompanyBody>(companyRes).id;
     expect(body<CompanyBody>(companyRes).slug).toBe(slug);
 
+    // GitHub issue #369 (Phase 35) — company creation now goes through
+    // moderation like everything else; neither the list nor the detail
+    // read surfaces it until a moderator approves it.
+    const adminCookie = await loginAsAdmin(app);
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+    const entry = findQueueEntry(queueRes.body as QueueGroupBody[], companyId);
+    if (!entry) throw new Error(`No moderation_queue entry found for company ${companyId}`);
+    await server()
+      .post(`/moderation/queue/${entry.id}/approve`)
+      .set('Cookie', adminCookie)
+      .send({})
+      .expect(201);
+
     await server()
       .get('/companies')
       .expect(200)
@@ -79,7 +95,10 @@ describe('Vertical slice (e2e)', () => {
         expect(body<CompanyBody[]>(res).some((c) => c.id === companyId)).toBe(true);
       });
 
-    await server().get(`/companies/${companyId}`).expect(200).expect(companyRes.body as object);
+    await server()
+      .get(`/companies/${companyId}`)
+      .expect(200)
+      .expect({ ...(companyRes.body as object), status: 'approved' });
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)
@@ -148,12 +167,10 @@ describe('Vertical slice (e2e)', () => {
     // unrelated to what this test is about) — only the process-creation
     // call below is the actual unauthenticated case under test.
     const { cookie } = await loginAsCandidate(app, uniqueEmail());
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: uniqueSlug(),
+    });
 
     await server()
       .post(`/companies/${companyId}/processes`)
@@ -164,12 +181,10 @@ describe('Vertical slice (e2e)', () => {
   it('rejects an out-of-range rating', async () => {
     const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', cookie)
-      .send({ name: 'Acme Corp', slug: uniqueSlug(), sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: uniqueSlug(),
+    });
 
     const processRes = await server()
       .post(`/companies/${companyId}/processes`)

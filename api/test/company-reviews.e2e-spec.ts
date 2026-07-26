@@ -6,14 +6,13 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
+import { createApprovedCompany } from './support/companies';
 
 interface IdBody {
   id: string;
 }
 interface CompanyBody {
   id: string;
-  slug: string;
-  name: string;
 }
 interface ReviewsPage {
   total: number;
@@ -84,15 +83,11 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     pending?: number;
   }): Promise<{ companyId: string; slug: string; approvedIds: string[] }> {
     const slug = uniqueSlug();
-    // POST /companies is session-gated now too — a throwaway login just
-    // for this, separate from the per-rating candidates below.
+    // POST /companies is session-gated (and moderation-gated, GitHub
+    // issue #369) now too — a throwaway login+approval just for this,
+    // separate from the per-rating candidates below.
     const { cookie: setupCookie } = await loginAsCandidate(app, uniqueEmail());
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', setupCookie)
-      .send({ name: 'Profile Co', slug, sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, setupCookie, { name: 'Profile Co', slug });
 
     const approvedIds: string[] = [];
     const totalNeeded = counts.approved + (counts.pending ?? 0);
@@ -191,12 +186,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
   it('groups multiple approved round ratings from the same submission into one item', async () => {
     const slug = uniqueSlug();
     const { cookie: setupCookie } = await loginAsCandidate(app, uniqueEmail());
-    const companyRes = await server()
-      .post('/companies')
-      .set('Cookie', setupCookie)
-      .send({ name: 'Profile Co', slug, sizeBucket: 'mid' })
-      .expect(201);
-    const companyId = body<CompanyBody>(companyRes).id;
+    const { id: companyId } = await createApprovedCompany(app, setupCookie, { name: 'Profile Co', slug });
 
     const { cookie } = await loginAsCandidate(app, uniqueEmail());
     const processRes = await server()
