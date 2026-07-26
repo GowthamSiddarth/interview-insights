@@ -1904,6 +1904,29 @@ precedent as #222/#240/#278/#312. **Phase 20 is now fully done** —
 issue #347 closed via merged PR, and every phase built so far has a
 complete engineering blog.
 
+**Phase 20 reopened a sixth time (GitHub issue #349, D55)** — a user
+live-usage report, found while checking whether `/me` had the same
+grouping issue #347 fixed on the company profile page (it didn't — `/me`
+was already grouped by `InterviewProcess` since Phase 17, before #315
+ever existed). What the check surfaced instead: each process card
+labels `InterviewProcess.outcome` (the candidate's own self-reported
+result — `offer`/`rejected`/`withdrawn`/`ghosted`/`in_progress`) as a
+bare word, sitting right alongside up to five nested moderation
+statuses that happen to share overlapping vocabulary
+(`approved`/`pending`/`rejected`/`flagged`). A process outcome of
+`rejected` displayed as bare "Rejected" read exactly like a sixth
+moderation verdict — especially confusing since it was the *opposite*
+of what every real moderation status on the same card said. Fixed with
+a one-line, copy-only prefix: `Outcome: Rejected` instead of a bare
+`Rejected`, in `web/src/app/me/page.tsx`. No test changes needed — the
+one existing test asserting a bare "Rejected" was checking a nested
+recruiter-rating's moderation status, not the process outcome, so it
+was unaffected; 125 web tests, build, lint all still green. Epic #214
+reopened and re-closed the same day, same precedent as
+#222/#240/#278/#312/#347. **Phase 20 is now fully done** — issue #349
+closed via merged PR, and every phase built so far has a complete
+engineering blog.
+
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
 started (GitHub issues #162-165) — now queued behind Phases 24-26
 below, planned more recently and with a more immediate user priority.

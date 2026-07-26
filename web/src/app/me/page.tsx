@@ -651,7 +651,8 @@ export default function MyReviewsPage() {
                   {entry.companyName} — {entry.roleTitle}
                 </h2>
                 <p className="text-xs text-gray-500">
-                  {outcomeLabel(entry.outcome)} · started{' '}
+                  {/* "Outcome:" prefix — a bare "Rejected" reads as a moderation status here, but this is the process's own outcome. */}
+                  Outcome: {outcomeLabel(entry.outcome)} · started{' '}
                   {new Date(entry.createdAt).toLocaleDateString()}
                 </p>
               </div>
