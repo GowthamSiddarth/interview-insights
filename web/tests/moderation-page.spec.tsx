@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ModerationPage from '../src/app/moderation/page';
@@ -125,6 +125,11 @@ const queueGroups = [
   },
 ];
 
+// GitHub issue #371 (Phase 35) — a mutable module-level result set so
+// individual tests can control what GET /moderation/search returns
+// without needing their own bespoke fetch mock.
+let searchResultsMock: unknown[] = [];
+
 function mockFetch() {
   global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -138,6 +143,9 @@ function mockFetch() {
     if (url.endsWith('/moderation/queue') && method === 'GET') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
     }
+    if (url.includes('/moderation/search') && method === 'GET') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(searchResultsMock) });
+    }
     if (/\/moderation\/queue\/.+\/(approve|reject|flag)$/.test(url) && method === 'POST') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     }
@@ -148,6 +156,7 @@ function mockFetch() {
 describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #160; grouped-by-submission Phase 29 issue #315)', () => {
   beforeEach(() => {
     push.mockClear();
+    searchResultsMock = [];
     mockFetch();
   });
 
@@ -354,5 +363,148 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     // While the fetch is unresolved React shows Loading…, then the explicit
     // empty state — never a silently blank list.
     expect(await screen.findByText(/Queue is clear/)).toBeInTheDocument();
+  });
+
+  // GitHub issue #371 (Phase 35) — the search box + category filter,
+  // replacing the grouped view with a flat list of fuzzy matches.
+  describe('search', () => {
+    const searchHit = {
+      id: 'q-round',
+      entityType: 'round_rating',
+      entityId: 'rr1',
+      flagReason: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: '2026-07-19T00:00:00Z',
+      entity: {
+        processId: 'process-1',
+        companyName: 'Acme Corp',
+        roleTitle: 'Engineer',
+        roundTitle: 'Screen',
+        roundType: 'coding',
+        difficulty: 3,
+        fluency: 4,
+        clarity: 4,
+        focus: 4,
+        freeText: 'tough but fair',
+      },
+    };
+    const companyHit = {
+      id: 'q-company',
+      entityType: 'company',
+      entityId: 'comp1',
+      flagReason: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: '2026-07-19T00:03:00Z',
+      entity: {
+        processId: 'company-request-comp1',
+        companyName: 'Globex Corp',
+        roleTitle: 'New company request',
+        requestedCompanySlug: 'globex-corp',
+        requestedCompanySizeBucket: 'large',
+        requestedCompanyIndustry: 'Manufacturing',
+      },
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers({ advanceTimers: true });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('typing a query replaces the grouped view with matching results, each labeled by category', async () => {
+      searchResultsMock = [searchHit, companyHit];
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.type(screen.getByLabelText('Search'), 'acme');
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+
+      expect(await screen.findByText('Interview Review')).toBeInTheDocument();
+      expect(screen.getByText('Create Company Request')).toBeInTheDocument();
+      // The grouped view's own rows are gone while in search mode.
+      expect(screen.queryByText('2 pending items')).not.toBeInTheDocument();
+    });
+
+    it('clearing the query restores the normal grouped queue view', async () => {
+      searchResultsMock = [searchHit];
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      const searchInput = screen.getByLabelText('Search');
+      await user.type(searchInput, 'acme');
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      await screen.findByText('Interview Review');
+
+      await user.clear(searchInput);
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+
+      expect(await screen.findByText('2 pending items')).toBeInTheDocument();
+      expect(screen.queryByText('Interview Review')).not.toBeInTheDocument();
+    });
+
+    it('a category filter alone (empty query) also searches', async () => {
+      searchResultsMock = [companyHit];
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.selectOptions(screen.getByLabelText('Category'), 'create-company');
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+
+      expect(await screen.findByText('Globex Corp')).toBeInTheDocument();
+      expect(screen.getByText('Create Company Request')).toBeInTheDocument();
+    });
+
+    it('shows a distinct empty state for zero search matches', async () => {
+      searchResultsMock = [];
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.type(screen.getByLabelText('Search'), 'nonexistent');
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+
+      expect(await screen.findByText('No matches for this search.')).toBeInTheDocument();
+    });
+
+    it('approving a search result removes it from the results', async () => {
+      searchResultsMock = [searchHit];
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.type(screen.getByLabelText('Search'), 'acme');
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      await screen.findByText('Interview Review');
+
+      await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+      await waitFor(() =>
+        expect(
+          (global.fetch as jest.Mock).mock.calls.some(([url]: [string]) =>
+            String(url).includes('/moderation/queue/q-round/approve'),
+          ),
+        ).toBe(true),
+      );
+      await waitFor(() => expect(screen.queryByText('Interview Review')).not.toBeInTheDocument());
+    });
   });
 });

@@ -1364,7 +1364,7 @@ under epic #368.
       role title, free-text preview), indexed/removed alongside
       existing enqueue/resolve points across all four entity types;
       `GET /moderation/search?q=&category=` (GitHub issue #370, D59)
-- [ ] Moderation UI: a search box + two-bucket category filter on
+- [x] Moderation UI: a search box + two-bucket category filter on
       `/moderation`, calling the new endpoint; each result shows a
       category badge; existing per-entry approve/reject/flag controls
       reused (GitHub issue #371)

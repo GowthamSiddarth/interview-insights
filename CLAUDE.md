@@ -3221,12 +3221,45 @@ direct company-row delete, and the `prune-orphaned-company-search-docs`
 script for the one company that got indexed into the public index too
 once approved).
 
-- Next step: Phase 35 issue #371 (moderation UI search/filter) is
-  next, followed by #372 (confirmation modal), #373 (blog, last).
-  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
-  Phases 30-32 (Event-Driven Foundation / Notification Service /
-  Review Analyzer Service) remain planned but not started. Continue
-  merging without waiting for CI until the user says the GitHub
+**Phase 35, issue #371 (moderation UI search/filter)** —
+`web/src/app/moderation/page.tsx` gains a search input and a category
+`<select>` (Any / Interview review / Create company request), debounced
+300ms, calling issue #370's `GET /moderation/search?q=&category=`. A
+query and/or a non-"Any" category puts the page into search mode,
+replacing the grouped-by-submission view with a flat list of matches —
+category alone (empty query) also searches, not just query-plus-category
+together. Each result shows a visible category badge ("Interview
+Review" / "Create Company Request"), derived client-side from
+`entityType` since the wire response never carries category as its own
+field. The existing per-entry `Approve`/`Reject`/`Flag` controls (plus
+the flag-reason select) were extracted into a shared `EntryActions`
+component so both the grouped view and the new flat search view use
+identical behavior — acting on a search result updates both `groups`
+and `searchResults` state, matching whichever view is actually showing.
+Loading and zero-match states are each distinguished (Phase 9 issue
+#61 rule), same as the existing grouped view already does. `api.ts`
+gained `searchModerationQueue()` and a `ModerationQueueCategory` type.
+
+16 web tests in `moderation-page.spec.tsx` (5 new: query narrows to
+badged results, clearing restores the grouped view, category-alone
+filtering, a distinct empty state, and acting on a search result) —
+fake-timer-driven to control the debounce deterministically, same
+pattern `session-expiry-warning.spec.tsx` already established. 149 web
+tests total, build/lint clean. Live-verified against the real `kind`
+cluster with a real headless browser (Playwright): created a pending
+company request, searched for it and saw its category badge, confirmed
+category-alone filtering both included and excluded it correctly,
+approved it directly from the search result and confirmed it
+disappeared, and confirmed clearing filters restored the grouped view
+— zero console errors. Test data (candidate, company) cleaned up
+afterward.
+
+- Next step: Phase 35 issue #372 (confirmation modal) is next,
+  followed by #373 (blog, last). Phase 19 (Content Quality &
+  Synthetic Data, issues #162-165) and Phases 30-32 (Event-Driven
+  Foundation / Notification Service / Review Analyzer Service) remain
+  planned but not started. Continue merging without waiting for CI
+  until the user says the GitHub
   Actions billing limit has been refreshed.
 
 ## Open decisions still to make
