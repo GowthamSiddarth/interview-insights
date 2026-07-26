@@ -328,3 +328,17 @@ action reachable from search results, a company's profile page, or
 NavBar. This phase's blog is complete.
 
 1. [Swap landing page and wizard; write-a-review reachable from search/profile (D56)](phase-33-search-first-landing-page/README.md)
+
+## Phase 34 — Write-a-Review Flow Refinements
+
+See `docs/ROADMAP.md` Phase 34 and `docs/DECISIONS.md` D57. Filed from
+a batch of five direct UI/UX requests following Phase 33's search-first
+swap: homogeneous company-list rows, a dedicated `/write-review` route
+(replacing the wizard's brief stay at `/search`), a login-gated
+`/drafts` page, and a search-failure-triggered "request a new company"
+flow. All four feature issues are done — this phase's blog is
+complete.
+
+1. [Issue #357 — Homogeneous company-list rows](phase-34-write-a-review-flow-refinements/issue-357-homogeneous-company-rows/README.md)
+2. [Issues #358-359 — `/write-review` route + login-gated `/drafts` page (D57)](phase-34-write-a-review-flow-refinements/issue-358-359-write-review-drafts-routes/README.md)
+3. [Issue #360 — Search-failure "request a new company" flow](phase-34-write-a-review-flow-refinements/issue-360-create-company-request-flow/README.md)
