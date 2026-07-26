@@ -3023,13 +3023,43 @@ shows plain "View profile" with no parentheses, and a typed search for
 "Amazon" shows the identical row shape as a second, independent match
 alongside the quick-select row — zero console errors.
 
-- Next step: Phase 34 issue #360 (search-failure create-company-request
-  flow) remains next in line, followed by #361 (blog, last). Phase 19
-  (Content Quality & Synthetic Data, issues #162-165) and Phases 30-32
-  (Event-Driven Foundation / Notification Service / Review Analyzer
-  Service) remain planned but not started. Continue merging without
-  waiting for CI until the user says the GitHub Actions billing limit
-  has been refreshed.
+**Phase 34, issue #360 (search-failure "request a new company" flow)**
+— a zero-results company search now shows a "Want to file a create
+company request?" button alongside the existing empty state; clicking
+it reveals a new "Request a new company" section on the same page,
+reusing the Name/Slug/Size/"Create company" form that used to live in
+the wizard's no-context state (moved here, not duplicated, per D57) —
+copy rewritten for this context ("Your search didn't find X — add it
+below so you can write a review for it. This creates the company
+itself, not a review."), gated behind login via the existing
+`GatedSection` component. The section is deliberately reachable only
+from this button — never on page load, never from a nav link — and
+resets whenever a new search runs. On successful creation, redirects
+straight into `/write-review?companyId=...` for the new company, the
+same query-param handoff every other "Write a review" link already
+uses. 4 new `page.spec.tsx` tests (never shown on load, shown after a
+failed search plus its own button click, login-gate prompt when
+logged out, creation + redirect when logged in) — 143 web tests total,
+build/lint clean. Live-verified with a real headless browser
+(Playwright) against the real `kind` cluster: searched for a
+nonexistent company, confirmed no section pre-emptively shown, clicked
+the button to reveal it, confirmed an anonymous visitor sees the login
+gate not the form, logged in via a real magic link, created the
+company, and confirmed the redirect landed on `/write-review` with the
+URL stripped and the draft auto-started — zero console errors. Test
+company cleaned up directly via `kubectl exec` psql plus the existing
+`prune-orphaned-company-search-docs` script (D51's tooling) to remove
+its now-orphaned OpenSearch document, confirmed via a dry run first.
+
+**Phase 34 is now fully done except its engineering blog** — issues
+#357-360 all closed via merged PRs.
+
+- Next step: Phase 34 issue #361 (engineering blog, last) remains.
+  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
+  Phases 30-32 (Event-Driven Foundation / Notification Service /
+  Review Analyzer Service) remain planned but not started. Continue
+  merging without waiting for CI until the user says the GitHub
+  Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   api,
   ApiError,
@@ -14,7 +15,11 @@ import { CompanyResultRow } from '@/components/CompanyResultRow';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { GatedSection } from '@/components/GatedSection';
 import { PageContainer } from '@/components/PageContainer';
+
+const inputClass =
+  'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
@@ -33,6 +38,7 @@ function roundTypeLabel(roundType: string): string {
 // itself lives at /search (see that file), receiving the chosen company via
 // query params so it never needs its own company-picker.
 export default function SearchPage() {
+  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyQuery, setCompanyQuery] = useState('');
   // null = haven't searched yet; [] = searched, zero matches.
@@ -48,6 +54,15 @@ export default function SearchPage() {
   const [reviewResults, setReviewResults] = useState<ReviewSearchResult[] | null>(null);
   const [reviewSearching, setReviewSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // GitHub issue #360 (Phase 34) — the create-company-request section is
+  // deliberately reachable only from a failed search's own button, never
+  // from page load or a nav link (see this state's one setter below).
+  const [showCreateCompanyRequest, setShowCreateCompanyRequest] = useState(false);
+  const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setCandidateSession(api.hasCandidateSessionHint());
+  }, []);
 
   // Quick-select buttons, one per existing company — the same shape the
   // wizard's old company picker used, relocated here now that discovery is
@@ -69,12 +84,32 @@ export default function SearchPage() {
     const q = String(formData.get('q'));
     setCompanyQuery(q);
     setCompanySearching(true);
+    setShowCreateCompanyRequest(false);
     try {
       setCompanyResults(await api.searchCompanies(q));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setCompanySearching(false);
+    }
+  }
+
+  // Reuses the wizard's former create-company form (moved here, not
+  // duplicated, per issue #358/#360) — the only difference is where a
+  // successful creation sends the candidate next.
+  async function handleCreateCompanyRequest(formData: FormData) {
+    setError(null);
+    try {
+      const created = await api.createCompany({
+        name: String(formData.get('name')),
+        slug: String(formData.get('slug')),
+        sizeBucket: formData.get('sizeBucket') as Company['sizeBucket'],
+      });
+      router.push(
+        `/write-review?companyId=${created.id}&companySlug=${created.slug}&companyName=${encodeURIComponent(created.name)}`,
+      );
+    } catch (err) {
+      setError(errorMessage(err));
     }
   }
 
@@ -155,7 +190,19 @@ export default function SearchPage() {
         ) : (
           companyResults !== null &&
           (companyResults.length === 0 ? (
-            <EmptyState message={`No companies match "${companyQuery}".`} />
+            <div className="flex flex-col gap-2">
+              <EmptyState message={`No companies match "${companyQuery}".`} />
+              {!showCreateCompanyRequest && (
+                <Button
+                  type="button"
+                  variant="neutral"
+                  className="self-start"
+                  onClick={() => setShowCreateCompanyRequest(true)}
+                >
+                  Want to file a create company request?
+                </Button>
+              )}
+            </div>
           ) : (
             <ul className="flex flex-col gap-1">
               {companyResults.map((company) => (
@@ -169,6 +216,50 @@ export default function SearchPage() {
           )))
         }
       </Card>
+
+      {showCreateCompanyRequest && (
+        <Card as="section" className="flex flex-col gap-3">
+          <h2 className="font-medium">Request a new company</h2>
+          <p className="text-sm text-gray-500">
+            Your search didn&apos;t find &quot;{companyQuery}&quot; — add it below so you can write
+            a review for it. This creates the company itself, not a review.
+          </p>
+          <GatedSection
+            loggedIn={candidateSession}
+            prompt="Log in to request a new company."
+          >
+            <form
+              action={handleCreateCompanyRequest}
+              className="flex flex-col gap-2 sm:flex-row sm:items-end"
+            >
+              <label className="flex flex-col text-sm">
+                Name
+                <input name="name" required className={inputClass} />
+              </label>
+              <label className="flex flex-col text-sm">
+                Slug
+                <input
+                  name="slug"
+                  required
+                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  placeholder="acme-corp"
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col text-sm">
+                Size
+                <select name="sizeBucket" className={inputClass}>
+                  <option value="startup">Startup</option>
+                  <option value="mid">Mid</option>
+                  <option value="large">Large</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </label>
+              <Button type="submit">Create company</Button>
+            </form>
+          </GatedSection>
+        </Card>
+      )}
 
       {selectedCompany && (
         <Card as="section" className="flex flex-col gap-3">
