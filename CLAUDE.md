@@ -2920,12 +2920,26 @@ lands on `/search` with the draft auto-started and the URL params
 stripped; the wizard shows no company-picker; the company profile page
 has its own "Write a review" link — zero console errors throughout.
 
-- Next step: Phase 33 issue #353 (engineering blog, written last).
-  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
-  Phases 30-32 (Event-Driven Foundation / Notification Service /
-  Review Analyzer Service) remain planned but not started. Continue
-  merging without waiting for CI until the user says the GitHub
-  Actions billing limit has been refreshed.
+**Phase 33, issue #353 (engineering blog)** —
+`wiki/blog/phase-33-search-first-landing-page/README.md` covers the
+landing-page/wizard content swap, the query-param company-handoff
+design (and why the wizard's own picker was removed entirely instead
+of kept as a fallback), the `useSearchParams()` Suspense-boundary
+requirement, and the real test-authoring bug the query-param mocking
+surfaced (a fresh `URLSearchParams` per call re-triggering the
+company-handoff effect on every render, not just mount — fixed with a
+stable module-level instance, matching real Next.js memoization).
+`wiki/blog/README.md`'s index updated to match.
+
+**Phase 33 is now fully done** — issues #352-353 both closed via
+merged PRs, and every phase built so far now has a complete
+engineering blog.
+
+- Next step: Phase 19 (Content Quality & Synthetic Data, issues
+  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
+  Service / Review Analyzer Service) remain planned but not started.
+  Continue merging without waiting for CI until the user says the
+  GitHub Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 

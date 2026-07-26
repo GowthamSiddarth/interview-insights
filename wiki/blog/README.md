@@ -318,3 +318,13 @@ issues are done — this phase's blog is complete.
 1. [Issue #315 — Moderation queue: full round content + group by submission](phase-29-moderator-full-content-visibility/issue-315-moderation-queue-grouping/README.md)
 2. [Issue #316 — Fix `ModerationQueueEntity.roundTitle`'s type](phase-29-moderator-full-content-visibility/issue-316-roundtitle-type-fix/README.md)
 3. [Issue #317 — Submission-scoped fraud-check rate limit (D52)](phase-29-moderator-full-content-visibility/issue-317-submission-scoped-rate-limit/README.md)
+
+## Phase 33 — Search-First Landing Page
+
+See `docs/ROADMAP.md` Phase 33. Filed retroactively per the user's
+direct request to swap the landing page and wizard — search/browse
+becomes the default experience, writing a review becomes an explicit
+action reachable from search results, a company's profile page, or
+NavBar. This phase's blog is complete.
+
+1. [Swap landing page and wizard; write-a-review reachable from search/profile (D56)](phase-33-search-first-landing-page/README.md)
