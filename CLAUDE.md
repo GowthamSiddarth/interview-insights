@@ -3126,3 +3126,5 @@ planning only, no implementation started.
 - Retention/deletion policy for moderation queue + rejected content (GDPR
   erasure path)
 - Whether/when to slice `company_overall_aggregates` by role or level
+- Moderator queue SLAs (~48h to start), request assignment, and breach
+  notifications (Phase 36, not yet planned — see docs/ROADMAP.md)

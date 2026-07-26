@@ -1372,3 +1372,22 @@ under epic #368.
       auto-redirect into `/write-review` — a plain "request submitted"
       modal (OK + corner close), no navigation (GitHub issue #372)
 - [ ] Engineering blog (last) (GitHub issue #373)
+
+## Phase 36 — Moderator Queue SLAs, Assignment & Notifications (not yet planned)
+
+Raised alongside Phase 35's planning: the project owner is thinking
+about queue SLAs (e.g. 48h in the beginning) once the moderation queue
+gets real search/filtering (Phase 35), plus how request *assignment*
+(which moderator owns which entry, once there's more than one
+moderator) and SLA-breach *notifications* would work. Explicitly not
+resolved or scoped now — no design decisions made, no issues filed —
+per direct instruction to keep this parked for a future planning pass,
+the same trigger-gated framing Phase 8's menu already uses. Real
+open questions for whenever this gets planned: what "the SLA clock"
+even starts from (entry creation? first moderator view?); whether
+assignment is manual (a moderator claims an entry) or automatic
+(round-robin/least-loaded); and what a breach notification looks like
+given there's no current out-of-band channel (email via the existing
+`mail/` module is the obvious candidate, but unconfirmed). Revisit once
+there's a concrete trigger — e.g. Phase 35 shipping and the queue
+actually needing this, or a second moderator account existing at all.
