@@ -2442,6 +2442,78 @@ use" now that this decision has shipped.
 
 ---
 
+### D59 — Moderation-queue documents keyed by `entityType:entityId`, genuinely fuzzy (unlike D17); indexing centralized in `ModerationService` (GitHub issue #370, Phase 35)
+
+**Context:** the moderator search/filter box needed a real backing
+store. Three real design questions came up while building it: how to
+key documents so every write-path caller (which only ever has
+`entityType`/`entityId` on hand, never a `moderation_queue` row's own
+id) can index or remove one without an extra lookup; where the actual
+indexing call belongs, given `enqueue()`/`reenqueue()` run *inside*
+their caller's own transaction and OpenSearch writes must never happen
+before that transaction commits (D16/D17); and whether fuzziness is
+safe here given D17 found it wasn't, once, for `CompanySearchService`.
+
+**Decision:**
+- A new dedicated `moderation_queue` OpenSearch index (separate from
+  the public `companies`/`reviews` ones), documents keyed by
+  `${entityType}:${entityId}` rather than the queue entry's own id —
+  every existing call site (`enqueue`/`reenqueue`/`removeQueueEntries`,
+  and `review()`'s `entry.entityType`/`entry.entityId`) already has
+  exactly those two values in scope, so no caller ever needs to look up
+  a queue-entry id just to know which document to touch.
+- Indexing is centralized in `ModerationService` itself, not scattered
+  across five write-path services: a new public
+  `indexForSearch(entityType, entityId)` re-derives the display fields
+  (company name, role title, free-text preview, category) fresh from
+  Postgres via a per-type lookup, then calls the new
+  `ModerationQueueSearchService`. Each write-path service's
+  `create()`/`update()` calls it with exactly one extra line, *after*
+  its own `$transaction()` resolves — the same D16/D17 "never index
+  from inside an open transaction" shape `indexApprovedReview`/
+  `indexApprovedCompany` already established, just generalized to a
+  method any caller can reach without duplicating per-type fetch logic
+  five times over. `BulkProcessSubmissionService` collects the ids of
+  every rateable entity it creates during its own transaction, then
+  indexes each one afterward.
+- `listPending()`'s per-type `Promise.allSettled` enrichment (round
+  rating / recruiter rating / overall review / company, including the
+  D37 transient-failure handling) is extracted into a shared
+  `enrichEntries()` private method, reused by the new `search()` too —
+  a query and `listPending()`'s own "everything pending" scan both
+  need the identical "turn raw queue rows into fully-enriched entries"
+  logic, just over a different input set. `search()` returns a flat
+  list in OpenSearch relevance order (not grouped by submission the
+  way `listPending()` is) — a query can legitimately match entries
+  from many unrelated submissions, so grouping would mostly produce
+  one-entry groups anyway.
+- `ModerationService.review()` now removes the resolved entry from the
+  moderator search index unconditionally, regardless of decision
+  (approved/rejected/flagged) — any resolution means it's no longer
+  part of the *pending* universe this index exists to cover, separate
+  from whatever public-facing index (if any) the same decision also
+  just added it to.
+- **Fuzziness is safe here**, unlike `CompanySearchService`'s D17
+  finding: that index's false-positive risk was specifically about
+  long numeric test-identifier tokens (two `Date.now()`-based values a
+  few digits apart) fuzzy-matching each other. This index only ever
+  holds short, human-authored text — company names, role titles,
+  free-text previews — genuinely benefiting from typo tolerance with
+  none of D17's numeric-token risk. Confirmed live, not just assumed:
+  a real e2e test proves a transposed-character typo query still
+  finds the right company.
+- The controller's base path changes from `moderation/queue` to
+  `moderation` (each existing route's own decorator gains the `queue`
+  prefix directly) so the new `GET /moderation/search` can be a
+  sibling of `/moderation/queue`, not nested under it — every existing
+  route's actual URL is unchanged.
+
+**Revisit when:** issue #371 (the moderation UI's own search box/
+category filter) lands — that's the first real consumer of this
+endpoint from the frontend.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

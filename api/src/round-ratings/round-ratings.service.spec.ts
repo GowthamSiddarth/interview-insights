@@ -17,7 +17,13 @@ describe('RoundRatingsService', () => {
     };
     $transaction: jest.Mock;
   };
-  let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; removeQueueEntries: jest.Mock };
+  let moderationService: {
+    enqueue: jest.Mock;
+    reenqueue: jest.Mock;
+    removeQueueEntries: jest.Mock;
+    indexForSearch: jest.Mock;
+    removeFromSearchIndex: jest.Mock;
+  };
   let fraudChecksService: { detectFlagReason: jest.Mock };
   let reviewSearchService: { removeReview: jest.Mock };
 
@@ -42,6 +48,8 @@ describe('RoundRatingsService', () => {
       enqueue: jest.fn(),
       reenqueue: jest.fn(),
       removeQueueEntries: jest.fn(),
+      indexForSearch: jest.fn().mockResolvedValue(undefined),
+      removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
     reviewSearchService = { removeReview: jest.fn().mockResolvedValue(undefined) };

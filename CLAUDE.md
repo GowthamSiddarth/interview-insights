@@ -3173,14 +3173,61 @@ Test data cleaned up afterward (GDPR erasure for the candidate, direct
 company-row deletes, and the `prune-orphaned-company-search-docs`
 script for the two approved test companies' OpenSearch documents).
 
-- Next step: Phase 35 issue #370 (new moderation-queue OpenSearch index
-  + fuzzy search endpoint) is next, followed by #371 (moderation UI
-  search/filter), #372 (confirmation modal), #373 (blog, last). Phase
-  19 (Content Quality & Synthetic Data, issues #162-165) and Phases
-  30-32 (Event-Driven Foundation / Notification Service / Review
-  Analyzer Service) remain planned but not started. Continue merging
-  without waiting for CI until the user says the GitHub Actions
-  billing limit has been refreshed.
+**Phase 35, issue #370 (new moderation-queue OpenSearch index + fuzzy
+search endpoint)** — a new dedicated `moderation_queue` OpenSearch
+index (separate from the public `companies`/`reviews` ones), with
+documents keyed by `${entityType}:${entityId}` rather than the queue
+entry's own id, since every write-path caller already has exactly
+those two values on hand. Indexing is centralized in
+`ModerationService` itself: a new `indexForSearch(entityType,
+entityId)` re-derives the display fields fresh from Postgres via a
+per-type lookup, called by each of the five write-path services (round
+rating, recruiter rating, overall review, company, and bulk
+submission's three internal creation points) with one extra line right
+after their own transaction commits — never from inside it, same
+D16/D17 shape the existing approval-time indexing already used.
+`listPending()`'s per-type enrichment logic (round rating/recruiter
+rating/overall review/company, including the D37 transient-failure
+handling) was extracted into a shared `enrichEntries()` helper, reused
+by the new `search()`, which returns a flat list in OpenSearch
+relevance order (not grouped by submission — a query can legitimately
+match entries from unrelated submissions). `ModerationService.review()`
+now unconditionally removes the resolved entry from the search index
+regardless of decision. Genuinely fuzzy this time (`fuzziness: 'AUTO'`)
+— unlike `CompanySearchService`'s D17 finding, this index only ever
+holds short human-authored text, not the long numeric test-identifier
+tokens that made fuzziness risky there; confirmed live with a real
+transposed-character typo test. `ModerationController`'s base path
+changed from `moderation/queue` to `moderation` (existing routes
+prefixed with `queue` directly) so the new `GET /moderation/search`
+can be a sibling route — every existing URL is unchanged. See D59.
+
+51 new/updated api unit tests (`ModerationQueueSearchService` from
+scratch, `ModerationService`'s `indexForSearch`/`removeFromSearchIndex`/
+`search`, plus mock updates across all 5 write-path services' spec
+files), a new dedicated `moderation-search.e2e-spec.ts` (8 tests:
+same-request-cycle indexing for both interview-review and
+create-company entities, the fuzzy-typo case specifically, resolution
+removing an entry, the category filter narrowing correctly, an edit
+reindexing a previously-resolved entity, and unauthenticated 401) all
+green — full e2e suite and the golden-path smoke test (route paths
+unchanged from the caller's perspective) both stayed green across
+repeated runs. Live-verified against the real `kind` cluster via curl:
+a newly requested company became searchable immediately, a
+transposed-character typo still found it, the category filter narrowed
+correctly both ways, and approving it removed it from search results —
+zero regressions. Test data cleaned up afterward (GDPR erasure, a
+direct company-row delete, and the `prune-orphaned-company-search-docs`
+script for the one company that got indexed into the public index too
+once approved).
+
+- Next step: Phase 35 issue #371 (moderation UI search/filter) is
+  next, followed by #372 (confirmation modal), #373 (blog, last).
+  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
+  Phases 30-32 (Event-Driven Foundation / Notification Service /
+  Review Analyzer Service) remain planned but not started. Continue
+  merging without waiting for CI until the user says the GitHub
+  Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 

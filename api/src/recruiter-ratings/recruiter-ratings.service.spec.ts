@@ -17,7 +17,13 @@ describe('RecruiterRatingsService', () => {
     };
     $transaction: jest.Mock;
   };
-  let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; removeQueueEntries: jest.Mock };
+  let moderationService: {
+    enqueue: jest.Mock;
+    reenqueue: jest.Mock;
+    removeQueueEntries: jest.Mock;
+    indexForSearch: jest.Mock;
+    removeFromSearchIndex: jest.Mock;
+  };
   let fraudChecksService: { detectFlagReason: jest.Mock };
 
   const dto = {
@@ -41,6 +47,8 @@ describe('RecruiterRatingsService', () => {
       enqueue: jest.fn(),
       reenqueue: jest.fn(),
       removeQueueEntries: jest.fn(),
+      indexForSearch: jest.fn().mockResolvedValue(undefined),
+      removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
 

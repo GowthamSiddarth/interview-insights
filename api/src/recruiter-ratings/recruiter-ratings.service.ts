@@ -17,8 +17,8 @@ export class RecruiterRatingsService {
   // transaction. Fraud-check wiring added in GitHub issue #317 (D52) —
   // FraudChecksService's rate limit now counts submissions, not entities,
   // so it applies identically here as it does for round ratings.
-  create(recruiterInteractionId: string, candidateId: string, dto: CreateRecruiterRatingDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async create(recruiterInteractionId: string, candidateId: string, dto: CreateRecruiterRatingDto) {
+    const rating = await this.prisma.$transaction(async (tx) => {
       // Runs against pre-existing rows only (before this one is inserted),
       // so it never flags a rating as a duplicate of itself.
       const flagReason = await this.fraudChecksService.detectFlagReason(
@@ -33,6 +33,9 @@ export class RecruiterRatingsService {
       await this.moderationService.enqueue('recruiter_rating', rating.id, tx, flagReason);
       return rating;
     });
+    // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
+    await this.moderationService.indexForSearch('recruiter_rating', rating.id);
+    return rating;
   }
 
   // Public read — only ever returns moderation-approved ratings.
@@ -58,7 +61,7 @@ export class RecruiterRatingsService {
       throw new ForbiddenException('You can only edit your own rating.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.recruiterRating.update({
         where: { id },
         data: { ...dto, status: 'pending' },
@@ -66,6 +69,8 @@ export class RecruiterRatingsService {
       await this.moderationService.reenqueue('recruiter_rating', id, tx);
       return updated;
     });
+    await this.moderationService.indexForSearch('recruiter_rating', id);
+    return updated;
   }
 
   // GitHub issue #150 — same shape as RoundRatingsService.remove(), minus
@@ -83,5 +88,6 @@ export class RecruiterRatingsService {
       await this.moderationService.removeQueueEntries('recruiter_rating', id, tx);
       await tx.recruiterRating.delete({ where: { id } });
     });
+    await this.moderationService.removeFromSearchIndex('recruiter_rating', id);
   }
 }

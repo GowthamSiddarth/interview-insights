@@ -1359,11 +1359,11 @@ under epic #368.
       OpenSearch index, reject keeps the row as `rejected`; creating an
       `InterviewProcess` against a non-approved `companyId` is rejected
       (GitHub issue #369, D58)
-- [ ] New moderation-queue OpenSearch index + fuzzy search endpoint:
+- [x] New moderation-queue OpenSearch index + fuzzy search endpoint:
       one document per pending queue entry (category, company name,
       role title, free-text preview), indexed/removed alongside
       existing enqueue/resolve points across all four entity types;
-      `GET /moderation/search?q=&category=` (GitHub issue #370)
+      `GET /moderation/search?q=&category=` (GitHub issue #370, D59)
 - [ ] Moderation UI: a search box + two-bucket category filter on
       `/moderation`, calling the new endpoint; each result shows a
       category badge; existing per-entry approve/reject/flag controls

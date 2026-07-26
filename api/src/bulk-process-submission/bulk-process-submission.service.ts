@@ -32,10 +32,18 @@ export class BulkProcessSubmissionService {
     private readonly roundTypeFieldOptionsService: RoundTypeFieldOptionsService,
   ) {}
 
-  create(companyId: string, candidateId: string, dto: CreateBulkProcessDto) {
+  async create(companyId: string, candidateId: string, dto: CreateBulkProcessDto) {
     const { rounds, recruiterInteractions, overallReview, ...processFields } = dto;
 
-    return this.prisma.$transaction(async (tx) => {
+    // Every rateable entity created below gets indexed for moderator
+    // search (GitHub issue #370) once this whole transaction commits —
+    // never from inside it, same D16/D17 reasoning every other
+    // post-commit indexing call in this app follows.
+    const roundRatingIds: string[] = [];
+    const recruiterRatingIds: string[] = [];
+    let overallReviewId: string | undefined;
+
+    const process = await this.prisma.$transaction(async (tx) => {
       // GitHub issue #369 (Phase 35) — same guard as the single-process
       // endpoint: a pending/rejected company doesn't publicly exist yet.
       const company = await tx.company.findUnique({
@@ -75,6 +83,7 @@ export class BulkProcessSubmissionService {
             data: { ...rating, roundId: round.id, candidateId },
           });
           await this.moderationService.enqueue('round_rating', roundRating.id, tx, flagReason);
+          roundRatingIds.push(roundRating.id);
         }
       }
 
@@ -100,6 +109,7 @@ export class BulkProcessSubmissionService {
             data: { ...rating, recruiterInteractionId: interaction.id, candidateId },
           });
           await this.moderationService.enqueue('recruiter_rating', recruiterRating.id, tx, flagReason);
+          recruiterRatingIds.push(recruiterRating.id);
         }
       }
 
@@ -114,9 +124,22 @@ export class BulkProcessSubmissionService {
           data: { ...overallReview, processId: process.id, candidateId },
         });
         await this.moderationService.enqueue('overall_review', review.id, tx, flagReason);
+        overallReviewId = review.id;
       }
 
       return process;
     });
+
+    for (const id of roundRatingIds) {
+      await this.moderationService.indexForSearch('round_rating', id);
+    }
+    for (const id of recruiterRatingIds) {
+      await this.moderationService.indexForSearch('recruiter_rating', id);
+    }
+    if (overallReviewId) {
+      await this.moderationService.indexForSearch('overall_review', overallReviewId);
+    }
+
+    return process;
   }
 }

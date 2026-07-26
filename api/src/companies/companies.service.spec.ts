@@ -15,7 +15,7 @@ describe('CompaniesService', () => {
     };
     roundRating: { count: jest.Mock; findMany: jest.Mock };
   };
-  let moderationService: { enqueue: jest.Mock };
+  let moderationService: { enqueue: jest.Mock; indexForSearch: jest.Mock };
 
   const dto = { name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' as const };
   const createdCompany = {
@@ -42,7 +42,10 @@ describe('CompaniesService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
-    moderationService = { enqueue: jest.fn().mockResolvedValue(undefined) };
+    moderationService = {
+      enqueue: jest.fn().mockResolvedValue(undefined),
+      indexForSearch: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

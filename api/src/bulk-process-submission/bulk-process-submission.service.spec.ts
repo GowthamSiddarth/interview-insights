@@ -20,7 +20,7 @@ describe('BulkProcessSubmissionService', () => {
     overallReview: { create: jest.Mock };
     $transaction: jest.Mock;
   };
-  let moderationService: { enqueue: jest.Mock };
+  let moderationService: { enqueue: jest.Mock; indexForSearch: jest.Mock };
   let fraudChecksService: { detectFlagReason: jest.Mock };
   let recruitersService: { findOrCreate: jest.Mock };
   let roundTypeFieldOptionsService: { validateTypeMetadata: jest.Mock };
@@ -41,7 +41,10 @@ describe('BulkProcessSubmissionService', () => {
       overallReview: { create: jest.fn().mockResolvedValue({ id: 'review-1' }) },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
-    moderationService = { enqueue: jest.fn() };
+    moderationService = {
+      enqueue: jest.fn(),
+      indexForSearch: jest.fn().mockResolvedValue(undefined),
+    };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
     recruitersService = { findOrCreate: jest.fn().mockResolvedValue({ id: 'recruiter-1' }) };
     roundTypeFieldOptionsService = { validateTypeMetadata: jest.fn().mockResolvedValue(undefined) };
