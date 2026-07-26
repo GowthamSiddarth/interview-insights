@@ -2206,6 +2206,29 @@ the last remaining flat list in the app.
 
 ---
 
+### D55 — `/me` labels a process's own outcome distinctly from moderation status (GitHub issue #349, Phase 20)
+
+**Context:** a user live-usage report on the `/me` page: each process
+card shows `InterviewProcess.outcome` (`offer`/`rejected`/`withdrawn`/
+`ghosted`/`in_progress` — the candidate's own self-reported result of
+the interview process) as a bare word, right alongside up to five
+nested moderation statuses (round ratings, recruiter rating, overall
+review — each independently `approved`/`pending`/`rejected`/`flagged`).
+The two fields share overlapping vocabulary by coincidence, not
+design — a process outcome of `rejected` displayed as a bare
+"Rejected" reads exactly like a sixth moderation verdict, especially
+confusing when it's the *opposite* of what every real moderation
+status on the same card said.
+
+**Decision:** prefix the label — `Outcome: Rejected` instead of a bare
+`Rejected` — making the field's meaning explicit. Copy-only change, no
+data or behavior difference.
+
+**Revisit when:** never expected to need revisiting — a one-line label
+fix.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

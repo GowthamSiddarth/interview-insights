@@ -835,6 +835,16 @@ GitHub issue #214.
       re-closed the same day, same precedent as #222/#240/#278/#312.
 - [x] Engineering blog update for issue #347 (D54) — Phase 20 is now
       fully done
+- [x] `/me`'s process card labels its own outcome distinctly from
+      moderation status — a bare "Rejected" (the process's own
+      self-reported outcome) read as a sixth moderation verdict
+      alongside five real ones, especially confusing when it was the
+      opposite of what every actual status said. Now `Outcome:
+      Rejected`, copy-only (GitHub issue #349, D55). Epic #214
+      reopened and re-closed the same day, same precedent as
+      #222/#240/#278/#312/#347.
+- [x] Engineering blog update for issue #349 (D55) — Phase 20 is now
+      fully done
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
