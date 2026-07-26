@@ -2860,11 +2860,72 @@ states. `wiki/blog/README.md`'s index updated to match.
 **Phase 27 is now fully done** — issues #263-265 all closed via merged
 PRs, and every phase built so far now has a complete engineering blog.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data, issues
-  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
-  Service / Review Analyzer Service) remain planned but not started.
-  Continue merging without waiting for CI until the user says the
-  GitHub Actions billing limit has been refreshed.
+**Phase 33 (Search-First Landing Page)** — filed retroactively,
+2026-07-26, per the user's direct request: the landing page should be
+for searching/browsing reviews, not writing one — the same category of
+direct-request pivot Phase 21 (anonymous visitor soft-gating) already
+used as precedent for getting its own phase. Milestone "Phase 33 —
+Search-First Landing Page", epic #351, issues #352-353. Also checked
+`/me` for the same flat-list problem #347 fixed (issue #349's finding)
+— confirmed it's unaffected, grouped by process since Phase 17.
+
+**Phase 33, issue #352 (swap landing page and wizard; company
+selection moves upstream)** — `web/src/app/page.tsx` (`/`) and
+`web/src/app/search/page.tsx` (`/search`) swap body content wholesale:
+`/` becomes the two-step company/review search experience (previously
+at `/search`), `/search` becomes the write-a-review wizard (previously
+at `/`) — routes unchanged, only which component each renders. The new
+`/` gains a quick-select company-button grid (every existing company,
+one click) alongside the text search, the same visual pattern the
+wizard's old picker used, relocated here since discovery is this
+page's job now. The wizard's own company-picker button grid is removed
+**entirely** — company selection for a new draft happens upstream
+instead: a new "Write a review" link, on a selected search result and
+on a company's public profile page, navigates to `/search?companyId=
+...&companySlug=...&companyName=...`; the wizard reads these on mount
+to resume an existing draft for that company (matched by `companyId`
+against `listDrafts()`) or start a fresh one, then strips the params
+via `router.replace('/search')` so a later reload lands on the plain
+drafts list, not a repeat auto-start. `NavBar`'s "Search companies &
+reviews" link is relabeled "Write a review" (still `/search`, which now
+hosts the wizard) — no separate nav entry added for search, since the
+brand-mark Home link already goes to `/`.
+
+`useSearchParams()` requires a `<Suspense>` boundary in the App Router
+(a hard build error otherwise) — the wizard's default export wraps its
+real content component, same pattern `auth/verify/page.tsx` already
+established. A real test-authoring bug surfaced along the way: a naive
+mock returning `new URLSearchParams(...)` fresh on every call creates a
+new object reference every render, re-triggering the company-handoff
+effect on every re-render (not just mount) — this manifested as a
+genuine test hang, not a flake, in the first pass at updating the
+wizard-driving test files. Fixed by returning a stable, module-level
+`URLSearchParams` instance from the mock instead, matching how real
+Next.js actually memoizes `useSearchParams()`'s return value across
+re-renders when the URL hasn't changed. Documented as D56.
+
+Two page-level test files swapped content to match (`page.spec.tsx`
+now tests the search UI + new quick-buttons; `search-page.spec.tsx`
+now tests the wizard + the query-param company handoff, including a
+dedicated test proving re-arriving with the same company resumes the
+existing draft rather than creating a duplicate); all five wizard-
+driving test files updated for the new query-param entry point instead
+of a picker-button click; `nav-bar.spec.tsx` updated for the new link
+text. 131 web tests total, build, lint all green. Live-verified with a
+real headless browser (Playwright) against the real `kind` cluster:
+landing page shows search + quick company buttons; NavBar shows "Write
+a review"; selecting a company (via quick button or search) reveals a
+"Write a review" link carrying the right query params; clicking it
+lands on `/search` with the draft auto-started and the URL params
+stripped; the wizard shows no company-picker; the company profile page
+has its own "Write a review" link — zero console errors throughout.
+
+- Next step: Phase 33 issue #353 (engineering blog, written last).
+  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
+  Phases 30-32 (Event-Driven Foundation / Notification Service /
+  Review Analyzer Service) remain planned but not started. Continue
+  merging without waiting for CI until the user says the GitHub
+  Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 

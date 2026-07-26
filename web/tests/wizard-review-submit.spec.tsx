@@ -1,7 +1,19 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/page';
+import HomePage from '../src/app/search/page';
+
+// The wizard now receives its company via query params instead of its own
+// picker (a "Write a review" link from the search/landing page).
+jest.mock('next/navigation', () => {
+  const params = new URLSearchParams(
+    'companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
+  );
+  return {
+    useRouter: () => ({ replace: jest.fn() }),
+    useSearchParams: () => params,
+  };
+});
 
 const fieldOptionsResponse = {
   tech_screening: { fields: [] },
@@ -44,7 +56,6 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
 
   async function openDraft(user: ReturnType<typeof userEvent.setup>) {
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
     // Role title is required (GitHub issue #281's pre-submit validation) —
     // fill it up front so every test below starts from a submittable draft
@@ -175,7 +186,6 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     mockFetchByRoute();
     const user = userEvent.setup();
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     // Deliberately leave Role title empty, add a recruiter touchpoint with
     // no identifier — the two required-field cases the original bug report
     // was about.
@@ -236,7 +246,6 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
     const user = userEvent.setup();
 
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     // Company creation is gated, but selecting an *existing* company and
     // drafting needs no session at all (issue #253/#255) — only submit does.
     await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');

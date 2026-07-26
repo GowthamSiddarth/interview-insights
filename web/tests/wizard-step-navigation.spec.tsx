@@ -1,7 +1,19 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/page';
+import HomePage from '../src/app/search/page';
+
+// The wizard now receives its company via query params (a "Write a review"
+// link from the search/landing page or a company profile) instead of its
+// own picker. `mockSearchParams` is mutable so a test simulating a reload
+// can clear it, matching production: router.replace('/search') strips the
+// params from the real URL after the first successful consumption.
+const mockSearchParams = { current: new URLSearchParams('companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp') };
+const mockRouterReplace = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: (...args: unknown[]) => mockRouterReplace(...args) }),
+  useSearchParams: () => mockSearchParams.current,
+}));
 
 const fieldOptionsResponse = {
   tech_screening: { fields: [] },
@@ -41,11 +53,16 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     mockFetchByRoute();
     document.cookie = 'candidate_logged_in=1';
     window.localStorage.clear();
+    mockSearchParams.current = new URLSearchParams(
+      'companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
+    );
+    mockRouterReplace.mockClear();
   });
 
   async function openDraft(user: ReturnType<typeof userEvent.setup>) {
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
+    // The draft auto-starts from the mocked query params (no picker button
+    // to click anymore) — just wait for it to land.
     await screen.findByRole('heading', { name: 'Acme Corp' });
     // Role title is required (issue #281) and Next is now the only way to
     // add a round (issue #319) — fill it up front so Next isn't blocked.
@@ -201,6 +218,10 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
 
     cleanup(); // simulate a real reload: unmount the old tree first
+    // The real URL's query params are already stripped by this point
+    // (router.replace('/search') ran when the draft first auto-started),
+    // so a genuine reload lands on the drafts list, not another auto-start.
+    mockSearchParams.current = new URLSearchParams();
     render(<HomePage />);
     await user.click(await screen.findByRole('button', { name: 'Resume' }));
     await user.click(await screen.findByText(/Round 1: Coding - Screen/));

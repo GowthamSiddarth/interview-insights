@@ -154,12 +154,20 @@ export default function CompanyProfilePage() {
         <p className="text-sm text-gray-500">
           {[company.industry, sizeBucketLabel(company.sizeBucket)].filter(Boolean).join(' · ')}
         </p>
-        <Link
-          href={`/companies/${company.slug}/analytics`}
-          className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-        >
-          Full analytics breakdown
-        </Link>
+        <span className="flex flex-wrap gap-3">
+          <Link
+            href={`/companies/${company.slug}/analytics`}
+            className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            Full analytics breakdown
+          </Link>
+          <Link
+            href={`/search?companyId=${company.id}&companySlug=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
+            className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            Write a review
+          </Link>
+        </span>
       </header>
 
       <Card as="section" className="flex flex-col gap-3">

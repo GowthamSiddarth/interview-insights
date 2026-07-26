@@ -2229,6 +2229,61 @@ fix.
 
 ---
 
+### D56 — Landing page (/) and wizard (/search) swap places; company selection moves upstream of the wizard entirely (GitHub issue #352, Phase 33)
+
+**Context:** a deliberate product-direction request — the landing page
+should be for searching/browsing reviews, the primary verb this
+platform is actually about for most visitors, not writing one. Same
+category of direct, confirmed pivot Phase 21 (anonymous visitor
+soft-gating) already used as precedent for getting its own phase
+rather than folding into Phase 20's operational-hardening epic.
+
+**Decision:**
+- Swap `web/src/app/page.tsx` and `web/src/app/search/page.tsx`'s body
+  content wholesale: `/` becomes the two-step company/review search
+  experience (previously at `/search`), `/search` becomes the
+  write-a-review wizard (previously at `/`). Routes/file locations are
+  unchanged — only which component each renders.
+- The new `/` gains a quick-select company-button grid (every existing
+  company, one click) alongside the existing text search — the exact
+  visual/interaction pattern the wizard's old company picker used,
+  relocated here since discovery is this page's job now.
+- The wizard's own former company-picker button grid is removed
+  **entirely**, not kept as a fallback. Company selection for a new
+  draft happens upstream instead: a new "Write a review" link — on a
+  selected search result and on a company's public profile page
+  (`/companies/:slug`) — navigates to `/search?companyId=...&
+  companySlug=...&companyName=...`. The wizard reads these on mount to
+  either resume an existing draft for that company (matched by
+  `companyId` against `listDrafts()`) or start a fresh one, then
+  strips the params via `router.replace('/search')` so a later reload
+  lands on the plain drafts list rather than repeating the auto-start.
+  The wizard's remaining "Start a new draft" section is only the
+  create-a-genuinely-new-company form now.
+- `NavBar`'s "Search companies & reviews" link is relabeled "Write a
+  review" — still pointing at `/search`, which now hosts the wizard;
+  no separate nav entry was added for search, since the brand-mark
+  Home link already goes to `/`, now the search/discovery experience.
+- `useSearchParams()` requires the consuming component to sit inside a
+  `<Suspense>` boundary in the Next.js App Router (a hard build error
+  otherwise) — same pattern `auth/verify/page.tsx` already established
+  for the same hook; the wizard's default export wraps its real content
+  component for exactly this reason.
+
+**Testing note worth recording:** a naive test mock of
+`useSearchParams()` returning `new URLSearchParams(...)` fresh on every
+call creates a new object reference every render, which re-triggers
+the company-handoff `useEffect` on every re-render (not just mount) —
+surfaced as a real test hang, not a flake. Fixed by returning a stable,
+module-level `URLSearchParams` instance from the mock instead, matching
+how real Next.js actually memoizes `useSearchParams()`'s return value
+across re-renders when the URL hasn't changed.
+
+**Revisit when:** never expected to need revisiting — this is the
+platform's primary navigation shape now.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

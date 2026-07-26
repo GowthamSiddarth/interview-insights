@@ -1,7 +1,19 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/page';
+import HomePage from '../src/app/search/page';
+
+// The wizard now receives its company via query params instead of its own
+// picker (a "Write a review" link from the search/landing page).
+jest.mock('next/navigation', () => {
+  const params = new URLSearchParams(
+    'companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
+  );
+  return {
+    useRouter: () => ({ replace: jest.fn() }),
+    useSearchParams: () => params,
+  };
+});
 
 const fieldOptionsResponse = {
   tech_screening: { fields: [] },
@@ -40,7 +52,6 @@ describe('Next-button add-round modal (GitHub issues #306, #319)', () => {
 
   async function openDraft(user: ReturnType<typeof userEvent.setup>) {
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
     await screen.findByRole('heading', { name: 'Acme Corp' });
     await user.type(await screen.findByLabelText('Role title'), 'Backend Engineer');
   }

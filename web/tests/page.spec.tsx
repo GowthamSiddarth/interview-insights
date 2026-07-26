@@ -1,116 +1,144 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/page';
+import SearchPage from '../src/app/page';
 
-function mockFetch(companies: unknown[]) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(companies),
+function mockFetchByRoute(companies: unknown[] = []) {
+  global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input);
+    const respond = (body: unknown) =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    if (url.endsWith('/companies')) return respond(companies);
+    if (url.includes('/search/companies')) return respond([]);
+    throw new Error(`Unmocked fetch: ${url}`);
   }) as jest.Mock;
 }
 
-function setLoggedInCookie(loggedIn: boolean) {
-  document.cookie = loggedIn
-    ? 'candidate_logged_in=1'
-    : 'candidate_logged_in=; expires=Thu, 01 Jan 1970 00:00:00 UTC';
-}
-
-describe('HomePage', () => {
+// The landing page — searching/browsing reviews is the primary verb here
+// now, not writing one (GitHub issue: swap landing page with search page).
+describe('SearchPage (the landing page, now at /)', () => {
   beforeEach(() => {
-    mockFetch([]);
-    setLoggedInCookie(false);
-    window.localStorage.clear();
+    mockFetchByRoute();
   });
 
-  it('renders the platform name and loads the (empty) company list', async () => {
-    render(<HomePage />);
-    expect(screen.getByText('Interview Insights')).toBeInTheDocument();
-
-    await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/companies'),
-        expect.anything(),
-      ),
-    );
-  });
-
-  it('starts a draft when picking an existing company, and can go back to the drafts list', async () => {
-    mockFetch([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
-
-    const user = userEvent.setup();
-    render(<HomePage />);
-
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
-    expect(await screen.findByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Back to my drafts' }));
-
-    expect(screen.queryByRole('heading', { name: 'Acme Corp' })).not.toBeInTheDocument();
-    expect(await screen.findByText(/Acme Corp — Untitled process/)).toBeInTheDocument();
-  });
-
-  it('a draft survives being resumed after navigating back, with edited fields intact', async () => {
-    mockFetch([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
-
-    const user = userEvent.setup();
-    render(<HomePage />);
-
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
-    await user.type(await screen.findByLabelText('Role title'), 'Senior Engineer');
-    await user.click(screen.getByRole('button', { name: 'Back to my drafts' }));
-
-    expect(await screen.findByText(/Acme Corp — Senior Engineer/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Resume' }));
-    expect(await screen.findByDisplayValue('Senior Engineer')).toBeInTheDocument();
-  });
-
-  it('deletes a draft from the drafts list', async () => {
-    mockFetch([{ id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' }]);
-    window.confirm = jest.fn().mockReturnValue(true);
-
-    const user = userEvent.setup();
-    render(<HomePage />);
-
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
-    await user.click(screen.getByRole('button', { name: 'Back to my drafts' }));
-    expect(await screen.findByText(/Acme Corp — Untitled process/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
-
-    expect(screen.queryByText(/Acme Corp — Untitled process/)).not.toBeInTheDocument();
-  });
-
-  it('prompts to log in instead of showing the create-company form, when logged out', async () => {
-    render(<HomePage />);
-
-    expect(await screen.findByRole('link', { name: 'Log in to unlock' })).toHaveAttribute(
-      'href',
-      '/login',
-    );
-    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
-  });
-
-  it('shows the create-company form when a candidate session exists, and starts a draft on creation', async () => {
-    setLoggedInCookie(true);
-    render(<HomePage />);
-
-    expect(await screen.findByLabelText('Name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Slug')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Log in to unlock' })).not.toBeInTheDocument();
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({ id: 'company-new', name: 'New Co', slug: 'new-co', sizeBucket: 'mid' }),
+  it('shows an explicit empty state — not a blank list — when a company search matches nothing', async () => {
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const respond = (body: unknown) =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      if (url.endsWith('/companies')) return respond([]);
+      if (url.includes('/search/companies')) return respond([]);
+      throw new Error(`Unmocked fetch: ${url}`);
     }) as jest.Mock;
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Name'), 'New Co');
-    await user.type(screen.getByLabelText('Slug'), 'new-co');
-    await user.click(screen.getByRole('button', { name: 'Create company' }));
+    render(<SearchPage />);
 
-    expect(await screen.findByRole('heading', { name: 'New Co' })).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Company name'), 'Nonexistent Co');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('No companies match "Nonexistent Co".')).toBeInTheDocument(),
+    );
+  });
+
+  it('shows a distinct loading indicator while a search is in flight (GitHub issue #61)', async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/companies')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return new Promise((resolve) => {
+        resolveFetch = resolve;
+      });
+    }) as jest.Mock;
+
+    const user = userEvent.setup();
+    render(<SearchPage />);
+
+    await user.type(screen.getByPlaceholderText('Company name'), 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    // Before the fetch resolves: a loading indicator, not silence and not
+    // an empty state — those would be indistinguishable from "haven't
+    // searched yet" or "confirmed zero results".
+    await waitFor(() => expect(screen.getByText('Searching…')).toBeInTheDocument());
+    expect(screen.queryByText(/No companies match/)).not.toBeInTheDocument();
+
+    resolveFetch({ ok: true, json: () => Promise.resolve([]) });
+
+    await waitFor(() => expect(screen.getByText('No companies match "Acme".')).toBeInTheDocument());
+    expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
+  });
+
+  it('links each company result to its public profile page, and to writing a review for it (Phase 15 issue #142)', async () => {
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const respond = (body: unknown) =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      if (url.endsWith('/companies')) return respond([]);
+      if (url.includes('/search/companies')) {
+        return respond([
+          { id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', industry: null, sizeBucket: 'mid' },
+        ]);
+      }
+      throw new Error(`Unmocked fetch: ${url}`);
+    }) as jest.Mock;
+
+    const user = userEvent.setup();
+    render(<SearchPage />);
+
+    await user.type(screen.getByPlaceholderText('Company name'), 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    const profileLink = await screen.findByRole('link', { name: 'View profile' });
+    expect(profileLink).toHaveAttribute('href', '/companies/acme-corp');
+
+    // Selecting the company for step 2 surfaces a profile link and a
+    // "Write a review" link in its header, distinct from the select button.
+    await user.click(screen.getByRole('button', { name: /Acme Corp/ }));
+    const headerProfileLink = await screen.findByRole('link', { name: '(view profile)' });
+    expect(headerProfileLink).toHaveAttribute('href', '/companies/acme-corp');
+    const writeReviewLink = screen.getByRole('link', { name: 'Write a review' });
+    expect(writeReviewLink).toHaveAttribute(
+      'href',
+      '/search?companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
+    );
+  });
+
+  // The quick-select company buttons, relocated here from the wizard's old
+  // "Start a new draft" picker (which no longer exists — see search/page.tsx).
+  describe('quick-select company buttons', () => {
+    it('lists every existing company as a button, alongside the text search', async () => {
+      mockFetchByRoute([
+        { id: 'company-1', name: 'Amazon', slug: 'amazon', industry: null, sizeBucket: 'large' },
+        { id: 'company-2', name: 'Walmart Tech', slug: 'walmart-tech', industry: null, sizeBucket: 'large' },
+      ]);
+      render(<SearchPage />);
+
+      expect(await screen.findByRole('button', { name: 'Amazon' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Walmart Tech' })).toBeInTheDocument();
+    });
+
+    it('selecting a quick-button company reveals step 2 for browsing its reviews', async () => {
+      mockFetchByRoute([
+        { id: 'company-1', name: 'Amazon', slug: 'amazon', industry: null, sizeBucket: 'large' },
+      ]);
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Amazon' }));
+
+      expect(await screen.findByText(/Browse reviews for Amazon/)).toBeInTheDocument();
+    });
+
+    it('does not show any quick buttons when there are no companies yet', async () => {
+      mockFetchByRoute([]);
+      render(<SearchPage />);
+
+      await waitFor(() => expect(screen.getByText('1. Find a company')).toBeInTheDocument());
+      expect(screen.queryByText('Or pick one directly:')).not.toBeInTheDocument();
+    });
   });
 });
