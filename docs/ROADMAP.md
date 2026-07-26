@@ -1311,3 +1311,64 @@ Refinements". Epic: GitHub issue #356.
       issue #357's homogeneous-row shape there created redundancy on an
       already-long company list; the typed-search-results list keeps
       the full `CompanyResultRow` shape unchanged (GitHub issue #366)
+
+## Phase 35 — Moderated Company Creation & Moderator Search
+
+Filed 2026-07-26, from direct user feedback on issue #360's
+create-company-request flow: `POST /companies` has never been
+moderation-gated (a real gap predating Phase 16, `Company` has no
+`candidateId` so it was never on that phase's write-path list, and
+issue #217/D38 only added session + rate-limit gating, not a
+moderation queue) — every new company is public and searchable
+instantly, contradicting CLAUDE.md hard constraint #2 ("every review/
+rating write goes through moderation before it's public"). Separately,
+the moderation queue itself has no search/filter capability at all —
+finding one entry among many means scrolling the whole grouped list.
+Four design decisions resolved directly with the project owner before
+filing:
+- `Company` gets a real `status` column (reusing the existing
+  `ModerationStatus` enum — pending/approved/rejected/flagged),
+  mirroring `RoundRating`/`RecruiterRating`/`OverallReview` exactly,
+  rather than a separate "request" table — the row exists immediately,
+  just hidden from every public read until approved.
+- The moderator's new fuzzy search/filter box is backed by a **new
+  dedicated OpenSearch index** over the moderation queue itself
+  (indexed on entry, removed on resolution — same best-effort,
+  non-blocking D16/D17 pattern), not Postgres trigram matching.
+- The category filter is **two buckets**: "interview-review" (round
+  rating + recruiter rating + overall review, combined) vs.
+  "create-company request" — not four separate per-entity-type values.
+- A rejected company request's row is **kept** with `status=rejected`
+  for an audit trail, not deleted — its slug stays permanently
+  occupied unless an admin manually intervenes later, a deliberate
+  trade favoring audit history over slug reuse.
+
+Also motivated by the same change: issue #360's auto-redirect into
+`/write-review` after a successful company creation stops making sense
+once the created company is pending, not public — it's replaced with a
+plain confirmation modal, no navigation. Milestone "Phase 35 —
+Moderated Company Creation & Moderator Search", issues #369-373 filed
+under epic #368.
+
+- [ ] Company creation moves behind moderation: `Company.status`
+      (migration), `CompaniesService.create()` enqueues instead of
+      indexing immediately, every public read path (list/by-slug/
+      analytics/reviews/search) filters to `approved` only,
+      `ModerationService.review()` gains a fourth entity type
+      (`company`) — approve indexes to the existing `companies`
+      OpenSearch index, reject keeps the row as `rejected`; creating an
+      `InterviewProcess` against a non-approved `companyId` is rejected
+      (GitHub issue #369)
+- [ ] New moderation-queue OpenSearch index + fuzzy search endpoint:
+      one document per pending queue entry (category, company name,
+      role title, free-text preview), indexed/removed alongside
+      existing enqueue/resolve points across all four entity types;
+      `GET /moderation/search?q=&category=` (GitHub issue #370)
+- [ ] Moderation UI: a search box + two-bucket category filter on
+      `/moderation`, calling the new endpoint; each result shows a
+      category badge; existing per-entry approve/reject/flag controls
+      reused (GitHub issue #371)
+- [ ] Confirmation modal replaces the create-company-request flow's
+      auto-redirect into `/write-review` — a plain "request submitted"
+      modal (OK + corner close), no navigation (GitHub issue #372)
+- [ ] Engineering blog (last) (GitHub issue #373)
