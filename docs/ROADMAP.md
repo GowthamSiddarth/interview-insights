@@ -1257,4 +1257,4 @@ Landing Page". Epic: GitHub issue #351.
       company's profile page that carries the chosen company into the
       wizard via query params; NavBar's link relabeled "Write a
       review" (GitHub issue #352, D56)
-- [ ] Engineering blog (last) (GitHub issue #353)
+- [x] Engineering blog (last) (GitHub issue #353)
