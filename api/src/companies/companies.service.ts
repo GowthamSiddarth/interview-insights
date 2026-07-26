@@ -41,51 +41,72 @@ export class CompaniesService {
     return this.prisma.company.findUniqueOrThrow({ where: { slug } });
   }
 
-  // A company's approved round ratings, shaped for public display. Reads
-  // Postgres, not OpenSearch — the search index is derived/best-effort
-  // (D16/D17) and can silently miss documents; a profile page listing a
-  // company's reviews is a source-of-truth read, not a search. Never
-  // includes candidateId or any interviewer identity (hard constraint #1).
+  // A company's approved round ratings, grouped by their InterviewProcess
+  // ("submission") — GitHub issue #347: a candidate's own multi-round loop
+  // was previously listed as one flat row per round, inflating the visible
+  // review count and repeating the same role-title context per row (the
+  // same flat-list problem Phase 29 issue #315 already fixed for the
+  // moderation queue). `total`/`page`/`pageSize` describe submissions, not
+  // raw rows, so a submission's rounds are never split across a page
+  // boundary. Reads Postgres, not OpenSearch — the search index is
+  // derived/best-effort (D16/D17) and can silently miss documents; a
+  // profile page listing a company's reviews is a source-of-truth read,
+  // not a search. Never includes candidateId or any interviewer identity
+  // (hard constraint #1).
   async findApprovedReviews(companyId: string, page: number, pageSize: number) {
     // 404 (not an empty page) for a company that doesn't exist.
     await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
 
-    const where = {
-      status: 'approved' as const,
-      round: { process: { companyId } },
-    };
-    const [total, ratings] = await Promise.all([
-      this.prisma.roundRating.count({ where }),
-      this.prisma.roundRating.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: {
-          round: {
-            select: { title: true, roundType: true, process: { select: { roleTitle: true } } },
+    // Grouped in application code, same pattern as ModerationService's
+    // Map-keyed grouping (#315) and D13's accepted full-table-scan
+    // tradeoff — fine at today's volume, revisit if a company's review
+    // count ever makes this measurably slow.
+    const ratings = await this.prisma.roundRating.findMany({
+      where: { status: 'approved', round: { process: { companyId } } },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        round: {
+          select: {
+            title: true,
+            roundType: true,
+            processId: true,
+            process: { select: { roleTitle: true } },
           },
         },
-      }),
-    ]);
+      },
+    });
 
-    return {
-      total,
-      page,
-      pageSize,
-      items: ratings.map((r) => ({
+    const groupsByProcess = new Map<
+      string,
+      { processId: string; roleTitle: string; entries: unknown[] }
+    >();
+    for (const r of ratings) {
+      const processId = r.round.processId;
+      let group = groupsByProcess.get(processId);
+      if (!group) {
+        group = { processId, roleTitle: r.round.process.roleTitle, entries: [] };
+        groupsByProcess.set(processId, group);
+      }
+      group.entries.push({
         id: r.id,
         createdAt: r.createdAt,
         roundTitle: r.round.title,
         roundType: r.round.roundType,
-        roleTitle: r.round.process.roleTitle,
         difficulty: r.difficulty,
         fluency: r.fluency,
         clarity: r.clarity,
         focus: r.focus,
         technicalDepth: r.technicalDepth,
         freeText: r.freeText,
-      })),
-    };
+      });
+    }
+
+    // `ratings` is already createdAt-desc and Map preserves insertion
+    // order, so groups are already ordered by their most-recent rating.
+    const groups = Array.from(groupsByProcess.values());
+    const total = groups.length;
+    const items = groups.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
+
+    return { total, page, pageSize, items };
   }
 }

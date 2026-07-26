@@ -175,11 +175,10 @@ set.
 See `docs/ROADMAP.md` Phase 20. Filed retroactively — cross-cutting
 fixes and tooling discovered via live verification, stress-testing, and
 product review rather than planned feature work. Declared fully done,
-then reopened twice the same day/night — first for issue #222, then
-for issue #240 — the same non-linear precedent Phase 6/8/18 already
-set. All six feature issues are now done — this phase's blog is
-complete. Phase 19 (Content Quality & Synthetic Data) remains queued
-behind it.
+then reopened five times — for issues #222, #240, #278, #312, and
+#347 — the same non-linear precedent Phase 6/8/18 already set. All
+nine feature issues are now done — this phase's blog is complete.
+Phase 19 (Content Quality & Synthetic Data) remains queued behind it.
 
 1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20-operational-hardening/issue-215-cd-artifact-pruning/README.md)
 2. [Issue #216 — Full golden-path smoke test (D36)](phase-20-operational-hardening/issue-216-golden-path-smoke-test/README.md)
@@ -189,6 +188,7 @@ behind it.
 6. [Issue #240 — D35's fix cleaned the wrong disk: pruning the kind node's own containerd store (D43)](phase-20-operational-hardening/issue-240-kind-node-image-pruning/README.md)
 7. [Issue #278 — 415 ghosts in the search index: pruning orphaned OpenSearch company documents (D51)](phase-20-operational-hardening/issue-278-orphaned-search-docs/README.md)
 8. [Issue #312 — Port-forwards that outlive the shell that started them](phase-20-operational-hardening/issue-312-launchd-port-forwards/README.md)
+9. [Issue #347 — Company reviews, grouped by submission (D54)](phase-20-operational-hardening/issue-347-company-reviews-grouping/README.md)
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

@@ -8,6 +8,7 @@ import {
   ApiError,
   Company,
   CompanyAnalytics,
+  CompanyReviewGroup,
   CompanyReviewItem,
   CompanyReviewsPage,
 } from '@/lib/api';
@@ -38,9 +39,9 @@ function errorMessage(err: unknown): string {
 
 function ReviewItem({ review }: { review: CompanyReviewItem }) {
   return (
-    <article className="flex flex-col gap-1 border-t border-gray-200 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-gray-700">
+    <article className="flex flex-col gap-1 text-sm">
       <p className="font-medium">
-        {review.roleTitle} · {formatRoundLabel(roundTypeLabel(review.roundType), review.roundTitle)}
+        {formatRoundLabel(roundTypeLabel(review.roundType), review.roundTitle)}
       </p>
       <p className="text-gray-600 dark:text-gray-400">
         difficulty {review.difficulty} · fluency {review.fluency} · clarity{' '}
@@ -48,6 +49,39 @@ function ReviewItem({ review }: { review: CompanyReviewItem }) {
       </p>
       {review.freeText && <p className="italic">&quot;{review.freeText}&quot;</p>}
     </article>
+  );
+}
+
+// GitHub issue #347: one collapsed row per submission (not per round),
+// expanding on click to reveal every rated round's full detail — the
+// same flat-list fix Phase 29 issue #315 already applied to the
+// moderation queue.
+function ReviewGroupItem({ group }: { group: CompanyReviewGroup }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border-t border-gray-200 pt-3 first:border-t-0 first:pt-0 dark:border-gray-700">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-center justify-between gap-4 text-left text-sm"
+        aria-expanded={expanded}
+      >
+        <div>
+          <p className="font-medium">{group.roleTitle}</p>
+          <p className="text-xs text-gray-500">
+            {group.entries.length} round{group.entries.length === 1 ? '' : 's'} rated
+          </p>
+        </div>
+        <span className="text-gray-500">{expanded ? 'Hide details' : 'View details'}</span>
+      </button>
+      {expanded && (
+        <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+          {group.entries.map((r) => (
+            <ReviewItem key={r.id} review={r} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -188,7 +222,7 @@ export default function CompanyProfilePage() {
               {reviews.total} review{reviews.total === 1 ? '' : 's'}
             </p>
             <div className="flex flex-col gap-4">
-              <ReviewItem review={reviews.items[0]} />
+              <ReviewGroupItem group={reviews.items[0]} />
             </div>
             {(reviews.items.length > 1 || totalPages > 1) && (
               <GatedSection
@@ -196,8 +230,8 @@ export default function CompanyProfilePage() {
                 prompt={`Log in to see the other ${reviews.total - 1} review${reviews.total - 1 === 1 ? '' : 's'}`}
               >
                 <div className="flex flex-col gap-4">
-                  {reviews.items.slice(1).map((r) => (
-                    <ReviewItem key={r.id} review={r} />
+                  {reviews.items.slice(1).map((g) => (
+                    <ReviewGroupItem key={g.processId} group={g} />
                   ))}
                 </div>
                 {totalPages > 1 && (
