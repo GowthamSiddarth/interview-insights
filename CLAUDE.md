@@ -2935,11 +2935,80 @@ stable module-level instance, matching real Next.js memoization).
 merged PRs, and every phase built so far now has a complete
 engineering blog.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data, issues
-  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
-  Service / Review Analyzer Service) remain planned but not started.
-  Continue merging without waiting for CI until the user says the
-  GitHub Actions billing limit has been refreshed.
+**Phase 34 planning (Write-a-Review Flow Refinements)** — filed
+2026-07-25 from a batch of five direct UI/UX requests following Phase
+33's search-first swap: homogeneous company-list rows ("Browse
+reviews"/"View profile"/"Write a review" actions, applied identically
+to search results and the quick-select button grid); dropping the
+parenthesized "(view profile)" styling; removing NavBar's standalone
+"Write a review" link entirely; and a search-failure-triggered
+"request a new company" flow, deliberately unreachable except from a
+zero-results search. Two clarifying questions resolved directly with
+the project owner before filing: quick-select buttons get the same
+3-action row shape search results do; and — a genuinely custom answer,
+not a plain option pick — drafts must be gated behind candidate login
+even though a draft is only localStorage, suggested (and adopted) a
+dedicated `/drafts` route, and the wizard must not keep living at
+`/search` (needs its own distinct route name). Milestone "Phase 34 —
+Write-a-Review Flow Refinements", issues #357-361 filed under epic
+#356.
+
+**Phase 34, issues #358-359 (`/write-review` route + login-gated
+`/drafts` page)** — implements D57. `web/src/app/search/page.tsx` (the
+wizard, since D56) moved to `web/src/app/write-review/page.tsx`; the
+`search/` directory (and route) no longer exists — browse/search
+already lives at `/` since D56, so there's no third swap, just one
+route retired. `/write-review`'s "no company context" state now only
+redirects to `/`; the inline drafts list and create-company form are
+removed from it entirely (they don't belong on a route whose only job
+is "a company or draft was already chosen upstream"). It gained a
+second query-param shape, `?draftId=X` (resume this exact draft),
+alongside the existing `?companyId=&companySlug=&companyName=` —
+`/drafts`'s Resume links use the former, every "Write a review" link
+elsewhere still uses the latter. A real redirect-loop bug was found
+and fixed while wiring the `?draftId=` path in: after the query-param
+effect consumes context and calls `router.replace('/write-review')`,
+the resulting empty `URLSearchParams` re-triggers the same effect,
+which would otherwise incorrectly redirect home even with an active
+draft — fixed with a `useRef` flag (`consumedContextRef`), not state,
+checked before the redirect-home branch (D57 has the full reasoning).
+
+New `web/src/app/drafts/page.tsx`: the drafts list, displaced from the
+wizard, gated with the existing `GatedSection` component (same
+visibility rule as `/me`'s "My reviews") — a presentation-layer gate
+only, since `listDrafts()` itself needs no session. `NavBar` gains a
+"My drafts" link (shown only when logged in) and loses its standalone
+"Write a review" link entirely. `web/src/app/page.tsx` and
+`web/src/app/companies/[slug]/page.tsx`'s "Write a review" links
+updated to point at `/write-review`.
+
+7 tests in the renamed `write-review-page.spec.tsx` (query-param
+company handoff, draftId resume, no-context redirect, the
+redirect-loop fix specifically) + 6 new `drafts-page.spec.tsx` tests
+(login gate, empty state, listing, resume, delete, declined-delete) +
+2 new `nav-bar.spec.tsx` tests (My drafts shown/hidden by session) +
+5 existing wizard-driving test files fixed for the new import path/
+router mock (`push` added alongside `replace`) and the drafts-list UI
+having moved off this page entirely — 137 web tests total, build/lint
+clean. Live-verified with a real headless browser (Playwright) against
+the real `kind` cluster: real magic-link login, NavBar showed "My
+drafts" and no "Write a review" anywhere, selecting a company and
+clicking its "Write a review" link landed on `/write-review` with the
+URL stripped and the draft auto-started, "Back to my drafts" was a
+real link to `/drafts`, Resume there navigated back into the same
+draft via `?draftId=`, Delete removed it, logging out both gated
+`/drafts` behind a login prompt and hid "My drafts" from NavBar — zero
+console errors throughout. Test candidate cleaned up via the real
+`DELETE /me` GDPR-erasure endpoint afterward.
+
+- Next step: Phase 34 issues #357 (homogeneous company-list rows) and
+  #360 (search-failure create-company-request flow) remain next in
+  line, followed by #361 (blog, last). Phase 19 (Content Quality &
+  Synthetic Data, issues #162-165) and Phases 30-32 (Event-Driven
+  Foundation / Notification Service / Review Analyzer Service) remain
+  planned but not started. Continue merging without waiting for CI
+  until the user says the GitHub Actions billing limit has been
+  refreshed.
 
 ## Open decisions still to make
 

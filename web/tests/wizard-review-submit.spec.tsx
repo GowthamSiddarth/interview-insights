@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/search/page';
+import HomePage from '../src/app/write-review/page';
 
 // The wizard now receives its company via query params instead of its own
 // picker (a "Write a review" link from the search/landing page).
@@ -10,7 +10,7 @@ jest.mock('next/navigation', () => {
     'companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
   );
   return {
-    useRouter: () => ({ replace: jest.fn() }),
+    useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
     useSearchParams: () => params,
   };
 });
@@ -174,12 +174,14 @@ describe('Wizard review & bulk submit (GitHub issue #255)', () => {
       await screen.findByText('Please check the highlighted fields and try again.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Invalid value\(s\)/)).not.toBeInTheDocument();
-    // Draft still exists (with its round still in it) — back to my drafts
-    // should not lose it, and resuming shows the round untouched.
-    await user.click(screen.getByRole('button', { name: 'Back to my drafts' }));
-    expect(await screen.findByText('Your drafts')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Resume' }));
-    expect((await screen.findAllByText(/Round 1: Coding - Screen/)).length).toBeGreaterThan(0);
+    // Draft still exists (with its round still in it) — the failed submit
+    // never touched it. "Back to my drafts" is a real link to the
+    // dedicated /drafts page now, not an inline list on this page.
+    expect(screen.getByRole('link', { name: 'Back to my drafts' })).toHaveAttribute(
+      'href',
+      '/drafts',
+    );
+    expect(screen.getAllByText(/Round 1: Coding - Screen/).length).toBeGreaterThan(0);
   });
 
   it('blocks submit and shows a plain-English fix list for an incomplete draft (GitHub issue #281)', async () => {

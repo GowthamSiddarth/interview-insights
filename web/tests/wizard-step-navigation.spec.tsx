@@ -1,17 +1,17 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/search/page';
+import HomePage from '../src/app/write-review/page';
 
 // The wizard now receives its company via query params (a "Write a review"
 // link from the search/landing page or a company profile) instead of its
 // own picker. `mockSearchParams` is mutable so a test simulating a reload
-// can clear it, matching production: router.replace('/search') strips the
+// can clear it, matching production: router.replace('/write-review') strips the
 // params from the real URL after the first successful consumption.
 const mockSearchParams = { current: new URLSearchParams('companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp') };
 const mockRouterReplace = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: (...args: unknown[]) => mockRouterReplace(...args) }),
+  useRouter: () => ({ replace: (...args: unknown[]) => mockRouterReplace(...args), push: jest.fn() }),
   useSearchParams: () => mockSearchParams.current,
 }));
 
@@ -218,12 +218,15 @@ describe('Wizard step navigation (GitHub issue #254)', () => {
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
 
     cleanup(); // simulate a real reload: unmount the old tree first
-    // The real URL's query params are already stripped by this point
-    // (router.replace('/search') ran when the draft first auto-started),
-    // so a genuine reload lands on the drafts list, not another auto-start.
-    mockSearchParams.current = new URLSearchParams();
+    // A real reload lands on /drafts (per Phase 34 issue #358/#359) —
+    // clicking "Resume" there arrives back here via ?draftId=X, the same
+    // mechanism used here directly.
+    const stored = JSON.parse(
+      window.localStorage.getItem('interview-insights:drafts:v1') ?? '{}',
+    ) as Record<string, { id: string }>;
+    const draftId = Object.keys(stored)[0];
+    mockSearchParams.current = new URLSearchParams(`draftId=${draftId}`);
     render(<HomePage />);
-    await user.click(await screen.findByRole('button', { name: 'Resume' }));
     await user.click(await screen.findByText(/Round 1: Coding - Screen/));
     expect(await screen.findByLabelText('I have a rating for this round')).toBeChecked();
   });

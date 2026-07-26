@@ -43,13 +43,10 @@ export function NavBar() {
           <BrandMark />
           Interview Insights
         </Link>
-        {/* The wizard lives at /search now — the landing page (/) is the
-            search/browse experience, so this is the write-a-review entry
-            point instead (searching companies & reviews is now the
-            default landing experience, no separate nav link needed). */}
-        <Link href="/search" className={linkClass}>
-          Write a review
-        </Link>
+        {/* No standalone "Write a review" nav link (GitHub issue #358) —
+            writing a review is always company-specific now, reached via a
+            "Write a review" link on search results or a company's profile
+            page, never a bare entry point with no company context. */}
         {/* Internal/admin page — gated by its own login screen (Phase 18
             issue #160), not linked to here based on session state. */}
         <Link href="/moderation" className={linkClass}>
@@ -58,6 +55,14 @@ export function NavBar() {
         {loggedIn === true && (
           <Link href="/me" className={linkClass}>
             My reviews
+          </Link>
+        )}
+        {/* GitHub issue #359 (Phase 34) — drafts are gated behind login
+            (same visibility rule as "My reviews"), even though the
+            underlying storage is just localStorage, not a real session. */}
+        {loggedIn === true && (
+          <Link href="/drafts" className={linkClass}>
+            My drafts
           </Link>
         )}
         <span className="ml-auto">

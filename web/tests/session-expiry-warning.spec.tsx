@@ -1,7 +1,7 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import HomePage from '../src/app/search/page';
+import HomePage from '../src/app/write-review/page';
 
 // The wizard now receives its company via query params instead of its own
 // picker (a "Write a review" link from the search/landing page).
@@ -10,7 +10,7 @@ jest.mock('next/navigation', () => {
     'companyId=company-1&companySlug=acme-corp&companyName=Acme%20Corp',
   );
   return {
-    useRouter: () => ({ replace: jest.fn() }),
+    useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
     useSearchParams: () => params,
   };
 });
