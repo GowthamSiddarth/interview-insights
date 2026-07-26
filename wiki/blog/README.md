@@ -342,3 +342,17 @@ complete.
 1. [Issue #357 — Homogeneous company-list rows](phase-34-write-a-review-flow-refinements/issue-357-homogeneous-company-rows/README.md)
 2. [Issues #358-359 — `/write-review` route + login-gated `/drafts` page (D57)](phase-34-write-a-review-flow-refinements/issue-358-359-write-review-drafts-routes/README.md)
 3. [Issue #360 — Search-failure "request a new company" flow](phase-34-write-a-review-flow-refinements/issue-360-create-company-request-flow/README.md)
+
+## Phase 35 — Moderated Company Creation & Moderator Search
+
+See `docs/ROADMAP.md` Phase 35 and `docs/DECISIONS.md` D58/D59. Filed
+from direct user feedback on issue #360's create-company-request flow:
+`POST /companies` had never been moderation-gated, a real gap against
+CLAUDE.md hard constraint #2; separately, the moderation queue had no
+search/filter capability at all. All four feature issues are done —
+this phase's blog is complete.
+
+1. [Issue #369 — Company creation moves behind moderation (D58)](phase-35-moderated-company-creation-moderator-search/issue-369-company-moderation-gate/README.md)
+2. [Issue #370 — New moderation-queue OpenSearch index + fuzzy search endpoint (D59)](phase-35-moderated-company-creation-moderator-search/issue-370-moderation-queue-search/README.md)
+3. [Issue #371 — Moderation UI search box + category filter](phase-35-moderated-company-creation-moderator-search/issue-371-moderation-ui-search/README.md)
+4. [Issue #372 — Confirmation modal replaces the create-company-request auto-redirect](phase-35-moderated-company-creation-moderator-search/issue-372-confirmation-modal/README.md)

@@ -3276,15 +3276,26 @@ appeared with no navigation (URL stayed on `/`), OK dismissed it and
 restored the trigger button, and a second request's corner ✕ dismissed
 identically — zero console errors. Test data cleaned up afterward.
 
-**Phase 35 is now fully done except its engineering blog** — issues
-#369-372 all closed via merged PRs.
+**Phase 35, issue #373 (engineering blog)** —
+`wiki/blog/phase-35-moderated-company-creation-moderator-search/`
+gained one post per feature issue (#369-372), covering the company
+moderation gate's storage-model decision and the friendly
+duplicate-pending message (D58), the moderation-queue search index's
+`entityType:entityId` keying and centralized `indexForSearch`/
+`enrichEntries` design plus why fuzziness is safe here unlike D17
+(D59), the moderation UI's category-alone-searches requirement and the
+shared `EntryActions` extraction, and the confirmation modal's
+acknowledgment-not-decision framing. `wiki/blog/README.md`'s index
+updated to match.
 
-- Next step: Phase 35 issue #373 (engineering blog, last) remains.
-  Phase 19 (Content Quality & Synthetic Data, issues #162-165) and
-  Phases 30-32 (Event-Driven Foundation / Notification Service /
-  Review Analyzer Service) remain planned but not started. Continue
-  merging without waiting for CI until the user says the GitHub
-  Actions billing limit has been refreshed.
+**Phase 35 is now fully done** — issues #369-373 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+- Next step: Phase 19 (Content Quality & Synthetic Data, issues
+  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
+  Service / Review Analyzer Service) remain planned but not started.
+  Continue merging without waiting for CI until the user says the
+  GitHub Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 

@@ -1371,7 +1371,7 @@ under epic #368.
 - [x] Confirmation modal replaces the create-company-request flow's
       auto-redirect into `/write-review` — a plain "request submitted"
       modal (OK + corner close), no navigation (GitHub issue #372)
-- [ ] Engineering blog (last) (GitHub issue #373)
+- [x] Engineering blog (last) (GitHub issue #373)
 
 ## Phase 36 — Moderator Queue SLAs, Assignment & Notifications (not yet planned)
 
