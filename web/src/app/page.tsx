@@ -10,6 +10,7 @@ import {
   ReviewSearchResult,
   Round,
 } from '@/lib/api';
+import { CompanyResultRow } from '@/components/CompanyResultRow';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -141,17 +142,11 @@ export default function SearchPage() {
         {companies.length > 0 && (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-gray-500">Or pick one directly:</p>
-            <div className="flex flex-wrap gap-2">
+            <ul className="flex flex-col gap-1">
               {companies.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleSelectCompany(c)}
-                  className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
-                >
-                  {c.name}
-                </button>
+                <CompanyResultRow key={c.id} company={c} onBrowseReviews={handleSelectCompany} />
               ))}
-            </div>
+            </ul>
           </div>
         )}
 
@@ -164,31 +159,11 @@ export default function SearchPage() {
           ) : (
             <ul className="flex flex-col gap-1">
               {companyResults.map((company) => (
-                <li
+                <CompanyResultRow
                   key={company.id}
-                  className={`flex items-center justify-between gap-2 rounded-md border px-3 py-1 text-sm transition-colors ${
-                    selectedCompany?.id === company.id
-                      ? 'border-indigo-600 dark:border-indigo-400'
-                      : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  <button
-                    onClick={() => handleSelectCompany(company)}
-                    className="flex-1 text-left hover:underline"
-                  >
-                    {company.name}{' '}
-                    <span className="text-gray-500">({company.sizeBucket})</span>
-                  </button>
-                  {/* The public profile page (Phase 15) — distinct from the
-                      button above, which only selects the company for
-                      step 2's review filtering below. */}
-                  <Link
-                    href={`/companies/${company.slug}`}
-                    className="shrink-0 text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                  >
-                    View profile
-                  </Link>
-                </li>
+                  company={company}
+                  onBrowseReviews={handleSelectCompany}
+                />
               ))}
             </ul>
           )))
@@ -203,7 +178,7 @@ export default function SearchPage() {
               href={`/companies/${selectedCompany.slug}`}
               className="text-sm font-normal text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
-              (view profile)
+              View profile
             </Link>{' '}
             <Link
               href={`/write-review?companyId=${selectedCompany.id}&companySlug=${selectedCompany.slug}&companyName=${encodeURIComponent(selectedCompany.name)}`}
