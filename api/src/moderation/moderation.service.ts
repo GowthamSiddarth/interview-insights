@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -248,6 +248,21 @@ export class ModerationService {
     const overallReviews = this.settledOrEmpty(overallReviewsResult, 'overall_review');
     const companies = this.settledOrEmpty(companiesResult, 'company');
 
+    // GitHub issue #383 (D61) — whether each type's own batch fetch
+    // actually succeeded, independent of whether any particular id came
+    // back. Distinguishes a *genuinely* missing entity (fetch succeeded,
+    // this id just wasn't in the results — the only way that happens is a
+    // raw-SQL deletion bypassing removeQueueEntries()) from D37's transient
+    // per-batch failure (fetch itself rejected — kept as `entity: null`
+    // below so a real, still-existing entity isn't dropped just because
+    // this pass couldn't enrich it).
+    const fetchSucceeded: Record<ModerationEntityType, boolean> = {
+      round_rating: roundRatingsResult.status === 'fulfilled',
+      recruiter_rating: recruiterRatingsResult.status === 'fulfilled',
+      overall_review: overallReviewsResult.status === 'fulfilled',
+      company: companiesResult.status === 'fulfilled',
+    };
+
     const entityById = new Map<string, ModerationQueueEntity>();
     for (const r of roundRatings) {
       entityById.set(r.id, {
@@ -310,10 +325,31 @@ export class ModerationService {
       });
     }
 
-    return entries.map((entry) => ({
-      ...entry,
-      entity: entityById.get(entry.entityId) ?? null,
-    }));
+    // GitHub issue #383 (D61) — self-heal genuine orphans found above
+    // rather than surfacing them forever as "Unknown · Unknown" (and
+    // leaving them one click away from review()'s own "Record not found."
+    // crash): remove the stale queue entry and its search-index document,
+    // and exclude it from the returned entries entirely.
+    const enriched: ModerationQueueEntry[] = [];
+    const orphaned: RawQueueEntry[] = [];
+    for (const entry of entries) {
+      const entity = entityById.get(entry.entityId) ?? null;
+      if (entity === null && fetchSucceeded[entry.entityType]) {
+        orphaned.push(entry);
+        continue;
+      }
+      enriched.push({ ...entry, entity });
+    }
+
+    if (orphaned.length > 0) {
+      this.logger.warn(
+        `Removing ${orphaned.length} orphaned moderation queue ${orphaned.length === 1 ? 'entry' : 'entries'} whose underlying record no longer exists: ${orphaned.map((e) => `${e.entityType}:${e.entityId}`).join(', ')}`,
+      );
+      await this.prisma.moderationQueueEntry.deleteMany({ where: { id: { in: orphaned.map((e) => e.id) } } });
+      await Promise.all(orphaned.map((e) => this.removeFromSearchIndex(e.entityType, e.entityId)));
+    }
+
+    return enriched;
   }
 
   approve(id: string, dto: ModerationActionDto) {
@@ -338,6 +374,24 @@ export class ModerationService {
 
     if (entry.reviewedAt) {
       throw new ConflictException('This item has already been reviewed.');
+    }
+
+    // GitHub issue #383 (D61) — a raw-SQL deletion of an entity (bypassing
+    // removeQueueEntries(), which every in-app delete path goes through)
+    // can leave a stale queue entry with nothing left to review. Without
+    // this check, the entity update below would throw Prisma's raw
+    // "Record not found." — a confusing, unrecoverable dead end for the
+    // moderator, since the entry can never be actioned again but also
+    // never disappears on its own. enrichEntries() already self-heals
+    // most of these on the next queue read (listPending()/search()), but
+    // this closes the narrow race where a page is already open when its
+    // entity gets deleted out from under it.
+    if (!(await this.entityExists(entry.entityType, entry.entityId))) {
+      await this.prisma.moderationQueueEntry.delete({ where: { id } });
+      await this.removeFromSearchIndex(entry.entityType, entry.entityId);
+      throw new NotFoundException(
+        "This item's underlying record no longer exists. The stale queue entry has been removed.",
+      );
     }
 
     // Every ModerationEntityType now has a write path (round_rating since
@@ -478,6 +532,27 @@ export class ModerationService {
   // ModerationService, never the search service directly.
   removeFromSearchIndex(entityType: ModerationEntityType, entityId: string): Promise<void> {
     return this.moderationQueueSearchService.removeEntry(entityType, entityId);
+  }
+
+  // GitHub issue #383 (D61) — a cheap existence check, used by review()'s
+  // orphan guard above. Deliberately a single `findUnique`/`select: { id }`
+  // per type rather than reusing buildIndexableEntry() (which does a much
+  // heavier join this check has no use for).
+  private async entityExists(entityType: ModerationEntityType, entityId: string): Promise<boolean> {
+    switch (entityType) {
+      case 'round_rating':
+        return (await this.prisma.roundRating.findUnique({ where: { id: entityId }, select: { id: true } })) !== null;
+      case 'recruiter_rating':
+        return (
+          (await this.prisma.recruiterRating.findUnique({ where: { id: entityId }, select: { id: true } })) !== null
+        );
+      case 'overall_review':
+        return (
+          (await this.prisma.overallReview.findUnique({ where: { id: entityId }, select: { id: true } })) !== null
+        );
+      case 'company':
+        return (await this.prisma.company.findUnique({ where: { id: entityId }, select: { id: true } })) !== null;
+    }
   }
 
   private async buildIndexableEntry(

@@ -1378,6 +1378,15 @@ under epic #368.
       from every public read path — a new data-fix migration marks
       anything created before that migration's own timestamp as
       `approved` (GitHub issue #381, D60)
+- [x] Fix: `moderation_queue` entries orphaned by a raw-SQL entity
+      deletion (bypassing `removeQueueEntries()`) rendered as
+      "Unknown · Unknown" forever and 404'd with a raw Prisma error if
+      actioned — `enrichEntries()`/`review()` now self-heal a genuinely
+      missing entity instead. Also closed a deeper gap this surfaced:
+      the general e2e suite had no guard against running against the
+      dev database/real OpenSearch indices (only the smoke test did) —
+      a new `jest-e2e.json` `globalSetup` now enforces both isolation
+      knobs for the whole suite (GitHub issue #383, D61)
 
 ## Phase 36 — Moderator Queue SLAs, Assignment & Notifications (not yet planned)
 

@@ -2574,6 +2574,86 @@ history.
 
 ---
 
+### D61 — Orphaned `moderation_queue` entries self-heal; a real e2e-isolation gap this surfaced (GitHub issue #383, Phase 35)
+
+**Context:** a live moderator saw two "Unknown · Unknown" groups
+alongside a legitimate one, plus an unresolved "Record not found."
+error banner. Root cause: `moderation_queue`'s reference to its entity
+is deliberately polymorphic, not a real FK (docs/DATA_MODEL.md) — a
+raw `DELETE FROM companies ...` (the established manual test-data
+cleanup pattern from D44/D51) never cleans up the matching queue
+entry the way `ModerationService.removeQueueEntries()` does. The two
+orphans traced directly to issue #372's own live verification (two
+test companies raw-SQL-deleted without ever being approved/rejected).
+`listPending()`'s enrichment found no matching company row for either,
+so `entity: null` rendered as "Unknown · Unknown" forever; attempting
+to approve/reject/flag one threw Prisma's raw `P2025` on the entity's
+own `update()`, mapped to the dead-end "Record not found." the
+moderator saw.
+
+**Decision:** `ModerationService.enrichEntries()` (shared by
+`listPending()`/`search()`) now distinguishes a *genuinely* missing
+entity — its batch fetch succeeded, this particular id just wasn't in
+the results — from D37's transient per-batch failure (the fetch itself
+rejected). A genuine orphan self-heals: its stale `moderation_queue`
+row and moderator-search index document (D59) are removed, and it's
+excluded from the returned entries, rather than surfacing forever.
+`review()` additionally checks the underlying entity still exists
+*before* attempting its status update, closing the narrow race where a
+moderator's page was already open when the orphan formed — on a miss,
+it cleans up the same way and throws a clear `NotFoundException`
+instead of a raw Prisma error. The two confirmed live orphans were
+removed directly.
+
+**A second, more consequential incident found while regression-testing
+this fix:** running the full `npm run test:e2e` suite without its
+documented `DATABASE_URL`/`OPENSEARCH_INDEX_PREFIX` overrides (D24/D26)
+silently wrote/deleted real rows in the dev database and real
+OpenSearch indices instead of erroring. The golden-path smoke test
+already guarded itself (`assertUsingTestDatabase()`, D36), specifically
+because it was judged "the one most likely to be run ad hoc" — but
+every other e2e spec carried no such guard, on the assumption (recorded
+in that helper's own comment) that they'd "already follow the manual
+override convention without incident." That assumption held right up
+until it didn't: a single unguarded run created 178 test companies,
+209 test candidates, and their full cascade of processes/rounds/
+ratings/reviews in the live dev Postgres, plus matching documents in
+the real (unprefixed) `companies`/`reviews`/`moderation_queue`
+OpenSearch indices — invisible until a live company count looked
+wrong.
+
+Both isolation knobs are now enforced for the *whole* suite, not just
+the smoke test: `test/support/assert-test-database.ts` gained
+`assertOpenSearchIndicesIsolated()` (skipped under CI, whose OpenSearch
+is its own ephemeral service container per job — nothing shared to
+isolate from) and a combined `assertLocalE2eIsolation()`; a new
+`test/jest-e2e.json` `globalSetup`
+(`test/support/jest-e2e-global-setup.ts`) calls it once before the
+whole suite runs, failing fast with a clear message naming the exact
+env vars to set. The golden-path smoke test was switched to the same
+combined check for consistency (it had only ever checked the database
+half, not the OpenSearch half its own documented invocation also
+requires).
+
+The contamination itself was fully remediated: identified against a
+clean timestamp boundary (nothing legitimate was created in the
+window; the last real row before it and the first real row after it
+bracket the incident exactly), removed from Postgres in FK-safe order
+inside one transaction, and the matching OpenSearch documents removed
+from all three real indices (`companies` via the existing
+`prune-orphaned-company-search-docs` script, D51; `reviews` and
+`moderation_queue` via a direct id-diff-and-bulk-delete, no dedicated
+script yet since neither has drifted before this).
+
+**Revisit when:** if a genuine future need arises for orphaned-index
+cleanup outside test contamination (mirroring why D51 built a
+dedicated script rather than a one-off), consider promoting the
+`reviews`/`moderation_queue` cleanup into scripts of their own at that
+point — not needed yet, since this was a one-time, fully-diagnosed
+incident, not an ongoing drift pattern like D51's.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

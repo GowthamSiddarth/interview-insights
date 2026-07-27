@@ -3317,8 +3317,56 @@ bug either. Epic #368 and milestone #32 reopened and re-closed the
 same day, same precedent as every other epic reopening in this
 project.
 
-**Phase 35 is now fully done** — issues #369-373 and #381 all closed
-via merged PRs, and every phase built so far now has a complete
+**Phase 35 was declared fully done, then reopened a second time (GitHub
+issue #383, D61)** — another direct user report: the moderation queue
+showed two "Unknown · Unknown" groups plus an unresolved "Record not
+found." error. Root cause: a raw `DELETE FROM companies ...` (the
+established manual test-data cleanup pattern from D44/D51) doesn't
+clean up `moderation_queue`'s polymorphic, non-FK entity reference the
+way `ModerationService.removeQueueEntries()` does — traced to two test
+companies raw-SQL-deleted during issue #372's own live verification
+without ever being approved/rejected. Fixed by making
+`ModerationService.enrichEntries()` (shared by `listPending()`/
+`search()`) distinguish a genuinely missing entity (its batch fetch
+succeeded, the id just wasn't in the results) from D37's transient
+per-batch failure — a genuine orphan now self-heals (its stale queue
+row and search-index document removed, excluded from results) instead
+of surfacing forever. `review()` also gained a pre-update existence
+check, closing the narrow race where a moderator's page was already
+open when the orphan formed, throwing a clear `NotFoundException`
+instead of a raw Prisma error. The two confirmed live orphans were
+removed directly.
+
+**A second, more consequential incident surfaced while regression-
+testing this fix**: running the full `npm run test:e2e` suite without
+its documented `DATABASE_URL`/`OPENSEARCH_INDEX_PREFIX` overrides
+(D24/D26) silently wrote/deleted real rows in the dev database and
+real OpenSearch indices instead of erroring — only the golden-path
+smoke test had ever guarded against this (`assertUsingTestDatabase()`,
+D36), on the assumption every other e2e file "already follows the
+manual override convention without incident." That assumption held
+until it didn't: one unguarded run created 178 test companies, 209
+test candidates, and their full cascade of processes/rounds/ratings/
+reviews in the live dev Postgres, plus matching documents in the real
+`companies`/`reviews`/`moderation_queue` OpenSearch indices. Both
+isolation knobs are now enforced for the whole suite via a new
+`test/jest-e2e.json` `globalSetup` (skipping the OpenSearch check
+under CI, whose OpenSearch is its own ephemeral service container);
+the smoke test was switched to the same combined check for
+consistency. The contamination was fully remediated: identified
+against a clean timestamp boundary (confirmed zero legitimate rows in
+the window), removed from Postgres in FK-safe order inside one
+transaction, and the matching OpenSearch documents removed from all
+three real indices (`companies` via the existing D51 prune script;
+`reviews`/`moderation_queue` via a direct id-diff-and-bulk-delete).
+357 api unit tests, 163 e2e tests (2 pre-existing unrelated skips), and
+the golden-path smoke test all green, verified against the real
+isolated test database this time. Epic #368 and milestone #32 reopened
+and re-closed the same day, same precedent as every other epic
+reopening in this project.
+
+**Phase 35 is now fully done** — issues #369-373, #381, and #383 all
+closed via merged PRs, and every phase built so far now has a complete
 engineering blog.
 
 - Next step: Phase 19 (Content Quality & Synthetic Data, issues
