@@ -3432,11 +3432,40 @@ reopening in this project.
 closed via merged PRs, and every phase built so far now has a complete
 engineering blog.
 
-- Next step: Phase 19 (Content Quality & Synthetic Data, issues
-  #162-165) and Phases 30-32 (Event-Driven Foundation / Notification
-  Service / Review Analyzer Service) remain planned but not started.
-  Continue merging without waiting for CI until the user says the
-  GitHub Actions billing limit has been refreshed.
+**Phase 19 kickoff brainstorm (before implementing, 2026-07-27)** — the
+user asked whether Phase 19 (filed 2026-07-20, never implemented —
+queued behind Phases 24-35 planned/implemented since) needed a fresh
+look before starting, given how much shipped in the meantime. It did:
+Phase 29 issue #317 had already extended near-duplicate scanning to
+all three entity types (issue #162 assumed round-ratings-only); Phase
+35 introduced a company-moderation gate the synthetic data generator
+(issue #164) never accounted for; Phase 25/26 replaced the incremental
+submission flow the generator assumed with the atomic bulk endpoint;
+and Phase 24's round-type registry meant generated `type_metadata`
+needs real registry-valid values, not arbitrary faker strings. All
+three issue bodies updated on GitHub to record the resolved decisions:
+issue #162 — `pg_trgm` trigram similarity (not embeddings),
+`similarity() > 0.55` starting threshold; issue #163 — Claude API via
+`@anthropic-ai/sdk`, model configurable via `ANTHROPIC_MODEL`,
+`ANTHROPIC_API_KEY` provisioned imperatively like `admin-credentials`
+(never committed), verdict stored as one nullable JSONB column
+mirroring `Round.typeMetadata`'s precedent, plus round `typeMetadata`
+now included in the LLM's context alongside free text/scores; issue
+#164 — an in-process `NestFactory.createApplicationContext()` calling
+real services directly (`CompaniesService`+`ModerationService.approve()`,
+`BulkProcessSubmissionService`, `RoundTypeFieldOptionsService`),
+varying moderation-outcome distribution alongside review-count
+distribution, and reusing `assertLocalE2eIsolation()`'s exact shape for
+its safety guard — directly incorporating this same session's own
+fresh D61 lesson (an unguarded e2e run had just contaminated the dev
+database) into the new script's design from the start. Epic #168
+moved to "In Progress". Implementation not yet started.
+
+- Next step: implement Phase 19 (issues #162-165, kickoff brainstorm
+  now resolved) and/or Phases 30-32 (Event-Driven Foundation /
+  Notification Service / Review Analyzer Service, still planned but
+  not started). Continue merging without waiting for CI until the user
+  says the GitHub Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 
