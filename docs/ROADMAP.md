@@ -1464,3 +1464,52 @@ given there's no current out-of-band channel (email via the existing
 `mail/` module is the obvious candidate, but unconfirmed). Revisit once
 there's a concrete trigger — e.g. Phase 35 shipping and the queue
 actually needing this, or a second moderator account existing at all.
+
+## Phase 37 — Synthetic Data Seed Rollback (Undo by Run ID)
+
+Filed 2026-07-27, from a direct follow-up question after using Phase
+19 issue #164's `seed-demo-data` generator against the dev database:
+there is currently no way to undo a seed run short of hand-deleting
+rows and diffing OpenSearch, the exact class of manual cleanup D51/D61
+already showed doesn't reliably happen at scale. The generator already
+returns the `companyIds` it created in its JSON summary (D62's own
+"identify your own data by id" discipline) — this phase turns that
+into a real, self-contained rollback command instead of something the
+caller has to act on by hand.
+
+Design, worked out before filing (no open questions — this composes
+existing, already-proven pieces rather than inventing new ones):
+
+- Each `seed:demo-data` run generates a `runId` (UUID) up front and
+  writes a local JSON manifest (`api/scripts/.seed-runs/<runId>.json`,
+  gitignored) capturing `runId`, a timestamp, the `--companies` count,
+  and the run's `companyIds`/`candidateIds` — the two anchors
+  everything else in the run hangs off of. Deliberately a local file,
+  not a new Postgres table: this is dev-tool bookkeeping for a
+  lower-env-only script, not something that belongs in the production
+  schema.
+- A new `seed:demo-data:undo -- --run-id=<id>` (plus `--list` to
+  enumerate available manifests without digging through old terminal
+  output) reads the manifest and deletes everything that run created,
+  in the same FK-safe order `MeService.eraseMe()` (Phase 17 issue
+  #151) already uses for a single candidate, just scoped to a batch of
+  companies/candidates instead of one: ratings/reviews and their
+  `moderation_queue` entries → rounds/recruiter interactions →
+  processes → candidates → companies (+ their own `moderation_queue`
+  entries) — all in one transaction, same atomicity guarantee the seed
+  script's own bulk-submission calls already rely on.
+- Best-effort removes the matching `companies`/`reviews`/
+  `moderation_queue` OpenSearch documents afterward (same D16/D17/D59
+  never-block-on-search pattern), then refreshes the three
+  materialized views, mirroring what the seed script itself does on
+  the way in.
+- Reuses `assertSeedTargetConfirmed()`'s exact guard (`interview_
+  insights_test`, or an explicit `--i-know-this-seeds-fake-data`
+  override) — undoing is exactly as destructive as seeding against the
+  wrong database.
+
+- [ ] Implement `seed:demo-data:undo` — manifest writing on every seed
+      run, the undo script itself (FK-safe deletion, search cleanup,
+      materialized-view refresh, `--list`), and the shared safety
+      guard reuse
+- [ ] Engineering blog (last)
