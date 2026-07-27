@@ -595,6 +595,49 @@ wired into any automated job: company deletion itself is always a
 manual, deliberate test-cleanup action, so pruning its fallout stays
 manual and deliberate too.
 
+### 6.3 Synthetic demo data generator (GitHub issue #164, Phase 19)
+
+`api/scripts/seed-demo-data.ts` populates a lower environment (local
+`kind`, or a future staging deployment) with realistic companies,
+processes, ratings, and reviews — for demoing/exploring the app without
+either an empty cold-start database or hand-entering data one field at
+a time. It walks the *real* application paths (`CompaniesService` +
+`ModerationService.approve()`, `BulkProcessSubmissionService`,
+`RoundTypeFieldOptionsService`) via an in-process NestJS application
+context — never raw SQL/Prisma, which is exactly the class of bug a
+Phase 5 seed script once caused by bypassing `CompaniesService.create()`'s
+OpenSearch indexing.
+
+```bash
+cd api
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+npm run seed:demo-data -- --companies=8
+```
+
+Refuses to run unless `DATABASE_URL` names `interview_insights_test` —
+same class of guard as `assertUsingTestDatabase()` (D36), directly
+motivated by this same week's D61 incident (an unguarded e2e run
+silently contaminated the dev database). Unlike that guard, an explicit
+override is allowed, since seeding a real dev/demo/staging database on
+purpose is this script's whole point:
+
+```bash
+DATABASE_URL="<a real dev/staging database>" \
+npm run seed:demo-data -- --companies=8 --i-know-this-seeds-fake-data
+```
+
+Generated data is deliberately uneven on two axes: review-count per
+company (some land under the `n=3` shrinkage floor, some well above it
+— hard constraint #3's "not enough reviews yet" path gets exercised on
+purpose) and moderation outcome (mostly approved, with a real minority
+left pending/rejected/flagged, so the moderation queue and `/me`-style
+status displays also have non-empty demo data). Every generated round's
+`type_metadata` is built from the real seeded/admin-managed
+`round_type_field_options` values (`RoundTypeFieldOptionsService`), so
+it validates against the same registry check the live write path
+enforces. Prints a JSON summary (counts per entity type and moderation
+outcome) when it finishes.
+
 ## 7. Self-hosted GitHub Actions runner (on-demand, Phase 12)
 
 Registered once; started manually whenever a workflow needs to run on

@@ -3459,13 +3459,85 @@ distribution, and reusing `assertLocalE2eIsolation()`'s exact shape for
 its safety guard — directly incorporating this same session's own
 fresh D61 lesson (an unguarded e2e run had just contaminated the dev
 database) into the new script's design from the start. Epic #168
-moved to "In Progress". Implementation not yet started.
+moved to "In Progress".
 
-- Next step: implement Phase 19 (issues #162-165, kickoff brainstorm
-  now resolved) and/or Phases 30-32 (Event-Driven Foundation /
-  Notification Service / Review Analyzer Service, still planned but
-  not started). Continue merging without waiting for CI until the user
-  says the GitHub Actions billing limit has been refreshed.
+**Phase 19, issue #164 (synthetic data generator)** — the user chose
+this issue to implement first, of the three independent Phase 19
+issues. `api/scripts/seed-demo-data.ts` implements the kickoff
+brainstorm's resolved design exactly: an in-process
+`NestFactory.createApplicationContext(AppModule)` calling
+`CompaniesService.create()`+`ModerationService.approve()` (Phase 35's
+moderation gate), `CandidatesService.create()` directly (bypassing the
+real magic-link mail loop for throwaway synthetic candidates),
+`BulkProcessSubmissionService.create()` (the Phase 25/26 real
+submission path), and `RoundTypeFieldOptionsService.getFullSchemaWithOptions()`
+(registry-valid `type_metadata`, never arbitrary faker strings). Core
+logic lives in an exported `runSeed(services, companyCount)` separate
+from the thin CLI `main()`, so a real e2e test can drive it through a
+compiled `AppModule` rather than shelling out to `ts-node`. Distributes
+both review-count per company (some under the `n=3` shrinkage floor,
+some well above it) and moderation outcome (~70% approved, the rest a
+realistic pending/rejected/flagged mix) — the kickoff brainstorm's
+scope addition beyond the original issue's review-count-only
+requirement. Safety-guarded by `assertSeedTargetConfirmed()` — same
+class of check as `assertLocalE2eIsolation()` (D61, this same week),
+but allows an explicit `--i-know-this-seeds-fake-data` override, since
+seeding a real dev/demo/staging database on purpose is this script's
+whole point, unlike the e2e suite which must never target one.
+
+**A real dependency-version bug found immediately**: `@faker-js/faker`'s
+current major (10.x) ships pure ESM with no CJS build at all, breaking
+every Jest unit test in the repo (`Cannot use import statement outside
+a module`) the moment it was imported anywhere. Fixed by pinning to
+`@faker-js/faker@8.4.1`, the last major with a real `dist/cjs` build —
+confirmed via its own `package.json`, not assumed — documented as D62
+alongside the design decisions above.
+
+**A second real bug found while testing at full-suite scale**: the
+first version of `test/seed-demo-data.e2e-spec.ts` identified "the
+companies this run just created" via a `createdAt >= before` timestamp
+query — passed running the file alone, but failed under a full
+parallel `npm run test:e2e` run, since other e2e spec files (separate
+Jest workers, same shared `interview_insights_test` database) were
+creating their own companies in the same window. Fixed by having
+`runSeed()` return the exact `companyIds` it created and looking those
+up directly — the same "identify your own data by id, never a shared
+mutable timestamp" discipline every other e2e spec in this codebase
+already follows.
+
+16 new unit tests (`scripts/seed-demo-data.spec.ts` — the safety guard,
+CLI arg parsing, the review-count/moderation-outcome distribution
+buckets via mocked `Math.random()`, and `buildTypeMetadata()`'s
+registry-scoping) — required extending the root Jest config's `roots`
+to also cover `scripts/` (previously only `src/`) and the `lint` script
+to also cover it (previously only `{src,test}`); 373 api unit tests
+total. 1 new e2e test (`test/seed-demo-data.e2e-spec.ts`) proves the
+generator's actual *output* against real Postgres + OpenSearch: every
+generated company is approved and immediately searchable (proving the
+real create-then-approve path ran, not a raw-Prisma bypass — the exact
+Phase 5 bug this issue's own design guards against), and every
+generated round's `type_metadata` validates against the real
+`RoundTypeFieldOptionsService` check the live write path enforces. Full
+regression pass: 373 api unit, 164 e2e (2 pre-existing unrelated
+skips), and the golden-path smoke test all green — verified against the
+real isolated test database throughout, with a manual live run
+(`--companies=2`) confirmed directly via `kubectl exec` psql (real
+registry-valid `type_metadata` like `problemAlgorithms`/`technologiesUsed`,
+realistic status mix) and a real OpenSearch search hit, before every
+run's data was cleaned up via a full truncate of `interview_insights_test`
+(itself found badly overdue — 3,435 stale companies had accumulated
+there from many past sessions never being truncated per D24's own
+"routinely truncated" convention) and its `e2etest-*` OpenSearch
+indices. `wiki/deployment-guide.md` gained section 6.3 documenting the
+script and its safety guard.
+
+- Next step: implement the remaining two Phase 19 issues (#162
+  near-duplicate detection, #163 LLM-assisted moderation triage —
+  kickoff brainstorm already resolved for both) and/or Phases 30-32
+  (Event-Driven Foundation / Notification Service / Review Analyzer
+  Service, still planned but not started). Continue merging without
+  waiting for CI until the user says the GitHub Actions billing limit
+  has been refreshed.
 
 ## Open decisions still to make
 
