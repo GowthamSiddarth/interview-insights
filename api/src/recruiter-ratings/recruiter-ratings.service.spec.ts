@@ -4,6 +4,7 @@ import { RecruiterRatingsService } from './recruiter-ratings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
+import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 
 describe('RecruiterRatingsService', () => {
   let service: RecruiterRatingsService;
@@ -25,6 +26,7 @@ describe('RecruiterRatingsService', () => {
     removeFromSearchIndex: jest.Mock;
   };
   let fraudChecksService: { detectFlagReason: jest.Mock };
+  let aiModerationService: { computeAndStoreVerdict: jest.Mock };
 
   const dto = {
     reachability: 4,
@@ -51,6 +53,7 @@ describe('RecruiterRatingsService', () => {
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
+    aiModerationService = { computeAndStoreVerdict: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,6 +61,7 @@ describe('RecruiterRatingsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ModerationService, useValue: moderationService },
         { provide: FraudChecksService, useValue: fraudChecksService },
+        { provide: AiModerationService, useValue: aiModerationService },
       ],
     }).compile();
 
@@ -109,6 +113,16 @@ describe('RecruiterRatingsService', () => {
     );
   });
 
+  // GitHub issue #163 (Phase 19) — advisory LLM triage runs after commit.
+  it('triggers AI moderation triage after creating the rating', async () => {
+    await service.create('interaction-1', 'candidate-1', dto);
+
+    expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledWith(
+      'recruiter_rating',
+      'rating-1',
+    );
+  });
+
   it('findApprovedForInteraction only queries approved ratings for that interaction', async () => {
     await service.findApprovedForInteraction('interaction-1');
 
@@ -138,6 +152,10 @@ describe('RecruiterRatingsService', () => {
         'recruiter_rating',
         'rating-1',
         prisma,
+      );
+      expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledWith(
+        'recruiter_rating',
+        'rating-1',
       );
     });
 

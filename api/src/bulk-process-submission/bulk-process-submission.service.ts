@@ -5,6 +5,7 @@ import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 import { RecruitersService } from '../recruiters/recruiters.service';
 import { RoundTypeFieldOptionsService } from '../round-type-registry/round-type-field-options.service';
+import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 import { CreateBulkProcessDto } from './dto/create-bulk-process.dto';
 
 // GitHub issue #251 (Phase 25) — the backend counterpart Phase 26's
@@ -30,6 +31,7 @@ export class BulkProcessSubmissionService {
     private readonly fraudChecksService: FraudChecksService,
     private readonly recruitersService: RecruitersService,
     private readonly roundTypeFieldOptionsService: RoundTypeFieldOptionsService,
+    private readonly aiModerationService: AiModerationService,
   ) {}
 
   async create(companyId: string, candidateId: string, dto: CreateBulkProcessDto) {
@@ -132,12 +134,15 @@ export class BulkProcessSubmissionService {
 
     for (const id of roundRatingIds) {
       await this.moderationService.indexForSearch('round_rating', id);
+      await this.aiModerationService.computeAndStoreVerdict('round_rating', id);
     }
     for (const id of recruiterRatingIds) {
       await this.moderationService.indexForSearch('recruiter_rating', id);
+      await this.aiModerationService.computeAndStoreVerdict('recruiter_rating', id);
     }
     if (overallReviewId) {
       await this.moderationService.indexForSearch('overall_review', overallReviewId);
+      await this.aiModerationService.computeAndStoreVerdict('overall_review', overallReviewId);
     }
 
     return process;

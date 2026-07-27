@@ -80,6 +80,12 @@ services:
       ADMIN_JWT_SECRET: dev-only-change-me-too
       COOKIE_SECURE: "false"
       CANDIDATE_JWT_SECRET: dev-only-change-me-candidate
+      # GitHub issue #163 (Phase 19) — optional; empty ANTHROPIC_API_KEY
+      # leaves AiModerationService's advisory triage disabled, unlike the
+      # ADMIN_*/CANDIDATE_JWT_SECRET vars above which the app requires to
+      # boot at all.
+      ANTHROPIC_API_KEY: ""
+      ANTHROPIC_MODEL: claude-haiku-4-5
     ports:
       - "3001:3001"
     depends_on:

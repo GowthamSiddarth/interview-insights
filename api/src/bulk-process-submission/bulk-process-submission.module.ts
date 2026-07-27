@@ -4,6 +4,7 @@ import { ModerationModule } from '../moderation/moderation.module';
 import { FraudChecksModule } from '../fraud-checks/fraud-checks.module';
 import { RecruitersModule } from '../recruiters/recruiters.module';
 import { RoundTypeRegistryModule } from '../round-type-registry/round-type-registry.module';
+import { AiModerationModule } from '../ai-moderation/ai-moderation.module';
 import { BulkProcessSubmissionController } from './bulk-process-submission.controller';
 import { BulkProcessSubmissionService } from './bulk-process-submission.service';
 
@@ -14,6 +15,7 @@ import { BulkProcessSubmissionService } from './bulk-process-submission.service'
     FraudChecksModule,
     RecruitersModule,
     RoundTypeRegistryModule,
+    AiModerationModule,
   ],
   controllers: [BulkProcessSubmissionController],
   providers: [BulkProcessSubmissionService],

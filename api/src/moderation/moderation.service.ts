@@ -56,6 +56,11 @@ export interface ModerationQueueEntity {
   overallExperience?: number;
   wouldRecommend?: boolean;
   reviewText?: string | null;
+  // GitHub issue #163 (Phase 19) — advisory-only LLM triage output, one of
+  // the three moderated content types only (never `company`). Null
+  // whenever the feature is disabled or the LLM call hasn't landed yet —
+  // absence is not itself a signal, just "no second opinion available."
+  moderationVerdict?: Prisma.JsonValue | null;
   // company (GitHub issue #369, Phase 35) — a create-company request has
   // no InterviewProcess/roleTitle of its own; companyName holds the
   // *requested* name instead.
@@ -285,6 +290,7 @@ export class ModerationService {
         focus: r.focus,
         technicalDepth: r.technicalDepth,
         freeText: r.freeText,
+        moderationVerdict: r.moderationVerdict,
       });
     }
     for (const r of recruiterRatings) {
@@ -298,6 +304,7 @@ export class ModerationService {
         guidelinesShared: r.guidelinesShared,
         rejectionMessageAuthenticity: r.rejectionMessageAuthenticity,
         freeText: r.freeText,
+        moderationVerdict: r.moderationVerdict,
       });
     }
     for (const r of overallReviews) {
@@ -308,6 +315,7 @@ export class ModerationService {
         overallExperience: r.overallExperience,
         wouldRecommend: r.wouldRecommend,
         reviewText: r.reviewText,
+        moderationVerdict: r.moderationVerdict,
       });
     }
     for (const c of companies) {

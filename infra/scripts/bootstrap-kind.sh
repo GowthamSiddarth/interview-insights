@@ -7,7 +7,9 @@
 #
 # Requires: docker, kind, kubectl, helm, and LOCALSTACK_AUTH_TOKEN,
 # ADMIN_PASSWORD_HASH, ADMIN_JWT_SECRET set in the environment (see
-# wiki/deployment-guide.md sections 5 and 5b).
+# wiki/deployment-guide.md sections 5 and 5b). ANTHROPIC_API_KEY is
+# optional (GitHub issue #163) — leave it unset to keep AI moderation
+# triage disabled.
 set -euo pipefail
 
 CLUSTER_NAME="interview-insights"
@@ -97,6 +99,16 @@ kubectl create secret generic admin-credentials \
   --namespace "$NAMESPACE" \
   --from-literal=ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
   --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "== 6c. AI moderation secret (GitHub issue #163) =="
+# Genuinely optional, unlike 6b above: an empty ANTHROPIC_API_KEY just
+# leaves AiModerationService's advisory triage disabled — nothing else in
+# the app depends on it, so this never exits non-zero the way the
+# ADMIN_*/LOCALSTACK_AUTH_TOKEN checks above do.
+kubectl create secret generic anthropic-credentials \
+  --namespace "$NAMESPACE" \
+  --from-literal=ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "== 7. Apply the dev-localstack overlay =="

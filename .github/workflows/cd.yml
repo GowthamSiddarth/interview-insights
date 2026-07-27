@@ -18,6 +18,8 @@ name: CD
 # ADMIN_PASSWORD_HASH and ADMIN_JWT_SECRET repo secrets (`gh secret set
 # ADMIN_PASSWORD_HASH` / `gh secret set ADMIN_JWT_SECRET`, GitHub issue
 # #192) — the real admin credential, never committed to a manifest.
+# ANTHROPIC_API_KEY (GitHub issue #163) is optional — an unset repo
+# secret just deploys with AI moderation triage disabled.
 on:
   push:
     branches: [main]
@@ -70,6 +72,21 @@ jobs:
             --namespace interview-insights \
             --from-literal=ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
             --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Provision AI moderation secret
+        # Genuinely optional (GitHub issue #163) — an empty
+        # ANTHROPIC_API_KEY just leaves AiModerationService's advisory
+        # triage disabled; nothing else depends on this secret existing.
+        # Real values would come from an ANTHROPIC_API_KEY repo secret
+        # (`gh secret set ANTHROPIC_API_KEY`), same never-committed
+        # pattern as ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET above.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          kubectl create secret generic anthropic-credentials \
+            --namespace interview-insights \
+            --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Provision LocalStack auth token secret

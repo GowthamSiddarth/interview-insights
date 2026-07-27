@@ -34,6 +34,11 @@ data:
   # api pod has no other way to reach `mailpit` by name once it does.
   MAIL_SMTP_HOST: mailpit
   MAIL_SMTP_PORT: "1025"
+  # Not sensitive — which Claude model AiModerationService calls (GitHub
+  # issue #163, Phase 19). Only takes effect once ANTHROPIC_API_KEY (below,
+  # in anthropic-credentials) is actually set; the feature is a no-op
+  # advisory triage otherwise, never a hard requirement to boot.
+  ANTHROPIC_MODEL: claude-haiku-4-5
 ---
 # Plaintext, same local-only reasoning as 01-postgres-secret.yaml.
 # DATABASE_URL duplicates 01-postgres-secret.yaml's credentials as a single
@@ -107,6 +112,16 @@ spec:
             # this Deployment's pod is created (envFrom doesn't hot-reload).
             - secretRef:
                 name: admin-credentials
+            # GitHub issue #163 (Phase 19) — same imperative-provisioning
+            # pattern as admin-credentials/localstack-credentials above,
+            # but genuinely optional: an empty ANTHROPIC_API_KEY (the
+            # default whenever nobody has supplied a real one) just leaves
+            # AiModerationService's advisory triage disabled — nothing
+            # else depends on this Secret existing or being non-empty. See
+            # cd.yml's "Provision AI moderation secret" step and
+            # infra/scripts/bootstrap-kind.sh.
+            - secretRef:
+                name: anthropic-credentials
           readinessProbe:
             httpGet:
               path: /health

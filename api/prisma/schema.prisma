@@ -242,6 +242,14 @@ model RoundRating {
   technicalDepth Int?             @map("technical_depth") @db.SmallInt
   freeText       String?          @map("free_text")
   status         ModerationStatus @default(pending)
+  // Advisory-only LLM triage output (GitHub issue #163, Phase 19) —
+  // nullable, same JSONB-column precedent as Round.typeMetadata. Never
+  // written synchronously by the write path itself failing this write;
+  // computed best-effort after commit by AiModerationService and never
+  // used to auto-approve/auto-reject (CLAUDE.md hard constraint #2). Null
+  // whenever the feature is disabled (no ANTHROPIC_API_KEY configured) or
+  // the LLM call/parse failed.
+  moderationVerdict Json?          @map("moderation_verdict")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
 
   round     Round     @relation(fields: [roundId], references: [id])
@@ -298,6 +306,8 @@ model RecruiterRating {
   rejectionMessageAuthenticity Int?       @map("rejection_message_authenticity") @db.SmallInt
   freeText               String?          @map("free_text")
   status                 ModerationStatus @default(pending)
+  // See RoundRating.moderationVerdict's comment — same shape/semantics.
+  moderationVerdict      Json?            @map("moderation_verdict")
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
 
   recruiterInteraction RecruiterInteraction @relation(fields: [recruiterInteractionId], references: [id])
@@ -322,6 +332,8 @@ model OverallReview {
   wouldRecommend    Boolean          @map("would_recommend")
   reviewText        String?          @map("review_text")
   status            ModerationStatus @default(pending)
+  // See RoundRating.moderationVerdict's comment — same shape/semantics.
+  moderationVerdict Json?            @map("moderation_verdict")
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
 
   process   InterviewProcess @relation(fields: [processId], references: [id])

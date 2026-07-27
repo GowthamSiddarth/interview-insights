@@ -131,6 +131,12 @@ export interface ModerationQueueEntity {
   requestedCompanySlug?: string;
   requestedCompanySizeBucket?: string;
   requestedCompanyIndustry?: string | null;
+  // GitHub issue #163 (Phase 19) — advisory-only second opinion from an
+  // LLM triage pass, one of the three moderated content types only
+  // (never `company`). Null is unremarkable — the feature may be
+  // disabled, or the triage call simply hasn't landed yet — never itself
+  // a signal to a moderator.
+  moderationVerdict?: { concerning: boolean; reasons: string[]; summary: string } | null;
 }
 
 export type ModerationEntityType =

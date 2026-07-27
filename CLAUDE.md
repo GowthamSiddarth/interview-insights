@@ -3655,14 +3655,74 @@ neither is this change's fault). Not yet committed — same as issue
 #162 above, ready-to-run git/gh commands to follow once #162's PR is
 handled.
 
-- Next step: open the branch/PR for issue #162 and this test-infra
-  follow-up (commands provided, awaiting the user to run them), then
-  implement Phase 19 issue #163 (LLM-assisted moderation triage —
-  kickoff brainstorm already resolved) and/or Phases 30-32
-  (Event-Driven Foundation / Notification Service / Review Analyzer
-  Service, still planned but not started). Continue merging without
-  waiting for CI until the user says the GitHub Actions billing limit
-  has been refreshed.
+**Phase 19, issue #163 (LLM-assisted moderation triage)** — the last
+of Phase 19's three feature issues. A new `api/src/ai-moderation/`
+module: `AiModerationService.computeAndStoreVerdict(entityType,
+entityId)` calls Claude via `@anthropic-ai/sdk`
+(`ANTHROPIC_MODEL`-configurable, no hardcoded model — only read once
+the feature is actually enabled) and writes the parsed verdict into a
+new nullable `moderation_verdict` JSONB column added to
+`round_ratings`/`recruiter_ratings`/`overall_reviews` (mirroring
+`Round.typeMetadata`'s precedent; migration hand-authored via `prisma
+migrate deploy`, same shadow-DB workaround D64 already used). Wired
+into every write path that creates or edits one of the three
+moderated content types — `RoundRatingsService`/`RecruiterRatingsService`/
+`OverallReviewsService`'s `create()`/`update()`, plus
+`BulkProcessSubmissionService.create()` once per created rating/
+review — called right after each write's own transaction commits,
+same position `ModerationService.indexForSearch()` already occupies.
+Advisory only: never touches `status`, never gates or delays the
+write itself (CLAUDE.md hard constraint #2 stays intact); a human
+moderator sees it as a distinct "AI second opinion (advisory only)"
+box in the queue UI, separate from the deterministic fraud-check
+`flagReason`.
+
+**Disabled by default, not just resilient to failure (D66).** The
+Anthropic client provider returns `null` when `ANTHROPIC_API_KEY` is
+unset — genuinely optional, unlike every other secret this project
+provisions imperatively (`admin-credentials`/`localstack-credentials`),
+since there's no dev-only placeholder value that could "work" the way
+a bcrypt hash of a fake password can. `computeAndStoreVerdict()` wraps
+its entire body in one try/catch, so a disabled feature, a model
+refusal, an unparseable response, or a network error all degrade to
+`moderationVerdict` simply staying null — never a failed write, same
+D16/D17 "never block the operation" shape applied to a genuinely
+higher-latency, higher-failure-risk external call. `ANTHROPIC_MODEL`
+(non-secret) went into the `api-config` ConfigMap;
+`ANTHROPIC_API_KEY` into a new `anthropic-credentials` Secret,
+provisioned by both `cd.yml` (new "Provision AI moderation secret"
+step, from an optional `ANTHROPIC_API_KEY` repo secret) and
+`infra/scripts/bootstrap-kind.sh`, mirroring `admin-credentials`'s
+imperative-provisioning shape exactly but never hard-failing when
+unset. `api/.env.example`/`infra/docker-compose.yml`'s full profile
+both got matching optional entries.
+
+13 new/updated unit tests (`ai-moderation.service.spec.ts` — disabled
+no-op, per-entity-type content building including round
+`typeMetadata`, entity-gone/refusal/unparseable-response/network-error
+all degrading silently, missing `ANTHROPIC_MODEL` caught the same
+way; plus one new assertion each in the three ratings/reviews service
+specs and the bulk-submission spec proving the call happens after
+commit) — 387 api unit tests total; `ModerationService`'s existing
+grouping test extended with a real verdict object and an explicit
+`null` case to prove both render correctly. 1 new e2e assertion in
+`bulk-process-submission.e2e-spec.ts` proving the whole tree still
+creates cleanly with `moderationVerdict` staying null when
+(as in this and every other test environment) no `ANTHROPIC_API_KEY`
+is configured — confirmed directly against real Postgres, not just
+mocked. 1 new web component test (`moderation-page.spec.tsx`) covers
+both a rendered verdict and the "no verdict yet" absence case
+rendering nothing. `api`/`web` build/lint clean. Not yet committed —
+same as issue #162/the test-infra follow-up above, ready-to-run git/gh
+commands to follow.
+
+- Next step: open the branch/PR for issue #162, the test-infra
+  follow-up, and issue #163 (commands provided, awaiting the user to
+  run them), then issue #165 (Phase 19's engineering blog, last) and/or
+  Phases 30-32 (Event-Driven Foundation / Notification Service / Review
+  Analyzer Service, still planned but not started). Continue merging
+  without waiting for CI until the user says the GitHub Actions billing
+  limit has been refreshed.
 
 ## Open decisions still to make
 

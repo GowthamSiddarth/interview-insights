@@ -4,6 +4,7 @@ import { OverallReviewsService } from './overall-reviews.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
+import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 
 describe('OverallReviewsService', () => {
   let service: OverallReviewsService;
@@ -25,6 +26,7 @@ describe('OverallReviewsService', () => {
     removeFromSearchIndex: jest.Mock;
   };
   let fraudChecksService: { detectFlagReason: jest.Mock };
+  let aiModerationService: { computeAndStoreVerdict: jest.Mock };
 
   const dto = {
     overallExperience: 4,
@@ -50,6 +52,7 @@ describe('OverallReviewsService', () => {
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
+    aiModerationService = { computeAndStoreVerdict: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -57,6 +60,7 @@ describe('OverallReviewsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ModerationService, useValue: moderationService },
         { provide: FraudChecksService, useValue: fraudChecksService },
+        { provide: AiModerationService, useValue: aiModerationService },
       ],
     }).compile();
 
@@ -108,6 +112,16 @@ describe('OverallReviewsService', () => {
     );
   });
 
+  // GitHub issue #163 (Phase 19) — advisory LLM triage runs after commit.
+  it('triggers AI moderation triage after creating the review', async () => {
+    await service.create('process-1', 'candidate-1', dto);
+
+    expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledWith(
+      'overall_review',
+      'review-1',
+    );
+  });
+
   it('findApprovedForProcess only queries the approved review for that process', async () => {
     await service.findApprovedForProcess('process-1');
 
@@ -133,6 +147,10 @@ describe('OverallReviewsService', () => {
         data: { ...dto, status: 'pending' },
       });
       expect(moderationService.reenqueue).toHaveBeenCalledWith('overall_review', 'review-1', prisma);
+      expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledWith(
+        'overall_review',
+        'review-1',
+      );
     });
 
     it('rejects an edit from anyone but the owning candidate', async () => {

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 import { ReviewSearchService } from '../search/review-search.service';
+import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 import { CreateRoundRatingDto } from './dto/create-round-rating.dto';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class RoundRatingsService {
     private readonly moderationService: ModerationService,
     private readonly fraudChecksService: FraudChecksService,
     private readonly reviewSearchService: ReviewSearchService,
+    private readonly aiModerationService: AiModerationService,
   ) {}
 
   async create(roundId: string, candidateId: string, dto: CreateRoundRatingDto) {
@@ -35,6 +37,9 @@ export class RoundRatingsService {
     });
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('round_rating', rating.id);
+    // GitHub issue #163 (Phase 19) — advisory LLM triage, after commit,
+    // fully best-effort (never throws, see AiModerationService).
+    await this.aiModerationService.computeAndStoreVerdict('round_rating', rating.id);
     return rating;
   }
 
@@ -71,6 +76,9 @@ export class RoundRatingsService {
       return updated;
     });
     await this.moderationService.indexForSearch('round_rating', id);
+    // Re-triage the edited content — a stale verdict against the pre-edit
+    // text would be misleading to a moderator (GitHub issue #163).
+    await this.aiModerationService.computeAndStoreVerdict('round_rating', id);
     return updated;
   }
 

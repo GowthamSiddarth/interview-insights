@@ -187,6 +187,7 @@ describe('ModerationService', () => {
           focus: 4,
           technicalDepth: null,
           freeText: 'tough but fair',
+          moderationVerdict: { concerning: false, reasons: [], summary: 'Looks fine.' },
           round: {
             title: 'Screen',
             roundType: 'coding',
@@ -205,6 +206,7 @@ describe('ModerationService', () => {
           guidelinesShared: 5,
           rejectionMessageAuthenticity: null,
           freeText: null,
+          moderationVerdict: null,
           recruiterInteraction: {
             recruiter: { displayLabel: 'Recruiter A', internalIdentifierHash: 'deadbeef' },
             process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
@@ -237,10 +239,16 @@ describe('ModerationService', () => {
         roundScheduledDurationMinutes: 45,
         difficulty: 3,
         freeText: 'tough but fair',
+        // GitHub issue #163 (Phase 19) — the advisory LLM verdict rides
+        // along in the same enrichment pass, for the moderator UI to show.
+        moderationVerdict: { concerning: false, reasons: [], summary: 'Looks fine.' },
       });
       expect(result[0].entries[1].entity).toMatchObject({
         recruiterLabel: 'Recruiter A',
         reachability: 5,
+        // Null is a valid, unremarkable state (feature disabled, or the
+        // triage call hasn't landed yet) — not itself a signal.
+        moderationVerdict: null,
       });
       expect(JSON.stringify(result)).not.toContain('deadbeef');
       expect(result[0].entries[2].entity).toMatchObject({
