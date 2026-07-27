@@ -3814,12 +3814,21 @@ deleting everything and reporting accurate counts, the manifest file
 removed on success, and `--list` afterward showing "No seed runs
 recorded."
 
-Not yet committed/branched/PR'd — per the user's standing instruction,
-git/gh commands are handed over as ready-to-run command blocks rather
-than executed directly.
+Merged via PR, closing issue #406.
 
-- Next step: Phase 37, issue #407 (engineering blog, once #406 is
-  merged), then Phases 30-32 (Event-Driven Foundation / Notification
+**Phase 37, issue #407 (engineering blog)** —
+`wiki/blog/phase-37-synthetic-data-seed-rollback/README.md` covers the
+"check the design against the code before writing any" prerequisite
+audit and the three gaps it found, the manifest-as-a-local-file (not a
+Postgres table) design, reusing `MeService.eraseMe()`'s FK-safe shape
+batched over a whole run, and the real `--list`-requires-admin-env bug
+(the `seed-cli-utils.ts` extraction + dynamic `AppModule` import fix).
+`wiki/blog/README.md`'s index updated to match.
+
+**Phase 37 is now fully done** — issues #406-407 both closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+- Next step: Phases 30-32 (Event-Driven Foundation / Notification
   Service / Review Analyzer Service, still planned but not started) are
   the natural next body of work, or Phase 27's already-complete backlog
   can be revisited if something else takes priority. Continue merging

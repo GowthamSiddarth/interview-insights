@@ -1512,7 +1512,7 @@ existing, already-proven pieces rather than inventing new ones):
       run, the undo script itself (FK-safe deletion, search cleanup,
       materialized-view refresh, `--list`), and the shared safety
       guard reuse
-- [ ] Engineering blog (last)
+- [x] Engineering blog (last)
 
 Epic: GitHub issue #405 (issues #406-407).
 
@@ -1525,5 +1525,5 @@ method at all (only `indexCompany`/`search`); and this design's own
 FK-safe deletion order omitted `Recruiter` rows, which the seed
 generator does create and which have a real FK to `Company` with no
 cascade — deleting a company first would have failed outright. See
-`wiki/blog/phase-37-synthetic-data-seed-rollback/` (once written) for
-the full writeup.
+`wiki/blog/phase-37-synthetic-data-seed-rollback/` for the full
+writeup.
