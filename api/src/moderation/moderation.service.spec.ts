@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -14,6 +14,7 @@ describe('ModerationService', () => {
       findMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       deleteMany: jest.Mock;
     };
     roundRating: {
@@ -47,6 +48,7 @@ describe('ModerationService', () => {
         findMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         deleteMany: jest.fn(),
       },
       roundRating: {
@@ -296,16 +298,21 @@ describe('ModerationService', () => {
       expect(result[1].processId).toBe('process-2');
     });
 
-    it('attaches entity: null when the underlying row is missing, in its own standalone group', async () => {
+    // GitHub issue #383 / docs/DECISIONS.md D61: a genuinely missing
+    // entity (the batch fetch succeeded, this id just wasn't in the
+    // results) only ever happens via a raw-SQL deletion bypassing
+    // removeQueueEntries() — self-heal by removing the stale entry
+    // rather than surfacing it forever as "Unknown · Unknown".
+    it('self-heals a genuinely orphaned entry: removed from results, the queue row, and the search index', async () => {
       prisma.moderationQueueEntry.findMany.mockResolvedValue([
         { id: 'q1', entityType: 'round_rating', entityId: 'gone', reviewedAt: null },
       ]);
 
       const result = await service.listPending();
 
-      expect(result).toHaveLength(1);
-      expect(result[0].processId).toBeNull();
-      expect(result[0].entries[0].entity).toBeNull();
+      expect(result).toHaveLength(0);
+      expect(prisma.moderationQueueEntry.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['q1'] } } });
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'gone');
     });
 
     // GitHub issue #212 / docs/DECISIONS.md D37: a required-relation
@@ -688,6 +695,25 @@ describe('ModerationService', () => {
       await service.reject('queue-4', {});
 
       expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('company', 'company-1');
+    });
+
+    // GitHub issue #383 / docs/DECISIONS.md D61: a raw-SQL deletion of the
+    // underlying entity, bypassing removeQueueEntries(), can leave a queue
+    // entry with nothing left to review — closing the narrow race where a
+    // moderator's page was already open when this happened (the more
+    // common case, listPending()/search() self-healing on the next read,
+    // is covered above).
+    it('approve() on an orphaned entry (underlying record already gone) removes the stale queue entry and throws not-found, not a raw Prisma error', async () => {
+      mockPendingRoundRatingEntry();
+      prisma.roundRating.findUnique.mockResolvedValue(null);
+      prisma.moderationQueueEntry.delete.mockResolvedValue({ id: 'queue-1' });
+
+      await expect(service.approve('queue-1', {})).rejects.toThrow(NotFoundException);
+
+      expect(prisma.moderationQueueEntry.delete).toHaveBeenCalledWith({ where: { id: 'queue-1' } });
+      expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
+      expect(prisma.roundRating.update).not.toHaveBeenCalled();
+      expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
     });
   });
 

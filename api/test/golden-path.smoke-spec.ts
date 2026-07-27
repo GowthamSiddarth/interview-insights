@@ -5,7 +5,7 @@ import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
-import { assertUsingTestDatabase } from './support/assert-test-database';
+import { assertLocalE2eIsolation } from './support/assert-test-database';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
 
@@ -95,7 +95,7 @@ describe('Full golden path (e2e smoke test)', () => {
   const sharedRecruiterIdentifier = `recruiter-${unique()}@example.com`;
 
   beforeAll(async () => {
-    assertUsingTestDatabase();
+    assertLocalE2eIsolation('npm run smoke:e2e');
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],

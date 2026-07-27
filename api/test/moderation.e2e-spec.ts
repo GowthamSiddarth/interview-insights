@@ -2,11 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
+import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
 import { createApprovedCompany, createPendingCompany } from './support/companies';
+
+// GitHub issue #383 / docs/DECISIONS.md D61 — a raw connection, bypassing
+// the app's own Prisma service, to simulate exactly what a raw-SQL
+// `DELETE FROM companies ...` (used repeatedly for manual live-verification
+// test-data cleanup throughout this project) actually does: remove the
+// entity row without ever touching its moderation_queue entry, since that
+// polymorphic reference isn't a real FK (docs/DATA_MODEL.md).
+const rawPrisma = new PrismaClient();
 
 interface ProcessBody {
   id: string;
@@ -69,6 +78,10 @@ describe('Moderation (e2e)', () => {
 
   afterEach(async () => {
     await app.close();
+  });
+
+  afterAll(async () => {
+    await rawPrisma.$disconnect();
   });
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
@@ -323,6 +336,57 @@ describe('Moderation (e2e)', () => {
 
       const publicCompanies = await server().get('/companies').expect(200);
       expect(body<Array<{ id: string }>>(publicCompanies).map((c) => c.id)).not.toContain(company.id);
+    });
+  });
+
+  // GitHub issue #383 / docs/DECISIONS.md D61 — a real live bug: manual
+  // live-verification test-data cleanup routinely uses a raw
+  // `DELETE FROM companies ...` (see D44/D51), which never cleans up a
+  // matching moderation_queue entry the way the app's own delete paths
+  // (removeQueueEntries()) do. The orphaned entry then rendered as
+  // "Unknown · Unknown" in the moderator UI and 404'd with a raw
+  // "Record not found." if actioned. Both self-healing paths are proven
+  // against a real Postgres here.
+  describe('orphaned queue entries (entity deleted outside the app)', () => {
+    it('listPending() removes an orphaned entry instead of surfacing it as Unknown · Unknown', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const company = await createPendingCompany(app, cookie, {
+        name: 'Orphan Target Co',
+        slug: uniqueSlug(),
+      });
+      const entryBefore = await findQueueEntryFor(company.id);
+
+      // Simulate the raw-SQL cleanup gap directly — bypasses the app
+      // entirely, exactly like a manual `DELETE FROM companies` would.
+      await rawPrisma.company.delete({ where: { id: company.id } });
+
+      const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+      const entries = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries);
+      expect(entries.find((e) => e.entityId === company.id)).toBeUndefined();
+
+      const remaining = await rawPrisma.moderationQueueEntry.findUnique({ where: { id: entryBefore.id } });
+      expect(remaining).toBeNull();
+    });
+
+    it('acting on an orphaned entry 404s with a clear message and cleans it up, rather than a raw Prisma error', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const company = await createPendingCompany(app, cookie, {
+        name: 'Orphan Action Co',
+        slug: uniqueSlug(),
+      });
+      const entry = await findQueueEntryFor(company.id);
+
+      await rawPrisma.company.delete({ where: { id: company.id } });
+
+      const res = await server()
+        .post(`/moderation/queue/${entry.id}/approve`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(404);
+      expect((res.body as { message: string }).message).toContain('no longer exists');
+
+      const remaining = await rawPrisma.moderationQueueEntry.findUnique({ where: { id: entry.id } });
+      expect(remaining).toBeNull();
     });
   });
 });
