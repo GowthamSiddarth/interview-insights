@@ -664,13 +664,7 @@ export default function MyReviewsPage() {
         return (
           <Card as="section" key={entry.processId} className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <button
-                type="button"
-                onClick={() => toggleExpanded(entry.processId)}
-                className="min-w-0 text-left sm:flex-1"
-                aria-expanded={isExpanded}
-                aria-label={`${isExpanded ? 'Hide' : 'View'} details for ${entry.companyName} — ${entry.roleTitle}`}
-              >
+              <div className="min-w-0 sm:flex-1">
                 <h2 className="truncate font-medium">
                   {entry.companyName} — {entry.roleTitle}
                 </h2>
@@ -680,16 +674,22 @@ export default function MyReviewsPage() {
                   {new Date(entry.createdAt).toLocaleDateString()} ·{' '}
                   {isEmpty ? 'no ratings submitted yet' : `${itemCount} item${itemCount === 1 ? '' : 's'}`}
                 </p>
-              </button>
-              {/* "View details"/"Hide details" and "View company profile" are
-                  grouped in one flex container so they always stay on the
-                  same line as each other. Below the `sm` breakpoint the
-                  title stacks on its own full-width row above this one
-                  instead of squeezing down to fit alongside it. */}
+              </div>
+              {/* "View details"/"Hide details" is the actual toggle — a
+                  hyperlink-styled button, not the whole row — grouped with
+                  "View company profile" so they always stay on the same
+                  line. Below the `sm` breakpoint the title stacks on its
+                  own full-width row above this one instead of squeezing
+                  down to fit alongside it. */}
               <div className="flex shrink-0 items-center gap-4">
-                <span className="text-sm text-gray-500">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(entry.processId)}
+                  className={`${linkClass} text-sm`}
+                  aria-expanded={isExpanded}
+                >
                   {isExpanded ? 'Hide details' : 'View details'}
-                </span>
+                </button>
                 <Link href={`/companies/${entry.companySlug}`} className={`${linkClass} text-sm`}>
                   View company profile
                 </Link>
