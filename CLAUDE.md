@@ -3531,6 +3531,29 @@ there from many past sessions never being truncated per D24's own
 indices. `wiki/deployment-guide.md` gained section 6.3 documenting the
 script and its safety guard.
 
+**Real CD incident found and fixed immediately (GitHub issue #393,
+D63)** — the very next CD run (issue #164's own merge) timed out at
+"Roll out api": the new pod crash-looped with `Cannot find module
+'/app/dist/secrets/localstack-secrets-bootstrap'`. No outage — the
+rolling-update strategy kept the previous pod serving traffic the
+whole time, only the new pod never became ready. Root cause:
+`api/tsconfig.build.json`'s `exclude` list never named `scripts`, so
+`nest build` pulled in the new `scripts/seed-demo-data.ts` too (its
+`../src/...` imports widened TypeScript's inferred common root from
+`src/` to all of `api/`), silently shifting every compiled path from
+`dist/main.js`/`dist/secrets/...` to `dist/src/main.js`/`dist/src/
+secrets/...` — breaking `entrypoint.js`'s hardcoded flat `dist/...`
+require paths, unchanged since Phase 11/issue #80. Confirmed directly
+(not guessed): reproduced locally before the fix, and confirmed a
+fresh local Docker build's actual image had the broken path structure
+via `docker run ... ls /app/dist/...`. Fixed with one line —
+`tsconfig.build.json` now excludes `scripts` — verified the same way
+(local build + a fresh Docker image both confirmed correct
+afterward), api unit tests/build/lint all still green, then reshipped
+via a new PR; CD's next run deployed clean. Epic #214 reopened and
+re-closed the same day, same precedent as every other epic reopening
+in this project.
+
 - Next step: implement the remaining two Phase 19 issues (#162
   near-duplicate detection, #163 LLM-assisted moderation triage —
   kickoff brainstorm already resolved for both) and/or Phases 30-32

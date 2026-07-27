@@ -2714,6 +2714,53 @@ support for other reasons, reconsider upgrading — not urgent, since
 
 ---
 
+### D63 — A live incident: `api/scripts/*.ts` files get pulled into `nest build`, shifting `dist/` output paths and crash-looping the deployed pod (GitHub issue #393, Phase 20)
+
+**Context:** the CD run for issue #164's own merge (D62) timed out at
+"Roll out api" — the new pod crash-looped with `Error: Cannot find
+module '/app/dist/secrets/localstack-secrets-bootstrap'`. No outage
+(the rolling-update strategy kept the previous pod serving traffic
+throughout), but the deploy never completed.
+
+Root cause: `api/tsconfig.build.json`'s `exclude` list named
+`node_modules`, `test`, `dist`, `**/*spec.ts` — never `scripts`, and it
+has no `include` at all. `nest build` therefore compiled every `.ts`
+file it could find under `api/`, including the new non-spec
+`scripts/seed-demo-data.ts`. That file imports from `../src/...`, so
+TypeScript's inferred common root (with no explicit `rootDir` set)
+widened from `src/` to the whole `api/` directory — silently shifting
+every compiled output path from `dist/main.js`/`dist/secrets/...` to
+`dist/src/main.js`/`dist/src/secrets/...`. `api/scripts/entrypoint.js`'s
+`require(path.join(__dirname, '..', 'dist', 'main'))` (and the same for
+`localstack-secrets-bootstrap`) has hardcoded that flat path since
+Phase 11 (issue #80) and had no reason to expect it to move.
+
+Confirmed directly, not guessed: reproduced locally
+(`rm -rf dist && npm run build` before the fix produced
+`dist/src/**`/`dist/scripts/**`), and confirmed a fresh local Docker
+build's actual image had the broken path structure (`docker run ... ls
+/app/dist/...`) before applying the fix.
+
+**Decision:** add `"scripts"` to `tsconfig.build.json`'s `exclude`
+list — the generator script is meant to run standalone via `ts-node`
+against the main `tsconfig.json` (which has no such exclusion, since
+`npm run seed:demo-data` needs to compile it), never bundled into the
+deployed application at all. Verified: `dist/` returns to its expected
+flat structure, a fresh local Docker image's `/app/dist/main.js` and
+`/app/dist/secrets/localstack-secrets-bootstrap.js` both confirmed
+present directly inside the built image (not just inferred from the
+build log), and all api unit tests/build/lint stay green.
+
+**Revisit when:** any *future* standalone script added under
+`api/scripts/` needing its own real Nest services (the same
+`NestFactory.createApplicationContext()` pattern D62 established)
+automatically stays excluded from `nest build` too, since the exclusion
+is directory-wide — no further action needed unless a script
+genuinely needs to ship inside the deployed container image itself
+(not the case for anything today).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
