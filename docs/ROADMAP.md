@@ -721,11 +721,15 @@ issues' original assumptions. All three issue bodies updated on GitHub
 to record the resolved decisions before implementation began; see each
 bullet below and the issues themselves for the full reasoning.
 
-- [ ] Near-duplicate review detection: `pg_trgm` trigram similarity
+- [x] Near-duplicate review detection: `pg_trgm` trigram similarity
       (not embeddings — stays inside Postgres, no new external
       dependency), `similarity() > 0.55` as a starting placeholder
       threshold, applied to all three entity types Phase 29 issue #317
-      already scoped `checkDuplicateFreeText()` to (GitHub issue #162)
+      already scoped `checkDuplicateFreeText()` to — computed via a
+      `$queryRaw` similarity query backed by a new partial GIN trigram
+      index on each of the three free-text columns, replacing D13's
+      exact-match/full-table-scan implementation entirely (GitHub
+      issue #162, D64)
 - [ ] LLM-assisted moderation triage: Anthropic's Claude API via
       `@anthropic-ai/sdk`, model configurable via `ANTHROPIC_MODEL`
       (not hardcoded), `ANTHROPIC_API_KEY` provisioned imperatively

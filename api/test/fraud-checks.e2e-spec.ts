@@ -2,11 +2,26 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
+import { faker } from '@faker-js/faker';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
 import { createApprovedCompany } from './support/companies';
+
+// GitHub issue #162 / D64: near-duplicate detection compares against every
+// prior row ever written to the shared, persistent `interview_insights_test`
+// database (D13's full-table-scan limitation, now trigram-based) — a fixed
+// template string plus a short random numeric suffix (the old convention
+// this file used pre-#162) stays well above the 0.55 similarity threshold
+// against its own leftovers from a previous run, since only the small
+// suffix differs. `faker.lorem.sentence()` gives each run's "must not be
+// flagged" fixtures genuinely independent wording (real word-salad
+// diversity, not just a different number), keeping cross-run collisions
+// negligible in practice.
+function uniqueFreeText(): string {
+  return faker.lorem.sentence({ min: 10, max: 16 });
+}
 
 interface ProcessBody {
   id: string;
@@ -246,11 +261,7 @@ describe('Fraud checks (e2e)', () => {
     const roundA = await createRound(await createProcess(candidateCookieA));
     const roundB = await createRound(await createProcess(candidateCookieB));
 
-    // Unique per run — the dockerized dev Postgres persists data across
-    // test runs (fraud-checks duplicate detection is a full-table scan by
-    // design, see D13), so a fixed literal string here would collide with
-    // leftover rows from a previous run instead of only this test's data.
-    const reviewText = `Great interview, fair and well-structured questions. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const reviewText = uniqueFreeText();
     const first = await submitRoundRating(roundA, candidateCookieA, reviewText);
     // Same text, different case/whitespace, different candidate/round.
     const second = await submitRoundRating(roundB, candidateCookieB, `  ${reviewText.toUpperCase()}  `);
@@ -267,7 +278,7 @@ describe('Fraud checks (e2e)', () => {
     const processA = await createProcess(candidateCookieA);
     const processB = await createProcess(candidateCookieB);
 
-    const freeText = `Very responsive, clear about next steps. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const freeText = uniqueFreeText();
     const first = await submitRecruiterRating(processA, candidateCookieA, freeText);
     const second = await submitRecruiterRating(processB, candidateCookieB, `  ${freeText.toUpperCase()}  `);
 
@@ -281,7 +292,7 @@ describe('Fraud checks (e2e)', () => {
     const processA = await createProcess(candidateCookieA);
     const processB = await createProcess(candidateCookieB);
 
-    const reviewText = `Would recommend, great loop overall. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const reviewText = uniqueFreeText();
     const first = await submitOverallReview(processA, candidateCookieA, reviewText);
     const second = await submitOverallReview(processB, candidateCookieB, `  ${reviewText.toUpperCase()}  `);
 
@@ -298,7 +309,7 @@ describe('Fraud checks (e2e)', () => {
     const roundA = await createRound(await createProcess(candidateCookieA));
     const processB = await createProcess(candidateCookieB);
 
-    const text = `Shared wording across entity types. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`;
+    const text = uniqueFreeText();
     const roundResult = await submitRoundRating(roundA, candidateCookieA, text);
     const overallResult = await submitOverallReview(processB, candidateCookieB, text);
 
@@ -306,15 +317,42 @@ describe('Fraud checks (e2e)', () => {
     expect(overallResult.queueEntry.flagReason).toBeNull();
   }, 20000);
 
+  // GitHub issue #162 / D64: this is the whole point of the pg_trgm switch
+  // — text that's genuinely reworded (not just a case/whitespace variant
+  // of the exact same string, which every test above already covers) must
+  // still trip the duplicate flag once its trigram similarity clears the
+  // 0.55 threshold. Both variants wrap the *same* freshly-generated random
+  // core phrase in different framing text — different wording throughout,
+  // but sharing enough content to land above the threshold. The core is
+  // regenerated per run (uniqueFreeText's own reasoning) so this pair never
+  // collides with a previous run's leftover rows either.
+  it('flags a round rating with duplicate when its free_text is a reworded near-duplicate, not an exact match', async () => {
+    const candidateCookieA = await loginNewCandidate();
+    const candidateCookieB = await loginNewCandidate();
+    const roundA = await createRound(await createProcess(candidateCookieA));
+    const roundB = await createRound(await createProcess(candidateCookieB));
+
+    const core = uniqueFreeText().replace(/\.$/, '');
+    const first = await submitRoundRating(
+      roundA,
+      candidateCookieA,
+      `Great interview experience: ${core}.`,
+    );
+    const second = await submitRoundRating(
+      roundB,
+      candidateCookieB,
+      `Really great interview, honestly - ${core.toLowerCase()} overall.`,
+    );
+
+    expect(first.queueEntry.flagReason).toBeNull();
+    expect(second.queueEntry.flagReason).toBe('duplicate');
+  }, 20000);
+
   it('does not flag distinct free_text submissions', async () => {
     const candidateCookie = await loginNewCandidate();
     const roundId = await createRound(await createProcess(candidateCookie));
 
-    const { queueEntry } = await submitRoundRating(
-      roundId,
-      candidateCookie,
-      `A genuinely unique review. (${Date.now()}-${Math.floor(Math.random() * 1e6)})`,
-    );
+    const { queueEntry } = await submitRoundRating(roundId, candidateCookie, uniqueFreeText());
 
     expect(queueEntry.flagReason).toBeNull();
   }, 15000);

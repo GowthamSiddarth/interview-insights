@@ -155,6 +155,11 @@ not something that scales.
 trigram index, or move to the OpenSearch layer in `docs/ROADMAP.md` Phase
 5), or false negatives/positives from exact-match-only duplicate detection
 turn out to matter in practice (add fuzzy matching then, not before).
+**Superseded (partially) by D64:** the "never block the write" decision and
+the rate-limit check are unchanged, but GitHub issue #162 (Phase 19)
+replaced the exact-match-only, full-table-scan-in-application-code
+duplicate check described above with a Postgres-computed `pg_trgm`
+similarity query — see D64.
 
 ---
 
@@ -2758,6 +2763,70 @@ automatically stays excluded from `nest build` too, since the exclusion
 is directory-wide — no further action needed unless a script
 genuinely needs to ship inside the deployed container image itself
 (not the case for anything today).
+
+---
+
+### D64 — Near-duplicate detection: `pg_trgm` trigram similarity computed in Postgres, replacing D13's exact-match full-table scan (GitHub issue #162, Phase 19)
+
+**Decision:** `FraudChecksService.checkDuplicateFreeText()` now runs a
+`similarity(lower(column), lower($1)) > 0.55` query via `$queryRaw`
+against the relevant table (`round_ratings.free_text`,
+`recruiter_ratings.free_text`, or `overall_reviews.review_text`, still
+scoped per entity type exactly as GitHub issue #317 established),
+instead of pulling every non-null row into application code and
+string-comparing after normalizing whitespace/case. A new migration
+(`20260727173830_enable_pg_trgm_near_duplicate_detection`) enables the
+`pg_trgm` extension and adds a partial GIN trigram index (on
+`lower(column)`, `WHERE column IS NOT NULL`) on each of the three
+columns — not modeled in `schema.prisma` (no first-class Prisma
+representation without the `postgresqlExtensions` preview feature),
+raw SQL like the Phase 1 CHECK constraints and Phase 4 materialized
+views before it. 0.55 is a starting placeholder threshold, not tuned
+against real data — same "revisit once there's real volume" spirit as
+`RATE_LIMIT_MAX_SUBMISSIONS` and the shrinkage formula's `k`. An exact
+match after normalizing whitespace/case is just the similarity-1.0
+case, so this single check now subsumes what D13's implementation did
+as well as genuine near-duplicates (typos, light rewording) — not a
+separate `flagReason`, still surfaces as `duplicate`.
+
+**Why:** D13 explicitly named both gaps this closes — exact-match-only
+detection missing genuine near-duplicates, and an application-code
+full-table scan that doesn't scale. Computing similarity in Postgres
+(backed by a trigram index) fixes both at once, and `pg_trgm` was
+chosen over an embeddings-based approach specifically because it stays
+inside Postgres with no new external dependency/service, matching this
+project's "don't build for hypothetical future requirements" bias —
+revisit an embeddings-based approach only if trigram similarity proves
+to miss real paraphrased duplicates in practice.
+
+**A real test-authoring finding, not a product bug:** the existing
+`fraud-checks.e2e-spec.ts` file's "must not be flagged" fixtures had
+used a fixed template sentence plus a short random numeric suffix
+(e.g. `` `Great interview, fair and well-structured questions.
+(${Date.now()}-${random})` ``) specifically so a fresh test run's
+literal string wouldn't exact-match a previous run's leftover row in
+the shared, persistent `interview_insights_test` database. Under
+trigram similarity, that pattern stopped working: two runs' strings
+differ only in a short numeric suffix, so their similarity stays well
+above 0.55 regardless — every "must not be flagged" assertion in the
+file started intermittently failing once run as part of the full
+parallel e2e suite (never when run alone immediately after a fresh
+migration, which is what first masked it). Fixed by generating each
+fixture's base text with `faker.lorem.sentence({ min: 10, max: 16 })`
+instead of a fixed template — real word-salad diversity across
+thousands of possible words, empirically confirmed via direct
+`similarity()` queries to stay under ~0.3 between independently
+generated sentences, versus a template+suffix pair's >0.55. The one
+test that *wants* a near-duplicate pair (proving the new behavior
+itself) wraps a single freshly-generated random core phrase in two
+different framing sentences, so the pair stays similar to each other
+by design while still being unrelated to any other run's leftover
+data.
+
+**Revisit when:** real usage data suggests 0.55 is too strict (misses
+real near-duplicates) or too loose (flags genuinely distinct short
+reviews that happen to share common phrasing) — tune the threshold
+constant directly, no query-shape change needed.
 
 ---
 
