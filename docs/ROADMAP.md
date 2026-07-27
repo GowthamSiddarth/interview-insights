@@ -760,7 +760,7 @@ bullet below and the issues themselves for the full reasoning.
       #383/D61, this same week) but allowing an explicit override, since
       seeding a real dev/demo/staging database on purpose is the whole
       point (GitHub issue #164, D62)
-- [ ] Engineering blog (last) (GitHub issue #165)
+- [x] Engineering blog (last) (GitHub issue #165)
 
 ## Phase 20 — Operational Hardening & Live-Verification Findings
 

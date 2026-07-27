@@ -3716,11 +3716,30 @@ rendering nothing. `api`/`web` build/lint clean. Not yet committed —
 same as issue #162/the test-infra follow-up above, ready-to-run git/gh
 commands to follow.
 
-- Next step: open the branch/PR for issue #162, the test-infra
-  follow-up, and issue #163 (commands provided, awaiting the user to
-  run them), then issue #165 (Phase 19's engineering blog, last) and/or
-  Phases 30-32 (Event-Driven Foundation / Notification Service / Review
-  Analyzer Service, still planned but not started). Continue merging
+Issue #163's PR merged the same session. With #162 (already merged as
+PR #396) and #164 done in an earlier session, all three of Phase 19's
+feature issues are closed.
+
+**Phase 19, issue #165 (engineering blog)** —
+`wiki/blog/phase-19-content-quality-synthetic-data/` gained one post per
+feature issue (#162, #163, #164), covering the `pg_trgm`-over-embeddings
+decision and the trigram-similarity-breaks-the-old-random-suffix-fixture
+test bug (D64), the LLM triage module's disabled-by-default/advisory-
+only/in-process-not-async design (D66), and the synthetic data
+generator's real-services-not-raw-SQL design plus its two real bugs
+(the `@faker-js/faker` ESM break, and identifying seeded companies by id
+rather than a shared timestamp under parallel test runs — D62).
+`wiki/blog/README.md`'s index updated to match, including fixing a
+stale "Phase 19 remains queued behind it" note left over on Phase 20's
+own entry from before Phase 19 was picked back up.
+
+**Phase 19 is now fully done** — issues #162-165 all closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
+- Next step: Phases 30-32 (Event-Driven Foundation / Notification
+  Service / Review Analyzer Service, still planned but not started) are
+  the natural next body of work, or Phase 27's already-complete backlog
+  can be revisited if something else takes priority. Continue merging
   without waiting for CI until the user says the GitHub Actions billing
   limit has been refreshed.
 
