@@ -2654,6 +2654,66 @@ incident, not an ongoing drift pattern like D51's.
 
 ---
 
+### D62 — Synthetic data generator: in-process real services, not raw SQL/HTTP; `@faker-js/faker` pinned to a CJS build (GitHub issue #164, Phase 19)
+
+**Context:** the kickoff brainstorm (this same week) resolved the
+mechanism as an in-process `NestFactory.createApplicationContext()`
+calling real services directly — `CompaniesService`+
+`ModerationService.approve()` (Phase 35's moderation gate),
+`BulkProcessSubmissionService` (the Phase 25/26 real submission path),
+`RoundTypeFieldOptionsService` (registry-valid `type_metadata`) —
+rather than raw HTTP (unnecessary real magic-link round-trips for
+throwaway candidates) or raw Prisma (the Phase 5 seed-script bug this
+issue's own design already cites).
+
+**Decision:** `api/scripts/seed-demo-data.ts` exports its core logic
+(`runSeed()`, taking a `SeedServices` bag of already-resolved providers)
+separately from its thin CLI `main()`, so a real e2e test
+(`test/seed-demo-data.e2e-spec.ts`) can drive the exact same logic
+through a `Test.createTestingModule({ imports: [AppModule] })`-compiled
+module — matching how every other e2e spec in this project already
+gets a real, fully-wired app, rather than shelling out to `ts-node` as
+a subprocess just to test a script. Its safety guard
+(`assertSeedTargetConfirmed()`) is the same *class* of check as
+`assertLocalE2eIsolation()` (D61, this same week) but not the same
+function — the e2e suite's guard must never allow an override (tests
+must always target the disposable database), while this script's whole
+purpose includes seeding a real dev/demo/staging database on purpose,
+so an explicit `--i-know-this-seeds-fake-data` flag is allowed to
+override the default `interview_insights_test` requirement.
+
+**A real dependency-version finding, not a design choice:**
+`@faker-js/faker`'s current major (10.x) ships pure ESM
+(`"type": "module"`, no CJS build at all) — installing it broke every
+Jest unit test in the repo with `SyntaxError: Cannot use import
+statement outside a module`, since this project's `ts-jest`/CommonJS
+setup has no ESM transform configured (and adding one just for one
+dependency isn't worth the complexity this codebase has otherwise
+avoided). Fixed by pinning to `@faker-js/faker@8.4.1` — the last major
+with a real `dist/cjs` build (confirmed via its own `package.json`
+`main` field, not assumed) — rather than fighting Jest's module system.
+
+**Also found while testing at full-suite scale:** the first version of
+`test/seed-demo-data.e2e-spec.ts` identified "the companies this test
+just created" via a `createdAt >= before` timestamp query. That worked
+running the file alone, but failed under a full parallel `npm run
+test:e2e` run — other e2e spec files (each its own Jest worker, all
+against the same shared `interview_insights_test` database) were
+creating their own companies in the same window, so the query picked
+up 8 companies instead of the 3 this test actually created. Fixed by
+having `runSeed()` return the exact `companyIds` it created (a small,
+generally-useful addition to its `Summary` return type, not test-only
+plumbing) and looking those up directly — the same "identify your own
+data by id, never by a shared mutable timestamp" lesson every other
+e2e spec in this codebase already follows via unique slugs/emails.
+
+**Revisit when:** if `@faker-js/faker` 9.x/10.x ever gains a real CJS
+build again, or if this project's Jest config ever gains genuine ESM
+support for other reasons, reconsider upgrading — not urgent, since
+8.4.1 has every generator API this script uses.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

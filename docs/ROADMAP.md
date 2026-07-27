@@ -737,18 +737,23 @@ bullet below and the issues themselves for the full reasoning.
       deliberately; Phase 32 (filed later, D53) depends on this issue
       shipping first, then ports the same logic into an async
       `review-analyzer` service once Phase 30's event bus exists
-- [ ] Synthetic data generator for lower environments: `@faker-js/faker`
-      plus an in-process NestJS application context calling real
-      services directly (`CompaniesService`+`ModerationService.approve()`
-      for the Phase 35 moderation gate, `BulkProcessSubmissionService`
-      for the Phase 25/26 real submission path, `RoundTypeFieldOptionsService`
-      for registry-valid `type_metadata`) — not raw HTTP or raw SQL/Prisma,
+- [x] Synthetic data generator for lower environments
+      (`api/scripts/seed-demo-data.ts`): `@faker-js/faker` (pinned to
+      8.4.1 — the current major ships pure ESM with no CJS build,
+      breaking Jest; see D62) plus an in-process NestJS application
+      context calling real services directly
+      (`CompaniesService`+`ModerationService.approve()` for the Phase
+      35 moderation gate, `BulkProcessSubmissionService` for the Phase
+      25/26 real submission path, `RoundTypeFieldOptionsService` for
+      registry-valid `type_metadata`) — not raw HTTP or raw SQL/Prisma,
       avoiding the Phase 5 seed-script indexing bug this issue already
       warned against. Varies both review-count distribution (exercising
-      the shrinkage floor on purpose) and moderation-outcome distribution.
-      Safety-guarded by reusing `assertLocalE2eIsolation()`'s shape — the
-      same lesson GitHub issue #383/D61 (this same week) already
-      taught the hard way (GitHub issue #164)
+      the shrinkage floor on purpose) and moderation-outcome
+      distribution. Safety-guarded by `assertSeedTargetConfirmed()`, the
+      same class of check as `assertLocalE2eIsolation()` (GitHub issue
+      #383/D61, this same week) but allowing an explicit override, since
+      seeding a real dev/demo/staging database on purpose is the whole
+      point (GitHub issue #164, D62)
 - [ ] Engineering blog (last) (GitHub issue #165)
 
 ## Phase 20 — Operational Hardening & Live-Verification Findings
