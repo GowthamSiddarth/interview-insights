@@ -1372,6 +1372,12 @@ under epic #368.
       auto-redirect into `/write-review` — a plain "request submitted"
       modal (OK + corner close), no navigation (GitHub issue #372)
 - [x] Engineering blog (last) (GitHub issue #373)
+- [x] Fix: legacy companies (created before issue #369's migration)
+      were silently backfilled to `status: pending` by Postgres's
+      `NOT NULL DEFAULT` column-add behavior, hiding every one of them
+      from every public read path — a new data-fix migration marks
+      anything created before that migration's own timestamp as
+      `approved` (GitHub issue #381, D60)
 
 ## Phase 36 — Moderator Queue SLAs, Assignment & Notifications (not yet planned)
 

@@ -3288,8 +3288,38 @@ shared `EntryActions` extraction, and the confirmation modal's
 acknowledgment-not-decision framing. `wiki/blog/README.md`'s index
 updated to match.
 
-**Phase 35 is now fully done** — issues #369-373 all closed via merged
-PRs, and every phase built so far now has a complete engineering blog.
+**Phase 35 was declared fully done, then reopened once more (GitHub
+issue #381, D60)** — a direct user report: clicking "Write a review"
+for Amazon (a real, long-standing, previously-public company) returned
+"Record not found." Root cause traced to issue #369's own migration —
+`ALTER TABLE "companies" ADD COLUMN "status" ... NOT NULL DEFAULT
+'pending'` silently backfills that default onto every row that already
+existed at the moment the column was added, not just future inserts.
+Every company created before that migration ran got flipped to
+`status: pending`, and every one of #369's new gates then correctly
+(but catastrophically) treated it as unapproved. Confirmed directly:
+6 of 7 companies in the live database were `pending` — exactly the
+ones created before the migration; the 7th ("Meta"), created after,
+was a genuine new request and correctly pending on its own. Fixed with
+a new migration (`20260727022934_backfill_legacy_companies_approved`)
+marking every company created strictly before the original migration's
+own `started_at` (looked up dynamically from `_prisma_migrations`, not
+a hardcoded date) as `approved` — applied to both the dev and
+`interview_insights_test` databases. Live-verified: `GET /companies`,
+`GET /companies/:id`, `GET /companies/by-slug/:slug` all show Amazon
+again, and a real `POST /companies/:id/processes` against it now
+succeeds where it previously 404'd. Notably, this gap wasn't caught by
+#369's own live verification because every prior check exercised *new*
+company-creation flows only — never "does an already-existing company
+still work" — and `interview_insights_test`'s routine truncation (D24)
+meant the test database never carried real legacy rows to expose the
+bug either. Epic #368 and milestone #32 reopened and re-closed the
+same day, same precedent as every other epic reopening in this
+project.
+
+**Phase 35 is now fully done** — issues #369-373 and #381 all closed
+via merged PRs, and every phase built so far now has a complete
+engineering blog.
 
 - Next step: Phase 19 (Content Quality & Synthetic Data, issues
   #162-165) and Phases 30-32 (Event-Driven Foundation / Notification

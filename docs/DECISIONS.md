@@ -2514,6 +2514,66 @@ endpoint from the frontend.
 
 ---
 
+### D60 — A live incident: `ADD COLUMN ... NOT NULL DEFAULT` backfills existing rows, silently hiding every pre-existing company (GitHub issue #381, Phase 35)
+
+**Context:** a direct user report — clicking "Write a review" for
+Amazon (a real, long-standing, previously-public company) returned
+"Record not found." Investigation traced it straight to issue #369's
+own migration: `ALTER TABLE "companies" ADD COLUMN "status"
+"ModerationStatus" NOT NULL DEFAULT 'pending';`. Postgres backfills a
+new NOT NULL column's default onto every row that already exists at
+the moment the column is added — not just future inserts. Every
+company created before that migration ran got silently flipped to
+`status: pending`, and every one of #369's new gates (list, by-slug,
+reviews, analytics, process creation) then correctly-but-catastrophically
+treated every one of them as not-yet-approved. Confirmed directly via
+`kubectl exec` psql: 6 of 7 companies in the live database were
+`pending` — every one created before the migration's own `started_at`;
+the 7th ("Meta"), created after, was a genuine new request and
+correctly `pending` on its own merits.
+
+This is exactly the class of gap the project's own live-verification
+habit exists to catch — and normally would have, except this migration
+was verified purely through *new* company-creation flows (create →
+pending → approve), never against a database that already had
+real, pre-existing rows in it. The `interview_insights_test` database
+is routinely truncated (D24), so it never carried this risk; only the
+long-lived dev/deployed database did, and no single-request curl
+walkthrough during #369's own verification ever exercised "does an
+*old* company still work."
+
+**Decision:** a new migration
+(`20260727022934_backfill_legacy_companies_approved`) marks every
+company created strictly before the original migration's own
+`started_at` as `approved` — looked up dynamically from the target
+database's own `_prisma_migrations` table, not a hardcoded timestamp,
+so the fix is correct wherever it runs (dev, test, a future staging
+environment) rather than only where the incident happened to occur:
+
+```sql
+UPDATE "companies"
+SET "status" = 'approved'
+WHERE "status" = 'pending'
+  AND "created_at" < (
+    SELECT "started_at" FROM "_prisma_migrations"
+    WHERE "migration_name" = '20260726040323_add_company_moderation_status'
+  );
+```
+
+A company created *after* that migration stays exactly as it already
+was — this only ever corrects rows that were never really pending in
+the first place, never touching a genuine new request.
+
+**Revisit when:** never expected to need revisiting for this specific
+incident, but the underlying lesson generalizes: any future migration
+that adds a `NOT NULL DEFAULT` column to a table with existing rows
+needs an explicit decision about what that default *means* for rows
+that already existed before the concept did — "pending" was the
+correct default for genuinely new writes, but silently wrong for
+history.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
