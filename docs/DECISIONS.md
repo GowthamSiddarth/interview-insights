@@ -2994,6 +2994,55 @@ here is unchanged; and if/when `ANTHROPIC_MODEL` needs per-entity-type
 tuning (e.g. a cheaper model for round ratings, a pickier one for overall
 reviews) — out of scope today, one shared model for all three.
 
+### D67 — A live incident: `seed-demo-data-undo`'s FK-safe delete transaction exceeded Prisma's default 5000ms timeout on a real dev-scale run (GitHub issue #406, Phase 37)
+
+**Context:** Phase 37's undo script (`seed-demo-data-undo.ts`, D66's
+neighbor issue) passed every unit test and its own e2e round-trip test
+clean — both run against small fixtures (1-3 companies) on a fresh
+local test database. Running the actual CLI by hand against the real
+dev database, against a run that had seeded 1500 companies and 8333
+candidates (~35k rows across `round_ratings`/`recruiter_ratings`/
+`overall_reviews`/`rounds`/`recruiter_interactions`/`interview_
+processes`/`candidates`/`recruiters`/`companies`), threw partway
+through:
+
+```
+Transaction API error: Transaction already closed: A query cannot be
+executed on an expired transaction. The timeout for this transaction
+was 5000 ms, however 7143 ms passed since the start of the transaction.
+```
+
+Prisma's interactive `$transaction()` defaults to a 5000ms timeout for
+the whole callback, not per query — a limit tuned for request-path
+writes (a single rating, a single company), never exercised anywhere
+else in this codebase because nothing else runs a batch delete
+proportional to an unbounded `--companies=N`. The transaction rolled
+back cleanly (Postgres's own guarantee, not something this code had to
+handle) — no partial state, no orphaned rows — so the failure mode was
+"try again," not data corruption. Still, "try again" isn't a real fix
+for a run of this size: rerunning the identical command reproduces the
+identical timeout.
+
+**Decision:** pass an explicit `{ timeout: 60_000 }` as `$transaction()`'s
+second argument. Chosen deliberately generous rather than tightly
+tuned to the 7143ms observed: this is a one-off, manually-triggered
+dev-tool operation, never a request-path write competing for a
+connection-pool slot under concurrent load, so holding row locks for up
+to a minute is an acceptable cost that a live write path wouldn't get.
+Verified against the exact dataset that surfaced the bug (1500
+companies / 8333 candidates on the real dev database) — completed
+cleanly in ~86 seconds wall-clock (most of it `ts-node` startup plus the
+post-transaction best-effort search cleanup and materialized-view
+refresh, both outside the timed transaction), confirmed via `--list`
+afterward showing no runs recorded.
+
+**Revisit when:** a seed/undo run large enough to exceed even 60s shows
+up — at that point, either bump the timeout further or (more likely,
+if runs keep growing) batch the deletes across several shorter
+transactions instead of one, accepting a narrow window where a crash
+mid-run could leave partial state (the current one-transaction design's
+whole point is avoiding exactly that).
+
 ---
 
 ## Still open (revisit when you have more information)

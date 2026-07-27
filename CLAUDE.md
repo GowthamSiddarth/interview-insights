@@ -3828,6 +3828,29 @@ batched over a whole run, and the real `--list`-requires-admin-env bug
 **Phase 37 is now fully done** — issues #406-407 both closed via merged
 PRs, and every phase built so far now has a complete engineering blog.
 
+**Phase 37 reopened once, the same day (GitHub issue #406's own real
+incident, D67)** — running the CLI by hand against the real dev
+database, on a run that had seeded 1500 companies and 8333 candidates
+(~35k rows), `seed-demo-data-undo`'s deletion transaction hit Prisma's
+default 5000ms interactive-transaction timeout partway through and
+rolled back cleanly (no partial state — just a failed attempt).
+Every unit test and the e2e round-trip test had only ever run against
+small fixtures on a fresh test database, so this scale was never
+exercised before a real hand-run surfaced it. Fixed with an explicit
+`{ timeout: 60_000 }` on the transaction — deliberately generous, since
+this is a one-off manual dev-tool operation, not a request-path write
+competing for a connection-pool slot. Verified against the exact
+dataset that broke it: the same 1500-company/8333-candidate run
+completed cleanly in ~86 seconds and left zero rows behind, confirmed
+via `--list` afterward. Also folded in the `seed:demo-data:undo`
+runbook (`wiki/deployment-guide.md` section 6.4, covering both the test
+database and a real dev/staging database) that had been written but
+not yet committed. Epic #405 reopened and re-closed the same day, same
+precedent as every other epic reopening in this project.
+
+**Phase 37 is now fully done** — issues #406-407 both closed via merged
+PRs, and every phase built so far now has a complete engineering blog.
+
 - Next step: Phases 30-32 (Event-Driven Foundation / Notification
   Service / Review Analyzer Service, still planned but not started) are
   the natural next body of work, or Phase 27's already-complete backlog
