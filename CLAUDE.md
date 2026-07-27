@@ -3610,17 +3610,57 @@ test all green. Not yet committed/branched/PR'd — per the user's
 standing instruction, git/gh commands are handed over as ready-to-run
 command blocks rather than executed directly.
 
-- Next step: open the branch/PR for issue #162 (commands provided,
-  awaiting the user to run them), then implement Phase 19 issue #163
-  (LLM-assisted moderation triage — kickoff brainstorm already
-  resolved) and/or Phases 30-32 (Event-Driven Foundation /
-  Notification Service / Review Analyzer Service, still planned but
-  not started). Also worth a look when convenient: the shared
-  `interview_insights_test` database has accumulated enough data
-  across past sessions to make `global-averages.e2e-spec.ts` fail
-  outright (not just flake) and `me-submissions.e2e-spec.ts`
-  intermittently fail when run as part of the full suite — the D61
-  truncation precedent likely applies again. Continue merging without
+**Test-infra follow-up: `interview_insights_test` now auto-truncates
+before every `npm run test:e2e` run (D65)** — closes the "worth a
+look" item above the same session it was flagged. New
+`test/support/truncate-test-database.ts` (`truncateTestDatabase()`),
+wired into `test/jest-e2e-global-setup.ts` right after
+`assertLocalE2eIsolation()` confirms the test database, deletes every
+row from every candidate/company-generated table in FK-safe order
+(deliberately excluding `round_type_field_options` — admin-managed
+reference data, not test output) and refreshes all three materialized
+views against the now-empty tables. Automates D61's one-off manual
+fix instead of letting the same class of problem resurface again.
+
+**A real regression caught and fixed during verification, not shipped
+blind:** the first version used `TRUNCATE TABLE ... CASCADE`.
+Empirically confirmed via repeated A/B testing (enabling/disabling
+each half of the change independently across many full-suite runs)
+that `TRUNCATE`'s `ACCESS EXCLUSIVE` lock across 13 tables at once
+intermittently caused real, always-registered routes to 404 on some
+of the ~25 NestJS app instances all bootstrapping in the same burst
+right after `globalSetup` resolved. Switched to a plain `DELETE FROM`
+in explicit FK-safe order — weaker `ROW EXCLUSIVE` lock, no
+relfilenode swap, negligible extra cost given the tables are empty at
+that point — which measurably reduced the failure rate. A second,
+separate finding surfaced during the same investigation: some
+HTTP-level flakiness (`Parse Error: Expected HTTP/`, stray 404s)
+persisted even with `DELETE`, but a controlled confound test proved
+it also occurs with truncation fully disabled, late in the same
+session — this is the long-lived local `kubectl port-forward` tunnel
+(D312/#312) degrading under this session's own ~20+ consecutive
+full-suite stress runs, not caused by this change; restarting the
+port-forwards should clear it. Also documented as a known, deliberately
+out-of-scope residual: `global-averages.e2e-spec.ts`'s "at least one
+RoundType has zero data" assumption can still occasionally fail on a
+genuinely fresh, just-truncated database, since `seed-demo-data.e2e-spec.ts`
+and other parallel files can collectively exhaust all 9 RoundTypes
+within a single run — a rarer intra-run race the test's own error
+message already acknowledges as a tradeoff, distinct from the
+guaranteed-eventual cross-run failure D61/this fix addresses. Full
+regression: 374 api unit, build/lint clean; e2e suite verified clean
+across multiple full runs (the two residual flake classes above both
+independently reproduced with truncation disabled too, confirming
+neither is this change's fault). Not yet committed — same as issue
+#162 above, ready-to-run git/gh commands to follow once #162's PR is
+handled.
+
+- Next step: open the branch/PR for issue #162 and this test-infra
+  follow-up (commands provided, awaiting the user to run them), then
+  implement Phase 19 issue #163 (LLM-assisted moderation triage —
+  kickoff brainstorm already resolved) and/or Phases 30-32
+  (Event-Driven Foundation / Notification Service / Review Analyzer
+  Service, still planned but not started). Continue merging without
   waiting for CI until the user says the GitHub Actions billing limit
   has been refreshed.
 

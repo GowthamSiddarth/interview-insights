@@ -2830,6 +2830,77 @@ constant directly, no query-shape change needed.
 
 ---
 
+### D65 — `interview_insights_test` is auto-truncated before every `npm run test:e2e`, via `DELETE FROM`, not `TRUNCATE`
+
+**Context:** D64's own e2e verification hit the exact class of problem
+D61 already fixed once — `global-averages.e2e-spec.ts`'s "at least one
+`RoundType` has zero data" assumption failed outright (not flaky) once
+every `RoundType` (9, since Phase 28's `tech_screening`) had
+accumulated real rows across many past sessions against the shared,
+persistent `interview_insights_test` database. D61's fix was a manual,
+one-off truncation — the same problem was always going to resurface.
+
+**Decision:** `test/jest-e2e-global-setup.ts` now also calls a new
+`truncateTestDatabase()` (`test/support/truncate-test-database.ts`)
+every time, right after `assertLocalE2eIsolation()` confirms
+`DATABASE_URL` genuinely points at the test database
+(`truncateTestDatabase()` re-checks this itself too — defense in
+depth, given the severity of getting it wrong). It deletes every row
+from every candidate/company-generated table, in FK-safe order, then
+refreshes all three materialized views against the now-empty base
+tables (nothing else does this automatically — D15). Deliberately
+excludes `round_type_field_options` — admin-managed reference data
+seeded by migrations (Phase 24/#248's algorithm/data-structure
+options), not test-run output; wiping it would break every test
+relying on round-type registry validation.
+
+**A real regression found and fixed during verification, not shipped
+blind:** the first version used `TRUNCATE TABLE ... CASCADE`, which
+takes an `ACCESS EXCLUSIVE` lock (and swaps the relfilenode) across
+every listed table at once. Empirically confirmed via repeated A/B
+testing (enabling/disabling each half of the change independently)
+that this intermittently caused real, always-registered routes
+(`POST /auth/admin/login`, `POST /auth/request-link`,
+`POST /moderation/queue/:id/approve`) to 404 on a handful of the ~25
+NestJS app instances all bootstrapping in the same burst once Jest's
+`globalSetup` resolved. Switched to a plain `DELETE FROM` in explicit
+FK-safe order instead — only needs the much weaker `ROW EXCLUSIVE`
+lock and never touches the relfilenode; the tables are empty or
+near-empty at the point this runs, so the extra cost of `DELETE` over
+`TRUNCATE` is negligible. This measurably reduced the failure rate.
+
+**A separate, pre-existing finding, explicitly not fixed here:** even
+after switching to `DELETE`, occasional HTTP-level flakiness (`Parse
+Error: Expected HTTP/`, unexpected 404s on real routes) still
+surfaced on some runs — but a controlled confound test proved it also
+occurs with truncation fully disabled, late in the same session, after
+~20 consecutive full-suite runs. This is environmental degradation in
+the long-lived local `kubectl port-forward` tunnel (D312/#312) under
+sustained heavy parallel Postgres/OpenSearch load from this session's
+own repeated stress-testing — not caused by this change. Restarting
+the port-forwards (`infra/scripts/dev-port-forwards.sh restart`)
+should clear it; not otherwise investigated further here.
+
+**Also observed, not fixed:** `global-averages.e2e-spec.ts`'s
+assumption can still occasionally fail on a genuinely fresh, just-
+truncated database — `seed-demo-data.e2e-spec.ts` (random synthetic
+round types) and other parallel files can collectively exhaust all 9
+`RoundType`s within a single run, independent of any cross-run
+accumulation. Truncation fixes the *guaranteed-eventual* failure D61
+already fixed once; it does not eliminate this much rarer intra-run
+race, which the test's own error message already acknowledges
+("Add a new enum value or reset the dev database") as a known
+tradeoff of asserting over global negative-space. Not in scope here.
+
+**Revisit when:** the port-forward flakiness recurs closely spaced
+enough to be worth a real fix (e.g. reducing local Jest `maxWorkers`,
+or the D312 script detecting/restarting a degraded tunnel
+automatically) — reducing `maxWorkers` to 4 was tried during this
+investigation and did **not** eliminate the flakiness on its own, so
+this needs real investigation, not a quick parallelism tweak.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
