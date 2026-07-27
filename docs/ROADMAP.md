@@ -890,6 +890,13 @@ GitHub issue #214.
       request; the title block is now plain static text (GitHub issue
       #389). Epic #214 reopened and re-closed the same day, same
       precedent as #222/#240/#278/#312/#347/#349/#387.
+- [x] Fix: `api/scripts/*.ts` files were being pulled into `nest
+      build` (`tsconfig.build.json` had no exclusion for `scripts`),
+      shifting every compiled `dist/` output path and crash-looping the
+      deployed pod on the very next CD run — `tsconfig.build.json` now
+      excludes `scripts` explicitly (GitHub issue #393, D63). Epic #214
+      reopened and re-closed the same day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389.
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
