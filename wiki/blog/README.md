@@ -170,6 +170,21 @@ set.
 1. [Issue #159 — Admin auth backend](phase-18-admin-authentication/issue-159-admin-auth-backend/README.md)
 2. [Issue #160 — Admin auth frontend](phase-18-admin-authentication/issue-160-admin-auth-frontend/README.md)
 
+## Phase 19 — Content Quality & Synthetic Data
+
+See `docs/ROADMAP.md` Phase 19. Filed alongside Phase 18 from the same
+2026-07-20 strategic review, then queued behind Phases 24-35 (planned
+and implemented more recently, with a more immediate priority) until a
+kickoff brainstorm revisited its three issues' original assumptions in
+light of everything shipped in the meantime — Phase 29's fraud-check
+reframing, Phase 35's company-moderation gate, Phase 24's round-type
+registry, Phase 25/26's bulk submission endpoint. All three feature
+issues are now done — this phase's blog is complete.
+
+1. [Issue #162 — Near-duplicate review detection (D64)](phase-19-content-quality-synthetic-data/issue-162-near-duplicate-detection/README.md)
+2. [Issue #163 — LLM-assisted moderation triage (D66)](phase-19-content-quality-synthetic-data/issue-163-llm-moderation-triage/README.md)
+3. [Issue #164 — Synthetic data generator (D62)](phase-19-content-quality-synthetic-data/issue-164-synthetic-data-generator/README.md)
+
 ## Phase 20 — Operational Hardening & Live-Verification Findings
 
 See `docs/ROADMAP.md` Phase 20. Filed retroactively — cross-cutting
@@ -177,8 +192,7 @@ fixes and tooling discovered via live verification, stress-testing, and
 product review rather than planned feature work. Declared fully done,
 then reopened six times — for issues #222, #240, #278, #312, #347, and
 #349 — the same non-linear precedent Phase 6/8/18 already set. All ten
-feature issues are now done — this phase's blog is complete. Phase 19
-(Content Quality & Synthetic Data) remains queued behind it.
+feature issues are now done — this phase's blog is complete.
 
 1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20-operational-hardening/issue-215-cd-artifact-pruning/README.md)
 2. [Issue #216 — Full golden-path smoke test (D36)](phase-20-operational-hardening/issue-216-golden-path-smoke-test/README.md)
