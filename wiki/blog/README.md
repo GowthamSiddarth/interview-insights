@@ -370,3 +370,18 @@ this phase's blog is complete.
 2. [Issue #370 — New moderation-queue OpenSearch index + fuzzy search endpoint (D59)](phase-35-moderated-company-creation-moderator-search/issue-370-moderation-queue-search/README.md)
 3. [Issue #371 — Moderation UI search box + category filter](phase-35-moderated-company-creation-moderator-search/issue-371-moderation-ui-search/README.md)
 4. [Issue #372 — Confirmation modal replaces the create-company-request auto-redirect](phase-35-moderated-company-creation-moderator-search/issue-372-confirmation-modal/README.md)
+
+## Phase 37 — Synthetic Data Seed Rollback (Undo by Run ID)
+
+See `docs/ROADMAP.md` Phase 37. Filed from a direct follow-up question
+after using Phase 19 issue #164's `seed-demo-data` generator against
+the dev database: there was no way to undo a run short of hand-deleting
+rows and diffing OpenSearch. Checking the roadmap's own design against
+the actual codebase before implementing surfaced three real gaps
+(missing `candidateIds` tracking, a missing `CompanySearchService`
+delete method, and a missing `Recruiter`-row step in the FK-safe
+deletion order), plus a real bug found during live CLI verification
+(`--list` eagerly required unrelated admin/JWT environment variables via
+a static `AppModule` import). This phase's blog is complete.
+
+1. [Issue #406 — `seed:demo-data:undo`, manifest tracking, and three prerequisite gaps](phase-37-synthetic-data-seed-rollback/README.md)
