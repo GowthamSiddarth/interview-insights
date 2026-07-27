@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from '@opensearch-project/opensearch';
 import { OPENSEARCH_CLIENT } from './opensearch-client.provider';
-import { isIndexAlreadyExistsError } from './opensearch-errors.util';
+import { isIndexAlreadyExistsError, isNotFoundError } from './opensearch-errors.util';
 import { searchIndexName } from './search-index-name.util';
 
 export interface IndexableCompany {
@@ -77,6 +77,23 @@ export class CompanySearchService implements OnModuleInit {
       },
       refresh: true,
     });
+  }
+
+  // GitHub issue #406 (Phase 37) — no caller needed this before a company
+  // could ever be un-created; seed-demo-data-undo.ts is the first. Same
+  // best-effort D16/D17 shape as ReviewSearchService.removeReview(): a
+  // not-found (e.g. the company was never approved, so never indexed) is
+  // silently expected, any other failure is logged, never thrown.
+  async removeCompany(id: string): Promise<void> {
+    try {
+      await this.client.delete({ index: this.index, id, refresh: true });
+    } catch (err) {
+      if (isNotFoundError(err)) return;
+      this.logger.error(
+        'Failed to remove company from OpenSearch',
+        err instanceof Error ? err.stack : err,
+      );
+    }
   }
 
   async search(query: string): Promise<CompanySearchResult[]> {

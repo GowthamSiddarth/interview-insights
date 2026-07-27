@@ -3736,7 +3736,90 @@ own entry from before Phase 19 was picked back up.
 **Phase 19 is now fully done** — issues #162-165 all closed via merged
 PRs, and every phase built so far now has a complete engineering blog.
 
-- Next step: Phases 30-32 (Event-Driven Foundation / Notification
+**Phase 37 planning (Synthetic Data Seed Rollback)** — filed 2026-07-27,
+from a direct follow-up question after using Phase 19 issue #164's
+`seed-demo-data` generator against the dev database: there was no way to
+undo a run short of hand-deleting rows and diffing OpenSearch. Milestone
+"Phase 37 — Synthetic Data Seed Rollback", epic #405, issues #406
+(implement) and #407 (blog) filed together per the "plan a phase before
+implementing" convention.
+
+**Phase 37, issue #406 (`seed:demo-data:undo`)** — before implementing,
+checked the roadmap's own design against the actual codebase (per the
+user's explicit request) and found three real gaps the design write-up
+didn't account for: `Summary` only tracked `companyIds`, not
+`candidateIds` (`runSeed()` created a candidate per process but
+discarded the id); `CompanySearchService` had no delete/remove method
+at all (only `indexCompany`/`search`); and the design's own FK-safe
+deletion order omitted `Recruiter` rows, which the seed generator does
+create via `RecruiterInteraction` and which have a real FK to `Company`
+with no cascade — deleting a company first would fail outright. All
+three fixed as part of this issue rather than surfacing later.
+
+`Summary.candidateIds` added alongside the existing `companyIds`.
+`CompanySearchService.removeCompany(id)` added, mirroring
+`ReviewSearchService.removeReview()`'s best-effort shape exactly. A new
+`api/scripts/seed-manifest.ts` (`writeManifest`/`readManifest`/
+`listManifests`/`deleteManifest`, a `dir` param defaulting to
+`api/scripts/.seed-runs/` so unit tests can point at a temp directory)
+is shared between `seed-demo-data.ts` (writer) and the new
+`seed-demo-data-undo.ts` (reader/lister). `main()` in `seed-demo-data.ts`
+now generates a `runId` (`crypto.randomUUID()`) and writes the manifest
+after `runSeed()` returns — deliberately not inside `runSeed()` itself,
+so `test/seed-demo-data.e2e-spec.ts` (which calls `runSeed()` directly)
+doesn't also write a manifest file on every test run.
+
+`api/scripts/seed-demo-data-undo.ts`: `--list` enumerates manifests with
+no DB connection; `--run-id=<id>` reuses `assertSeedTargetConfirmed()`,
+reads the manifest, boots a `NestFactory.createApplicationContext`, and
+deletes everything the run created in one transaction — ratings/reviews
+by `candidateId` (batched, same shape `MeService.eraseMe()` already
+uses for one candidate) + their `moderation_queue` entries → rounds/
+recruiter interactions → processes/candidates → `Recruiter` rows scoped
+by `companyId` → companies + their own `moderation_queue` entries —
+then best-effort removes `companies`/`reviews`/`moderation_queue`
+OpenSearch documents, refreshes the three materialized views, and
+deletes the manifest file on success.
+
+**A fourth real bug found during live CLI verification, not just unit
+tests**: a first working version made `--list` fail with "ADMIN_JWT_SECRET
+must be set" even with zero DB/admin config — merely importing anything
+from `seed-demo-data-undo.ts` statically imported `AppModule`, whose
+`AdminAuthModule` eagerly requires admin env vars at module-decorator-
+evaluation time, defeating the whole point of a lightweight `--list`.
+Fixed by extracting `assertSeedTargetConfirmed`/`parseIntArg`/
+`parseStringArg`/`refreshMaterializedViews` into a new
+`api/scripts/seed-cli-utils.ts` with zero `AppModule` dependency
+(re-exported from `seed-demo-data.ts` for backward compatibility), and
+making `AppModule` itself a dynamic `import()` inside `main()`'s
+`--run-id` branch only, never a static top-level import. Verified
+directly: `--list` now works with no admin env configured at all, and a
+real `--run-id` run (with real env) still works end to end.
+
+21 new unit tests (`parseStringArg`, `seed-manifest.ts`'s full round
+trip, `seed-demo-data-undo.ts`'s FK-safe deletion order/scoping/search
+cleanup/materialized-view refresh via mocked Prisma, `CompanySearchService.
+removeCompany()`) — 408 api unit tests total. 1 new e2e test
+(`test/seed-demo-data-undo.e2e-spec.ts`) proves a real seed-then-undo
+round trip against real Postgres + OpenSearch leaves zero rows across
+every table the seed touched and zero documents across all three search
+indices — 166 e2e tests total (163 passing, 2 pre-existing unrelated
+skips, 1 pre-existing unrelated intermittent failure in
+`global-averages.e2e-spec.ts` — the same documented D61/D65 residual
+flake class, confirmed unrelated by rerunning it in isolation clean).
+`api` build/lint clean. Live-verified via the real CLI against kind's
+Postgres/OpenSearch (port-forwarded): a real `--companies=1` seed run,
+its manifest written correctly, `--list` showing it, `--run-id=<id>`
+deleting everything and reporting accurate counts, the manifest file
+removed on success, and `--list` afterward showing "No seed runs
+recorded."
+
+Not yet committed/branched/PR'd — per the user's standing instruction,
+git/gh commands are handed over as ready-to-run command blocks rather
+than executed directly.
+
+- Next step: Phase 37, issue #407 (engineering blog, once #406 is
+  merged), then Phases 30-32 (Event-Driven Foundation / Notification
   Service / Review Analyzer Service, still planned but not started) are
   the natural next body of work, or Phase 27's already-complete backlog
   can be revisited if something else takes priority. Continue merging

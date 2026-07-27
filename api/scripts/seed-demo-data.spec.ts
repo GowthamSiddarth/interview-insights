@@ -2,6 +2,7 @@ import {
   assertSeedTargetConfirmed,
   buildTypeMetadata,
   parseIntArg,
+  parseStringArg,
   pickModerationOutcome,
   pickProcessCount,
 } from './seed-demo-data';
@@ -53,6 +54,24 @@ describe('seed-demo-data', () => {
       expect(parseIntArg('--companies', 8)).toBe(8);
       process.argv = ['node', 'seed-demo-data.ts', '--companies=-3'];
       expect(parseIntArg('--companies', 8)).toBe(8);
+    });
+  });
+
+  // GitHub issue #406 (Phase 37) — seed-demo-data-undo.ts's --run-id= flag.
+  describe('parseStringArg', () => {
+    it('returns undefined when the flag is absent', () => {
+      process.argv = ['node', 'seed-demo-data-undo.ts'];
+      expect(parseStringArg('--run-id')).toBeUndefined();
+    });
+
+    it('parses the flag value', () => {
+      process.argv = ['node', 'seed-demo-data-undo.ts', '--run-id=abc-123'];
+      expect(parseStringArg('--run-id')).toBe('abc-123');
+    });
+
+    it('preserves embedded "=" characters in the value', () => {
+      process.argv = ['node', 'seed-demo-data-undo.ts', '--run-id=abc=123'];
+      expect(parseStringArg('--run-id')).toBe('abc=123');
     });
   });
 
