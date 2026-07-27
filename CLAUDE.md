@@ -1968,9 +1968,27 @@ with fresh screenshots at both widths confirming the fix. Epic #214
 reopened and re-closed the same day, same precedent as
 #222/#240/#278/#312/#347/#349/#385.
 
-**Phase 20 is now fully done** — issues #349, #385, and #387 all closed
-via merged PRs, and every phase built so far has a complete engineering
-blog.
+**Phase 20 reopened a ninth time (GitHub issue #389)** — a direct
+user follow-up: the whole title row (company/role/outcome) was the
+clickable toggle, with "View details" as a plain non-interactive label
+beside it — the user wanted the reverse, "View details" itself as the
+clickable control, styled and behaving like a hyperlink, with the
+title just static text. `web/src/app/me/page.tsx`: the title block is
+now a plain `<div>`; "View details"/"Hide details" is now a real
+`<button>` styled with the shared `linkClass` (matching "View company
+profile"'s look), carrying the `onClick`/`aria-expanded` the title
+button used to have — both stay grouped on the same line, per #387.
+The button's accessible name no longer needs the `aria-label` #387
+added, since its visible text ("View details"/"Hide details") is
+sufficient on its own now. 13 web tests still green; build/lint clean;
+verified visually with real screenshots at 1280px and 390px widths —
+"View details" reads and behaves like a hyperlink at both sizes. Epic
+#214 reopened and re-closed the same day, same precedent as
+#222/#240/#278/#312/#347/#349/#385/#387.
+
+**Phase 20 is now fully done** — issues #349, #385, #387, and #389 all
+closed via merged PRs, and every phase built so far has a complete
+engineering blog.
 
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
 started (GitHub issues #162-165) — now queued behind Phases 24-26

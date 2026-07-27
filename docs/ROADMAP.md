@@ -859,6 +859,11 @@ GitHub issue #214.
       the title stacking full-width above them below the `sm`
       breakpoint (GitHub issue #387). Epic #214 reopened and re-closed
       the same day, same precedent as #222/#240/#278/#312/#347/#349.
+- [x] "View details" is now the actual clickable toggle (a hyperlink-
+      styled button), not the whole title row — direct user follow-up
+      request; the title block is now plain static text (GitHub issue
+      #389). Epic #214 reopened and re-closed the same day, same
+      precedent as #222/#240/#278/#312/#347/#349/#387.
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
