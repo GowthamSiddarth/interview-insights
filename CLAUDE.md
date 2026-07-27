@@ -1943,8 +1943,33 @@ plus every existing test that touches nested content now expands the
 card first); build/lint clean. Epic #214 reopened and re-closed the
 same day, same precedent as #222/#240/#278/#312/#347/#349.
 
-**Phase 20 is now fully done** — issues #349 and #385 both closed via
-merged PRs, and every phase built so far has a complete engineering
+**Phase 20 reopened an eighth time (GitHub issue #387)** — a direct
+user report immediately after #385 shipped: "View details" and "View
+company profile" weren't rendering on the same line. Root cause:
+#385's header row put the toggle button (`flex-1`, zero flex-basis)
+and the profile `Link` as two nowrap-eligible flex siblings — a
+zero-basis flex item never forces a wrap, so on a narrower viewport
+the button just shrank arbitrarily instead, wrapping the title across
+several lines while "View details" (vertically centered in that now-
+tall button) ended up nowhere near the top-aligned `Link`. Confirmed
+visually via real headless-browser screenshots at 1280px and 390px
+widths before diagnosing the fix, not guessed. Fixed by grouping "View
+details"/"Hide details" and "View company profile" into one flex
+sub-container that can never split apart, and switching the outer row
+to `flex-col`/`sm:flex-row` — below the `sm` breakpoint the title
+stacks on its own full-width row (`truncate` so a long title clips
+cleanly instead of wrapping into many lines) with the action pair
+below it; at `sm` and above it's identical to the original single-row
+design. The toggle button's accessible name moved to an explicit
+`aria-label` since "View details" text is no longer inside its visible
+content. 13 web tests still green (the existing name-matching regexes
+still match the new `aria-label` text); build/lint clean; re-verified
+with fresh screenshots at both widths confirming the fix. Epic #214
+reopened and re-closed the same day, same precedent as
+#222/#240/#278/#312/#347/#349/#385.
+
+**Phase 20 is now fully done** — issues #349, #385, and #387 all closed
+via merged PRs, and every phase built so far has a complete engineering
 blog.
 
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
