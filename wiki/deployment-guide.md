@@ -899,3 +899,222 @@ been disposable dev/test data): `pg_dump` it from the old machine before
 decommissioning, then restore into the new cluster's `postgres-0` after
 step 4. Not documented step-by-step here since it's never actually been
 needed yet — revisit if that changes.
+
+## 11. Self-triage playbook — common `gh`/`kubectl`/`docker` commands
+
+Every command below has actually been run, more than once, across this
+project's AI-assisted sessions — this section exists so a human
+developer can run the same commands directly (self-triage) without
+needing an assistant to execute anything. Copy-paste as-is; each block
+assumes you're in the repo root unless a `cd` is shown. Cross-references
+point at the fuller sections/`wiki/github-project-setup.md` where more
+depth already exists — this section is a fast-lookup index, not a
+replacement for them.
+
+### 11.1 Ship a change: branch → PR → merge
+
+```bash
+# 1. Branch (never commit to main directly, docs-only changes included)
+git checkout -b <type>/<short-description>   # e.g. fix/123-thing or feature/124-thing
+
+# 2. Commit (see the repo's own recent `git log` for message style)
+git add <files>
+git commit -m "type: summary
+
+longer explanation if needed
+
+Closes #<issue-number>"
+
+# 3. Push
+git push -u origin <branch-name>
+
+# 4. Open the PR — always assign yourself, always a real closing keyword
+gh pr create --title "..." --assignee GowthamSiddarth --body "$(cat <<'EOF'
+## Summary
+- Closes #<issue-number>. <what and why>
+
+## Test plan
+- [x] <what you verified>
+EOF
+)"
+
+# 5. Merge once satisfied (see project_ci_billing_gap memory / CLAUDE.md
+#    for the current CI-billing-gap status — local test/build/lint is
+#    the real correctness gate while that lasts, not a green CI check)
+gh pr merge <pr-number> --merge --delete-branch
+```
+
+### 11.2 File/close a GitHub issue (always `--assignee`, see `wiki/github-project-setup.md`)
+
+```bash
+gh issue create --title "..." --assignee GowthamSiddarth \
+  --milestone "Phase N — ..." \
+  --body "$(cat <<'EOF'
+## Why
+...
+## Scope
+...
+EOF
+)"
+
+# Closing happens automatically when a PR with "Closes #N" merges;
+# to close directly instead:
+gh issue close <issue-number> --comment "Fixed via PR #<pr-number>."
+```
+
+Epic/milestone/project-board mechanics (moving an epic to "In
+Progress", linking sub-issues, the project's own node/field IDs) are
+fully documented in `wiki/github-project-setup.md` — not repeated here.
+
+### 11.3 Check whether a merge to `main` actually deployed cleanly
+
+Every merge to `main` touching `api/**`, `web/**`, or `infra/k8s/**`
+triggers CD on the self-hosted runner (section 8). After merging:
+
+```bash
+# List recent CD runs — find the one for your merge
+gh run list --workflow=cd.yml --limit 5
+
+# Watch it live (blocks until done; exits non-zero if the run failed)
+gh run watch <run-id> --exit-status
+
+# If it failed, get exactly which step and why
+gh run view <run-id> --log-failed
+
+# Confirm the live app actually picked up your commit
+curl -s http://api.interview-insights.local/health
+# {"status":"ok","version":"<should match your merge commit SHA>"}
+```
+
+**A real gotcha, hit live (GitHub issue #393):** a `gh run watch`
+call's own background/notification summary can say a run
+"completed" without that meaning it *succeeded* — always check the
+run's actual conclusion (`gh run view <id> --json conclusion` or just
+read the `--log-failed` output) rather than trusting a one-line status
+summary at face value, especially for anything reported asynchronously.
+
+### 11.4 A CD deploy failed — find out why on the live cluster
+
+```bash
+# Is the new pod even coming up?
+kubectl -n interview-insights get pods -l app=api
+kubectl -n interview-insights get pods -l app=web
+
+# Crash-looping? Read the PREVIOUS container's logs, not the current
+# one (it's usually already restarting when you look):
+kubectl -n interview-insights logs <pod-name> --previous
+
+# Rollout stuck mid-way:
+kubectl -n interview-insights rollout status deployment/api
+kubectl -n interview-insights rollout history deployment/api
+```
+
+A rolling-update strategy (this project's default) keeps the previous
+healthy pod serving traffic while a new one fails — check `get pods`
+for a still-`Running` old pod before assuming an outage. See D35,
+D40, D43, D60, D63 in `docs/DECISIONS.md` for past incidents diagnosed
+exactly this way.
+
+### 11.5 Ad hoc SQL/OpenSearch queries against the live cluster
+
+**Always double-check which database first** — `interview_insights`
+(real dev data, 7 companies as of Phase 35) vs. `interview_insights_test`
+(disposable, routinely truncated, D24). Running anything destructive
+against the wrong one is exactly what D61 documents.
+
+```bash
+# Postgres — ad hoc query
+kubectl -n interview-insights exec postgres-0 -- psql -U postgres -d interview_insights -c "SELECT count(*) FROM companies;"
+
+# OpenSearch — from a machine with the port-forward running (section 1)
+curl -s "http://localhost:9200/companies/_count"
+curl -s "http://localhost:9200/companies/_search?q=name:SomeCompany"
+```
+
+### 11.6 Clean up the test database when it's overdue for truncation (D24, D61)
+
+`interview_insights_test` accumulates rows from every e2e/smoke run
+that doesn't clean up after itself — it's disposable by design, but
+"disposable" isn't the same as "self-cleaning." A live check found
+3,435 stale companies once (D61); if `npm run test:e2e` starts feeling
+oddly slow or a test that reasons about "any RoundType with zero data"
+starts failing for no obvious reason, it's usually this.
+
+```bash
+kubectl -n interview-insights exec postgres-0 -- psql -U postgres -d interview_insights_test -c "
+TRUNCATE TABLE
+  moderation_queue,
+  round_ratings,
+  recruiter_ratings,
+  overall_reviews,
+  rounds,
+  recruiter_interactions,
+  recruiters,
+  interview_processes,
+  candidate_verification_tokens,
+  candidates,
+  companies
+CASCADE;
+"
+# NEVER truncate round_type_field_options — that's seeded admin/reference
+# data (Phase 24/27), not disposable test output.
+
+# Matching OpenSearch cleanup (D26 — these indices are safe to delete anytime):
+curl -s -X DELETE "http://localhost:9200/e2etest-*"
+```
+
+### 11.7 Full regression check before merging (the real gate during the CI billing gap)
+
+```bash
+cd api
+npm test                                    # unit
+npm run build
+npm run lint
+
+# e2e — BOTH env vars required or you risk contaminating the dev
+# database/real OpenSearch indices (this exact mistake happened once,
+# D61) — a jest globalSetup now refuses to run without them, but don't
+# rely on that alone:
+set -a && source .env && set +a
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+OPENSEARCH_INDEX_PREFIX="e2etest-" \
+npm run test:e2e
+
+# smoke test (opt-in, full golden path in one pass — section 6.1)
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+OPENSEARCH_INDEX_PREFIX="e2etest-" \
+MAIL_HTTP_URL="http://localhost:8025" \
+npm run smoke:e2e
+
+cd ../web
+npm test
+npm run build
+npm run lint
+```
+
+### 11.8 Build and inspect a Docker image directly (diagnosing a bad build, e.g. D63)
+
+Useful when a container crash-loops with a `MODULE_NOT_FOUND` or
+similarly path-shaped error — confirm what's actually inside the image
+rather than guessing from the build log:
+
+```bash
+cd /path/to/interview-insights
+docker build -t interview-insights-api:debug -f api/Dockerfile \
+  --build-arg GIT_SHA=debug api
+
+# Inspect the built image's filesystem directly
+docker run --rm interview-insights-api:debug sh -c "ls /app/dist | head -20"
+docker run --rm interview-insights-api:debug sh -c "ls /app/dist/main.js"
+
+# Clean up the debug tag when done
+docker rmi interview-insights-api:debug
+```
+
+### 11.9 Manual live-verification data cleanup checklist
+
+Already covered in full in section 6.2 above (gather ids first,
+`moderation_queue` cleanup, the `companies` OpenSearch document-id-is-
+a-UUID-not-a-slug gotcha, and `prune-orphaned-company-search-docs.js`)
+— linked here so this playbook is a complete index of "where do I look
+when X happens."
