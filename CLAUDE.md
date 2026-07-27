@@ -3554,11 +3554,73 @@ via a new PR; CD's next run deployed clean. Epic #214 reopened and
 re-closed the same day, same precedent as every other epic reopening
 in this project.
 
-- Next step: implement the remaining two Phase 19 issues (#162
-  near-duplicate detection, #163 LLM-assisted moderation triage —
-  kickoff brainstorm already resolved for both) and/or Phases 30-32
-  (Event-Driven Foundation / Notification Service / Review Analyzer
-  Service, still planned but not started). Continue merging without
+**Phase 19, issue #162 (near-duplicate review detection)** —
+implements the kickoff brainstorm's resolved design exactly:
+`FraudChecksService.checkDuplicateFreeText()` now runs a
+`similarity(lower(column), lower($1)) > 0.55` query via `$queryRaw`
+against the relevant table, computed in Postgres, replacing D13's
+exact-match-only, application-code full-table-scan implementation
+entirely — an exact match after normalizing whitespace/case is just
+the similarity-1.0 case, so the same `duplicate` flagReason now covers
+both what D13 did and genuine near-duplicates (typos, light
+rewording). New migration
+(`20260727173830_enable_pg_trgm_near_duplicate_detection`) enables the
+`pg_trgm` extension and adds a partial GIN trigram index (on
+`lower(column)`, non-null only) on each of the three free-text
+columns (`round_ratings.free_text`, `recruiter_ratings.free_text`,
+`overall_reviews.review_text`), raw SQL not modeled in
+`schema.prisma` — same pattern as the Phase 1 CHECK constraints and
+Phase 4 materialized views. Still scoped per entity type/field exactly
+as GitHub issue #317 established. Applied directly to both the dev and
+`interview_insights_test` databases via `prisma migrate deploy`
+(shadow-database-based `migrate dev` currently fails against this
+schema — issue #369's `_prisma_migrations`-querying backfill migration
+trips a `P1014` replaying from empty on the shadow DB — worked around
+by hand-authoring the migration and applying with `migrate deploy`,
+which skips the shadow DB entirely; not otherwise investigated or
+fixed here).
+
+Rewrote `checkDuplicateFreeText()`'s unit tests to mock `$queryRaw`
+instead of `findMany`, including a dedicated "genuine near-duplicate,
+not just case/whitespace" test — 374 api unit tests total. Added a
+matching e2e test (10 fraud-checks e2e tests total) proving a
+genuinely reworded (not exact-match) pair trips `duplicate` via real
+Postgres trigram similarity. A real test-authoring bug surfaced while
+running the new test as part of the full parallel e2e suite (never
+when run alone): the file's existing "must not be flagged" fixtures
+used a fixed template sentence plus a short random numeric suffix to
+avoid colliding with a previous run's leftover rows under exact-match
+— under trigram similarity that pattern no longer works, since two
+runs' strings differ only in the suffix and stay well above 0.55
+regardless. Fixed by generating each fixture's base text with
+`faker.lorem.sentence({ min: 10, max: 16 })` instead (real word-salad
+diversity, empirically confirmed via direct `similarity()` queries to
+stay under ~0.3 between independent runs); the one test that wants a
+near-duplicate pair wraps a single freshly-generated random core
+phrase in two different framing sentences so the pair stays similar to
+each other by design without colliding with any other run's data.
+Documented as D64 (and a superseded-by note added to D13). Full
+regression pass: 374 api unit, 165 e2e (2 pre-existing unrelated
+failures — `global-averages.e2e-spec.ts`'s "every RoundType has data"
+assertion and, intermittently, `me-submissions.e2e-spec.ts`, both
+symptoms of the shared `interview_insights_test` database's
+accumulated data across many past sessions, D61's same standing risk,
+not caused by or related to this change), and the golden-path smoke
+test all green. Not yet committed/branched/PR'd — per the user's
+standing instruction, git/gh commands are handed over as ready-to-run
+command blocks rather than executed directly.
+
+- Next step: open the branch/PR for issue #162 (commands provided,
+  awaiting the user to run them), then implement Phase 19 issue #163
+  (LLM-assisted moderation triage — kickoff brainstorm already
+  resolved) and/or Phases 30-32 (Event-Driven Foundation /
+  Notification Service / Review Analyzer Service, still planned but
+  not started). Also worth a look when convenient: the shared
+  `interview_insights_test` database has accumulated enough data
+  across past sessions to make `global-averages.e2e-spec.ts` fail
+  outright (not just flake) and `me-submissions.e2e-spec.ts`
+  intermittently fail when run as part of the full suite — the D61
+  truncation precedent likely applies again. Continue merging without
   waiting for CI until the user says the GitHub Actions billing limit
   has been refreshed.
 

@@ -10,9 +10,28 @@ type PrismaTransaction = Prisma.TransactionClient;
 const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMIT_MAX_SUBMISSIONS = 3;
 
+// Starting placeholder, not tuned against real data yet (GitHub issue #162)
+// — same "revisit once there's real volume" spirit as
+// RATE_LIMIT_MAX_SUBMISSIONS and the shrinkage formula's `k`.
+const DUPLICATE_SIMILARITY_THRESHOLD = 0.55;
+
 function normalizeFreeText(freeText: string): string {
   return freeText.trim().toLowerCase().replace(/\s+/g, ' ');
 }
+
+interface SimilarityTableConfig {
+  table: string;
+  column: string;
+}
+
+const SIMILARITY_TABLE_BY_ENTITY_TYPE: Record<
+  Exclude<ModerationEntityType, 'company'>,
+  SimilarityTableConfig
+> = {
+  round_rating: { table: 'round_ratings', column: 'free_text' },
+  recruiter_rating: { table: 'recruiter_ratings', column: 'free_text' },
+  overall_review: { table: 'overall_reviews', column: 'review_text' },
+};
 
 // Pre-write signal only — never blocks a write outright. A write that trips
 // a check still gets created as `pending` like every other rating (CLAUDE.md
@@ -41,60 +60,43 @@ export class FraudChecksService {
     return count >= RATE_LIMIT_MAX_SUBMISSIONS;
   }
 
+  // GitHub issue #162 / docs/DECISIONS.md D64: pg_trgm trigram similarity,
+  // computed in Postgres (never an app-code full-table scan-and-compare —
+  // the D13 limitation this replaces). An exact match after normalizing
+  // whitespace/case is just the similarity-1.0 case, so this single check
+  // now covers both what the original exact-match implementation did and
+  // genuine near-duplicates (typos, light rewording). Scoped per entity
+  // type/field exactly as GitHub issue #317 already established — a
+  // recruiter rating's freeText is only compared against other recruiter
+  // ratings' freeText, never cross-type.
   async checkDuplicateFreeText(
     entityType: ModerationEntityType,
     freeText: string | null | undefined,
     tx: PrismaTransaction = this.prisma,
   ): Promise<boolean> {
     if (!freeText?.trim()) return false;
-    const normalized = normalizeFreeText(freeText);
+    if (entityType === 'company') return false;
 
-    // Full-table scan-and-compare in application code — fine at today's
-    // data volume, not something that scales. Revisit with a Postgres
-    // trigram index or the OpenSearch layer (docs/ROADMAP.md Phase 5) once
-    // real volume makes this slow. Also exact-match only (after
-    // normalizing whitespace/case) — genuinely fuzzy near-duplicate
-    // detection is a further-out enhancement, not this issue's scope.
-    // Scoped per entity type/field (GitHub issue #317): a recruiter
-    // rating's freeText is only compared against other recruiter
-    // ratings' freeText, never cross-type.
-    const existing = await this.fetchExistingFreeText(entityType, tx);
-    return existing.some((text) => text !== null && normalizeFreeText(text) === normalized);
+    const normalized = normalizeFreeText(freeText);
+    const { table, column } = SIMILARITY_TABLE_BY_ENTITY_TYPE[entityType];
+    return this.hasSimilarExistingText(tx, table, column, normalized);
   }
 
-  private async fetchExistingFreeText(
-    entityType: ModerationEntityType,
+  private async hasSimilarExistingText(
     tx: PrismaTransaction,
-  ): Promise<(string | null)[]> {
-    switch (entityType) {
-      case 'round_rating': {
-        const rows = await tx.roundRating.findMany({
-          where: { freeText: { not: null } },
-          select: { freeText: true },
-        });
-        return rows.map((r) => r.freeText);
-      }
-      case 'recruiter_rating': {
-        const rows = await tx.recruiterRating.findMany({
-          where: { freeText: { not: null } },
-          select: { freeText: true },
-        });
-        return rows.map((r) => r.freeText);
-      }
-      case 'overall_review': {
-        const rows = await tx.overallReview.findMany({
-          where: { reviewText: { not: null } },
-          select: { reviewText: true },
-        });
-        return rows.map((r) => r.reviewText);
-      }
-      // GitHub issue #369 (Phase 35) — company creation requests never go
-      // through fraud checks at all (out of scope: a company isn't a
-      // review, and its create() path never calls detectFlagReason()),
-      // but the switch must stay exhaustive over ModerationEntityType.
-      case 'company':
-        return [];
-    }
+    table: string,
+    column: string,
+    normalizedFreeText: string,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<{ found: boolean }[]>(Prisma.sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM ${Prisma.raw(`"${table}"`)}
+        WHERE ${Prisma.raw(`"${column}"`)} IS NOT NULL
+          AND similarity(lower(${Prisma.raw(`"${column}"`)}), ${normalizedFreeText}) > ${DUPLICATE_SIMILARITY_THRESHOLD}
+      ) AS "found"
+    `);
+    return rows[0]?.found ?? false;
   }
 
   // Only one flagReason fits per moderation_queue row, so if multiple
