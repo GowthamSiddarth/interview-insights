@@ -850,6 +850,15 @@ GitHub issue #214.
       collapsed-by-default / expand-on-click pattern (GitHub issue
       #385). Epic #214 reopened and re-closed the same day, same
       precedent as #222/#240/#278/#312/#347/#349.
+- [x] Fix: "View details" and "View company profile" (issue #385's own
+      layout) rendered on visibly separate lines on narrower viewports
+      — `flex-1`'s zero flex-basis never triggered a wrap, so a long
+      title just shrank the toggle button instead of wrapping,
+      stranding "View details" far from the profile link. Grouped both
+      labels into one flex sub-container that can't split apart, with
+      the title stacking full-width above them below the `sm`
+      breakpoint (GitHub issue #387). Epic #214 reopened and re-closed
+      the same day, same precedent as #222/#240/#278/#312/#347/#349.
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
