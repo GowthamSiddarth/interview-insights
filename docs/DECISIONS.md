@@ -2901,6 +2901,101 @@ this needs real investigation, not a quick parallelism tweak.
 
 ---
 
+### D66 — LLM-assisted moderation triage: in-process/synchronous, disabled by default, verdict never gates the write (GitHub issue #163, Phase 19)
+
+**Context:** the last of Phase 19's three issues (#162 near-duplicate
+detection and #164 the synthetic data generator were already done).
+`docs/ROADMAP.md`'s own bullet had already resolved the shape before
+implementation: Anthropic's Claude API via `@anthropic-ai/sdk`, model
+configurable via `ANTHROPIC_MODEL` (never hardcoded), `ANTHROPIC_API_KEY`
+provisioned imperatively like `admin-credentials`/`localstack-
+credentials` (never committed), the verdict stored as one nullable JSONB
+column mirroring `Round.typeMetadata`'s precedent, and — non-negotiably —
+advisory only, since CLAUDE.md hard constraint #2 says every rating/
+review starts `pending` and nothing here is allowed to change that.
+
+**Decision:** a new `api/src/ai-moderation/` module
+(`AiModerationService.computeAndStoreVerdict(entityType, entityId)`),
+wired into all four write paths that create or edit a `RoundRating`/
+`RecruiterRating`/`OverallReview` (the three single-entity services'
+`create()`/`update()`, plus `BulkProcessSubmissionService.create()` once
+per created rating/review) — called right after each write's own
+transaction commits, the same position `ModerationService.indexForSearch()`
+already occupies. Two things distinguish it from that OpenSearch-indexing
+precedent (D16/D17), both deliberate:
+
+- **Awaited in the request path, not fire-and-forget.** D16/D17's
+  indexing calls are also awaited today, so this isn't actually a new
+  pattern in practice — but the *design intent* differs: this issue's own
+  text calls out "built in-process/synchronous here deliberately," in
+  contrast to Phase 32 (D53), which ports the same logic into an async,
+  event-driven `review-analyzer` service once Phase 30's event bus
+  exists. Phase 19 isn't inventing a new synchronous-vs-async precedent;
+  it's the "prove it simply first" half of that pair.
+- **Disabled by default, not just resilient to failure.** Every other
+  best-effort integration in this codebase (OpenSearch, Mailpit) is a
+  hard dependency the app assumes is reachable; the Anthropic client
+  provider (`anthropic-client.provider.ts`) instead returns `null` when
+  `ANTHROPIC_API_KEY` is unset, and `AiModerationService` treats that as
+  a normal, silent no-op rather than a startup failure. This is the
+  correct shape for a secret that's "provisioned imperatively... never
+  committed" with no dev-only placeholder possible (unlike
+  `ADMIN_PASSWORD_HASH`, which *can* have a working, harmless dev value
+  — `bcrypt("dev-only-admin-password")` — there is no equivalent fake
+  Anthropic API key that "works" locally). `ANTHROPIC_MODEL` has no
+  hardcoded fallback either; it's only read (and only required) once
+  `ANTHROPIC_API_KEY` is actually set, mirroring `admin-auth.env.ts`'s
+  lazy-throw-on-use pattern rather than validating at boot.
+
+**Never gates the write, and degrades silently at every failure point.**
+`computeAndStoreVerdict()` wraps its entire body in one try/catch: a
+disabled feature, a refused request (`stop_reason: "refusal"`), an
+unparseable response, or a network/API error all result in the row's
+`moderationVerdict` simply staying whatever it was (usually `null`) —
+never a failed write, never a retry, never surfaced to the candidate.
+This is the same "never allowed to fail the operation it's attached to"
+shape D16/D17 established for search indexing, applied to a call that's
+strictly higher-latency and higher-failure-risk (a real third-party API,
+not a local OpenSearch instance) — which is exactly why the disabled-by-
+default posture above matters: in every environment without a real key
+configured (every CI run, every fresh local checkout), this code path is
+a single `if (!this.client) return;` and never reaches the network at
+all.
+
+**Content sent to the model** is rebuilt fresh from Postgres per entity
+type (never trusted from whatever the caller had in scope, same
+`indexForSearch`/`buildIndexableEntry` reasoning) — round ratings include
+the parent `Round`'s `roundType` and `typeMetadata` (the round-type
+registry's already-human-readable structured answers) alongside the
+scores and free text, per the issue's own scope note; recruiter ratings
+and overall reviews send just their own fields, since neither has an
+equivalent parent context. The prompt asks for a strict JSON object
+(`{concerning, reasons, summary}`) rather than using Structured Outputs
+(`output_config.format`) — that feature is gated to specific model tiers
+(Fable 5, Opus 5, Opus 4.8, Sonnet 5, Haiku 4.5), and since
+`ANTHROPIC_MODEL` is a deliberately open configuration knob, a plain
+prompt-and-parse approach (with a `JSON.parse` failure caught the same
+way every other failure mode is) works regardless of which model an
+operator points this at.
+
+**Surfaced to moderators, never auto-acted on:** `ModerationService`'s
+existing `ModerationQueueEntity`/`enrichEntries()` (Phase 29, #315) gained
+a `moderationVerdict` passthrough field for all three entity types
+(never `company`, which has no rateable content to triage) — the queue
+UI renders it as a distinct "AI second opinion (advisory only)" box,
+visually separate from the deterministic fraud-check `flagReason` above
+it, so a moderator can tell at a glance which signal is a hard rule
+(D13/D52/D64) and which is a probabilistic second opinion they're free to
+disagree with.
+
+**Revisit when:** Phase 32 ships (review-analyzer, event-driven) — at
+that point this module's logic moves, per D53, but Phase 19's own scope
+here is unchanged; and if/when `ANTHROPIC_MODEL` needs per-entity-type
+tuning (e.g. a cheaper model for round ratings, a pickier one for overall
+reviews) — out of scope today, one shared model for all three.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

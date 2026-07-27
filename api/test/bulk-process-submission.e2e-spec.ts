@@ -153,6 +153,15 @@ describe('Bulk process submission (e2e)', () => {
     const overallReview = await rawPrisma.overallReview.findFirst({ where: { processId } });
     expect(overallReview).not.toBeNull();
 
+    // GitHub issue #163 (Phase 19) — advisory LLM triage runs for every
+    // one of these, but is fully best-effort: with no ANTHROPIC_API_KEY
+    // configured in this test environment (AiModerationService.disabled),
+    // every write still succeeds and moderationVerdict simply stays null
+    // rather than the request failing or hanging on a real API call.
+    expect(roundRatings[0].moderationVerdict).toBeNull();
+    expect(recruiterRatings[0].moderationVerdict).toBeNull();
+    expect(overallReview!.moderationVerdict).toBeNull();
+
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
     const entries = body<QueueGroupBody[]>(queueRes).flatMap((g) => g.entries);
     const entityIds = new Set(entries.map((e) => e.entityId));

@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
+import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 import { CreateOverallReviewDto } from './dto/create-overall-review.dto';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class OverallReviewsService {
     private readonly prisma: PrismaService,
     private readonly moderationService: ModerationService,
     private readonly fraudChecksService: FraudChecksService,
+    private readonly aiModerationService: AiModerationService,
   ) {}
 
   // Same shape as RoundRatingsService/RecruiterRatingsService.create():
@@ -36,6 +38,8 @@ export class OverallReviewsService {
     });
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('overall_review', review.id);
+    // GitHub issue #163 (Phase 19) — advisory LLM triage, best-effort.
+    await this.aiModerationService.computeAndStoreVerdict('overall_review', review.id);
     return review;
   }
 
@@ -68,6 +72,7 @@ export class OverallReviewsService {
       return updated;
     });
     await this.moderationService.indexForSearch('overall_review', review.id);
+    await this.aiModerationService.computeAndStoreVerdict('overall_review', review.id);
     return updated;
   }
 

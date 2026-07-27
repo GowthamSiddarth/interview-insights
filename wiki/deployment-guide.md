@@ -466,6 +466,37 @@ password stops working the moment the new Secret is live and `api`
 restarts — there's no overlap window, matching this project's single-
 admin, single-credential scope (`docs/ROADMAP.md` Phase 18).
 
+## 5c. AI moderation triage credentials (GitHub issue #163, Phase 19)
+
+`ANTHROPIC_API_KEY` follows the same never-committed, imperatively-
+provisioned pattern as `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` (5b
+above) and `LOCALSTACK_AUTH_TOKEN` (5 above) — but unlike those two, it's
+genuinely optional. An empty/unset key just leaves
+`AiModerationService`'s advisory LLM triage disabled: every write still
+succeeds normally, `moderationVerdict` simply stays `null`, and nothing
+else in the app depends on this Secret existing. `ANTHROPIC_MODEL` is not
+a secret — it lives in the plain `api-config` ConfigMap alongside
+`ADMIN_USERNAME`.
+
+**One-time setup (only if you want the feature enabled):**
+
+```bash
+gh secret set ANTHROPIC_API_KEY   # paste a real Claude API key
+
+# Only needed to apply this manually, outside CD:
+export ANTHROPIC_API_KEY="sk-ant-..."
+kubectl create secret generic anthropic-credentials \
+  --namespace interview-insights \
+  --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+```
+
+**What CD does on every push** (`cd.yml`'s "Provision AI moderation
+secret" step): upserts `anthropic-credentials` from the
+`ANTHROPIC_API_KEY` repo secret — an unset repo secret deploys with the
+feature disabled, not a failed deploy. `infra/scripts/bootstrap-kind.sh`
+does the same, defaulting to an empty value when `ANTHROPIC_API_KEY`
+isn't exported locally.
+
 ## 6. Smoke-testing the whole stack end to end
 
 Whichever environment from sections 1-5 is up, the same golden path

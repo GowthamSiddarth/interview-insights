@@ -115,6 +115,32 @@ function CompanyRequestDetails({ entity }: { entity: ModerationQueueEntity }) {
   );
 }
 
+// GitHub issue #163 (Phase 19) — an advisory second opinion from an LLM
+// triage pass, rendered distinctly from the deterministic fraud-check flag
+// below: this is a suggestion to weigh, never a decision — the moderator
+// still makes the call either way (CLAUDE.md hard constraint #2). Renders
+// nothing when there's no verdict yet (feature disabled, or the triage
+// call simply hasn't landed).
+function AiModerationVerdict({ entity }: { entity: ModerationQueueEntity }) {
+  const verdict = entity.moderationVerdict;
+  if (!verdict) return null;
+  return (
+    <div
+      className={
+        verdict.concerning
+          ? 'rounded-md bg-red-50 p-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-300'
+          : 'rounded-md bg-gray-50 p-2 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+      }
+    >
+      <p className="font-medium">
+        AI second opinion (advisory only): {verdict.concerning ? 'flagged a concern' : 'no concerns found'}
+      </p>
+      <p>{verdict.summary}</p>
+      {verdict.reasons.length > 0 && <p>{verdict.reasons.join('; ')}</p>}
+    </div>
+  );
+}
+
 function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
   const entity: ModerationQueueEntity | null = entry.entity;
   if (!entity) {
@@ -150,6 +176,7 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
           Auto-flagged: {entry.flagReason} (fraud checks) — review with extra care.
         </p>
       )}
+      <AiModerationVerdict entity={entity} />
     </div>
   );
 }

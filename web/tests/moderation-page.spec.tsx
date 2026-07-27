@@ -49,6 +49,12 @@ const queueGroups = [
           focus: 4,
           technicalDepth: null,
           freeText: 'tough but fair',
+          // GitHub issue #163 (Phase 19) — advisory LLM triage verdict.
+          moderationVerdict: {
+            concerning: true,
+            reasons: ['mentions a specific interviewer by name'],
+            summary: 'Free text may reveal interviewer identity.',
+          },
         },
       },
       {
@@ -286,6 +292,13 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     expect(screen.getByText('A live coding round over a shared editor')).toBeInTheDocument();
     expect(screen.getByText(/scheduled duration: 45 min/)).toBeInTheDocument();
     expect(screen.getByText(/problem algorithms: DFS/)).toBeInTheDocument();
+    // GitHub issue #163 (Phase 19) — advisory LLM verdict, rendered
+    // distinctly from the deterministic fraud-check flag above.
+    expect(screen.getByText(/AI second opinion.*flagged a concern/)).toBeInTheDocument();
+    expect(screen.getByText('Free text may reveal interviewer identity.')).toBeInTheDocument();
+    // The recruiter rating in the same submission has no verdict yet —
+    // absence renders nothing, not an empty box.
+    expect(screen.queryByText(/no concerns found/)).not.toBeInTheDocument();
 
     // The other submission stays collapsed.
     expect(screen.queryByText('Overall review')).not.toBeInTheDocument();

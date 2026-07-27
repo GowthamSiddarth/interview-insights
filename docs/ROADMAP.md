@@ -730,17 +730,19 @@ bullet below and the issues themselves for the full reasoning.
       index on each of the three free-text columns, replacing D13's
       exact-match/full-table-scan implementation entirely (GitHub
       issue #162, D64)
-- [ ] LLM-assisted moderation triage: Anthropic's Claude API via
+- [x] LLM-assisted moderation triage: Anthropic's Claude API via
       `@anthropic-ai/sdk`, model configurable via `ANTHROPIC_MODEL`
       (not hardcoded), `ANTHROPIC_API_KEY` provisioned imperatively
       like `admin-credentials`/`localstack-credentials` (never
-      committed), verdict stored as one nullable JSONB column
-      (mirroring `Round.typeMetadata`'s precedent) — advisory only,
-      never auto-approves/rejects, hard constraint #2 stays intact
-      (GitHub issue #163) — built in-process/synchronous here
-      deliberately; Phase 32 (filed later, D53) depends on this issue
-      shipping first, then ports the same logic into an async
-      `review-analyzer` service once Phase 30's event bus exists
+      committed, and genuinely optional — disabled by default rather
+      than a boot-time requirement), verdict stored as one nullable
+      JSONB column (mirroring `Round.typeMetadata`'s precedent) —
+      advisory only, never auto-approves/rejects, hard constraint #2
+      stays intact (GitHub issue #163, D66) — built in-process/
+      synchronous here deliberately; Phase 32 (filed later, D53)
+      depends on this issue shipping first, then ports the same logic
+      into an async `review-analyzer` service once Phase 30's event
+      bus exists
 - [x] Synthetic data generator for lower environments
       (`api/scripts/seed-demo-data.ts`): `@faker-js/faker` (pinned to
       8.4.1 — the current major ships pure ESM with no CJS build,
