@@ -712,22 +712,43 @@ absence of any content-quality signal beyond mechanical fraud checks, and
 exists for lower environments). Milestone: "Phase 19 — Content Quality &
 Synthetic Data". Epic: GitHub issue #168.
 
-- [ ] Near-duplicate review detection: replace `FraudChecksService`'s
-      exact-match full-table scan with a similarity-based check
-      (`pg_trgm` or embeddings, decide at implementation time and record
-      as a new `docs/DECISIONS.md` entry) (GitHub issue #162)
-- [ ] LLM-assisted moderation triage: advisory spam/toxicity/
-      rating-text-mismatch signal surfaced in the Phase 14 moderation UI —
-      never auto-approves or auto-rejects, hard constraint #2 stays intact
+**Kickoff brainstorm (2026-07-27)**, run before implementation given how
+much shipped in the seven months since filing — Phase 24's rating-field
+redesign, Phase 25/26's bulk-submission endpoint, Phase 29's fraud-check
+reframing (already extended near-duplicate scanning to all three entity
+types), and Phase 35's company-moderation gate all touch these three
+issues' original assumptions. All three issue bodies updated on GitHub
+to record the resolved decisions before implementation began; see each
+bullet below and the issues themselves for the full reasoning.
+
+- [ ] Near-duplicate review detection: `pg_trgm` trigram similarity
+      (not embeddings — stays inside Postgres, no new external
+      dependency), `similarity() > 0.55` as a starting placeholder
+      threshold, applied to all three entity types Phase 29 issue #317
+      already scoped `checkDuplicateFreeText()` to (GitHub issue #162)
+- [ ] LLM-assisted moderation triage: Anthropic's Claude API via
+      `@anthropic-ai/sdk`, model configurable via `ANTHROPIC_MODEL`
+      (not hardcoded), `ANTHROPIC_API_KEY` provisioned imperatively
+      like `admin-credentials`/`localstack-credentials` (never
+      committed), verdict stored as one nullable JSONB column
+      (mirroring `Round.typeMetadata`'s precedent) — advisory only,
+      never auto-approves/rejects, hard constraint #2 stays intact
       (GitHub issue #163) — built in-process/synchronous here
       deliberately; Phase 32 (filed later, D53) depends on this issue
       shipping first, then ports the same logic into an async
       `review-analyzer` service once Phase 30's event bus exists
-- [ ] Synthetic data generator for lower environments: `@faker-js/faker`,
-      walks the real create → moderate-approve → index path (not raw
-      SQL/Prisma, avoiding the Phase 5 seed-script indexing bug),
-      parameterized with deliberately uneven distribution to exercise the
-      shrinkage floor on purpose (GitHub issue #164)
+- [ ] Synthetic data generator for lower environments: `@faker-js/faker`
+      plus an in-process NestJS application context calling real
+      services directly (`CompaniesService`+`ModerationService.approve()`
+      for the Phase 35 moderation gate, `BulkProcessSubmissionService`
+      for the Phase 25/26 real submission path, `RoundTypeFieldOptionsService`
+      for registry-valid `type_metadata`) — not raw HTTP or raw SQL/Prisma,
+      avoiding the Phase 5 seed-script indexing bug this issue already
+      warned against. Varies both review-count distribution (exercising
+      the shrinkage floor on purpose) and moderation-outcome distribution.
+      Safety-guarded by reusing `assertLocalE2eIsolation()`'s shape — the
+      same lesson GitHub issue #383/D61 (this same week) already
+      taught the hard way (GitHub issue #164)
 - [ ] Engineering blog (last) (GitHub issue #165)
 
 ## Phase 20 — Operational Hardening & Live-Verification Findings
