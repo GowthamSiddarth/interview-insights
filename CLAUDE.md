@@ -1923,9 +1923,29 @@ one existing test asserting a bare "Rejected" was checking a nested
 recruiter-rating's moderation status, not the process outcome, so it
 was unaffected; 125 web tests, build, lint all still green. Epic #214
 reopened and re-closed the same day, same precedent as
-#222/#240/#278/#312/#347. **Phase 20 is now fully done** — issue #349
-closed via merged PR, and every phase built so far has a complete
-engineering blog.
+#222/#240/#278/#312/#347.
+
+**Phase 20 reopened a seventh time (GitHub issue #385)** — a direct
+user request: make `/me` (my reviews) use the same collapsed-by-
+default / expand-on-click style as the moderation queue
+(`/moderation`) — a summary row per submission, with a "View details"
+button revealing the nested round ratings / recruiter ratings /
+overall review only once clicked, rather than always rendering
+everything inline. `web/src/app/me/page.tsx` gained an
+`expanded: Set<string>` keyed by `processId` (stable across a
+`reload()`, unlike an index) plus `toggleExpanded()`, mirroring
+`ModerationPage`'s own identical pattern exactly — the header button
+shows company/role/outcome/item-count and `aria-expanded`; the "View
+company profile" link stays outside the toggle (a separate,
+always-visible action, same as the moderation page's own secondary
+links). 13 web tests updated (a new dedicated collapse/expand test,
+plus every existing test that touches nested content now expands the
+card first); build/lint clean. Epic #214 reopened and re-closed the
+same day, same precedent as #222/#240/#278/#312/#347/#349.
+
+**Phase 20 is now fully done** — issues #349 and #385 both closed via
+merged PRs, and every phase built so far has a complete engineering
+blog.
 
 Phase 19 (Content Quality & Synthetic Data) remains planned but not
 started (GitHub issues #162-165) — now queued behind Phases 24-26

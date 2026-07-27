@@ -84,8 +84,38 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     expect(await screen.findByText("You haven't submitted anything yet.")).toBeInTheDocument();
   });
 
+  // GitHub issue #385 — mirrors the moderation queue's own collapsed-by-
+  // default / expand-on-click pattern: a process card shows only its
+  // summary until "View details" is clicked.
+  it('keeps a submission collapsed until "View details" is clicked, matching the moderation queue pattern', async () => {
+    setLoggedInCookie(true);
+    mockSubmissions(roundRatingSubmission);
+    const user = userEvent.setup();
+
+    render(<MyReviewsPage />);
+
+    expect(await screen.findByText('Acme Corp — Senior Engineer')).toBeInTheDocument();
+    expect(screen.getByText(/1 item/)).toBeInTheDocument();
+    expect(screen.queryByText('Approved')).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: /View details/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(toggle);
+
+    expect(await screen.findByText('Approved')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Hide details/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: /Hide details/ }));
+
+    expect(screen.queryByText('Approved')).not.toBeInTheDocument();
+  });
+
   it('groups a submission under its process and shows every status, including pending/rejected', async () => {
     setLoggedInCookie(true);
+    const user = userEvent.setup();
     mockSubmissions([
       {
         processId: 'process-1',
@@ -137,16 +167,20 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     render(<MyReviewsPage />);
 
     expect(await screen.findByText('Acme Corp — Senior Engineer')).toBeInTheDocument();
-    expect(screen.getByText('Approved')).toBeInTheDocument();
-    expect(screen.getByText('Rejected')).toBeInTheDocument();
-    expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'View company profile' }),
     ).toHaveAttribute('href', '/companies/acme-corp');
+
+    await user.click(screen.getByRole('button', { name: /View details/ }));
+
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
   });
 
   it("shows a process with no ratings yet as a distinct 'nothing submitted' note", async () => {
     setLoggedInCookie(true);
+    const user = userEvent.setup();
     mockSubmissions([
       {
         processId: 'process-1',
@@ -162,6 +196,8 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
       },
     ]);
     render(<MyReviewsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
 
     expect(await screen.findByText('No ratings submitted for this process yet.')).toBeInTheDocument();
   });
@@ -204,6 +240,7 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     }) as jest.Mock;
 
     render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
     await user.click(await screen.findByRole('button', { name: 'Delete process' }));
 
     expect(confirmSpy).toHaveBeenCalled();
@@ -218,6 +255,7 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     mockSubmissions(emptyProcessSubmission);
 
     render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
     await user.click(await screen.findByRole('button', { name: 'Delete process' }));
 
     expect(confirmSpy).toHaveBeenCalled();
@@ -253,6 +291,7 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     }) as jest.Mock;
 
     render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -288,6 +327,7 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     }) as jest.Mock;
 
     render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
     expect(confirmSpy).toHaveBeenCalled();
@@ -302,6 +342,7 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     mockSubmissions(roundRatingSubmission);
 
     render(<MyReviewsPage />);
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
     expect(confirmSpy).toHaveBeenCalled();
