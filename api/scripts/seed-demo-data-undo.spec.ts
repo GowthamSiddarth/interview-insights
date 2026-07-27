@@ -116,6 +116,15 @@ describe('seed-demo-data-undo', () => {
       return runUndo(services as unknown as UndoServices, seedManifest);
     }
 
+    it('uses a longer-than-default transaction timeout, since a large seed run can exceed Prisma\'s 5000ms default against a real database', async () => {
+      const { prisma } = buildPrisma();
+      const services = buildServices(prisma);
+
+      await invokeRunUndo(services, manifest);
+
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 60_000 });
+    });
+
     it('deletes in FK-safe order: moderation_queue -> ratings/reviews -> rounds/interactions -> processes/candidates -> recruiter -> company', async () => {
       const { prisma, calls } = buildPrisma();
       const services = buildServices(prisma);

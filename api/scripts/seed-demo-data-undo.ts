@@ -75,40 +75,53 @@ export async function runUndo(services: UndoServices, manifest: SeedManifest): P
   const overallReviewIds = overallReviews.map((r) => r.id);
   const processIds = processes.map((p) => p.id);
 
-  await prisma.$transaction(async (tx: PrismaTransaction) => {
-    await tx.moderationQueueEntry.deleteMany({
-      where: { entityType: 'round_rating', entityId: { in: roundRatingIds } },
-    });
-    await tx.moderationQueueEntry.deleteMany({
-      where: { entityType: 'recruiter_rating', entityId: { in: recruiterRatingIds } },
-    });
-    await tx.moderationQueueEntry.deleteMany({
-      where: { entityType: 'overall_review', entityId: { in: overallReviewIds } },
-    });
-    await tx.moderationQueueEntry.deleteMany({
-      where: { entityType: 'company', entityId: { in: companyIds } },
-    });
+  // GitHub issue #406 (Phase 37) — a real bug found running this against
+  // an actual dev database, not the smaller test fixtures: Prisma's
+  // default interactive-transaction timeout is 5000ms, which a large
+  // seed run's batch of deleteMany calls (proportional to --companies=N,
+  // against a real database with real indexes/latency rather than a
+  // fresh local test one) can genuinely exceed. This is a one-off manual
+  // dev-tool operation, not a request-path write competing for a
+  // connection-pool slot under load, so a generous explicit timeout is
+  // the right trade — holding the row locks longer is an acceptable cost
+  // here, unlike in the live write paths.
+  await prisma.$transaction(
+    async (tx: PrismaTransaction) => {
+      await tx.moderationQueueEntry.deleteMany({
+        where: { entityType: 'round_rating', entityId: { in: roundRatingIds } },
+      });
+      await tx.moderationQueueEntry.deleteMany({
+        where: { entityType: 'recruiter_rating', entityId: { in: recruiterRatingIds } },
+      });
+      await tx.moderationQueueEntry.deleteMany({
+        where: { entityType: 'overall_review', entityId: { in: overallReviewIds } },
+      });
+      await tx.moderationQueueEntry.deleteMany({
+        where: { entityType: 'company', entityId: { in: companyIds } },
+      });
 
-    await tx.roundRating.deleteMany({ where: { candidateId: { in: candidateIds } } });
-    await tx.recruiterRating.deleteMany({ where: { candidateId: { in: candidateIds } } });
-    await tx.overallReview.deleteMany({ where: { candidateId: { in: candidateIds } } });
+      await tx.roundRating.deleteMany({ where: { candidateId: { in: candidateIds } } });
+      await tx.recruiterRating.deleteMany({ where: { candidateId: { in: candidateIds } } });
+      await tx.overallReview.deleteMany({ where: { candidateId: { in: candidateIds } } });
 
-    await tx.round.deleteMany({ where: { processId: { in: processIds } } });
-    await tx.recruiterInteraction.deleteMany({ where: { processId: { in: processIds } } });
+      await tx.round.deleteMany({ where: { processId: { in: processIds } } });
+      await tx.recruiterInteraction.deleteMany({ where: { processId: { in: processIds } } });
 
-    await tx.interviewProcess.deleteMany({ where: { candidateId: { in: candidateIds } } });
-    await tx.candidateVerificationToken.deleteMany({ where: { candidateId: { in: candidateIds } } });
-    await tx.candidate.deleteMany({ where: { id: { in: candidateIds } } });
+      await tx.interviewProcess.deleteMany({ where: { candidateId: { in: candidateIds } } });
+      await tx.candidateVerificationToken.deleteMany({ where: { candidateId: { in: candidateIds } } });
+      await tx.candidate.deleteMany({ where: { id: { in: candidateIds } } });
 
-    // Recruiter rows are scoped one-to-one to a company
-    // (@@unique([companyId, internalIdentifierHash])) with a real FK to it
-    // and no cascade — must be removed before the company itself, or the
-    // delete below fails with a foreign-key violation. The roadmap's own
-    // design write-up for this phase omitted this step; found while
-    // checking prerequisites.
-    await tx.recruiter.deleteMany({ where: { companyId: { in: companyIds } } });
-    await tx.company.deleteMany({ where: { id: { in: companyIds } } });
-  });
+      // Recruiter rows are scoped one-to-one to a company
+      // (@@unique([companyId, internalIdentifierHash])) with a real FK to
+      // it and no cascade — must be removed before the company itself, or
+      // the delete below fails with a foreign-key violation. The
+      // roadmap's own design write-up for this phase omitted this step;
+      // found while checking prerequisites.
+      await tx.recruiter.deleteMany({ where: { companyId: { in: companyIds } } });
+      await tx.company.deleteMany({ where: { id: { in: companyIds } } });
+    },
+    { timeout: 60_000 },
+  );
 
   await Promise.all([
     ...roundRatings

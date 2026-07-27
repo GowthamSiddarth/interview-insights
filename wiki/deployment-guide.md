@@ -667,7 +667,57 @@ status displays also have non-empty demo data). Every generated round's
 `round_type_field_options` values (`RoundTypeFieldOptionsService`), so
 it validates against the same registry check the live write path
 enforces. Prints a JSON summary (counts per entity type and moderation
-outcome) when it finishes.
+outcome), including a `runId`, when it finishes.
+
+### 6.4 Undoing a seed run (GitHub issue #406, Phase 37)
+
+Every `seed:demo-data` run writes a manifest (`runId`, timestamp,
+`--companies` count, and the run's `companyIds`/`candidateIds`) to
+`api/scripts/.seed-runs/<runId>.json` (gitignored, local only —
+deliberately not a Postgres table, this is dev-tool bookkeeping, not
+production schema). `api/scripts/seed-demo-data-undo.ts` reads that
+manifest back and reverses the run: same FK-safe deletion order
+`MeService.eraseMe()` uses for a single candidate, batched over the
+whole run, plus best-effort OpenSearch cleanup and a materialized-view
+refresh.
+
+**Against the test database:**
+
+```bash
+cd api
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+OPENSEARCH_INDEX_PREFIX="e2etest-" \
+npm run seed:demo-data -- --companies=2
+
+npm run seed:demo-data:undo -- --list   # no DB/env needed, just reads local manifests
+
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+OPENSEARCH_INDEX_PREFIX="e2etest-" \
+npm run seed:demo-data:undo -- --run-id=<run-id>   # from the seed output or --list
+
+npm run seed:demo-data:undo -- --list   # confirms "No seed runs recorded."
+```
+
+**Against a real dev/staging database** (whatever `DATABASE_URL` your
+`.env` points at) — the same `--i-know-this-seeds-fake-data` override
+`assertSeedTargetConfirmed()` already requires for seeding applies
+identically to undoing:
+
+```bash
+cd api
+set -a && source .env && set +a
+
+npm run seed:demo-data -- --companies=2 --i-know-this-seeds-fake-data
+npm run seed:demo-data:undo -- --list
+npm run seed:demo-data:undo -- --run-id=<run-id> --i-know-this-seeds-fake-data
+npm run seed:demo-data:undo -- --list
+```
+
+`--list` never touches Postgres, OpenSearch, or any admin/JWT
+environment variable — it only reads the local manifest files, so it
+works with zero config. `--run-id=<id>` does need the full app context
+(same as the seed script itself), and deletes the manifest file on
+success so a completed undo stops showing up in `--list`.
 
 ## 7. Self-hosted GitHub Actions runner (on-demand, Phase 12)
 
