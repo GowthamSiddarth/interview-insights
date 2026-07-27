@@ -18,6 +18,7 @@
 // Usage:
 //   DATABASE_URL=... npm run seed:demo-data -- --companies=8
 //   DATABASE_URL=<not interview_insights_test> npm run seed:demo-data -- --companies=8 --i-know-this-seeds-fake-data
+import { randomUUID } from 'crypto';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
 import {
@@ -39,36 +40,23 @@ import {
 import { CreateBulkProcessDto } from '../src/bulk-process-submission/dto/create-bulk-process.dto';
 import { CreateBulkRoundDto } from '../src/bulk-process-submission/dto/create-bulk-round.dto';
 import { CreateBulkRecruiterInteractionDto } from '../src/bulk-process-submission/dto/create-bulk-recruiter-interaction.dto';
+import { writeManifest } from './seed-manifest';
 
-const TEST_DATABASE_NAME = 'interview_insights_test';
 const SEEDER_LABEL = 'seed-demo-data';
 
-// GitHub issue #383/D61 (this same week) found that an unguarded run
-// against the wrong database silently contaminated the real dev Postgres
-// and OpenSearch indices — this generator gets the identical class of
-// guard from the start, not as an afterthought. Unlike the e2e suite's own
-// assertLocalE2eIsolation() (which never allows an override — tests must
-// always target the disposable database), this script's whole purpose
-// includes seeding a real dev/demo/staging database on purpose, so an
-// explicit opt-in flag is allowed to override the default safety check.
-export function assertSeedTargetConfirmed(): void {
-  const databaseUrl = process.env.DATABASE_URL ?? '';
-  if (databaseUrl.includes(TEST_DATABASE_NAME)) return;
-  if (process.argv.includes('--i-know-this-seeds-fake-data')) return;
-  throw new Error(
-    `Refusing to seed: DATABASE_URL does not point at ${TEST_DATABASE_NAME}, ` +
-      'and this run creates a large volume of fake data. If you really want ' +
-      'to seed a different database on purpose (local kind dev, a future ' +
-      'staging environment), pass --i-know-this-seeds-fake-data explicitly.',
-  );
-}
-
-export function parseIntArg(flag: string, fallback: number): number {
-  const arg = process.argv.find((a) => a.startsWith(`${flag}=`));
-  if (!arg) return fallback;
-  const value = Number(arg.split('=')[1]);
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
+// GitHub issue #406 (Phase 37) — moved to seed-cli-utils.ts so
+// seed-demo-data-undo.ts's --list mode can use these without statically
+// importing this file's own AppModule import (see that module's comment
+// for why). Re-exported here so existing imports of these from
+// './seed-demo-data' (e.g. scripts/seed-demo-data.spec.ts) keep working
+// unchanged.
+export {
+  assertSeedTargetConfirmed,
+  parseIntArg,
+  parseStringArg,
+  refreshMaterializedViews,
+} from './seed-cli-utils';
+import { assertSeedTargetConfirmed, parseIntArg, refreshMaterializedViews } from './seed-cli-utils';
 
 export interface Summary {
   companies: number;
@@ -86,6 +74,11 @@ export interface Summary {
   // e2e spec files happen to be writing to the same shared test database
   // in parallel Jest workers at the same time.
   companyIds: string[];
+  // The generated candidates' own ids — GitHub issue #406 (Phase 37):
+  // seed-demo-data-undo.ts needs these to delete a run's content by
+  // candidateId, the same anchor MeService.eraseMe() already uses for a
+  // single candidate.
+  candidateIds: string[];
 }
 
 // Deliberately uneven — some companies stay under the n=3 shrinkage floor
@@ -280,12 +273,6 @@ async function moderateGeneratedEntities(
   }
 }
 
-async function refreshMaterializedViews(prisma: PrismaService): Promise<void> {
-  await prisma.$executeRawUnsafe('REFRESH MATERIALIZED VIEW company_round_type_aggregates');
-  await prisma.$executeRawUnsafe('REFRESH MATERIALIZED VIEW company_recruiter_aggregates');
-  await prisma.$executeRawUnsafe('REFRESH MATERIALIZED VIEW company_overall_aggregates');
-}
-
 // Exported so a real e2e test (test/seed-demo-data.e2e-spec.ts) can drive
 // this exact logic against a real Postgres/OpenSearch through a
 // Test.createTestingModule()-compiled AppModule, without shelling out to
@@ -324,6 +311,7 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
     rejected: 0,
     flagged: 0,
     companyIds: [],
+    candidateIds: [],
   };
 
   for (let i = 0; i < companyCount; i++) {
@@ -334,6 +322,7 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
     const processCount = pickProcessCount();
     for (let p = 0; p < processCount; p++) {
       const candidate = await candidatesService.create({ email: faker.internet.email() });
+      summary.candidateIds.push(candidate.id);
       const dto = buildProcessDto(roundTypes, schema);
       const process = await bulkSubmissionService.create(company.id, candidate.id, dto);
       summary.processes++;
@@ -360,7 +349,21 @@ async function main(): Promise<void> {
       roundTypeFieldOptionsService: app.get(RoundTypeFieldOptionsService),
     };
     const summary = await runSeed(services, companyCount);
-    console.log(JSON.stringify(summary, null, 2));
+
+    // GitHub issue #406 (Phase 37) — runId generation and manifest writing
+    // deliberately live here, not inside runSeed(), so runSeed() stays
+    // side-effect-free: test/seed-demo-data.e2e-spec.ts calls runSeed()
+    // directly and shouldn't also write a manifest file on every test run.
+    const runId = randomUUID();
+    writeManifest({
+      runId,
+      createdAt: new Date().toISOString(),
+      companyCount,
+      companyIds: summary.companyIds,
+      candidateIds: summary.candidateIds,
+    });
+
+    console.log(JSON.stringify({ runId, ...summary }, null, 2));
   } finally {
     await app.close();
   }
