@@ -572,10 +572,25 @@ export default function MyReviewsPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [submissions, setSubmissions] = useState<MyProcessSubmissions[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // GitHub issue #385 — same collapsed-by-default / expand-on-click
+  // pattern as the moderation queue (web/src/app/moderation/page.tsx),
+  // keyed by processId rather than index, since that stays stable
+  // across a reload() the way an index wouldn't if the list ever
+  // reordered.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLoggedIn(api.hasCandidateSessionHint());
   }, []);
+
+  function toggleExpanded(processId: string): void {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(processId)) next.delete(processId);
+      else next.add(processId);
+      return next;
+    });
+  }
 
   function reload(): void {
     api
@@ -619,8 +634,8 @@ export default function MyReviewsPage() {
         <h1 className="text-2xl font-semibold">My reviews</h1>
         <p className="text-sm text-gray-500">
           Every submission you&apos;ve made, across every status — the one place you can see a
-          rating before it&apos;s approved. Editing resets a submission back to pending review;
-          deleting is permanent.
+          rating before it&apos;s approved. Click a row to see everything you submitted for it.
+          Editing resets a submission back to pending review; deleting is permanent.
         </p>
       </header>
 
@@ -642,42 +657,63 @@ export default function MyReviewsPage() {
           entry.roundRatings.length === 0 &&
           entry.recruiterRatings.length === 0 &&
           !entry.overallReview;
+        const itemCount =
+          entry.roundRatings.length + entry.recruiterRatings.length + (entry.overallReview ? 1 : 0);
+        const isExpanded = expanded.has(entry.processId);
 
         return (
           <Card as="section" key={entry.processId} className="flex flex-col gap-3">
-            <header className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-medium">
-                  {entry.companyName} — {entry.roleTitle}
-                </h2>
-                <p className="text-xs text-gray-500">
-                  {/* "Outcome:" prefix — a bare "Rejected" reads as a moderation status here, but this is the process's own outcome. */}
-                  Outcome: {outcomeLabel(entry.outcome)} · started{' '}
-                  {new Date(entry.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-              <Link href={`/companies/${entry.companySlug}`} className={`${linkClass} text-sm`}>
+            <div className="flex items-start justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => toggleExpanded(entry.processId)}
+                className="flex flex-1 items-center justify-between gap-4 text-left"
+                aria-expanded={isExpanded}
+              >
+                <div>
+                  <h2 className="font-medium">
+                    {entry.companyName} — {entry.roleTitle}
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    {/* "Outcome:" prefix — a bare "Rejected" reads as a moderation status here, but this is the process's own outcome. */}
+                    Outcome: {outcomeLabel(entry.outcome)} · started{' '}
+                    {new Date(entry.createdAt).toLocaleDateString()} ·{' '}
+                    {isEmpty ? 'no ratings submitted yet' : `${itemCount} item${itemCount === 1 ? '' : 's'}`}
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm text-gray-500">
+                  {isExpanded ? 'Hide details' : 'View details'}
+                </span>
+              </button>
+              <Link
+                href={`/companies/${entry.companySlug}`}
+                className={`${linkClass} shrink-0 text-sm`}
+              >
                 View company profile
               </Link>
-            </header>
+            </div>
 
-            {isEmpty && <EmptyProcessNotice processId={entry.processId} onChanged={reload} />}
+            {isExpanded && (
+              <div className="flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                {isEmpty && <EmptyProcessNotice processId={entry.processId} onChanged={reload} />}
 
-            {entry.roundRatings.map((r) => (
-              <RoundRatingItem key={r.id} rating={r} onChanged={reload} />
-            ))}
+                {entry.roundRatings.map((r) => (
+                  <RoundRatingItem key={r.id} rating={r} onChanged={reload} />
+                ))}
 
-            {entry.recruiterRatings.map((r) => (
-              <RecruiterRatingItem key={r.id} rating={r} onChanged={reload} />
-            ))}
+                {entry.recruiterRatings.map((r) => (
+                  <RecruiterRatingItem key={r.id} rating={r} onChanged={reload} />
+                ))}
 
-            {entry.overallReview && (
-              <OverallReviewItem
-                key={entry.overallReview.id}
-                processId={entry.processId}
-                review={entry.overallReview}
-                onChanged={reload}
-              />
+                {entry.overallReview && (
+                  <OverallReviewItem
+                    key={entry.overallReview.id}
+                    processId={entry.processId}
+                    review={entry.overallReview}
+                    onChanged={reload}
+                  />
+                )}
+              </div>
             )}
           </Card>
         );

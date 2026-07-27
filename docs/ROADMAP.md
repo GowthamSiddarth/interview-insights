@@ -845,6 +845,11 @@ GitHub issue #214.
       #222/#240/#278/#312/#347.
 - [x] Engineering blog update for issue #349 (D55) — Phase 20 is now
       fully done
+- [x] `/me`'s process cards collapse by default and expand on click —
+      direct user request to match the moderation queue's own
+      collapsed-by-default / expand-on-click pattern (GitHub issue
+      #385). Epic #214 reopened and re-closed the same day, same
+      precedent as #222/#240/#278/#312/#347/#349.
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
