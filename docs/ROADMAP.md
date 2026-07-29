@@ -1480,6 +1480,13 @@ given there's no current out-of-band channel (email via the existing
 there's a concrete trigger — e.g. Phase 35 shipping and the queue
 actually needing this, or a second moderator account existing at all.
 
+**Amendment (sketched 2026-07-29, from Phase 39's own brainstorm):**
+also now a downstream consumer of Phase 39's flagged/ambiguous LLM
+verdicts, once that phase exists — a new automatic ticket source
+alongside today's manual-flag path. Doesn't resolve any of this
+phase's own parked questions above, just adds a second thing capable
+of creating a ticket.
+
 ## Phase 37 — Synthetic Data Seed Rollback (Undo by Run ID)
 
 Filed 2026-07-27, from a direct follow-up question after using Phase
@@ -1596,3 +1603,50 @@ Review Browsing". Epic: GitHub issue #422.
       navigating directly between two companies' profiles (GitHub issue
       #425)
 - [x] Engineering blog (last) (GitHub issue #426)
+
+## Phase 39 — LLM Auto-Approval for High-Confidence Submissions (not yet planned)
+
+Sketched 2026-07-29 from a brainstorm about extracting moderator/
+ticketing services into their own microservices (Phase 30-32, D53).
+Deliberately does **not** depend on Phase 30-32's event bus — same
+"prove the policy simply first" sequencing Phase 19 already used for
+D66's advisory-only triage. Builds directly on today's in-process,
+synchronous `AiModerationService` (D66); the logic travels into the
+async `review-analyzer` service later, alongside Phase 32's own
+extraction, same as the rest of D66's logic is already slated to.
+
+Partially supersedes D66's "verdict never gates the write" — deliberately,
+and only for the high-confidence-clean band; see D71. Every other D66
+property (disabled by default, degrades silently on failure, content
+rebuilt fresh from Postgres) is unchanged and still governs the
+ambiguous/concerning bands. Deliberately kept as its own phase rather
+than folded into Phase 32: Phase 32 is a location change (move D66's
+existing logic async); this is a policy change (what the logic is
+allowed to decide) — keeping them separate means either can ship or be
+rolled back independently. Real open questions for the kickoff
+brainstorm, not resolved here: starting confidence threshold and
+whether it's a hard cutoff or the three-tier shape sketched in D71,
+which entity types ship first (all three D66 covers, or just
+`RoundRating`), the durable audit log's storage (new table vs.
+extending `moderationVerdict`'s JSONB), and the reconciliation sweep's
+staleness SLA. Milestone: "Phase 39 — LLM Auto-Approval for
+High-Confidence Submissions". Epic: TBD (filed alongside the kickoff
+brainstorm issue below).
+
+- [ ] Kickoff brainstorm: threshold model, entity-type rollout order,
+      audit log shape, sweep SLA (new issue)
+- [ ] Extend D66's verdict shape with a confidence score; three-tier
+      routing logic (clean / ambiguous / concerning)
+- [ ] System-attributed auto-approve path: `AiModerationService` calls
+      `ModerationService.approve()` for clean verdicts, attributed to a
+      system actor, durably audited (never best-effort/swallowed the
+      way D16/D17's search indexing is)
+- [ ] Config-driven kill switch (env var) forcing every verdict back to
+      D66's original advisory-only behavior, no deploy needed
+- [ ] Reconciliation sweep: scheduled job re-triages or escalates any
+      `pending` row past a configurable age with no verdict yet — closes
+      the "lost/never-ran triage" gap without a transactional outbox
+- [ ] Flagged/ambiguous verdicts feed Phase 36's ticket queue as a new
+      automatic ticket source, alongside today's manual/fraud-check
+      flags (coordinate with Phase 36 once both are planned)
+- [ ] Engineering blog (last)
