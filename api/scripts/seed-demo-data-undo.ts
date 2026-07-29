@@ -123,16 +123,39 @@ export async function runUndo(services: UndoServices, manifest: SeedManifest): P
     { timeout: 60_000 },
   );
 
-  await Promise.all([
-    ...roundRatings
-      .filter((r) => r.status === 'approved')
-      .map((r) => reviewSearchService.removeReview(r.id)),
-    ...roundRatingIds.map((id) => moderationService.removeFromSearchIndex('round_rating', id)),
-    ...recruiterRatingIds.map((id) => moderationService.removeFromSearchIndex('recruiter_rating', id)),
-    ...overallReviewIds.map((id) => moderationService.removeFromSearchIndex('overall_review', id)),
-    ...companyIds.map((id) => moderationService.removeFromSearchIndex('company', id)),
-    ...companyIds.map((id) => companySearchService.removeCompany(id)),
-  ]);
+  // GitHub issue #420 (D70) — a real incident found live: this used
+  // to be one giant Promise.all over every deleted entity. At real
+  // seed-run scale (D67: 1500 companies / 8333 candidates) that's
+  // thousands of concurrent OpenSearch deletes, each with refresh: true,
+  // against a single-node/512MB-heap OpenSearch (infra/docker-compose.yml)
+  // — enough of them silently failed (removeEntry()'s catch block only
+  // logs, never retries) to leave a real backlog of orphaned
+  // moderation_queue documents, which went on to bury genuinely pending
+  // entries in the moderator search UI (a low-relevance/no-text query
+  // only returns OpenSearch's default page size). Batching trades
+  // wall-clock time for not saturating OpenSearch — acceptable here for
+  // the same "one-off manual dev-tool operation" reasoning D67 already
+  // applied to this script's transaction timeout. The backlog this
+  // already caused is a one-time cleanup via
+  // `npm run prune:orphaned-moderation-queue-search-docs`, not something
+  // this script itself needs to reach back and fix.
+  const CLEANUP_BATCH_SIZE = 25;
+  async function removeInBatches<T>(items: T[], remove: (item: T) => Promise<void>): Promise<void> {
+    for (let i = 0; i < items.length; i += CLEANUP_BATCH_SIZE) {
+      await Promise.all(items.slice(i, i + CLEANUP_BATCH_SIZE).map(remove));
+    }
+  }
+
+  await removeInBatches(roundRatings.filter((r) => r.status === 'approved'), (r) =>
+    reviewSearchService.removeReview(r.id),
+  );
+  await removeInBatches(roundRatingIds, (id) => moderationService.removeFromSearchIndex('round_rating', id));
+  await removeInBatches(recruiterRatingIds, (id) =>
+    moderationService.removeFromSearchIndex('recruiter_rating', id),
+  );
+  await removeInBatches(overallReviewIds, (id) => moderationService.removeFromSearchIndex('overall_review', id));
+  await removeInBatches(companyIds, (id) => moderationService.removeFromSearchIndex('company', id));
+  await removeInBatches(companyIds, (id) => companySearchService.removeCompany(id));
 
   await refreshMaterializedViews(prisma);
 
