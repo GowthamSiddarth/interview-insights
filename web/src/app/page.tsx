@@ -2,14 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  api,
-  ApiError,
-  Company,
-  CompanySearchResult,
-  ReviewSearchResult,
-  Round,
-} from '@/lib/api';
+import { api, ApiError, Company, CompanySearchResult } from '@/lib/api';
 import { CompanyResultRow } from '@/components/CompanyResultRow';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import { EmptyState } from '@/components/EmptyState';
@@ -25,18 +18,12 @@ function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
-function roundTypeLabel(roundType: string): string {
-  return roundType
-    .split('_')
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-// Landing page — searching/browsing reviews is the primary verb here now,
-// writing one is reachable via the "Write a review" link once a company is
-// selected (or from NavBar), not the first thing a visitor sees. The wizard
-// itself lives at /search (see that file), receiving the chosen company via
-// query params so it never needs its own company-picker.
+// Landing page — finding a company is the only job here; viewing its
+// profile, browsing/filtering its reviews, and writing a new one all live
+// on the company's own pages now (GitHub issue #423, Phase 38 — this page
+// used to also render an inline "browse reviews" panel for whichever
+// company you picked, but that duplicated what the profile page does and
+// is gone).
 export default function SearchPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyQuery, setCompanyQuery] = useState('');
@@ -49,9 +36,6 @@ export default function SearchPage() {
   // indication a new one was running. Confirmed live against a
   // deliberately delayed response, not just theorized from the code.
   const [companySearching, setCompanySearching] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState<CompanySearchResult | null>(null);
-  const [reviewResults, setReviewResults] = useState<ReviewSearchResult[] | null>(null);
-  const [reviewSearching, setReviewSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // GitHub issue #360 (Phase 34) — the create-company-request section is
   // deliberately reachable only from a failed search's own button, never
@@ -126,46 +110,12 @@ export default function SearchPage() {
     setShowCreateCompanyRequest(false);
   }
 
-  function handleSelectCompany(company: CompanySearchResult) {
-    setSelectedCompany(company);
-    setReviewResults(null);
-  }
-
-  async function handleReviewSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedCompany) return;
-    const formData = new FormData(event.currentTarget);
-    setError(null);
-    const roleTitle = String(formData.get('roleTitle') || '') || undefined;
-    const roundType = (String(formData.get('roundType') || '') || undefined) as
-      | Round['roundType']
-      | undefined;
-    const dateFrom = String(formData.get('dateFrom') || '') || undefined;
-    const dateTo = String(formData.get('dateTo') || '') || undefined;
-    setReviewSearching(true);
-    try {
-      setReviewResults(
-        await api.searchReviews({
-          companyId: selectedCompany.id,
-          roleTitle,
-          roundType,
-          dateFrom,
-          dateTo,
-        }),
-      );
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setReviewSearching(false);
-    }
-  }
-
   return (
     <PageContainer size="wide">
       <header>
         <h1 className="text-2xl font-semibold">Interview Insights</h1>
         <p className="text-sm text-gray-500">
-          Find a company, then browse and filter its approved reviews.
+          Find a company to view its profile, browse its approved reviews, or write one.
         </p>
       </header>
 
@@ -176,7 +126,7 @@ export default function SearchPage() {
       )}
 
       <Card as="section" className="flex flex-col gap-3">
-        <h2 className="font-medium">1. Find a company</h2>
+        <h2 className="font-medium">Find a company</h2>
         <form onSubmit={handleCompanySearch} className="flex gap-2">
           <input
             name="q"
@@ -192,13 +142,13 @@ export default function SearchPage() {
             <p className="text-sm text-gray-500">Or pick one directly:</p>
             <div className="flex flex-wrap gap-2">
               {companies.map((c) => (
-                <button
+                <Link
                   key={c.id}
-                  onClick={() => handleSelectCompany(c)}
+                  href={`/companies/${c.slug}`}
                   className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
                 >
                   {c.name}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -225,11 +175,7 @@ export default function SearchPage() {
           ) : (
             <ul className="flex flex-col gap-1">
               {companyResults.map((company) => (
-                <CompanyResultRow
-                  key={company.id}
-                  company={company}
-                  onBrowseReviews={handleSelectCompany}
-                />
+                <CompanyResultRow key={company.id} company={company} />
               ))}
             </ul>
           )))
@@ -277,85 +223,6 @@ export default function SearchPage() {
               <Button type="submit">Create company</Button>
             </form>
           </GatedSection>
-        </Card>
-      )}
-
-      {selectedCompany && (
-        <Card as="section" className="flex flex-col gap-3">
-          <h2 className="font-medium">
-            2. Browse reviews for {selectedCompany.name}{' '}
-            <Link
-              href={`/companies/${selectedCompany.slug}`}
-              className="text-sm font-normal text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-            >
-              View profile
-            </Link>{' '}
-            <Link
-              href={`/write-review?companyId=${selectedCompany.id}&companySlug=${selectedCompany.slug}&companyName=${encodeURIComponent(selectedCompany.name)}`}
-              className="text-sm font-normal text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-            >
-              Write a review
-            </Link>
-          </h2>
-          <form onSubmit={handleReviewSearch} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label className="flex flex-col text-sm">
-              Role title
-              <input name="roleTitle" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
-            </label>
-            <label className="flex flex-col text-sm">
-              Round type
-              <select name="roundType" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900">
-                <option value="">Any</option>
-                <option value="coding">Coding</option>
-                <option value="system_design">System design</option>
-                <option value="behavioral">Behavioral</option>
-                <option value="leadership">Leadership</option>
-                <option value="case_study">Case study</option>
-                <option value="assessment">Assessment</option>
-                <option value="take_home">Take-home</option>
-                <option value="tech_screening">Tech Screening</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label className="flex flex-col text-sm">
-              From
-              <input type="date" name="dateFrom" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
-            </label>
-            <label className="flex flex-col text-sm">
-              To
-              <input type="date" name="dateTo" className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900" />
-            </label>
-            <Button type="submit" className="col-span-full">
-              Search reviews
-            </Button>
-          </form>
-
-          {reviewSearching ? (
-            <p className="text-sm text-gray-500">Searching…</p>
-          ) : (
-            reviewResults !== null &&
-            (reviewResults.length === 0 ? (
-              <EmptyState message="No reviews match these filters." />
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {reviewResults.map((review) => (
-                  <li
-                    key={review.id}
-                    className="rounded-lg border border-gray-200 bg-white p-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
-                  >
-                    <p className="font-medium">
-                      {review.roleTitle} — {roundTypeLabel(review.roundType)}
-                    </p>
-                    {review.freeText && <p className="text-gray-500">{review.freeText}</p>}
-                    <p className="text-xs text-gray-400">
-                      Difficulty {review.difficulty} · Fluency {review.fluency} ·
-                      Clarity {review.clarity} · Focus {review.focus}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )))
-          }
         </Card>
       )}
 

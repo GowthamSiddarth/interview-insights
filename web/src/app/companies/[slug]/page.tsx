@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -11,6 +11,8 @@ import {
   CompanyReviewGroup,
   CompanyReviewItem,
   CompanyReviewsPage,
+  ReviewSearchResult,
+  Round,
 } from '@/lib/api';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { EmptyState } from '@/components/EmptyState';
@@ -21,6 +23,9 @@ import { PageContainer } from '@/components/PageContainer';
 import { formatRoundLabel } from '@/lib/format-round-label';
 
 const PAGE_SIZE = 10;
+
+const inputClass =
+  'rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900';
 
 function sizeBucketLabel(bucket: Company['sizeBucket']): string {
   return bucket[0].toUpperCase() + bucket.slice(1);
@@ -96,12 +101,32 @@ export default function CompanyProfilePage() {
   // NavBar/the wizard already use (D32): null while unchecked, so a gated
   // section never flashes before the real state is known.
   const [candidateSession, setCandidateSession] = useState<boolean | null>(null);
+  // GitHub issue #424 (Phase 38) — review filtering, merged into the
+  // Reviews section itself rather than a separate section: null = no
+  // filter applied yet (show the default grouped/paginated list below),
+  // non-null = show these flat filtered results instead.
+  const [filterResults, setFilterResults] = useState<ReviewSearchResult[] | null>(null);
+  const [filterSearching, setFilterSearching] = useState(false);
+  // GitHub issue #425 (Phase 38) fix — tracks whether *this slug's* initial
+  // bundled fetch (below) has completed, as opposed to the old `page === 1`
+  // check, which also (incorrectly) skipped refetching on a Previous click
+  // that returned to page 1, leaving `reviews` stuck showing the last
+  // fetched page. A ref, not state: flipping it must not itself trigger a
+  // render/effect run.
+  const initialReviewsLoadedRef = useRef(false);
 
   useEffect(() => {
     setCandidateSession(api.hasCandidateSessionHint());
   }, []);
 
+  // Resetting `page` here (not just leaving it at whatever it was) fixes
+  // the same class of stale-page bug — without it, navigating from company
+  // A's page 2 straight to company B's profile would fetch company B
+  // starting on page 2.
   useEffect(() => {
+    initialReviewsLoadedRef.current = false;
+    setPage(1);
+    setFilterResults(null);
     api
       .getCompanyBySlug(slug)
       .then((c) => {
@@ -111,19 +136,48 @@ export default function CompanyProfilePage() {
       .then(([a, r]) => {
         setAnalytics(a);
         setReviews(r);
+        initialReviewsLoadedRef.current = true;
       })
       .catch((err: unknown) => setError(errorMessage(err)));
   }, [slug]);
 
+  // Handles every page change *after* the initial bundled fetch above —
+  // including a Previous click that returns to page 1, which the old
+  // `page === 1` guard incorrectly skipped (GitHub issue #425).
   useEffect(() => {
-    // Skip the initial page (already fetched above alongside the company).
-    if (!company || page === 1) return;
+    if (!company || !initialReviewsLoadedRef.current) return;
     setReviews(null);
     api
       .listCompanyReviews(company.id, page, PAGE_SIZE)
       .then(setReviews)
       .catch((err: unknown) => setError(errorMessage(err)));
   }, [company, page]);
+
+  async function handleFilterSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!company) return;
+    const formData = new FormData(event.currentTarget);
+    const roleTitle = String(formData.get('roleTitle') || '') || undefined;
+    const roundType = (String(formData.get('roundType') || '') || undefined) as
+      | Round['roundType']
+      | undefined;
+    const dateFrom = String(formData.get('dateFrom') || '') || undefined;
+    const dateTo = String(formData.get('dateTo') || '') || undefined;
+    setFilterSearching(true);
+    try {
+      setFilterResults(
+        await api.searchReviews({ companyId: company.id, roleTitle, roundType, dateFrom, dateTo }),
+      );
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setFilterSearching(false);
+    }
+  }
+
+  function handleClearFilters() {
+    setFilterResults(null);
+  }
 
   if (error) {
     return (
@@ -237,33 +291,102 @@ export default function CompanyProfilePage() {
                 loggedIn={candidateSession}
                 prompt={`Log in to see the other ${reviews.total - 1} review${reviews.total - 1 === 1 ? '' : 's'}`}
               >
-                <div className="flex flex-col gap-4">
-                  {reviews.items.slice(1).map((g) => (
-                    <ReviewGroupItem key={g.processId} group={g} />
-                  ))}
-                </div>
-                {totalPages > 1 && (
-                  <div className="mt-4 flex items-center gap-3 text-sm">
-                    <Button
-                      type="button"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
-                      className="disabled:opacity-40"
-                    >
-                      Previous
+                <form
+                  onSubmit={handleFilterSearch}
+                  className="grid grid-cols-2 gap-2 border-b border-gray-200 pb-4 sm:grid-cols-4 dark:border-gray-700"
+                >
+                  <label className="flex flex-col text-sm">
+                    Role title
+                    <input name="roleTitle" className={inputClass} />
+                  </label>
+                  <label className="flex flex-col text-sm">
+                    Round type
+                    <select name="roundType" className={inputClass}>
+                      <option value="">Any</option>
+                      <option value="coding">Coding</option>
+                      <option value="system_design">System design</option>
+                      <option value="behavioral">Behavioral</option>
+                      <option value="leadership">Leadership</option>
+                      <option value="case_study">Case study</option>
+                      <option value="assessment">Assessment</option>
+                      <option value="take_home">Take-home</option>
+                      <option value="tech_screening">Tech Screening</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col text-sm">
+                    From
+                    <input type="date" name="dateFrom" className={inputClass} />
+                  </label>
+                  <label className="flex flex-col text-sm">
+                    To
+                    <input type="date" name="dateTo" className={inputClass} />
+                  </label>
+                  <Button type="submit" className={filterResults !== null ? '' : 'col-span-full'}>
+                    Search reviews
+                  </Button>
+                  {filterResults !== null && (
+                    <Button type="button" variant="neutral" onClick={handleClearFilters}>
+                      Clear filters
                     </Button>
-                    <span className="text-gray-500">
-                      Page {page} of {totalPages}
-                    </span>
-                    <Button
-                      type="button"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
-                      className="disabled:opacity-40"
-                    >
-                      Next
-                    </Button>
-                  </div>
+                  )}
+                </form>
+
+                {filterSearching ? (
+                  <p className="text-sm text-gray-500">Searching…</p>
+                ) : filterResults !== null ? (
+                  filterResults.length === 0 ? (
+                    <EmptyState message="No reviews match these filters." />
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {filterResults.map((review) => (
+                        <li
+                          key={review.id}
+                          className="rounded-lg border border-gray-200 bg-white p-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                        >
+                          <p className="font-medium">
+                            {review.roleTitle} — {roundTypeLabel(review.roundType)}
+                          </p>
+                          {review.freeText && <p className="text-gray-500">{review.freeText}</p>}
+                          <p className="text-xs text-gray-400">
+                            Difficulty {review.difficulty} · Fluency {review.fluency} ·
+                            Clarity {review.clarity} · Focus {review.focus}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-4">
+                      {reviews.items.slice(1).map((g) => (
+                        <ReviewGroupItem key={g.processId} group={g} />
+                      ))}
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="mt-4 flex items-center gap-3 text-sm">
+                        <Button
+                          type="button"
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          disabled={page <= 1}
+                          className="disabled:opacity-40"
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-gray-500">
+                          Page {page} of {totalPages}
+                        </span>
+                        <Button
+                          type="button"
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={page >= totalPages}
+                          className="disabled:opacity-40"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </GatedSection>
             )}
