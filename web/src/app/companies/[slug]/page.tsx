@@ -61,10 +61,17 @@ function ReviewItem({ review }: { review: CompanyReviewItem }) {
 // expanding on click to reveal every rated round's full detail — the
 // same flat-list fix Phase 29 issue #315 already applied to the
 // moderation queue.
-function ReviewGroupItem({ group }: { group: CompanyReviewGroup }) {
+//
+// `divider` is an explicit prop, not a CSS `first:` pseudo-class, because
+// the always-visible first review and the gated rest render in two
+// separate sibling containers (split by the login gate) — `first:` only
+// sees "first within its own container," which silently ate the
+// separator between the free preview and the first gated item (GitHub
+// issue reported after #429).
+function ReviewGroupItem({ group, divider = true }: { group: CompanyReviewGroup; divider?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="border-t border-gray-200 pt-3 first:border-t-0 first:pt-0 dark:border-gray-700">
+    <div className={divider ? 'border-t border-gray-200 pt-3 dark:border-gray-700' : ''}>
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
@@ -114,6 +121,12 @@ export default function CompanyProfilePage() {
   // fetched page. A ref, not state: flipping it must not itself trigger a
   // render/effect run.
   const initialReviewsLoadedRef = useRef(false);
+  // GitHub issue reported after #429 — the filter form is uncontrolled
+  // (read via FormData on submit), so clearing filters only ever reset
+  // `filterResults` state; the inputs themselves kept showing whatever was
+  // last typed. A ref to the form lets "Clear filters" call the DOM's own
+  // `reset()` too.
+  const filterFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     setCandidateSession(api.hasCandidateSessionHint());
@@ -177,6 +190,7 @@ export default function CompanyProfilePage() {
 
   function handleClearFilters() {
     setFilterResults(null);
+    filterFormRef.current?.reset();
   }
 
   if (error) {
@@ -248,31 +262,6 @@ export default function CompanyProfilePage() {
       </Card>
 
       <Card as="section" className="flex flex-col gap-3">
-        <h2 className="font-medium">By round type</h2>
-        {!analytics ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : analytics.roundTypes.length === 0 ? (
-          <EmptyState message="Not enough reviews yet" />
-        ) : (
-          <GatedSection loggedIn={candidateSession} prompt="Log in to see the full round-type breakdown">
-            <div className="flex flex-col gap-4">
-              {analytics.roundTypes.map((rt) => (
-                <div key={rt.roundType}>
-                  <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
-                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <ScoreDisplay label="Difficulty" value={rt.scores.difficulty} sampleSize={rt.sampleSize} />
-                    <ScoreDisplay label="Fluency" value={rt.scores.fluency} sampleSize={rt.sampleSize} />
-                    <ScoreDisplay label="Clarity" value={rt.scores.clarity} sampleSize={rt.sampleSize} />
-                    <ScoreDisplay label="Focus" value={rt.scores.focus} sampleSize={rt.sampleSize} />
-                  </dl>
-                </div>
-              ))}
-            </div>
-          </GatedSection>
-        )}
-      </Card>
-
-      <Card as="section" className="flex flex-col gap-3">
         <h2 className="font-medium">Reviews</h2>
         {reviews === null ? (
           <p className="text-sm text-gray-500">Loading…</p>
@@ -294,6 +283,7 @@ export default function CompanyProfilePage() {
                 duplicate "Log in..." prompt. */}
             {candidateSession && (reviews.items.length > 1 || totalPages > 1) && (
               <form
+                ref={filterFormRef}
                 onSubmit={handleFilterSearch}
                 className="grid grid-cols-2 gap-2 border-b border-gray-200 pb-4 sm:grid-cols-4 dark:border-gray-700"
               >
@@ -366,7 +356,7 @@ export default function CompanyProfilePage() {
             ) : (
               <>
                 <div className="flex flex-col gap-4">
-                  <ReviewGroupItem group={reviews.items[0]} />
+                  <ReviewGroupItem group={reviews.items[0]} divider={false} />
                 </div>
                 {(reviews.items.length > 1 || totalPages > 1) && (
                   <GatedSection

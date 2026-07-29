@@ -150,16 +150,19 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
     expect(link).toHaveAttribute('href', '/companies/acme-corp/analytics');
   });
 
+  // GitHub issue reported after #429 — "By round type" duplicated the
+  // analytics page's own breakdown; it belongs only on /analytics now.
+  it('does not show a "By round type" section — that only lives on /analytics', async () => {
+    setLoggedInCookie(true);
+    mockFetchByRoute(reviewsPage(1, 1, [oneReviewGroup]));
+    renderPage();
+
+    await screen.findByText('Acme Corp');
+    expect(screen.queryByText('By round type')).not.toBeInTheDocument();
+    expect(screen.queryByText('3.50')).not.toBeInTheDocument(); // round-type difficulty score
+  });
+
   describe('anonymous visitor soft-gating (GitHub issue #226, Phase 21)', () => {
-    it('shows the overall-experience hook but gates the round-type breakdown', async () => {
-      mockFetchByRoute(reviewsPage(1, 1, [oneReviewGroup]));
-      renderPage();
-
-      expect(await screen.findByText('4.20')).toBeInTheDocument(); // overall experience — the free hook
-      expect(screen.getByText('Log in to see the full round-type breakdown')).toBeInTheDocument();
-      expect(screen.queryByText('3.50')).not.toBeInTheDocument(); // round-type difficulty score
-    });
-
     it('shows the first review group and the real total, gating the rest', async () => {
       const secondGroup = {
         processId: 'process-2',
@@ -190,7 +193,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     });
 
-    it('shows the full round-type breakdown and all review groups when logged in', async () => {
+    it('shows all review groups when logged in', async () => {
       setLoggedInCookie(true);
       const secondGroup = {
         processId: 'process-2',
@@ -201,8 +204,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       const user = userEvent.setup();
       renderPage();
 
-      expect(await screen.findByText('3.50')).toBeInTheDocument(); // round-type difficulty score
-      expect(screen.getByText('Staff Engineer')).toBeInTheDocument();
+      expect(await screen.findByText('Staff Engineer')).toBeInTheDocument();
       expect(screen.queryByText(/Log in to see/)).not.toBeInTheDocument();
 
       const detailButtons = screen.getAllByRole('button', { name: /View details/ });
@@ -342,5 +344,79 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       const position = roleTitleInput.compareDocumentPosition(firstReview);
       expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
+
+    // GitHub issue reported after #429 — "Clear filters" only reset
+    // `filterResults` state; the form's own inputs (uncontrolled, read via
+    // FormData) kept showing whatever was last typed/selected.
+    it('Clear filters resets the form fields themselves, not just the results', async () => {
+      setLoggedInCookie(true);
+      const secondGroup = { ...oneReviewGroup, processId: 'process-2', roleTitle: 'Staff Engineer' };
+      global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        const respond = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+        if (url.includes('/companies/by-slug/')) return respond(company);
+        if (url.includes('/analytics')) return respond(analytics);
+        if (url.includes('/search/reviews')) {
+          return respond([
+            {
+              id: 'search-result-1',
+              companyId: 'company-1',
+              roleTitle: 'Backend Engineer',
+              roundType: 'coding',
+              freeText: 'Great round',
+              createdAt: '2026-01-01T00:00:00Z',
+              difficulty: 3,
+              fluency: 4,
+              clarity: 4,
+              focus: 4,
+            },
+          ]);
+        }
+        if (url.includes('/reviews')) return respond(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+        throw new Error(`Unmocked fetch: ${url}`);
+      }) as jest.Mock;
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await screen.findByText('Staff Engineer');
+
+      const roleTitleInput = screen.getByLabelText('Role title') as HTMLInputElement;
+      const roundTypeSelect = screen.getByLabelText('Round type') as HTMLSelectElement;
+      await user.type(roleTitleInput, 'Backend');
+      await user.selectOptions(roundTypeSelect, 'coding');
+      await user.click(screen.getByRole('button', { name: 'Search reviews' }));
+
+      await screen.findByText('Backend Engineer — Coding');
+      expect(roleTitleInput.value).toBe('Backend');
+      expect(roundTypeSelect.value).toBe('coding');
+
+      await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+      await screen.findByText('Staff Engineer');
+      expect(roleTitleInput.value).toBe('');
+      expect(roundTypeSelect.value).toBe('');
+    });
+  });
+
+  // GitHub issue reported after #429 — the free preview and the gated rest
+  // render in two separate sibling containers, so a CSS `:first-child`
+  // pseudo-class on each review row silently ate the separator between
+  // them (each container's own "first" row lost its top border).
+  it('shows a divider between the free preview review and the first gated review', async () => {
+    setLoggedInCookie(true);
+    const secondGroup = { ...oneReviewGroup, processId: 'process-2', roleTitle: 'Staff Engineer' };
+    mockFetchByRoute(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+    renderPage();
+
+    await screen.findByText('Staff Engineer');
+    // Each ReviewGroupItem's outer (bordered-or-not) div is the toggle
+    // button's parent element — the button's own accessible name includes
+    // both the role title and "rounds rated" text, so match on that.
+    const secondReviewButton = screen.getByRole('button', { name: /Staff Engineer/ });
+    expect(secondReviewButton.parentElement?.className).toContain('border-t');
+
+    const firstReviewButton = screen.getByRole('button', { name: /Backend Engineer/ });
+    expect(firstReviewButton.parentElement?.className).not.toContain('border-t');
   });
 });
