@@ -3192,6 +3192,52 @@ scale.
 
 ---
 
+### D71 — Sketch: LLM auto-approval reopens D66's "verdict never gates the write," scoped to the high-confidence band only (proposed, Phase 39, not yet built)
+
+**Context:** brainstormed 2026-07-29 while discussing extracting
+moderator-service/ticketing into their own microservices (D53). D66
+built LLM triage as strictly advisory because CLAUDE.md hard
+constraint #2 requires every rating/review write to start `pending`.
+This decision, once actually implemented, deliberately narrows that
+guarantee: a high-confidence-clean verdict is allowed to become the
+moderation decision itself, not just a signal a human reads.
+
+**Decision (sketch, pending Phase 39's kickoff brainstorm and actual
+implementation):** auto-approval always routes through the same
+`ModerationService.approve()` a human moderator's action already
+calls — never a new, parallel path that skips `moderation_queue` —
+attributed to a system actor, so hard constraint #2's literal text
+("every write goes through moderation before it's public") stays
+true; only the identity of who decides changes for the clean band.
+Three-tier confidence routing (clean / ambiguous / concerning), not a
+single cutoff — same reasoning as D4's shrinkage floor: a hard cliff
+at one threshold creates a misleading boundary, and the stakes of a
+wrong auto-approve are higher than the stakes of D4's display
+threshold. Reconciliation sweep over a transactional outbox for now
+(same D9-style "don't build infrastructure ahead of a demonstrated
+need" instinct already applied throughout this project) — escalate to
+an outbox only if the sweep's staleness window turns out to be a real
+problem, not pre-emptively. Kill switch and durable (non-best-effort)
+audit logging are load-bearing parts of this decision, not follow-up
+hardening: a wrong auto-approve is real user-facing content published
+unattended, closer to D2's defamation-risk territory than to D16/D17's
+indexing tradeoffs — it isn't self-healing the way a stale search
+index is.
+
+**Why a separate phase, not folded into Phase 32:** Phase 32 is scoped
+as a location change (move D66's existing logic into an async
+service); this is a policy change (what the logic is allowed to
+decide). Keeping them as separate phases means either can ship, be
+reviewed, or be rolled back independently — and auto-approval doesn't
+need Phase 30-32's event bus at all; it can land directly on today's
+in-process, synchronous D66 module.
+
+**Revisit when:** Phase 39's kickoff brainstorm resolves the open
+threshold/rollout/audit-log questions and this moves from sketch to
+`[x]` in `docs/ROADMAP.md`.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
