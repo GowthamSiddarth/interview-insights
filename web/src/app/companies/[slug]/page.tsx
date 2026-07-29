@@ -283,81 +283,96 @@ export default function CompanyProfilePage() {
             <p className="text-sm text-gray-500">
               {reviews.total} review{reviews.total === 1 ? '' : 's'}
             </p>
-            <div className="flex flex-col gap-4">
-              <ReviewGroupItem group={reviews.items[0]} />
-            </div>
-            {(reviews.items.length > 1 || totalPages > 1) && (
-              <GatedSection
-                loggedIn={candidateSession}
-                prompt={`Log in to see the other ${reviews.total - 1} review${reviews.total - 1 === 1 ? '' : 's'}`}
-              >
-                <form
-                  onSubmit={handleFilterSearch}
-                  className="grid grid-cols-2 gap-2 border-b border-gray-200 pb-4 sm:grid-cols-4 dark:border-gray-700"
-                >
-                  <label className="flex flex-col text-sm">
-                    Role title
-                    <input name="roleTitle" className={inputClass} />
-                  </label>
-                  <label className="flex flex-col text-sm">
-                    Round type
-                    <select name="roundType" className={inputClass}>
-                      <option value="">Any</option>
-                      <option value="coding">Coding</option>
-                      <option value="system_design">System design</option>
-                      <option value="behavioral">Behavioral</option>
-                      <option value="leadership">Leadership</option>
-                      <option value="case_study">Case study</option>
-                      <option value="assessment">Assessment</option>
-                      <option value="take_home">Take-home</option>
-                      <option value="tech_screening">Tech Screening</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col text-sm">
-                    From
-                    <input type="date" name="dateFrom" className={inputClass} />
-                  </label>
-                  <label className="flex flex-col text-sm">
-                    To
-                    <input type="date" name="dateTo" className={inputClass} />
-                  </label>
-                  <Button type="submit" className={filterResults !== null ? '' : 'col-span-full'}>
-                    Search reviews
-                  </Button>
-                  {filterResults !== null && (
-                    <Button type="button" variant="neutral" onClick={handleClearFilters}>
-                      Clear filters
-                    </Button>
-                  )}
-                </form>
 
-                {filterSearching ? (
-                  <p className="text-sm text-gray-500">Searching…</p>
-                ) : filterResults !== null ? (
-                  filterResults.length === 0 ? (
-                    <EmptyState message="No reviews match these filters." />
-                  ) : (
-                    <ul className="flex flex-col gap-2">
-                      {filterResults.map((review) => (
-                        <li
-                          key={review.id}
-                          className="rounded-lg border border-gray-200 bg-white p-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
-                        >
-                          <p className="font-medium">
-                            {review.roleTitle} — {roundTypeLabel(review.roundType)}
-                          </p>
-                          {review.freeText && <p className="text-gray-500">{review.freeText}</p>}
-                          <p className="text-xs text-gray-400">
-                            Difficulty {review.difficulty} · Fluency {review.fluency} ·
-                            Clarity {review.clarity} · Focus {review.focus}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  )
-                ) : (
-                  <>
+            {/* GitHub issue #429 (Phase 38): the filter form sits directly under
+                the header/count, before any review content — not sandwiched
+                after the always-visible first review below. It's gated with a
+                plain `candidateSession` check rather than nested inside the
+                GatedSection below: nesting it there would either force the
+                free preview review behind the login gate too (breaking the
+                anonymous-visitor hook, issue #226/D40) or require a second,
+                duplicate "Log in..." prompt. */}
+            {candidateSession && (reviews.items.length > 1 || totalPages > 1) && (
+              <form
+                onSubmit={handleFilterSearch}
+                className="grid grid-cols-2 gap-2 border-b border-gray-200 pb-4 sm:grid-cols-4 dark:border-gray-700"
+              >
+                <label className="flex flex-col text-sm">
+                  Role title
+                  <input name="roleTitle" className={inputClass} />
+                </label>
+                <label className="flex flex-col text-sm">
+                  Round type
+                  <select name="roundType" className={inputClass}>
+                    <option value="">Any</option>
+                    <option value="coding">Coding</option>
+                    <option value="system_design">System design</option>
+                    <option value="behavioral">Behavioral</option>
+                    <option value="leadership">Leadership</option>
+                    <option value="case_study">Case study</option>
+                    <option value="assessment">Assessment</option>
+                    <option value="take_home">Take-home</option>
+                    <option value="tech_screening">Tech Screening</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="flex flex-col text-sm">
+                  From
+                  <input type="date" name="dateFrom" className={inputClass} />
+                </label>
+                <label className="flex flex-col text-sm">
+                  To
+                  <input type="date" name="dateTo" className={inputClass} />
+                </label>
+                <Button type="submit" className={filterResults !== null ? '' : 'col-span-full'}>
+                  Search reviews
+                </Button>
+                {filterResults !== null && (
+                  <Button type="button" variant="neutral" onClick={handleClearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+              </form>
+            )}
+
+            {filterSearching ? (
+              <p className="text-sm text-gray-500">Searching…</p>
+            ) : filterResults !== null ? (
+              // A filter replaces the *entire* default display (both the free
+              // preview and the gated rest) — showing an unrelated free
+              // preview alongside a differently-scoped filtered list would be
+              // confusing.
+              filterResults.length === 0 ? (
+                <EmptyState message="No reviews match these filters." />
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {filterResults.map((review) => (
+                    <li
+                      key={review.id}
+                      className="rounded-lg border border-gray-200 bg-white p-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                    >
+                      <p className="font-medium">
+                        {review.roleTitle} — {roundTypeLabel(review.roundType)}
+                      </p>
+                      {review.freeText && <p className="text-gray-500">{review.freeText}</p>}
+                      <p className="text-xs text-gray-400">
+                        Difficulty {review.difficulty} · Fluency {review.fluency} ·
+                        Clarity {review.clarity} · Focus {review.focus}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : (
+              <>
+                <div className="flex flex-col gap-4">
+                  <ReviewGroupItem group={reviews.items[0]} />
+                </div>
+                {(reviews.items.length > 1 || totalPages > 1) && (
+                  <GatedSection
+                    loggedIn={candidateSession}
+                    prompt={`Log in to filter and see the other ${reviews.total - 1} review${reviews.total - 1 === 1 ? '' : 's'}`}
+                  >
                     <div className="flex flex-col gap-4">
                       {reviews.items.slice(1).map((g) => (
                         <ReviewGroupItem key={g.processId} group={g} />
@@ -386,9 +401,9 @@ export default function CompanyProfilePage() {
                         </Button>
                       </div>
                     )}
-                  </>
+                  </GatedSection>
                 )}
-              </GatedSection>
+              </>
             )}
           </>
         )}
