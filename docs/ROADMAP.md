@@ -1595,4 +1595,4 @@ Review Browsing". Epic: GitHub issue #422.
       slug change to avoid the same stale-page class of bug when
       navigating directly between two companies' profiles (GitHub issue
       #425)
-- [ ] Engineering blog (last) (GitHub issue #426)
+- [x] Engineering blog (last) (GitHub issue #426)
