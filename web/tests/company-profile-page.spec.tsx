@@ -172,7 +172,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
 
       expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
       expect(screen.getByText('2 reviews')).toBeInTheDocument();
-      expect(screen.getByText('Log in to see the other 1 review')).toBeInTheDocument();
+      expect(screen.getByText('Log in to filter and see the other 1 review')).toBeInTheDocument();
       // Free-preview group's own content is expandable...
       await user.click(screen.getByRole('button', { name: /View details/ }));
       expect(screen.getByText('Solid, well-run round.', { exact: false })).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       mockFetchByRoute(reviewsPage(1, 15, [oneReviewGroup]));
       renderPage();
 
-      await screen.findByText(/Log in to see the other 14 reviews/);
+      await screen.findByText(/Log in to filter and see the other 14 reviews/);
       expect(screen.queryByText('Page 1 of 2')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     });
@@ -323,6 +323,24 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
 
       expect(await screen.findByText('Staff Engineer')).toBeInTheDocument();
       expect(screen.queryByText('Backend Engineer — Coding')).not.toBeInTheDocument();
+    });
+
+    // GitHub issue #429 (Phase 38) — the filter form was rendering after the
+    // always-visible first review (sandwiched between it and the gated
+    // rest), not directly after the section's header/count as intended.
+    it('renders the filter form before the first review, not after it', async () => {
+      setLoggedInCookie(true);
+      const secondGroup = { ...oneReviewGroup, processId: 'process-2', roleTitle: 'Staff Engineer' };
+      mockFetchByRoute(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+      renderPage();
+
+      const roleTitleInput = await screen.findByLabelText('Role title');
+      const firstReview = screen.getByText('Backend Engineer');
+
+      // DOCUMENT_POSITION_FOLLOWING on firstReview relative to roleTitleInput
+      // means roleTitleInput comes first in document order.
+      const position = roleTitleInput.compareDocumentPosition(firstReview);
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 });
