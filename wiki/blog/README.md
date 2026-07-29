@@ -371,6 +371,21 @@ this phase's blog is complete.
 3. [Issue #371 — Moderation UI search box + category filter](phase-35-moderated-company-creation-moderator-search/issue-371-moderation-ui-search/README.md)
 4. [Issue #372 — Confirmation modal replaces the create-company-request auto-redirect](phase-35-moderated-company-creation-moderator-search/issue-372-confirmation-modal/README.md)
 
+## Phase 38 — Company-Profile-Centric Review Browsing
+
+See `docs/ROADMAP.md` Phase 38. Filed from direct product feedback:
+clicking a company anywhere on the landing page opened an inline
+"browse reviews" panel on that same page instead of going to the
+company's own profile; that panel's filtering capability was merged
+into the profile page's existing Reviews section (not a new section)
+during planning, per further direct feedback. A pagination bug was
+also found via live verification while scoping this work. All three
+feature issues are done — this phase's blog is complete.
+
+1. [Issue #423 — Home page & search results navigate straight to the company profile](phase-38-company-profile-centric-review-browsing/issue-423-home-page-navigation/README.md)
+2. [Issue #424 — Review filtering merged into the Reviews section](phase-38-company-profile-centric-review-browsing/issue-424-merged-review-filtering/README.md)
+3. [Issue #425 — Fix: "Previous" left stale reviews on the company profile page](phase-38-company-profile-centric-review-browsing/issue-425-pagination-bug-fix/README.md)
+
 ## Phase 37 — Synthetic Data Seed Rollback (Undo by Run ID)
 
 See `docs/ROADMAP.md` Phase 37. Filed from a direct follow-up question
