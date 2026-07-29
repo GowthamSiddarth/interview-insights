@@ -245,10 +245,14 @@ model RoundRating {
   // Advisory-only LLM triage output (GitHub issue #163, Phase 19) —
   // nullable, same JSONB-column precedent as Round.typeMetadata. Never
   // written synchronously by the write path itself failing this write;
-  // computed best-effort after commit by AiModerationService and never
-  // used to auto-approve/auto-reject (CLAUDE.md hard constraint #2). Null
+  // computed best-effort after commit by AiModerationService. Null
   // whenever the feature is disabled (no ANTHROPIC_API_KEY configured) or
-  // the LLM call/parse failed.
+  // the LLM call/parse failed. Since GitHub issue #439 (D71) this also
+  // carries a `confidence` score and a derived `autoApprovalEligible`
+  // boolean, but this column is still never itself the thing that acts on
+  // that eligibility (CLAUDE.md hard constraint #2) — the system-attributed
+  // ModerationService.approve() call that reads it lands in a follow-up
+  // issue (#440).
   moderationVerdict Json?          @map("moderation_verdict")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
 

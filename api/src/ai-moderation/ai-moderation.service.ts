@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { ModerationEntityType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ANTHROPIC_CLIENT } from './anthropic-client.provider';
-import { getAnthropicModel } from './ai-moderation.env';
+import { getAnthropicModel, getAutoApprovalConfidenceThreshold } from './ai-moderation.env';
 
 // A create-company request has no round/recruiter/overall content to
 // triage — same exclusion FraudChecksService's per-type checks already
@@ -15,9 +15,9 @@ const SYSTEM_PROMPT = `You are a content-moderation triage assistant for an inte
 Look for: spam or nonsense text; a specific interviewer or recruiter named or otherwise identifiable by name (this platform never shows real names publicly, only generated labels like "Interviewer A" — flag any text that would defeat that); harassment or abusive language; and text that directly contradicts its own numeric scores (e.g. a 5-out-of-5 difficulty score paired with text calling the round "trivial").
 
 Respond with a single JSON object and nothing else, matching exactly this shape:
-{"concerning": boolean, "reasons": string[], "summary": string}
+{"concerning": boolean, "reasons": string[], "summary": string, "confidence": number}
 
-"reasons" must be an empty array when "concerning" is false. "summary" is one sentence, written for a moderator who hasn't read the content yet.`;
+"reasons" must be an empty array when "concerning" is false. "summary" is one sentence, written for a moderator who hasn't read the content yet. "confidence" is a 0-1 score for how confident you are in this verdict as a whole (1 = certain, 0 = a coin flip) — a low-confidence verdict should read as a weaker signal to the moderator regardless of which way "concerning" came out.`;
 
 // GitHub issue #163 (Phase 19) — Claude API via @anthropic-ai/sdk,
 // deliberately in-process/synchronous here (not an async event-driven
@@ -124,11 +124,31 @@ export class AiModerationService {
     const parsed: unknown = JSON.parse(textBlock.text);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
 
+    const record = parsed as Record<string, unknown>;
     return {
       ...(parsed as Prisma.InputJsonObject),
       model,
       analyzedAt: new Date().toISOString(),
+      // GitHub issue #439 (D71) — single hard confidence cutoff, computed
+      // and persisted here so the follow-up issue (#440, the actual
+      // system-attributed ModerationService.approve() call) can just read
+      // this field rather than re-deriving it. Never true when the
+      // threshold env var is unset — same "no numeric default" discipline
+      // as ANTHROPIC_MODEL, but fails closed (not eligible) instead of
+      // throwing, so an unconfigured threshold degrades to today's D66
+      // advisory-only behavior rather than losing the verdict entirely.
+      autoApprovalEligible: this.isEligibleForAutoApproval(record.concerning, record.confidence),
     };
+  }
+
+  private isEligibleForAutoApproval(concerning: unknown, confidence: unknown): boolean {
+    if (concerning !== false) return false;
+    if (typeof confidence !== 'number' || Number.isNaN(confidence)) return false;
+
+    const threshold = getAutoApprovalConfidenceThreshold();
+    if (threshold === null) return false;
+
+    return confidence >= threshold;
   }
 
   private async storeVerdict(

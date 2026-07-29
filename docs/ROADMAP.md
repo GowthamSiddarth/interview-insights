@@ -1643,7 +1643,7 @@ no verdict past 24h.
 
 - [x] Kickoff brainstorm: threshold model, entity-type rollout order,
       audit log shape, sweep SLA (GitHub issue #437)
-- [ ] Extend D66's verdict shape with a confidence score; single-cutoff
+- [x] Extend D66's verdict shape with a confidence score; single-cutoff
       auto-approve routing logic (GitHub issue #439)
 - [ ] System-attributed auto-approve path: `AiModerationService` calls
       `ModerationService.approve()` for clean verdicts, attributed to a
