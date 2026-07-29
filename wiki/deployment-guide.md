@@ -626,6 +626,26 @@ wired into any automated job: company deletion itself is always a
 manual, deliberate test-cleanup action, so pruning its fallout stays
 manual and deliberate too.
 
+**The `moderation_queue` index gets the same script now, for the same
+reason.** Found live: a moderator's `/moderation/search` category
+filter was returning zero matches for a category that genuinely had
+pending entries. Root cause: `seed-demo-data-undo.ts`'s search-index
+cleanup used to fire one `Promise.all` over every deleted entity — at
+real seed-run scale (6.4 below) that's thousands of concurrent
+OpenSearch deletes, enough to silently overwhelm a single-node/512MB
+OpenSearch and leave orphaned documents behind (the script now batches
+these calls, but the backlog it had already created needed cleaning
+up). Since `reviewedAt: null` is what actually determines "should still
+be indexed" here (not mere row existence, unlike `companies`),
+`api/scripts/prune-orphaned-moderation-queue-search-docs.js` diffs the
+index against currently-pending `moderation_queue` rows instead:
+
+```bash
+cd api
+DATABASE_URL=... OPENSEARCH_URL=... npm run prune:orphaned-moderation-queue-search-docs -- --dry-run
+DATABASE_URL=... OPENSEARCH_URL=... npm run prune:orphaned-moderation-queue-search-docs
+```
+
 ### 6.3 Synthetic demo data generator (GitHub issue #164, Phase 19)
 
 `api/scripts/seed-demo-data.ts` populates a lower environment (local

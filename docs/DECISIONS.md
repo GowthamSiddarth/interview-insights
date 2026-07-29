@@ -3113,12 +3113,82 @@ a moderator before every search — self-healing on that existing read is
 simpler than standing up new infrastructure for a low-volume,
 single-moderator app.
 
-**Revisit when:** the live-verification follow-up (open on issue #416)
-either confirms this was the actual root cause, or rules it out and a
-different explanation needs to be found; also worth checking if this
-same class of gap applies anywhere `indexForSearch()`/`indexApproved*()`
-are called outside a subsequent Postgres-source-of-truth read path this
-easily reachable.
+**Resolved by the live-verification follow-up (same day):** this
+hypothesis turned out not to be the actual root cause of the reported
+symptom — live investigation found the real cause was stale/orphaned
+`moderation_queue` OpenSearch documents left behind by
+`seed-demo-data-undo.ts`'s cleanup silently failing under load, not a
+write-time indexing failure on the candidate-facing path. See D70. The
+self-heal fix above is still a real, valid improvement for the failure
+mode it targets (a write-time indexForSearch() call failing at
+creation), just not what actually happened here — left in place rather
+than reverted.
+
+---
+
+### D70 — A live incident: `seed-demo-data-undo`'s bulk OpenSearch cleanup silently overwhelmed a single-node OpenSearch, leaving orphaned `moderation_queue` documents that buried genuinely pending search results (GitHub issue #420, Phase 37)
+
+**Context:** live-verification follow-up on D69/issue #416 — after
+deploying that fix, the moderator's `/moderation/search` category
+filter for "Interview review" returned zero matches despite the
+unfiltered `/moderation/queue` clearly showing pending interview-review
+items. Direct investigation (querying OpenSearch's `moderation_queue`
+index and Postgres directly) found: the index held 60 documents against
+only 50 currently-pending Postgres rows. One traced document
+(`round_rating:8da4ee7f-...`) pointed at a row that no longer existed in
+Postgres at all — proof of an orphan, not a missing-doc gap D69's fix
+could have caught.
+
+**Root cause:** `seed-demo-data-undo.ts`'s best-effort search-index
+cleanup (added correctly in Phase 37's original implementation, #406)
+fired one `Promise.all` over every deleted entity's
+`removeFromSearchIndex()` call. At real seed-run scale (D67: 1500
+companies / 8333 candidates), that's thousands of concurrent OpenSearch
+deletes, each with `refresh: true`, against a single-node,
+512MB-heap OpenSearch (`infra/docker-compose.yml`). Enough of them
+silently failed — `ModerationQueueSearchService.removeEntry()`'s catch
+block only logs a non-404 error, never retries — to leave a real
+backlog. The resulting orphaned documents didn't just clutter results:
+because `/moderation/search` with no text query has no relevance
+scoring (every hit scores `0.0`), OpenSearch's default page size (10)
+can return a page made up *entirely* of orphans, which
+`ModerationService.search()`'s Postgres cross-reference then correctly
+finds zero currently-pending matches for — surfacing as "no results"
+even though far more pending documents exist elsewhere, unordered, in
+the same index.
+
+**Decision:**
+- `seed-demo-data-undo.ts`'s cleanup now batches these calls (25 at a
+  time, sequential across batches) instead of one unbounded
+  `Promise.all` — trades wall-clock time for not saturating OpenSearch,
+  same "acceptable cost for a one-off manual dev-tool operation"
+  reasoning D67 already applied to this script's transaction timeout.
+- New `api/scripts/prune-orphaned-moderation-queue-search-docs.js`,
+  mirroring D51's `prune-orphaned-company-search-docs.js` shape exactly
+  (Postgres-vs-OpenSearch diff, `--dry-run`, manual/not automated) —
+  cleans up the backlog this already caused, and is the reusable fix if
+  it recurs. Diffs against **currently-pending** `moderation_queue`
+  rows (`reviewedAt: null`), not mere row existence like the
+  `companies` version — the same document can legitimately point at a
+  row that still exists but has already been reviewed, which is just as
+  much an orphan here as a deleted row is.
+- Ran directly against the live index as part of this same
+  investigation: 10 orphaned documents found and deleted, confirmed via
+  a direct OpenSearch query afterward that the previously-buried pending
+  documents are now reachable.
+
+**Revisit when:** if this recurs even with batching (e.g. a much larger
+future seed run), consider dropping `refresh: true` from
+`removeEntry()`'s bulk-cleanup callers specifically — it's not needed
+for a batch cleanup the way it is for a candidate-facing write's
+same-request-cycle searchability requirement (D16/D17's own reasoning),
+and forcing a refresh per delete is a meaningful part of what makes
+this expensive at scale. Also worth deciding whether
+`ModerationService.search()`'s OpenSearch query should ever use a
+`size` larger than the default 10 — would reduce how often a heavily-
+polluted index can hide real results, but doesn't fix the underlying
+orphan accumulation and only pushes the same failure mode to a larger
+scale.
 
 ---
 

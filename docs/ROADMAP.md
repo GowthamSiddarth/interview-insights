@@ -1542,3 +1542,14 @@ generator does create and which have a real FK to `Company` with no
 cascade — deleting a company first would have failed outright. See
 `wiki/blog/phase-37-synthetic-data-seed-rollback/` for the full
 writeup.
+
+- [x] Fix: found via live-verification of Phase 35's moderator search —
+      `seed-demo-data-undo`'s best-effort OpenSearch cleanup fired one
+      unbounded `Promise.all` per run, thousands of concurrent deletes
+      at real seed-run scale, enough to silently overwhelm a
+      single-node OpenSearch and leave orphaned `moderation_queue`
+      documents behind, burying genuinely pending search results (D70).
+      Cleanup now batches (25 at a time); new
+      `prune-orphaned-moderation-queue-search-docs.js` (mirroring D51)
+      cleans up the resulting backlog, both live and reusable
+      (GitHub issue #420, D70)

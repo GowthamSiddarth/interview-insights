@@ -18,6 +18,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prune:orphaned-company-search-docs": "node scripts/prune-orphaned-company-search-docs.js",
+    "prune:orphaned-moderation-queue-search-docs": "node scripts/prune-orphaned-moderation-queue-search-docs.js",
     "seed:demo-data": "ts-node scripts/seed-demo-data.ts",
     "seed:demo-data:undo": "ts-node scripts/seed-demo-data-undo.ts"
   },
