@@ -1604,7 +1604,7 @@ Review Browsing". Epic: GitHub issue #422.
       #425)
 - [x] Engineering blog (last) (GitHub issue #426)
 
-## Phase 39 — LLM Auto-Approval for High-Confidence Submissions (not yet planned)
+## Phase 39 — LLM Auto-Approval for High-Confidence Submissions
 
 Sketched 2026-07-29 from a brainstorm about extracting moderator/
 ticketing services into their own microservices (Phase 30-32, D53).
@@ -1618,34 +1618,43 @@ extraction, same as the rest of D66's logic is already slated to.
 Partially supersedes D66's "verdict never gates the write" — deliberately,
 and only for the high-confidence-clean band; see D71. Every other D66
 property (disabled by default, degrades silently on failure, content
-rebuilt fresh from Postgres) is unchanged and still governs the
-ambiguous/concerning bands. Deliberately kept as its own phase rather
-than folded into Phase 32: Phase 32 is a location change (move D66's
-existing logic async); this is a policy change (what the logic is
-allowed to decide) — keeping them separate means either can ship or be
-rolled back independently. Real open questions for the kickoff
-brainstorm, not resolved here: starting confidence threshold and
-whether it's a hard cutoff or the three-tier shape sketched in D71,
-which entity types ship first (all three D66 covers, or just
-`RoundRating`), the durable audit log's storage (new table vs.
-extending `moderationVerdict`'s JSONB), and the reconciliation sweep's
-staleness SLA. Milestone: "Phase 39 — LLM Auto-Approval for
-High-Confidence Submissions". Epic: GitHub issue #436.
+rebuilt fresh from Postgres) is unchanged and still governs everything
+that doesn't clear the auto-approve cutoff. Deliberately kept as its
+own phase rather than folded into Phase 32: Phase 32 is a location
+change (move D66's existing logic async); this is a policy change
+(what the logic is allowed to decide) — keeping them separate means
+either can ship or be rolled back independently. Milestone: "Phase 39 —
+LLM Auto-Approval for High-Confidence Submissions". Epic: GitHub issue
+#436.
 
-- [ ] Kickoff brainstorm: threshold model, entity-type rollout order,
+**Kickoff brainstorm resolved 2026-07-29** (GitHub issue #437, D71):
+single hard confidence cutoff (not the three-tier clean/ambiguous/
+concerning shape originally sketched — anything below the cutoff stays
+`pending`/advisory-only exactly as D66 already behaves today, so the
+"ambiguous" band and its Phase 36 ticket-queue integration were
+dropped); no numeric starting threshold committed here, it ships as an
+env-var-driven config value tuned empirically; all three D66-covered
+entity types (`RoundRating`/`RecruiterRating`/`OverallReview`) ship
+together, not a `RoundRating`-only rollout; durable audit log is a new
+dedicated table, not an extension of the mutable per-entity
+`moderationVerdict` JSONB column; kill switch is a single global env
+var; reconciliation sweep re-triages/escalates any `pending` row with
+no verdict past 24h.
+
+- [x] Kickoff brainstorm: threshold model, entity-type rollout order,
       audit log shape, sweep SLA (GitHub issue #437)
-- [ ] Extend D66's verdict shape with a confidence score; three-tier
-      routing logic (clean / ambiguous / concerning)
+- [ ] Extend D66's verdict shape with a confidence score; single-cutoff
+      auto-approve routing logic (GitHub issue #439)
 - [ ] System-attributed auto-approve path: `AiModerationService` calls
       `ModerationService.approve()` for clean verdicts, attributed to a
-      system actor, durably audited (never best-effort/swallowed the
-      way D16/D17's search indexing is)
-- [ ] Config-driven kill switch (env var) forcing every verdict back to
-      D66's original advisory-only behavior, no deploy needed
+      system actor, durably audited in a new dedicated table (never
+      best-effort/swallowed the way D16/D17's search indexing is)
+      (GitHub issue #440)
+- [ ] Config-driven kill switch (single global env var) forcing every
+      verdict back to D66's original advisory-only behavior, no deploy
+      needed (GitHub issue #441)
 - [ ] Reconciliation sweep: scheduled job re-triages or escalates any
-      `pending` row past a configurable age with no verdict yet — closes
-      the "lost/never-ran triage" gap without a transactional outbox
-- [ ] Flagged/ambiguous verdicts feed Phase 36's ticket queue as a new
-      automatic ticket source, alongside today's manual/fraud-check
-      flags (coordinate with Phase 36 once both are planned)
-- [ ] Engineering blog (last)
+      `pending` row past 24h with no verdict yet — closes the
+      "lost/never-ran triage" gap without a transactional outbox
+      (GitHub issue #442)
+- [ ] Engineering blog (last) (GitHub issue #443)

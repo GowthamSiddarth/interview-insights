@@ -3209,7 +3209,7 @@ scale.
 
 ---
 
-### D71 — Sketch: LLM auto-approval reopens D66's "verdict never gates the write," scoped to the high-confidence band only (proposed, Phase 39, not yet built)
+### D71 — LLM auto-approval reopens D66's "verdict never gates the write," scoped to a high-confidence cutoff only (Phase 39, GitHub issue #437)
 
 **Context:** brainstormed 2026-07-29 while discussing extracting
 moderator-service/ticketing into their own microservices (D53). D66
@@ -3219,27 +3219,60 @@ This decision, once actually implemented, deliberately narrows that
 guarantee: a high-confidence-clean verdict is allowed to become the
 moderation decision itself, not just a signal a human reads.
 
-**Decision (sketch, pending Phase 39's kickoff brainstorm and actual
-implementation):** auto-approval always routes through the same
+**Decision:** auto-approval always routes through the same
 `ModerationService.approve()` a human moderator's action already
 calls — never a new, parallel path that skips `moderation_queue` —
 attributed to a system actor, so hard constraint #2's literal text
 ("every write goes through moderation before it's public") stays
 true; only the identity of who decides changes for the clean band.
-Three-tier confidence routing (clean / ambiguous / concerning), not a
-single cutoff — same reasoning as D4's shrinkage floor: a hard cliff
-at one threshold creates a misleading boundary, and the stakes of a
-wrong auto-approve are higher than the stakes of D4's display
-threshold. Reconciliation sweep over a transactional outbox for now
-(same D9-style "don't build infrastructure ahead of a demonstrated
-need" instinct already applied throughout this project) — escalate to
-an outbox only if the sweep's staleness window turns out to be a real
-problem, not pre-emptively. Kill switch and durable (non-best-effort)
-audit logging are load-bearing parts of this decision, not follow-up
-hardening: a wrong auto-approve is real user-facing content published
-unattended, closer to D2's defamation-risk territory than to D16/D17's
-indexing tradeoffs — it isn't self-healing the way a stale search
-index is.
+
+Resolved at Phase 39's kickoff brainstorm (issue #437), 2026-07-29:
+
+- **Single hard confidence cutoff, not three-tier.** Considered the
+  three-tier (clean / ambiguous / concerning) shape sketched below in
+  the original brainstorm, same reasoning D4's shrinkage floor used
+  against hard cliffs — but decided the extra "ambiguous" band adds
+  routing complexity (a new Phase 36 ticket-queue integration) without
+  a clear improvement over what D66 already does today: anything below
+  the cutoff simply stays `pending` and advisory-only, exactly like
+  every verdict does now. Only the clean/auto-approved side of the
+  line is new behavior. No numeric starting threshold is committed
+  here — it ships as an env-var-driven config value, tuned empirically
+  once real verdict/confidence data exists in an environment, rather
+  than guessed in a design doc.
+- **All three D66 entity types ship together** (`RoundRating`,
+  `RecruiterRating`, `OverallReview`), not a `RoundRating`-only rollout
+  — D66's triage logic is already identical/shared across all three,
+  so there's no partial-rollout mechanism to build either way.
+- **Durable audit log is a new dedicated table**, not an extension of
+  the mutable per-entity `moderationVerdict` JSONB column — an
+  append-only record (verdict, confidence, model, prompt/response,
+  decision, timestamp) survives a later human override or re-triage of
+  that same JSONB column, which a shared column would not.
+- **Kill switch is a single global env var**, not per-entity-type —
+  simplest option, matching this decision's own default preference;
+  revisit only if operating the feature in production surfaces a
+  concrete reason one entity type needs to be disabled independently.
+- **Reconciliation sweep re-triages/escalates any `pending` row older
+  than 24h with no verdict.** Long enough to never fight the LLM call's
+  own normal (sub-second to low-seconds) latency or retry backoff;
+  matches the order of magnitude already discussed for Phase 36's
+  moderator-queue SLA, so the two don't need separate mental models.
+
+Because the three-tier shape was dropped, the "ambiguous verdicts feed
+Phase 36's ticket queue" integration sketched in `docs/ROADMAP.md`'s
+original checklist no longer applies — below-cutoff content behaves
+exactly as it does under D66 today, with no new Phase 36 dependency.
+
+Reconciliation sweep over a transactional outbox for now (same D9-style
+"don't build infrastructure ahead of a demonstrated need" instinct
+already applied throughout this project) — escalate to an outbox only
+if the sweep's staleness window turns out to be a real problem, not
+pre-emptively. Kill switch and durable (non-best-effort) audit logging
+are load-bearing parts of this decision, not follow-up hardening: a
+wrong auto-approve is real user-facing content published unattended,
+closer to D2's defamation-risk territory than to D16/D17's indexing
+tradeoffs — it isn't self-healing the way a stale search index is.
 
 **Why a separate phase, not folded into Phase 32:** Phase 32 is scoped
 as a location change (move D66's existing logic into an async
@@ -3248,10 +3281,6 @@ decide). Keeping them as separate phases means either can ship, be
 reviewed, or be rolled back independently — and auto-approval doesn't
 need Phase 30-32's event bus at all; it can land directly on today's
 in-process, synchronous D66 module.
-
-**Revisit when:** Phase 39's kickoff brainstorm resolves the open
-threshold/rollout/audit-log questions and this moves from sketch to
-`[x]` in `docs/ROADMAP.md`.
 
 ---
 
