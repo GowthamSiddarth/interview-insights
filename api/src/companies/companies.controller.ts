@@ -32,6 +32,15 @@ export class CompaniesController {
     return this.companiesService.findBySlug(slug);
   }
 
+  // GitHub issue #415 — same route-ordering reasoning as 'by-slug/:slug'
+  // above: a literal segment declared before ':id' so it isn't swallowed
+  // by that route and sent through ParseUUIDPipe as if 'top' were a
+  // company id.
+  @Get('top')
+  findTop() {
+    return this.companiesService.findTop();
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.companiesService.findOne(id);

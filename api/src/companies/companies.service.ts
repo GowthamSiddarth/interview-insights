@@ -45,6 +45,30 @@ export class CompaniesService {
     });
   }
 
+  // GitHub issue #415 — backs the landing page's quick-select company
+  // grid, which used to render every approved company (findAll(), no
+  // cap) — a real problem flagged directly against the live app once the
+  // company list grew past a screenful. Random selection is a deliberate
+  // placeholder, not a final ranking: there's no volume/popularity signal
+  // on Company yet to rank by (see docs/DECISIONS.md D68), so an unbiased
+  // random sample is the honest choice until one exists. Shuffles in
+  // application code rather than `ORDER BY RANDOM()` — same "fine at
+  // today's volume" full-table-scan tradeoff findAll()/
+  // findApprovedReviews() already accept below.
+  async findTop(limit = 5) {
+    const approved = await this.prisma.company.findMany({ where: { status: 'approved' } });
+    return this.shuffle(approved).slice(0, limit);
+  }
+
+  // Fisher-Yates, in place — used only by findTop() above.
+  private shuffle<T>(items: T[]): T[] {
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    return items;
+  }
+
   findOne(id: string) {
     return this.prisma.company.findFirstOrThrow({ where: { id, status: 'approved' } });
   }

@@ -3045,6 +3045,83 @@ whole point is avoiding exactly that).
 
 ---
 
+### D68 — `GET /companies/top` returns a random sample, not a ranking (GitHub issue #415, Phase 34)
+
+**Context:** the landing page's quick-select company grid (issue #352,
+Phase 33) has rendered every approved company via `listCompanies()`
+since it was introduced — issue #366 already flagged this as a real
+problem ("already-long company list") during Phase 34's own planning,
+but only the row *styling* was fixed there; the underlying "renders
+literally every company, unbounded" scaling issue was left for later.
+Direct report against the live app: the grid needs to be capped.
+
+**Decision:** a new `GET /companies/top` returns up to 5 approved
+companies. Selection is a uniform random sample, computed by fetching
+every approved company and shuffling in application code (Fisher-Yates)
+rather than `ORDER BY RANDOM()` in Postgres — consistent with this
+codebase's existing "fine at today's volume" full-table-scan tradeoff
+(`findAll()`, `findApprovedReviews()`), and avoids introducing this
+app's first raw-SQL read path for what's explicitly a throwaway
+placeholder. Random, not e.g. "5 most recently approved" or
+alphabetical, because there's no real signal to rank by yet and an
+arbitrary-but-deterministic order (recency, alphabetical) would read as
+a ranking it isn't — random makes the placeholder nature visible rather
+than accidentally implying one company is more relevant than another.
+
+**Revisit when:** a real ranking signal exists (review volume/recency,
+company popularity, or similar) — at that point `findTop()`'s shuffle
+gets replaced with a real `ORDER BY`, and the endpoint's contract («up
+to 5 approved companies») stays the same for callers.
+
+---
+
+### D69 — Moderator search self-heals missing entries by re-indexing on every `listPending()` read, not via a new compensating job (GitHub issue #416, Phase 35)
+
+**Context:** reported against the live moderation queue: a pending
+create-company request was visible in `/moderation/queue` but never
+turned up in `/moderation/search`, even searching its exact name. Could
+not be reproduced against a local Postgres/OpenSearch (none available
+in the diagnosing environment), so the fix below is the best-supported
+explanation from code review, not an empirically confirmed root cause —
+flagged as such in the issue itself for a live-verification follow-up.
+
+**Root cause hypothesis:** `CompaniesService.create()`'s
+`indexForSearch()` call is best-effort by design (D16/D17) and swallows
+its own errors — if OpenSearch is briefly unreachable, or the call
+races with something else, right at creation time, the
+`moderation_queue` row still gets created in Postgres (so the entry is
+visible via `listPending()`, which reads Postgres directly) but the
+corresponding OpenSearch document never gets written, and nothing ever
+retries it. `/moderation/search` only ever reads the OpenSearch index,
+so that one entry becomes permanently unsearchable. Same class of gap
+D61 (issue #383) already fixed for `moderation_queue` — that one was a
+stale doc for an entity that no longer exists; this is the opposite
+direction, a live, still-pending entity that never got its doc at all.
+
+**Decision:** `ModerationService.listPending()` — which already
+re-reads every pending entity fresh from Postgres, the source of truth
+for "what's actually pending" — now best-effort re-indexes each one via
+the existing `indexForSearch()` on every call. `indexForSearch()`
+already swallows its own errors, and re-indexing an entry that's
+already correctly indexed is a harmless upsert (same doc id), so this
+can't fail or meaningfully slow down the queue read itself. Chosen over
+a separate reconciliation job/script (this app's precedent for
+index-drift cleanup, e.g. `prune-orphaned-company-search-docs.js`,
+D51) because there's no `workers`/cron infrastructure yet (docs/
+ROADMAP.md Phase 3's own note) and the queue page is already loaded by
+a moderator before every search — self-healing on that existing read is
+simpler than standing up new infrastructure for a low-volume,
+single-moderator app.
+
+**Revisit when:** the live-verification follow-up (open on issue #416)
+either confirms this was the actual root cause, or rules it out and a
+different explanation needs to be found; also worth checking if this
+same class of gap applies anywhere `indexForSearch()`/`indexApproved*()`
+are called outside a subsequent Postgres-source-of-truth read path this
+easily reachable.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

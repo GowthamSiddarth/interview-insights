@@ -14,7 +14,7 @@ function mockFetchByRoute(companies: unknown[] = []) {
     const url = String(input);
     const respond = (body: unknown) =>
       Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-    if (url.endsWith('/companies')) return respond(companies);
+    if (url.endsWith('/companies/top')) return respond(companies);
     if (url.includes('/search/companies')) return respond([]);
     throw new Error(`Unmocked fetch: ${url}`);
   }) as jest.Mock;
@@ -33,7 +33,7 @@ describe('SearchPage (the landing page, now at /)', () => {
       const url = String(input);
       const respond = (body: unknown) =>
         Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-      if (url.endsWith('/companies')) return respond([]);
+      if (url.endsWith('/companies/top')) return respond([]);
       if (url.includes('/search/companies')) return respond([]);
       throw new Error(`Unmocked fetch: ${url}`);
     }) as jest.Mock;
@@ -53,7 +53,7 @@ describe('SearchPage (the landing page, now at /)', () => {
     let resolveFetch: (value: unknown) => void = () => {};
     global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith('/companies')) {
+      if (url.endsWith('/companies/top')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
       return new Promise((resolve) => {
@@ -88,7 +88,7 @@ describe('SearchPage (the landing page, now at /)', () => {
       const url = String(input);
       const respond = (body: unknown) =>
         Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-      if (url.endsWith('/companies')) return respond([]);
+      if (url.endsWith('/companies/top')) return respond([]);
       if (url.includes('/search/companies')) {
         return respond([
           { id: 'company-1', name: 'Acme Corp', slug: 'acme-corp', industry: null, sizeBucket: 'mid' },
@@ -214,7 +214,7 @@ describe('SearchPage (the landing page, now at /)', () => {
         const method = init?.method ?? 'GET';
         const respond = (body: unknown) =>
           Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-        if (url.endsWith('/companies') && method === 'GET') return respond([]);
+        if (url.endsWith('/companies/top') && method === 'GET') return respond([]);
         if (url.includes('/search/companies')) return respond([]);
         if (url.endsWith('/companies') && method === 'POST') {
           return respond({ id: 'new-co', name: 'Meta', slug: 'meta', sizeBucket: 'enterprise' });

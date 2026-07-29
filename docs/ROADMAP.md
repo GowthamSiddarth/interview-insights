@@ -1369,6 +1369,13 @@ Refinements". Epic: GitHub issue #356.
       issue #357's homogeneous-row shape there created redundancy on an
       already-long company list; the typed-search-results list keeps
       the full `CompanyResultRow` shape unchanged (GitHub issue #366)
+- [x] Fix: the quick-select grid still rendered every approved company
+      unbounded (`listCompanies()`, no cap) — the scaling problem #366
+      flagged but didn't actually resolve. New `GET /companies/top`
+      returns up to 5 companies, randomly selected for now (no
+      volume/popularity signal exists yet to rank by — a real ranking
+      is a future follow-up); the landing page's grid switches to it
+      (GitHub issue #415, D68)
 
 ## Phase 35 — Moderated Company Creation & Moderator Search
 
@@ -1445,6 +1452,14 @@ under epic #368.
       dev database/real OpenSearch indices (only the smoke test did) —
       a new `jest-e2e.json` `globalSetup` now enforces both isolation
       knobs for the whole suite (GitHub issue #383, D61)
+- [x] Fix: a create-company request could go permanently unsearchable
+      via `/moderation/search` if its write-time OpenSearch indexing
+      call (best-effort, D16/D17) failed or raced — still visible in
+      `/moderation/queue` (Postgres), never in search, with nothing to
+      retry it. `ModerationService.listPending()` now self-heals: since
+      it already reads every pending entity fresh from Postgres on
+      every queue load, it best-effort re-indexes each one (GitHub
+      issue #416, D69)
 
 ## Phase 36 — Moderator Queue SLAs, Assignment & Notifications (not yet planned)
 

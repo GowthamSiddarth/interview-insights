@@ -446,6 +446,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listCompanies: () => request<Company[]>('/companies'),
 
+  // GitHub issue #415 — backs the landing page's quick-select grid,
+  // capped server-side (5, random for now) rather than listCompanies()
+  // above, which returns every approved company and doesn't scale as
+  // the list grows.
+  topCompanies: () => request<Company[]>('/companies/top'),
+
   createCompany: (input: { name: string; slug: string; sizeBucket: Company['sizeBucket'] }) =>
     request<Company>('/companies', { method: 'POST', body: JSON.stringify(input) }),
 

@@ -68,11 +68,13 @@ export default function SearchPage() {
     setCandidateSession(api.hasCandidateSessionHint());
   }, []);
 
-  // Quick-select buttons, one per existing company — the same shape the
-  // wizard's old company picker used, relocated here now that discovery is
-  // this page's job.
+  // GitHub issue #415 — quick-select buttons, one per company, the same
+  // shape the wizard's old company picker used, relocated here now that
+  // discovery is this page's job. Capped to 5 (topCompanies(), random
+  // for now — issue #366 flagged the uncapped list as unusable once it
+  // grew past a screenful), not the full listCompanies().
   useEffect(() => {
-    api.listCompanies().then(setCompanies).catch((err: unknown) => setError(errorMessage(err)));
+    api.topCompanies().then(setCompanies).catch((err: unknown) => setError(errorMessage(err)));
   }, []);
 
   // Plain onSubmit handlers, not <form action={fn}> — React 19 batches a
