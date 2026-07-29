@@ -111,6 +111,48 @@ describe('CompaniesService', () => {
     });
   });
 
+  describe('findTop', () => {
+    const approvedCompanies = Array.from({ length: 8 }, (_, i) => ({
+      ...createdCompany,
+      id: `company-${i}`,
+      slug: `company-${i}`,
+    }));
+
+    it('only queries approved companies', async () => {
+      prisma.company.findMany.mockResolvedValue(approvedCompanies);
+
+      await service.findTop();
+
+      expect(prisma.company.findMany).toHaveBeenCalledWith({ where: { status: 'approved' } });
+    });
+
+    it('caps the result at 5, even with more approved companies available', async () => {
+      prisma.company.findMany.mockResolvedValue(approvedCompanies);
+
+      const result = await service.findTop();
+
+      expect(result).toHaveLength(5);
+    });
+
+    it('returns every approved company when there are 5 or fewer', async () => {
+      const fewer = approvedCompanies.slice(0, 3);
+      prisma.company.findMany.mockResolvedValue(fewer);
+
+      const result = await service.findTop();
+
+      expect(result).toHaveLength(3);
+      expect(result.map((c) => c.id).sort()).toEqual(fewer.map((c) => c.id).sort());
+    });
+
+    it('returns an empty list when there are no approved companies', async () => {
+      prisma.company.findMany.mockResolvedValue([]);
+
+      const result = await service.findTop();
+
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('findBySlug', () => {
     it('looks the company up by its unique slug, approved only', async () => {
       await service.findBySlug('acme-corp');

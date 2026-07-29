@@ -172,6 +172,44 @@ describe('ModerationService', () => {
       });
     });
 
+    it('self-heals a pending entry missing from the search index (its write-time indexForSearch() call never landed)', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'company', entityId: 'company-1', reviewedAt: null },
+      ]);
+      const company = {
+        id: 'company-1',
+        name: 'Marker Verify Co',
+        slug: 'marker-verify-co',
+        sizeBucket: 'mid',
+        industry: null,
+        createdAt: new Date('2026-01-01'),
+      };
+      prisma.company.findMany.mockResolvedValue([company]);
+      prisma.company.findUnique.mockResolvedValue(company);
+
+      await service.listPending();
+
+      expect(moderationQueueSearchService.indexEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'company',
+          entityId: 'company-1',
+          category: 'create-company',
+          companyName: 'Marker Verify Co',
+        }),
+      );
+    });
+
+    it('does not attempt to re-index an entry whose entity failed to enrich (entity: null, a transient D37 failure)', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([
+        { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },
+      ]);
+      prisma.roundRating.findMany.mockRejectedValue(new Error('transient'));
+
+      await service.listPending();
+
+      expect(moderationQueueSearchService.indexEntry).not.toHaveBeenCalled();
+    });
+
     it('groups entries from the same process into one group, enriched with only generated labels — never the identifier hash', async () => {
       prisma.moderationQueueEntry.findMany.mockResolvedValue([
         { id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null },

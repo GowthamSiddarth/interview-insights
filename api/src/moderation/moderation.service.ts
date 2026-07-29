@@ -160,6 +160,25 @@ export class ModerationService {
     });
     const enrichedEntries = await this.enrichEntries(entries);
 
+    // GitHub issue #416 (D69) — self-heal any entry whose write-time
+    // indexForSearch() call (D16/D17, best-effort) never landed — e.g.
+    // OpenSearch was briefly unreachable right as a candidate submitted.
+    // Without this, that one entry stays visible here (Postgres is the
+    // source of truth for "pending") but permanently invisible to
+    // /moderation/search, with nothing to ever retry it — the opposite
+    // direction from D61's self-heal, which cleans up a stale doc for an
+    // entity that's gone, not a live one missing its doc. Every queue
+    // load already reads every pending entity fresh from Postgres, so
+    // it's the natural place to catch this up; indexForSearch() swallows
+    // its own errors and re-indexing an already-correct doc is a
+    // harmless upsert, so this can't fail (or meaningfully slow down)
+    // the read itself.
+    await Promise.all(
+      enrichedEntries
+        .filter((entry) => entry.entity !== null)
+        .map((entry) => this.indexForSearch(entry.entityType, entry.entityId)),
+    );
+
     // Map preserves insertion order — groups naturally come out in the
     // same createdAt-ascending order entries already had, since each
     // group is created the moment its first (earliest) entry is seen.
