@@ -290,6 +290,23 @@ Homebrew) might not reproduce this specific parsing bug, but
 `--body-file` is strictly safer regardless and costs nothing extra, so
 there's no reason to special-case it by shell version.
 
+**Confirmed broader than backticks, 2026-07-29 (shipping Phase 39):**
+the identical nested-heredoc-in-command-substitution misparse
+reproduced with a commit message containing zero backticks —
+`git commit -m "$(cat <<'EOF' ... EOF)"` failed with `unexpected EOF
+while looking for matching `''`` on a message whose only unusual
+characters were three apostrophes ("it's", "doesn't", "30-32's").
+Reproduced deterministically with `bash -n` against the exact script
+(no need to actually run `git commit` to hit it) and isolated by
+bisection: an otherwise-identical two-apostrophe test string parsed
+fine, a three-apostrophe one didn't — consistent with the same naive
+quote-balancing behavior this decision already named, just tripped by
+an odd count of `'` instead of a backtick pair. This decision's own
+title undersold its scope: the fix (write the body to a real file,
+pass it via `--body-file`/`git commit -F`, never a heredoc nested
+inside `$(...)`) is the right default for *any* multi-line message
+assembled this way, not only ones containing backticks.
+
 ---
 
 ### D19 — Helm for third-party infra only; our own app manifests stay on Kustomize
