@@ -211,4 +211,118 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
       expect(screen.getByText('A second, visible review.', { exact: false })).toBeInTheDocument();
     });
   });
+
+  // GitHub issue #425 (Phase 38) — found via live verification on the
+  // Gerhold - Schneider company profile: the page-fetch effect used to skip
+  // fetching whenever `page === 1`, which also fired on a Previous click
+  // returning to page 1, leaving the reviews list stuck on the last-fetched
+  // page instead of refetching/redisplaying page 1's own reviews.
+  describe('pagination (GitHub issue #425)', () => {
+    it('refetches and redisplays page 1 correctly after paging forward then back with Previous', async () => {
+      setLoggedInCookie(true);
+      const page1Group = { ...oneReviewGroup, processId: 'process-1', roleTitle: 'Backend Engineer' };
+      const page2Group = { ...oneReviewGroup, processId: 'process-2', roleTitle: 'Staff Engineer' };
+      global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        const respond = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+        if (url.includes('/companies/by-slug/')) return respond(company);
+        if (url.includes('/analytics')) return respond(analytics);
+        if (url.includes('page=2')) return respond(reviewsPage(2, 15, [page2Group]));
+        if (url.includes('/reviews')) return respond(reviewsPage(1, 15, [page1Group]));
+        throw new Error(`Unmocked fetch: ${url}`);
+      }) as jest.Mock;
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await screen.findByText('Backend Engineer');
+      await screen.findByText('Page 1 of 2');
+
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      await screen.findByText('Page 2 of 2');
+      expect(await screen.findByText('Staff Engineer')).toBeInTheDocument();
+      expect(screen.queryByText('Backend Engineer')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Previous' }));
+
+      await waitFor(() => expect(screen.getByText('Page 1 of 2')).toBeInTheDocument());
+      expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+      expect(screen.queryByText('Staff Engineer')).not.toBeInTheDocument();
+    });
+
+  });
+
+  // GitHub issue #424 (Phase 38) — filtering merged directly into the
+  // Reviews section (no separate "Browse reviews" section/button), gated
+  // behind login the same as the rest of that section's content.
+  describe('Reviews section: merged filtering', () => {
+    it('does not show the filter form when logged out', async () => {
+      const secondGroup = { ...oneReviewGroup, processId: 'process-2', roleTitle: 'Staff Engineer' };
+      mockFetchByRoute(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+      renderPage();
+
+      await screen.findByText('Backend Engineer');
+      expect(screen.queryByLabelText('Role title')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Search reviews' })).not.toBeInTheDocument();
+    });
+
+    it('filters reviews in place of the default list when logged in, and Clear filters restores it', async () => {
+      setLoggedInCookie(true);
+      const secondGroup = { ...oneReviewGroup, processId: 'process-2', roleTitle: 'Staff Engineer' };
+      global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        const respond = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+        if (url.includes('/companies/by-slug/')) return respond(company);
+        if (url.includes('/analytics')) return respond(analytics);
+        if (url.includes('/search/reviews')) {
+          return respond([
+            {
+              id: 'search-result-1',
+              companyId: 'company-1',
+              roleTitle: 'Backend Engineer',
+              roundType: 'coding',
+              freeText: 'Great round',
+              createdAt: '2026-01-01T00:00:00Z',
+              difficulty: 3,
+              fluency: 4,
+              clarity: 4,
+              focus: 4,
+            },
+          ]);
+        }
+        if (url.includes('/reviews')) return respond(reviewsPage(1, 2, [oneReviewGroup, secondGroup]));
+        throw new Error(`Unmocked fetch: ${url}`);
+      }) as jest.Mock;
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await screen.findByText('Staff Engineer'); // default grouped list, pre-filter
+
+      await user.type(screen.getByLabelText('Role title'), 'Backend');
+      await user.click(screen.getByRole('button', { name: 'Search reviews' }));
+
+      await waitFor(() =>
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/search/reviews?'),
+          expect.anything(),
+        ),
+      );
+      const searchCall = (global.fetch as jest.Mock).mock.calls.find(([u]) =>
+        String(u).includes('/search/reviews'),
+      );
+      expect(String(searchCall?.[0])).toContain('companyId=company-1');
+      expect(String(searchCall?.[0])).toContain('roleTitle=Backend');
+
+      expect(await screen.findByText('Backend Engineer — Coding')).toBeInTheDocument();
+      expect(screen.getByText('Great round')).toBeInTheDocument();
+      // The default grouped/paginated list is replaced while a filter is active.
+      expect(screen.queryByText('Staff Engineer')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+      expect(await screen.findByText('Staff Engineer')).toBeInTheDocument();
+      expect(screen.queryByText('Backend Engineer — Coding')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -1553,3 +1553,46 @@ writeup.
       `prune-orphaned-moderation-queue-search-docs.js` (mirroring D51)
       cleans up the resulting backlog, both live and reusable
       (GitHub issue #420, D70)
+
+## Phase 38 — Company-Profile-Centric Review Browsing
+
+Filed 2026-07-29, from direct product feedback: clicking a company
+anywhere on the landing page (a quick-select link or a typed-search
+result row) opened an inline "Browse reviews for {company}" panel on
+the same page instead of going to that company's own profile, which
+duplicated what the profile page already does. Clarified during
+planning: the filtering capability that panel offered doesn't become
+its own section on the profile page — it's merged directly into the
+profile page's existing Reviews section, gated behind login the same
+way the rest of that section already is (issue #226, Phase 21), with
+no separate "Browse reviews" button or section anywhere. A pagination
+bug was also found via live verification while scoping this work (on
+the Gerhold - Schneider company profile): the Reviews section's
+"Previous" button failed to correctly redisplay page 1 after paging
+forward, since the fetch effect's `page === 1` skip-guard (meant only
+to avoid a redundant fetch on first mount) also fired on every later
+return to page 1. Milestone: "Phase 38 — Company-Profile-Centric
+Review Browsing". Epic: GitHub issue #422.
+
+- [x] Home page & search results: quick-select links and
+      `CompanyResultRow`'s search-result rows navigate straight to
+      `/companies/{slug}` instead of opening the inline browse-reviews
+      panel; `CompanyResultRow` drops its "Browse reviews" button
+      entirely (keeps "View profile" / "Write a review"); the inline
+      panel and its state/handlers are removed from the landing page
+      (GitHub issue #423)
+- [x] Company profile page: review filtering (role title, round type,
+      date range) merged into the existing Reviews section's own
+      `GatedSection`, replacing the default grouped/paginated list with
+      flat filtered results (`GET /search/reviews`, no backend change
+      needed) while a filter is active; "Clear filters" restores the
+      default view (GitHub issue #424)
+- [x] Fix: the Reviews section's "Previous" pagination button left
+      stale data when returning to page 1 — replaced the `page === 1`
+      skip-guard with a ref tracking whether the slug's initial bundled
+      fetch has completed, so every later page change (including a
+      return to page 1) refetches correctly; also resets `page` to 1 on
+      slug change to avoid the same stale-page class of bug when
+      navigating directly between two companies' profiles (GitHub issue
+      #425)
+- [ ] Engineering blog (last) (GitHub issue #426)
