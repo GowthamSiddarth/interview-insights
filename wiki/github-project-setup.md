@@ -355,6 +355,67 @@ is. If individual sub-issues start reappearing again despite "Auto-add
 to project" being off, this is the next thing to check/toggle the same
 way.
 
+## Ad-hoc work: tracking under an existing epic
+
+Not every task is planned phase work — bug fixes, structural cleanups, and
+one-off dev/test tooling changes come up between phases too. Convention:
+**every dev/test/structural task, even an ad-hoc one, gets tracked under a
+GitHub Epic — reuse an existing "catch-all" epic if the work isn't
+specific to a phase, rather than skip issue-tracking altogether.** This
+project reuses its Phase 20 epic (#214, "Operational Hardening &
+Live-Verification Findings") for exactly this — it's been reopened and
+re-closed repeatedly as unrelated ad-hoc fixes landed under it.
+
+Steps, using an existing epic (substitute the real epic number):
+
+1. **File the issue, assigned to yourself:**
+   ```bash
+   gh issue create --repo <owner>/<repo> \
+     --title "<what the task actually is>" \
+     --assignee <your-github-username> \
+     --body "Ad-hoc <bugfix/structural/test> task: <why>. Tracked under <epic name>'s epic per this project's ad-hoc-work-under-an-epic convention."
+   ```
+
+2. **Attach its milestone by number, not title** — a reused epic's
+   milestone is often already closed (the phase itself shipped long ago),
+   and `gh issue create --milestone "<title>"` only resolves *open*
+   milestones by title:
+   ```bash
+   gh api "repos/<owner>/<repo>/milestones?state=all" \
+     --jq '.[] | select(.title | startswith("<Phase N>")) | {number, state, title}'
+   gh api "repos/<owner>/<repo>/issues/<new-issue-number>" -X PATCH -F milestone=<milestone-number>
+   ```
+
+3. **Attach it as a sub-issue of the epic** (same mechanics as "Epics vs
+   Milestones" above — the epic-issue-number here is the *existing*
+   epic, not a new one):
+   ```bash
+   CHILD_DB_ID=$(gh api repos/<owner>/<repo>/issues/<new-issue-number> --jq '.id')
+   gh api repos/<owner>/<repo>/issues/<epic-issue-number>/sub_issues \
+     -X POST -F sub_issue_id=$CHILD_DB_ID
+   ```
+
+4. **Reopen the epic for the day if it's currently closed** — harmless if
+   already open, and matches the "reopened and re-closed the same day"
+   precedent this project has used every time:
+   ```bash
+   gh issue reopen <epic-issue-number> --repo <owner>/<repo>
+   ```
+
+5. **Do NOT add the new issue to the Project board itself** — only epics
+   go on the board (see "Board hygiene" above); the epic's own sub-issues
+   panel already shows it.
+
+6. **PR as usual**: branch, `Closes #<new-issue-number>` in the PR body,
+   `--assignee <your-github-username>`.
+
+7. **After merge, close both** — the issue and (if nothing else is open
+   under it) the epic again:
+   ```bash
+   gh issue close <new-issue-number> --repo <owner>/<repo>
+   gh issue close <epic-issue-number> --repo <owner>/<repo>
+   ```
+
 ## Gotchas hit while setting this up
 
 - `docker` and `gh` binaries can exist on disk (e.g. `/usr/local/bin`) while

@@ -110,6 +110,13 @@ See `docs/ARCHITECTURE.md` for how these pieces connect and why.
   implementing PR must still use a real closing keyword (`Closes #N`)
   so it registers as a linked PR, not just a mention — see
   `wiki/github-project-setup.md`'s "Board hygiene" note.
+- **Every dev/test/structural task — even an ad-hoc one — gets tracked
+  under a GitHub Epic**, not just planned phase work. Reuse an existing
+  epic as a catch-all when the task isn't specific to a phase (this
+  project reuses its Phase 20 epic this way). See
+  `wiki/github-project-setup.md`'s "Ad-hoc work" section for the
+  concrete steps (milestone-by-number when the epic's milestone is
+  closed, sub-issue attachment, same-day reopen/close).
 
 Service-specific conventions (test/schema requirements for `api/`, etc.)
 live in that directory's own `CLAUDE.md`, layered on top of this file.
