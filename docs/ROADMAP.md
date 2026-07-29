@@ -1630,11 +1630,10 @@ which entity types ship first (all three D66 covers, or just
 `RoundRating`), the durable audit log's storage (new table vs.
 extending `moderationVerdict`'s JSONB), and the reconciliation sweep's
 staleness SLA. Milestone: "Phase 39 — LLM Auto-Approval for
-High-Confidence Submissions". Epic: TBD (filed alongside the kickoff
-brainstorm issue below).
+High-Confidence Submissions". Epic: GitHub issue #436.
 
 - [ ] Kickoff brainstorm: threshold model, entity-type rollout order,
-      audit log shape, sweep SLA (new issue)
+      audit log shape, sweep SLA (GitHub issue #437)
 - [ ] Extend D66's verdict shape with a confidence score; three-tier
       routing logic (clean / ambiguous / concerning)
 - [ ] System-attributed auto-approve path: `AiModerationService` calls
