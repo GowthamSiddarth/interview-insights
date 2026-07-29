@@ -22,3 +22,24 @@ export function getAnthropicModel(): string {
   }
   return model;
 }
+
+// Single hard confidence cutoff for auto-approval routing (D71, GitHub
+// issue #439/#437) — no numeric default is committed in the design; it's
+// meant to be tuned empirically once real verdict/confidence data exists
+// in an environment, not guessed here. Unlike ANTHROPIC_MODEL, leaving this
+// unset doesn't throw: it just means nothing is ever eligible for
+// auto-approval, i.e. today's D66 advisory-only behavior. Only a *set but
+// invalid* value (unparseable, or outside [0, 1]) is treated as a
+// misconfiguration worth failing loudly for.
+export function getAutoApprovalConfidenceThreshold(): number | null {
+  const raw = process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD;
+  if (raw === undefined) return null;
+
+  const threshold = Number(raw);
+  if (Number.isNaN(threshold) || threshold < 0 || threshold > 1) {
+    throw new Error(
+      `AI_MODERATION_AUTO_APPROVE_THRESHOLD must be a number between 0 and 1, got "${raw}".`,
+    );
+  }
+  return threshold;
+}

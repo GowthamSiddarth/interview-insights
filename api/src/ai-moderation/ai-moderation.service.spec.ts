@@ -63,7 +63,7 @@ describe('AiModerationService', () => {
       round: { roundType: 'coding', typeMetadata: { problemAlgorithms: ['DFS'] } },
     });
     anthropicClient.messages.create.mockResolvedValue(
-      textResponse({ concerning: false, reasons: [], summary: 'Looks fine.' }),
+      textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 0.9 }),
     );
 
     const service = buildService();
@@ -86,10 +86,148 @@ describe('AiModerationService', () => {
           concerning: false,
           reasons: [],
           summary: 'Looks fine.',
+          confidence: 0.9,
           model: 'claude-haiku-4-5',
           analyzedAt: expect.any(String) as string,
+          autoApprovalEligible: false,
         },
       },
+    });
+  });
+
+  describe('auto-approval eligibility routing (GitHub issue #439, D71)', () => {
+    function mockCleanRating(): void {
+      prisma.roundRating.findUnique.mockResolvedValue({
+        id: 'rating-1',
+        difficulty: 3,
+        fluency: 4,
+        clarity: 5,
+        focus: 4,
+        technicalDepth: null,
+        freeText: 'Fine round, nothing notable.',
+        round: { roundType: 'coding', typeMetadata: null },
+      });
+    }
+
+    it('is eligible when clean and confidence meets the configured threshold', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.8';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 0.8 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: true }) as unknown,
+        }) as unknown,
+      });
+    });
+
+    it('is not eligible when confidence is below the configured threshold', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.8';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 0.79 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+    });
+
+    it('is never eligible when concerning is true, regardless of confidence', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.5';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({
+          concerning: true,
+          reasons: ['names a specific interviewer'],
+          summary: 'Flagged.',
+          confidence: 0.99,
+        }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+    });
+
+    it('is never eligible when the threshold env var is unset, even for a clean, high-confidence verdict', async () => {
+      delete process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD;
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+    });
+
+    it('never stores a verdict when the threshold env var is set but out of range', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '1.5';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).not.toHaveBeenCalled();
+    });
+
+    it('never stores a verdict when the threshold env var is set but unparseable', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = 'not-a-number';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).not.toHaveBeenCalled();
+    });
+
+    it('is not eligible when the model omits confidence entirely', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.5';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.' }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
     });
   });
 
