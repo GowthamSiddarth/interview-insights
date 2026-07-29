@@ -3050,3 +3050,5 @@ whole point is avoiding exactly that).
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
 - Whether `company_overall_aggregates` should be sliced by role/level from
   the start or added later.
+- Moderator queue SLAs (~48h to start), request assignment, and breach
+  notifications (Phase 36, not yet planned — see `docs/ROADMAP.md`).
