@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ModerationEntityType, ModerationFlagReason, Prisma } from '@prisma/client';
+import { ModerationEntityType, ModerationFlagReason, ModerationStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
 import { CompanySearchService } from '../search/company-search.service';
@@ -7,6 +7,31 @@ import {
   ModerationQueueCategory,
   ModerationQueueSearchService,
 } from '../search/moderation-queue-search.service';
+import { DomainEventPublisher } from '../events/domain-event-publisher';
+import {
+  ROUND_RATING_CREATED_V1_TOPIC,
+  RoundRatingCreatedEventV1,
+} from '../events/schemas/round-rating-created.event';
+import {
+  ROUND_RATING_STATUS_CHANGED_V1_TOPIC,
+  RoundRatingStatusChangedEventV1,
+} from '../events/schemas/round-rating-status-changed.event';
+import {
+  RECRUITER_RATING_CREATED_V1_TOPIC,
+  RecruiterRatingCreatedEventV1,
+} from '../events/schemas/recruiter-rating-created.event';
+import {
+  RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC,
+  RecruiterRatingStatusChangedEventV1,
+} from '../events/schemas/recruiter-rating-status-changed.event';
+import {
+  OVERALL_REVIEW_CREATED_V1_TOPIC,
+  OverallReviewCreatedEventV1,
+} from '../events/schemas/overall-review-created.event';
+import {
+  OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC,
+  OverallReviewStatusChangedEventV1,
+} from '../events/schemas/overall-review-status-changed.event';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 
@@ -120,6 +145,7 @@ export class ModerationService {
     private readonly reviewSearchService: ReviewSearchService,
     private readonly companySearchService: CompanySearchService,
     private readonly moderationQueueSearchService: ModerationQueueSearchService,
+    private readonly domainEventPublisher: DomainEventPublisher,
   ) {}
 
   // Called by the write path right after creating a rating/review — accepts
@@ -516,6 +542,12 @@ export class ModerationService {
     // public-facing index (if any) it also just got added to above.
     await this.removeFromSearchIndex(entry.entityType, entry.entityId);
 
+    // GitHub issue #332 (Phase 30, D53) — best-effort domain event, same
+    // after-commit shape as every other side-effect in this method. Only
+    // the three rating/review entity types are in scope (see
+    // publishStatusChangedEvent's own switch); 'company' is a no-op.
+    await this.publishStatusChangedEvent(entry.entityType, entry.entityId, decision, dto.reviewedBy);
+
     return updatedEntry;
   }
 
@@ -564,6 +596,169 @@ export class ModerationService {
     } catch (err) {
       this.logger.error(
         'Failed to index approved review in OpenSearch',
+        err instanceof Error ? err.stack : err,
+      );
+    }
+  }
+
+  // GitHub issue #332 (Phase 30, D53) — called by every write-path
+  // service's create() right after its own transaction commits, same
+  // best-effort/after-commit call shape as indexForSearch(). Only the
+  // three rating/review entity types publish a domain event; 'company'
+  // is out of scope for this issue (a create-company request isn't one
+  // of the "moderated entity types" #331/#332 were scoped to) and is a
+  // deliberate no-op, not an oversight. Fetches fresh from Postgres
+  // rather than trusting caller context, same reasoning as
+  // indexForSearch()'s own comment.
+  async publishCreatedEvent(entityType: ModerationEntityType, entityId: string): Promise<void> {
+    try {
+      const occurredAt = new Date().toISOString();
+      switch (entityType) {
+        case 'round_rating': {
+          const r = await this.prisma.roundRating.findUniqueOrThrow({
+            where: { id: entityId },
+            include: { round: { include: { process: true } } },
+          });
+          const event: RoundRatingCreatedEventV1 = {
+            eventType: 'moderation.round_rating.created',
+            eventVersion: 1,
+            occurredAt,
+            roundRatingId: r.id,
+            roundId: r.roundId,
+            candidateId: r.candidateId,
+            companyId: r.round.process.companyId,
+            status: 'pending',
+          };
+          await this.domainEventPublisher.publish(ROUND_RATING_CREATED_V1_TOPIC, event, r.id);
+          return;
+        }
+        case 'recruiter_rating': {
+          const r = await this.prisma.recruiterRating.findUniqueOrThrow({
+            where: { id: entityId },
+            include: { recruiterInteraction: { include: { process: true } } },
+          });
+          const event: RecruiterRatingCreatedEventV1 = {
+            eventType: 'moderation.recruiter_rating.created',
+            eventVersion: 1,
+            occurredAt,
+            recruiterRatingId: r.id,
+            recruiterInteractionId: r.recruiterInteractionId,
+            candidateId: r.candidateId,
+            companyId: r.recruiterInteraction.process.companyId,
+            status: 'pending',
+          };
+          await this.domainEventPublisher.publish(RECRUITER_RATING_CREATED_V1_TOPIC, event, r.id);
+          return;
+        }
+        case 'overall_review': {
+          const r = await this.prisma.overallReview.findUniqueOrThrow({
+            where: { id: entityId },
+            include: { process: true },
+          });
+          const event: OverallReviewCreatedEventV1 = {
+            eventType: 'moderation.overall_review.created',
+            eventVersion: 1,
+            occurredAt,
+            overallReviewId: r.id,
+            processId: r.processId,
+            candidateId: r.candidateId,
+            companyId: r.process.companyId,
+            status: 'pending',
+          };
+          await this.domainEventPublisher.publish(OVERALL_REVIEW_CREATED_V1_TOPIC, event, r.id);
+          return;
+        }
+        case 'company':
+          return;
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to publish created event for ${entityType} ${entityId}`,
+        err instanceof Error ? err.stack : err,
+      );
+    }
+  }
+
+  // Counterpart to publishCreatedEvent() above, called from review() once
+  // a decision has committed. `newStatus` is already known from the
+  // caller (the decision just made) — this only needs a fresh fetch for
+  // the join context (candidateId/companyId etc.), same reasoning as
+  // every other best-effort fetch in this class.
+  private async publishStatusChangedEvent(
+    entityType: ModerationEntityType,
+    entityId: string,
+    newStatus: ModerationStatus,
+    reviewedBy: string | undefined,
+  ): Promise<void> {
+    try {
+      const occurredAt = new Date().toISOString();
+      switch (entityType) {
+        case 'round_rating': {
+          const r = await this.prisma.roundRating.findUniqueOrThrow({
+            where: { id: entityId },
+            include: { round: { include: { process: true } } },
+          });
+          const event: RoundRatingStatusChangedEventV1 = {
+            eventType: 'moderation.round_rating.status_changed',
+            eventVersion: 1,
+            occurredAt,
+            roundRatingId: r.id,
+            roundId: r.roundId,
+            candidateId: r.candidateId,
+            companyId: r.round.process.companyId,
+            previousStatus: 'pending',
+            newStatus,
+            reviewedBy,
+          };
+          await this.domainEventPublisher.publish(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, r.id);
+          return;
+        }
+        case 'recruiter_rating': {
+          const r = await this.prisma.recruiterRating.findUniqueOrThrow({
+            where: { id: entityId },
+            include: { recruiterInteraction: { include: { process: true } } },
+          });
+          const event: RecruiterRatingStatusChangedEventV1 = {
+            eventType: 'moderation.recruiter_rating.status_changed',
+            eventVersion: 1,
+            occurredAt,
+            recruiterRatingId: r.id,
+            recruiterInteractionId: r.recruiterInteractionId,
+            candidateId: r.candidateId,
+            companyId: r.recruiterInteraction.process.companyId,
+            previousStatus: 'pending',
+            newStatus,
+            reviewedBy,
+          };
+          await this.domainEventPublisher.publish(RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC, event, r.id);
+          return;
+        }
+        case 'overall_review': {
+          const r = await this.prisma.overallReview.findUniqueOrThrow({
+            where: { id: entityId },
+            include: { process: true },
+          });
+          const event: OverallReviewStatusChangedEventV1 = {
+            eventType: 'moderation.overall_review.status_changed',
+            eventVersion: 1,
+            occurredAt,
+            overallReviewId: r.id,
+            processId: r.processId,
+            candidateId: r.candidateId,
+            companyId: r.process.companyId,
+            previousStatus: 'pending',
+            newStatus,
+            reviewedBy,
+          };
+          await this.domainEventPublisher.publish(OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC, event, r.id);
+          return;
+        }
+        case 'company':
+          return;
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to publish status_changed event for ${entityType} ${entityId}`,
         err instanceof Error ? err.stack : err,
       );
     }

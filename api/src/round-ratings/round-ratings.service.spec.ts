@@ -24,6 +24,7 @@ describe('RoundRatingsService', () => {
     removeQueueEntries: jest.Mock;
     indexForSearch: jest.Mock;
     removeFromSearchIndex: jest.Mock;
+    publishCreatedEvent: jest.Mock;
   };
   let fraudChecksService: { detectFlagReason: jest.Mock };
   let reviewSearchService: { removeReview: jest.Mock };
@@ -52,6 +53,7 @@ describe('RoundRatingsService', () => {
       removeQueueEntries: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
+      publishCreatedEvent: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
     reviewSearchService = { removeReview: jest.fn().mockResolvedValue(undefined) };
@@ -125,6 +127,14 @@ describe('RoundRatingsService', () => {
       'round_rating',
       'rating-1',
     );
+  });
+
+  // GitHub issue #332 (Phase 30, D53) — domain event publish runs after
+  // commit, same call shape as indexForSearch/AI triage.
+  it('publishes a created domain event after creating the rating', async () => {
+    await service.create('round-1', 'candidate-1', dto);
+
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('round_rating', 'rating-1');
   });
 
   describe('update', () => {

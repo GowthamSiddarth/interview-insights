@@ -135,14 +135,19 @@ export class BulkProcessSubmissionService {
     for (const id of roundRatingIds) {
       await this.moderationService.indexForSearch('round_rating', id);
       await this.aiModerationService.computeAndStoreVerdict('round_rating', id);
+      // GitHub issue #332 (Phase 30, D53) — same *.created event every
+      // incremental round-rating submission publishes, best-effort.
+      await this.moderationService.publishCreatedEvent('round_rating', id);
     }
     for (const id of recruiterRatingIds) {
       await this.moderationService.indexForSearch('recruiter_rating', id);
       await this.aiModerationService.computeAndStoreVerdict('recruiter_rating', id);
+      await this.moderationService.publishCreatedEvent('recruiter_rating', id);
     }
     if (overallReviewId) {
       await this.moderationService.indexForSearch('overall_review', overallReviewId);
       await this.aiModerationService.computeAndStoreVerdict('overall_review', overallReviewId);
+      await this.moderationService.publishCreatedEvent('overall_review', overallReviewId);
     }
 
     return process;

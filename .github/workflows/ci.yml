@@ -50,12 +50,31 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # GitHub issue #332, Phase 30 (D53) — domain-events.e2e-spec.ts
+      # needs a real broker, not a mock, same D29 standing as mailpit
+      # above. GitHub Actions service containers can't override a
+      # container's default command, so this runs Redpanda's own
+      # plain default CMD (`redpanda start --overprovisioned`) rather
+      # than infra/docker-compose.yml's `dev-container`-mode flags —
+      # verified locally to work identically for a single-broker,
+      # default-listener (9092/9644) setup like this one.
+      redpanda:
+        image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+        ports:
+          - 9092:9092
+          - 9644:9644
+        options: >-
+          --health-cmd "rpk cluster health | grep -q 'Healthy:.*true'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
       OPENSEARCH_URL: http://localhost:9200
       MAIL_SMTP_HOST: localhost
       MAIL_SMTP_PORT: "1025"
       MAIL_HTTP_URL: http://localhost:8025
+      REDPANDA_BROKERS: localhost:9092
       EMAIL_HASH_SECRET: ci-test-secret
       # bcrypt("dev-only-admin-password") — see api/test/support/admin-session.ts,
       # which every moderation-touching e2e spec logs in with (GitHub issue #159).

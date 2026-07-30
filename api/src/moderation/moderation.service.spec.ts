@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
 import { CompanySearchService } from '../search/company-search.service';
 import { ModerationQueueSearchService } from '../search/moderation-queue-search.service';
+import { DomainEventPublisher } from '../events/domain-event-publisher';
 
 describe('ModerationService', () => {
   let service: ModerationService;
@@ -23,8 +24,18 @@ describe('ModerationService', () => {
       findUniqueOrThrow: jest.Mock;
       findMany: jest.Mock;
     };
-    recruiterRating: { update: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock };
-    overallReview: { update: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock };
+    recruiterRating: {
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      findMany: jest.Mock;
+    };
+    overallReview: {
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      findMany: jest.Mock;
+    };
     company: {
       update: jest.Mock;
       findUnique: jest.Mock;
@@ -41,6 +52,7 @@ describe('ModerationService', () => {
     removeEntry: jest.Mock;
     search: jest.Mock;
   };
+  let domainEventPublisher: { publish: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -61,11 +73,13 @@ describe('ModerationService', () => {
       recruiterRating: {
         update: jest.fn(),
         findUnique: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
       overallReview: {
         update: jest.fn(),
         findUnique: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
       company: {
@@ -84,6 +98,7 @@ describe('ModerationService', () => {
       removeEntry: jest.fn().mockResolvedValue(undefined),
       search: jest.fn().mockResolvedValue([]),
     };
+    domainEventPublisher = { publish: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -92,6 +107,7 @@ describe('ModerationService', () => {
         { provide: ReviewSearchService, useValue: reviewSearchService },
         { provide: CompanySearchService, useValue: companySearchService },
         { provide: ModerationQueueSearchService, useValue: moderationQueueSearchService },
+        { provide: DomainEventPublisher, useValue: domainEventPublisher },
       ],
     }).compile();
 
@@ -479,6 +495,8 @@ describe('ModerationService', () => {
       prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
       prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
         id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
         freeText: 'Great round',
         createdAt: new Date('2026-01-01'),
         difficulty: 3,
@@ -588,6 +606,12 @@ describe('ModerationService', () => {
         Promise.resolve({ id: 'queue-2', ...args.data }),
       );
       prisma.recruiterRating.update.mockResolvedValue({ id: 'rating-2', status: 'approved' });
+      prisma.recruiterRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-2',
+        recruiterInteractionId: 'interaction-1',
+        candidateId: 'candidate-2',
+        recruiterInteraction: { process: { companyId: 'company-2' } },
+      });
     }
 
     it('approve() flips a recruiter rating to approved and does not attempt search indexing', async () => {
@@ -625,6 +649,12 @@ describe('ModerationService', () => {
         Promise.resolve({ id: 'queue-3', ...args.data }),
       );
       prisma.overallReview.update.mockResolvedValue({ id: 'review-1', status: 'approved' });
+      prisma.overallReview.findUniqueOrThrow.mockResolvedValue({
+        id: 'review-1',
+        processId: 'process-1',
+        candidateId: 'candidate-3',
+        process: { companyId: 'company-3' },
+      });
     }
 
     it('approve() flips an overall review to approved and does not attempt search indexing', async () => {
@@ -763,6 +793,95 @@ describe('ModerationService', () => {
       expect(prisma.roundRating.update).not.toHaveBeenCalled();
       expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
     });
+
+    // GitHub issue #332 (Phase 30, D53) — best-effort domain event
+    // published after every decision commits, one per entity type.
+    it('approve() publishes a round_rating status_changed event', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approve('queue-1', { reviewedBy: 'gowtham' });
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.round_rating.status_changed.v1',
+        expect.objectContaining({
+          eventType: 'moderation.round_rating.status_changed',
+          eventVersion: 1,
+          roundRatingId: 'rating-1',
+          roundId: 'round-1',
+          candidateId: 'candidate-1',
+          companyId: 'company-1',
+          previousStatus: 'pending',
+          newStatus: 'approved',
+          reviewedBy: 'gowtham',
+        }),
+        'rating-1',
+      );
+    });
+
+    it('reject() publishes a recruiter_rating status_changed event', async () => {
+      mockPendingRecruiterRatingEntry();
+
+      await service.reject('queue-2', {});
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.recruiter_rating.status_changed.v1',
+        expect.objectContaining({
+          eventType: 'moderation.recruiter_rating.status_changed',
+          recruiterRatingId: 'rating-2',
+          recruiterInteractionId: 'interaction-1',
+          candidateId: 'candidate-2',
+          companyId: 'company-2',
+          previousStatus: 'pending',
+          newStatus: 'rejected',
+        }),
+        'rating-2',
+      );
+    });
+
+    it('flag() publishes an overall_review status_changed event', async () => {
+      mockPendingOverallReviewEntry();
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-3',
+        entityType: 'overall_review',
+        entityId: 'review-1',
+        reviewedAt: null,
+        flagReason: null,
+      });
+
+      await service.flag('queue-3', { flagReason: 'spam_pattern' });
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.overall_review.status_changed.v1',
+        expect.objectContaining({
+          eventType: 'moderation.overall_review.status_changed',
+          overallReviewId: 'review-1',
+          processId: 'process-1',
+          candidateId: 'candidate-3',
+          companyId: 'company-3',
+          previousStatus: 'pending',
+          newStatus: 'flagged',
+        }),
+        'review-1',
+      );
+    });
+
+    it('never publishes a status_changed event for a company decision (out of scope for #332)', async () => {
+      mockPendingCompanyEntry();
+
+      await service.approve('queue-4', {});
+
+      expect(domainEventPublisher.publish).not.toHaveBeenCalled();
+    });
+
+    // D16/D17-style adversarial proof: a broker outage never affects the
+    // moderation decision itself, which is already committed by the time
+    // this best-effort publish runs.
+    it('approve() still succeeds even if the domain event publish rejects', async () => {
+      mockPendingRoundRatingEntry();
+      domainEventPublisher.publish.mockRejectedValue(new Error('Redpanda unreachable'));
+
+      await expect(service.approve('queue-1', {})).resolves.toBeDefined();
+    });
   });
 
   // GitHub issue #440 (Phase 39, D71) — the system-attributed auto-approval
@@ -874,6 +993,111 @@ describe('ModerationService', () => {
       ).rejects.toThrow(NotFoundException);
 
       expect(prisma.aiAutoApprovalAudit.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // GitHub issue #332 (Phase 30, D53) — called by every write-path
+  // service's create() right after its own transaction commits, same
+  // shape as indexForSearch below.
+  describe('publishCreatedEvent', () => {
+    it('publishes a round_rating created event', async () => {
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        round: { process: { companyId: 'company-1' } },
+      });
+
+      await service.publishCreatedEvent('round_rating', 'rating-1');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.round_rating.created.v1',
+        expect.objectContaining({
+          eventType: 'moderation.round_rating.created',
+          eventVersion: 1,
+          roundRatingId: 'rating-1',
+          roundId: 'round-1',
+          candidateId: 'candidate-1',
+          companyId: 'company-1',
+          status: 'pending',
+        }),
+        'rating-1',
+      );
+    });
+
+    it('publishes a recruiter_rating created event', async () => {
+      prisma.recruiterRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-2',
+        recruiterInteractionId: 'interaction-1',
+        candidateId: 'candidate-2',
+        recruiterInteraction: { process: { companyId: 'company-2' } },
+      });
+
+      await service.publishCreatedEvent('recruiter_rating', 'rating-2');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.recruiter_rating.created.v1',
+        expect.objectContaining({
+          eventType: 'moderation.recruiter_rating.created',
+          recruiterRatingId: 'rating-2',
+          recruiterInteractionId: 'interaction-1',
+          candidateId: 'candidate-2',
+          companyId: 'company-2',
+          status: 'pending',
+        }),
+        'rating-2',
+      );
+    });
+
+    it('publishes an overall_review created event', async () => {
+      prisma.overallReview.findUniqueOrThrow.mockResolvedValue({
+        id: 'review-1',
+        processId: 'process-1',
+        candidateId: 'candidate-3',
+        process: { companyId: 'company-3' },
+      });
+
+      await service.publishCreatedEvent('overall_review', 'review-1');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.overall_review.created.v1',
+        expect.objectContaining({
+          eventType: 'moderation.overall_review.created',
+          overallReviewId: 'review-1',
+          processId: 'process-1',
+          candidateId: 'candidate-3',
+          companyId: 'company-3',
+          status: 'pending',
+        }),
+        'review-1',
+      );
+    });
+
+    it('never publishes a created event for a company request (out of scope for #332)', async () => {
+      await service.publishCreatedEvent('company', 'company-1');
+
+      expect(domainEventPublisher.publish).not.toHaveBeenCalled();
+    });
+
+    // D16/D17-style adversarial proof — the caller (RoundRatingsService
+    // etc.) awaits this method directly, so it must never throw back.
+    it('never throws when the publish itself rejects', async () => {
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        round: { process: { companyId: 'company-1' } },
+      });
+      domainEventPublisher.publish.mockRejectedValue(new Error('Redpanda unreachable'));
+
+      await expect(service.publishCreatedEvent('round_rating', 'rating-1')).resolves.toBeUndefined();
+    });
+
+    it('never throws when the underlying entity fetch fails', async () => {
+      prisma.roundRating.findUniqueOrThrow.mockRejectedValue(new Error('Record not found'));
+
+      await expect(service.publishCreatedEvent('round_rating', 'rating-1')).resolves.toBeUndefined();
+      expect(domainEventPublisher.publish).not.toHaveBeenCalled();
     });
   });
 

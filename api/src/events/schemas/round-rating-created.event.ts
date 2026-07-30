@@ -10,6 +10,7 @@ export interface RoundRatingCreatedEventV1 {
   occurredAt: string; // ISO-8601, event creation time — not necessarily the DB row's createdAt
   roundRatingId: string;
   roundId: string;
+  candidateId: string;
   companyId: string;
   status: 'pending'; // always 'pending' at creation — see docs/DATA_MODEL.md
 }

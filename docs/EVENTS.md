@@ -9,10 +9,13 @@ like, how it's published, and how it's versioned.
 
 ## Status
 
-`api/src/events/` (GitHub issue #331) is reusable plumbing only:
-`DomainEventPublisher` and one real, documented event type below. Nothing
-publishes it from a write path yet, and `EventsModule` isn't imported into
-`AppModule` — GitHub issue #332 does both.
+`api/src/events/` (GitHub issue #331) is the reusable plumbing:
+`DomainEventPublisher`. As of GitHub issue #332, `ModerationService`
+publishes all six event types below from the real write paths — every
+incremental create endpoint, the bulk-submission path, and every
+approve/reject/flag decision — and `EventsModule` is imported into
+`AppModule` (via `ModerationModule`). No consumer exists yet; Phase 31
+(notification-service) and Phase 32 (review-analyzer) are the first two.
 
 ## Publishing semantics
 
@@ -27,11 +30,12 @@ by D53:
   caught, logged, and swallowed. It never throws back to the caller and
   never fails or rolls back the write that triggered it.
 - `DomainEventPublisher` connects its producer once, in `onModuleInit()`.
-  If that connection attempt fails (e.g. no broker reachable — true of
-  every environment until a consumer is deployed, and always true in CI,
-  which doesn't run Redpanda), every `publish()` call is a silent no-op:
-  logged at `warn`, not `error`, since an unreachable broker is an
-  expected steady state today, not a bug.
+  If that connection attempt fails (native dev without `redpanda` running,
+  a broker restart mid-deploy, etc.), every `publish()` call is a silent
+  no-op: logged at `warn`, not `error`, since an unreachable broker isn't
+  necessarily a bug. `.github/workflows/ci.yml`'s `api` job runs a real
+  `redpanda` service container (GitHub issue #332) — CI exercises the
+  real connect-and-publish path, not just the failure path.
 
 ## Versioning convention
 
@@ -49,25 +53,41 @@ version in place.
 
 ## Defined events
 
-### `moderation.round_rating.created.v1`
+Six event types — one `*.created` and one `*.status_changed` per
+moderated entity type (`round_rating`, `recruiter_rating`,
+`overall_review`). `company` (a create-company request, Phase 35) is
+deliberately out of scope — see `ModerationService.publishCreatedEvent`/
+`publishStatusChangedEvent`'s own comments for why. Every `*.created`
+event carries `candidateId`/`companyId` context so a consumer can act
+without an immediate callback into the monolith; every `*.status_changed`
+event additionally carries `previousStatus` (always `'pending'` —
+`ModerationService.review()` only ever runs against an unreviewed entry),
+`newStatus`, and the optional `reviewedBy` label.
 
-`api/src/events/schemas/round-rating-created.event.ts` —
-`RoundRatingCreatedEventV1`:
-
-| Field | Type | Notes |
+| Topic | Type | Schema file |
 |---|---|---|
-| `eventType` | `'moderation.round_rating.created'` | |
-| `eventVersion` | `1` | |
-| `occurredAt` | `string` (ISO-8601) | Event creation time, not necessarily the DB row's `createdAt` |
-| `roundRatingId` | `string` | |
-| `roundId` | `string` | |
-| `companyId` | `string` | Denormalized onto the event so a consumer never needs a callback query just to know which company a rating belongs to |
-| `status` | `'pending'` | Always `'pending'` at creation — see `docs/DATA_MODEL.md` |
+| `moderation.round_rating.created.v1` | `RoundRatingCreatedEventV1` | `api/src/events/schemas/round-rating-created.event.ts` |
+| `moderation.round_rating.status_changed.v1` | `RoundRatingStatusChangedEventV1` | `api/src/events/schemas/round-rating-status-changed.event.ts` |
+| `moderation.recruiter_rating.created.v1` | `RecruiterRatingCreatedEventV1` | `api/src/events/schemas/recruiter-rating-created.event.ts` |
+| `moderation.recruiter_rating.status_changed.v1` | `RecruiterRatingStatusChangedEventV1` | `api/src/events/schemas/recruiter-rating-status-changed.event.ts` |
+| `moderation.overall_review.created.v1` | `OverallReviewCreatedEventV1` | `api/src/events/schemas/overall-review-created.event.ts` |
+| `moderation.overall_review.status_changed.v1` | `OverallReviewStatusChangedEventV1` | `api/src/events/schemas/overall-review-status-changed.event.ts` |
 
-Not yet published anywhere (GitHub issue #332). Once wired, this is the
+Published from:
+- **`*.created`** — `RoundRatingsService.create()`, `RecruiterRatingsService.create()`,
+  `OverallReviewsService.create()`, and `BulkProcessSubmissionService.create()`
+  (one call per rated/reviewed entity it creates) — all after their
+  transaction commits, alongside `indexForSearch()`/AI triage.
+- **`*.status_changed`** — `ModerationService.review()`, the shared
+  implementation behind `approve()`/`reject()`/`flag()` (and
+  `approveWithAudit()`, the AI auto-approval entry point).
+
+No consumer exists yet. Once one does, `moderation.*.created.v1` is the
 event both Phase 31's "your submission is pending review" notification
-and Phase 32's review-analyzer are expected to consume — see their own
-issues (#335, #339) for the actual consumer-side wiring.
+and Phase 32's review-analyzer are expected to consume, and
+`moderation.*.status_changed.v1` is what Phase 31's approved/rejected
+notification consumes — see their own issues (#335, #336, #339) for the
+actual consumer-side wiring.
 
 ## Adding a new event type
 

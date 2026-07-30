@@ -21,7 +21,7 @@ describe('BulkProcessSubmissionService', () => {
     overallReview: { create: jest.Mock };
     $transaction: jest.Mock;
   };
-  let moderationService: { enqueue: jest.Mock; indexForSearch: jest.Mock };
+  let moderationService: { enqueue: jest.Mock; indexForSearch: jest.Mock; publishCreatedEvent: jest.Mock };
   let fraudChecksService: { detectFlagReason: jest.Mock };
   let recruitersService: { findOrCreate: jest.Mock };
   let roundTypeFieldOptionsService: { validateTypeMetadata: jest.Mock };
@@ -46,6 +46,7 @@ describe('BulkProcessSubmissionService', () => {
     moderationService = {
       enqueue: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
+      publishCreatedEvent: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
     recruitersService = { findOrCreate: jest.fn().mockResolvedValue({ id: 'recruiter-1' }) };
@@ -284,5 +285,42 @@ describe('BulkProcessSubmissionService', () => {
       'review-1',
     );
     expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledTimes(3);
+  });
+
+  // GitHub issue #332 (Phase 30, D53) — same per-entity, after-commit
+  // shape as AI triage above, for every rated/reviewed entity created.
+  it('publishes a created domain event for every rated/reviewed entity created', async () => {
+    await service.create('company-1', 'candidate-1', {
+      ...baseDto,
+      rounds: [
+        {
+          sequenceNumber: 1,
+          title: 'Technical Screen',
+          roundType: 'coding',
+          rating: { difficulty: 3, fluency: 4, clarity: 4, focus: 4 },
+        },
+      ],
+      recruiterInteractions: [
+        {
+          recruiterIdentifier: 'recruiter@example.com',
+          rating: { reachability: 4, responsiveness: 4, guidelinesShared: 4 },
+        },
+      ],
+      overallReview: { overallExperience: 5, wouldRecommend: true },
+    });
+
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith(
+      'round_rating',
+      'round-rating-1',
+    );
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith(
+      'recruiter_rating',
+      'recruiter-rating-1',
+    );
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith(
+      'overall_review',
+      'review-1',
+    );
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledTimes(3);
   });
 });

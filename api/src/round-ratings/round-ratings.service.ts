@@ -40,6 +40,9 @@ export class RoundRatingsService {
     // GitHub issue #163 (Phase 19) — advisory LLM triage, after commit,
     // fully best-effort (never throws, see AiModerationService).
     await this.aiModerationService.computeAndStoreVerdict('round_rating', rating.id);
+    // GitHub issue #332 (Phase 30, D53) — domain event, after commit,
+    // fully best-effort (never throws, see DomainEventPublisher).
+    await this.moderationService.publishCreatedEvent('round_rating', rating.id);
     return rating;
   }
 

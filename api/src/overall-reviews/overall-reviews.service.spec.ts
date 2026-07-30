@@ -24,6 +24,7 @@ describe('OverallReviewsService', () => {
     removeQueueEntries: jest.Mock;
     indexForSearch: jest.Mock;
     removeFromSearchIndex: jest.Mock;
+    publishCreatedEvent: jest.Mock;
   };
   let fraudChecksService: { detectFlagReason: jest.Mock };
   let aiModerationService: { computeAndStoreVerdict: jest.Mock };
@@ -50,6 +51,7 @@ describe('OverallReviewsService', () => {
       removeQueueEntries: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
+      publishCreatedEvent: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
     aiModerationService = { computeAndStoreVerdict: jest.fn().mockResolvedValue(undefined) };
@@ -120,6 +122,14 @@ describe('OverallReviewsService', () => {
       'overall_review',
       'review-1',
     );
+  });
+
+  // GitHub issue #332 (Phase 30, D53) — domain event publish runs after
+  // commit, same call shape as indexForSearch/AI triage.
+  it('publishes a created domain event after creating the review', async () => {
+    await service.create('process-1', 'candidate-1', dto);
+
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('overall_review', 'review-1');
   });
 
   it('findApprovedForProcess only queries the approved review for that process', async () => {
