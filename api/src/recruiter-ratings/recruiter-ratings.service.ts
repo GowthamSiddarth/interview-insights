@@ -39,6 +39,8 @@ export class RecruiterRatingsService {
     await this.moderationService.indexForSearch('recruiter_rating', rating.id);
     // GitHub issue #163 (Phase 19) — advisory LLM triage, best-effort.
     await this.aiModerationService.computeAndStoreVerdict('recruiter_rating', rating.id);
+    // GitHub issue #332 (Phase 30, D53) — domain event, best-effort.
+    await this.moderationService.publishCreatedEvent('recruiter_rating', rating.id);
     return rating;
   }
 

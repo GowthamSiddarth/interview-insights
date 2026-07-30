@@ -1234,7 +1234,7 @@ Phases 31-32 build on. The synchronous write path itself (including
 - [x] Shared event-publishing module (`api/src/events/`) + a versioned
       event-schema contract, best-effort/after-commit per D16/D17
       (GitHub issue #331)
-- [ ] Wire creation + moderation status-change events for all three
+- [x] Wire creation + moderation status-change events for all three
       moderated entity types, in both the single-create and
       bulk-submission paths (GitHub issue #332)
 - [ ] Engineering blog (last) (GitHub issue #333)

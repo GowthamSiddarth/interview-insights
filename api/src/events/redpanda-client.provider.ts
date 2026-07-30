@@ -7,9 +7,9 @@ export const EVENT_PRODUCER = 'EVENT_PRODUCER';
 // Same shape as ../search/opensearch-client.provider.ts: a thin factory
 // reading the broker address from env, defaulting to the native-dev port
 // (infra/docker-compose.yml's `redpanda` service publishes its external
-// listener on 19092 — GitHub issue #330). Not yet added to
-// api/.env.example: nothing reads this at app boot until GitHub issue
-// #332 imports EventsModule into AppModule.
+// listener on 19092 — GitHub issue #330). Documented in api/.env.example
+// as of GitHub issue #332, which is what first makes AppModule actually
+// read this at boot (via ModerationModule -> EventsModule).
 export const kafkaClientProvider: Provider = {
   provide: KAFKA_CLIENT,
   useFactory: () =>

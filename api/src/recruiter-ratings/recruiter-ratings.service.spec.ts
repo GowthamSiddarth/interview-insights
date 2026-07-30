@@ -24,6 +24,7 @@ describe('RecruiterRatingsService', () => {
     removeQueueEntries: jest.Mock;
     indexForSearch: jest.Mock;
     removeFromSearchIndex: jest.Mock;
+    publishCreatedEvent: jest.Mock;
   };
   let fraudChecksService: { detectFlagReason: jest.Mock };
   let aiModerationService: { computeAndStoreVerdict: jest.Mock };
@@ -51,6 +52,7 @@ describe('RecruiterRatingsService', () => {
       removeQueueEntries: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
+      publishCreatedEvent: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
     aiModerationService = { computeAndStoreVerdict: jest.fn().mockResolvedValue(undefined) };
@@ -121,6 +123,14 @@ describe('RecruiterRatingsService', () => {
       'recruiter_rating',
       'rating-1',
     );
+  });
+
+  // GitHub issue #332 (Phase 30, D53) — domain event publish runs after
+  // commit, same call shape as indexForSearch/AI triage.
+  it('publishes a created domain event after creating the rating', async () => {
+    await service.create('interaction-1', 'candidate-1', dto);
+
+    expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('recruiter_rating', 'rating-1');
   });
 
   it('findApprovedForInteraction only queries approved ratings for that interaction', async () => {

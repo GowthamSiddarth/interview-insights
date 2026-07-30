@@ -63,7 +63,7 @@ the original plan" below.
 | Moderation | In-process NestJS module (D12) | Only `RoundRating` has a write path (see gaps below) |
 | Fraud checks | In-process, same module family | Rate-limit (3/24h) + duplicate-text flag, never blocks writes (D13) |
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
-| Event bus | Redpanda | Broker deployed (Phase 30, D53); `DomainEventPublisher` plumbing exists (#331) but nothing publishes yet — see `docs/EVENTS.md` |
+| Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — no consumer yet, see `docs/EVENTS.md` |
 | Secrets/IAM | LocalStack (dev-localstack overlay) | Default CD target as of Phase 12 issue #99 (D23) |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,dev-localstack,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |

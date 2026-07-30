@@ -16,6 +16,7 @@ describe('DomainEventPublisher', () => {
     occurredAt: '2026-07-30T00:00:00.000Z',
     roundRatingId: 'rr-1',
     roundId: 'round-1',
+    candidateId: 'candidate-1',
     companyId: 'company-1',
     status: 'pending',
   };
