@@ -1267,7 +1267,7 @@ only once its trigger fires" convention; not pre-filed here. Phase 8f
 trigger (first shared/staging deployment with real traffic) still
 hasn't fired.
 
-- [ ] `notification-service` skeleton + its own Dockerfile/k8s
+- [x] `notification-service` skeleton + its own Dockerfile/k8s
       manifest/CD step (GitHub issue #334)
 - [ ] Consume `*.created` events → "your submission is pending review"
       email, idempotent (GitHub issue #335)

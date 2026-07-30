@@ -3310,6 +3310,48 @@ real need for out-of-process scheduling emerges elsewhere first.
 
 ---
 
+### D73 — `notification-service` duplicates `mail/`'s SMTP wiring rather than extracting a shared package (GitHub issue #334, Phase 31)
+
+**Context:** Issue #334 (`notification-service` skeleton) explicitly
+left open whether it should duplicate the ~30 lines of nodemailer/Mailpit
+wiring already living in `api/src/mail/mail.service.ts`, or whether that
+logic should move into a small shared package both `api` and
+`notification-service` depend on.
+
+**Decision:** Duplicate. `notification-service`'s own mail-sending logic
+(added in #335/#336) will be its own copy of the same
+`nodemailer.createTransport({ host: MAIL_SMTP_HOST, port: MAIL_SMTP_PORT,
+secure: false })` + `transporter.sendMail()` shape — not a shared
+package. Reasoning:
+
+- Root `package.json` is explicitly not an npm workspaces root (see its
+  own description) — every service already keeps its own
+  `package.json`/`package-lock.json` and is built/deployed independently.
+  A shared internal package would be the first thing to break that,
+  needing either a private npm registry, a `file:` dependency (which
+  Docker's `COPY . .` + `npm ci` build pattern doesn't handle across a
+  sibling directory without extra COPY/context wiring), or adopting
+  workspaces after all — real tooling overhead for ~30 lines.
+- The two call sites' actual needs already diverge in shape: `api`'s
+  `MailService.send()` is a generic `{to, subject, text, html?}` wrapper
+  with no moderation-specific methods; `notification-service` needs
+  exactly two fixed templates (pending-review, approved/rejected) and
+  never anything more generic. A shared package would have to serve both
+  shapes or become the more generic one anyway, coupling two
+  independent deploys' release cadence together for no proven benefit.
+- Matches this project's standing "simplest thing that proves the
+  pattern" instinct (same reasoning D53 itself gives for building
+  notification-service before review-analyzer) — the phase's actual
+  goal is proving broker → independent-deploy → real-consumer works end
+  to end, not minimizing duplicate nodemailer boilerplate.
+
+**Revisit when:** a third consumer needs the same SMTP wiring (making it
+genuinely repetitive, not just duplicated once), or `api`'s and
+`notification-service`'s mail-sending needs converge enough that keeping
+two copies in sync becomes its own maintenance cost.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

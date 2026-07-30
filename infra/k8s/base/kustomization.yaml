@@ -12,3 +12,4 @@ resources:
   - 07-ingress.yaml
   - 08-mailpit.yaml
   - 09-redpanda.yaml
+  - 10-notification-service.yaml

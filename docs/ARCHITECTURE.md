@@ -43,7 +43,7 @@ flowchart TD
 flowchart LR
     DEV["git push to main"] --> GH["GitHub Actions\n(cd.yml, queued)"]
     GH -->|picked up when\n./run.sh is started| RUNNER["Self-hosted runner\n(on-demand, this laptop)"]
-    RUNNER -->|build + kind load| IMAGES["api:k8s / web:k8s images"]
+    RUNNER -->|build + kind load| IMAGES["api:k8s / web:k8s /\nnotification-service:k8s images"]
     RUNNER -->|kubectl apply -k| OVERLAY["overlays/dev-localstack"]
     OVERLAY --> CLUSTER["kind cluster\n(interview-insights namespace)"]
     RUNNER -->|reseed| LS2[("LocalStack")]
@@ -63,7 +63,8 @@ the original plan" below.
 | Moderation | In-process NestJS module (D12) | Only `RoundRating` has a write path (see gaps below) |
 | Fraud checks | In-process, same module family | Rate-limit (3/24h) + duplicate-text flag, never blocks writes (D13) |
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
-| Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — no consumer yet, see `docs/EVENTS.md` |
+| Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — see `docs/EVENTS.md` |
+| `notification-service` (`services/notification-service/`) | NestJS, own Deployment | First standalone microservice (Phase 31, D53/D73, GitHub issue #334) — deployed, zero consumers wired yet; `*.created`/`*.status_changed` consumption + candidate emails land in #335/#336 |
 | Secrets/IAM | LocalStack (dev-localstack overlay) | Default CD target as of Phase 12 issue #99 (D23) |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,dev-localstack,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |
@@ -187,11 +188,15 @@ interview-insights/
 ├── web/
 │   └── src/app/                # wizard, search, analytics pages
 ├── workers/                    # placeholder — no logic (D12)
+├── services/
+│   └── notification-service/   # first standalone microservice (Phase 31, D53/D73)
+│       ├── src/health/         # only module wired so far (#334) — consumer lands in #335/#336
+│       └── Dockerfile
 ├── infra/
 │   ├── docker-compose.yml      # inert reference only (D24/D26 — kind runs both stores) / --profile full / --profile localstack
 │   ├── aws/                    # seed-localstack.sh, IAM policy JSON
 │   ├── k8s/
-│   │   ├── base/                # numbered manifests + localstack/ subdir
+│   │   ├── base/                # numbered manifests (incl. 10-notification-service.yaml) + localstack/ subdir
 │   │   └── overlays/
 │   │       ├── dev              # the exact shape actually deployed
 │   │       ├── dev-localstack   # dev + LocalStack, CD's actual target
