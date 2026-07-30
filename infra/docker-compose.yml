@@ -1,12 +1,16 @@
 name: interview-insights
 
-# Default (`docker compose up`): Postgres + OpenSearch + Mailpit. `api`/
-# `web` run directly on the host via npm for the fast local-dev loop (see
-# README.md) — no code talks to Redis/Kafka yet, so those aren't run
-# either until something actually depends on them (docs/DECISIONS.md D9:
-# avoid premature infrastructure). OpenSearch was added here for Phase 5
-# (GitHub issue #21); Mailpit for Phase 16 (GitHub issue #144) — the
-# first real trigger for each, per that same D9 reasoning.
+# Default (`docker compose up`): Postgres + OpenSearch + Mailpit +
+# Redpanda. `api`/`web` run directly on the host via npm for the fast
+# local-dev loop (see README.md) — no code talks to Redis yet, so that
+# isn't run either until something actually depends on it
+# (docs/DECISIONS.md D9: avoid premature infrastructure). OpenSearch was
+# added here for Phase 5 (GitHub issue #21); Mailpit for Phase 16 (GitHub
+# issue #144); Redpanda for Phase 30 (GitHub issue #330, D53) — the first
+# real trigger for each, per that same D9 reasoning. Redpanda is broker
+# infra only at this point: nothing publishes or consumes yet (that's
+# GitHub issue #332), same "proven reachable, unused" state OpenSearch
+# briefly had between #21 and its first real indexing call.
 #
 # `docker compose --profile full up --build`: also builds and runs `api`
 # and `web` as containers, for prod-like local testing of the actual Docker
@@ -55,6 +59,34 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  # Kafka-API-compatible broker (GitHub issue #330, D53) — single-node,
+  # `dev-container` mode (Redpanda's own recommended mode for a lone
+  # container instance: relaxed fsync/memory defaults, no multi-broker
+  # gossip setup needed). `--advertise-kafka-addr` uses this service's own
+  # DNS name so the same value also works unchanged from inside the
+  # cluster (infra/k8s/base/09-redpanda.yaml mirrors this exactly) —
+  # single broker, headless-equivalent addressing either way.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --mode dev-container
+      - --smp 1
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   api:
     profiles: ["full"]
@@ -148,3 +180,4 @@ services:
 volumes:
   postgres_data:
   opensearch_data:
+  redpanda_data:

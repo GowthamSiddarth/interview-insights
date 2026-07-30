@@ -1229,7 +1229,7 @@ No new deployable service ships in this phase; it's the plumbing
 Phases 31-32 build on. The synchronous write path itself (including
 `ModerationService.enqueue()`) is unchanged.
 
-- [ ] Add Redpanda to local infra (docker-compose + k8s), mirroring
+- [x] Add Redpanda to local infra (docker-compose + k8s), mirroring
       how OpenSearch was added in Phase 5 (GitHub issue #330)
 - [ ] Shared event-publishing module (`api/src/events/`) + a versioned
       event-schema contract, best-effort/after-commit per D16/D17
