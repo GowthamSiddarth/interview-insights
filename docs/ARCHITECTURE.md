@@ -84,7 +84,7 @@ from the original plan" below.
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
 | Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — see `docs/EVENTS.md` |
 | `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). As of #335, a real consumer: subscribes to all three `moderation.*.created.v1` topics and sends a "your submission is pending review" email, idempotently. `*.status_changed` consumption (approved/rejected) lands in #336 |
-| Secrets/IAM | LocalStack (`dev` overlay, unconditional) | Default CD target as of Phase 12 issue #99 (D23); folded into `dev` itself, no separate `dev-localstack` variant, by GitHub issue #466 (D76) |
+| Secrets/IAM | LocalStack (`dev` overlay, unconditional) | Default CD target as of Phase 12 issue #99 (D23); folded into `dev` itself, no separate `dev-localstack` variant, by GitHub issue #466 (D76). Full secret-by-secret inventory: `docs/SECRETS.md` |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |
 | Cluster monitoring | `metrics-server` (Helm) + `k9s` | Phase 12 issue #90 |

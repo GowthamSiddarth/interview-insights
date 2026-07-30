@@ -61,7 +61,9 @@ Full schema: `docs/DATA_MODEL.md`.
    compliance — `postgres-credentials`'s imperative provisioning is the
    one deliberate, documented exception this constraint allows for, not a
    precedent to extend beyond that same narrow "needed before our own
-   code can run" justification.
+   code can run" justification. See `docs/SECRETS.md` for the full
+   inventory of every secret, which pattern each uses, and how to verify
+   any of it — read it before adding a new one.
 
 ## Stack (decided)
 
