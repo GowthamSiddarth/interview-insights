@@ -3673,6 +3673,43 @@ Secrets Manager.
 
 ---
 
+### D79 — The `*.status_changed` notification consumer sends no email (and writes no `NotificationLog` row) for `newStatus: 'flagged'` (GitHub issue #336, Phase 31)
+
+**Context:** Issue #336/`docs/ROADMAP.md`'s own wording scope this work
+as an "approved/rejected notification" — neither the issue nor
+`docs/EVENTS.md` says anything about what to do when
+`ModerationService.review()`'s decision is `'flagged'` instead. The
+event schema (`*StatusChangedEventV1.newStatus`) types this as the full
+`ModerationStatus` enum (`pending | approved | rejected | flagged`), so
+the consumer has to handle the value even though the feature request
+doesn't mention it.
+
+**Decision:** Treat `flagged` as a deliberate no-op: `notificationFor()`
+in `notification-consumer.service.ts` returns `null` for it, and
+`processEvent()` returns immediately — no email sent, and no
+`NotificationLog` row written either. Skipping the log write (not just
+the email) is safe specifically because `review()` rejects re-reviewing
+an entry that already has `reviewedAt` set (`ConflictException` in
+`api/src/moderation/moderation.service.ts`) — a flagged entity can never
+produce a second `status_changed` event to need deduping against, so
+there is no side effect for idempotency to guard in the first place.
+
+**Alternative considered:** Log the row anyway, purely for an audit
+trail of "we saw this and chose not to notify." Rejected for now — this
+service's `NotificationLog` table exists to dedupe sent notifications
+(D75), not as a general event-audit log; broadening its purpose belongs
+in Phase 32 (review-analyzer) or a dedicated audit feature if one is
+ever requested, not folded into this table's meaning without a driving
+need.
+
+**Revisit when:** flagged items get a "why we didn't approve/reject
+yet" candidate-facing notification of their own — then this becomes a
+third real template instead of a no-op, and the no-log-row reasoning
+above would need re-checking against whatever a flagged item's actual
+follow-up review path turns out to be.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

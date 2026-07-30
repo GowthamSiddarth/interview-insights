@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { MAIL_TRANSPORTER } from '../src/mail/mail-transporter.provider';
 import { ROUND_RATING_CREATED_V1_TOPIC } from '../src/events/schemas/round-rating-created.event';
+import { ROUND_RATING_STATUS_CHANGED_V1_TOPIC } from '../src/events/schemas/round-rating-status-changed.event';
 import { seedCandidateWithEmail } from './support/seed-candidate';
 import { publishTestEvent } from './support/redpanda-producer';
 import { assertMailpitMessageCountStaysAt, searchMailpit, waitForMailpitMessage } from './support/mailpit';
@@ -86,6 +87,86 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
 
       const messagesForRecipient = await searchMailpit(`to:${email}`);
       expect(messagesForRecipient).toHaveLength(1);
+    },
+    25000,
+  );
+
+  // GitHub issue #336 — same idempotent-consumer shape as #335's test
+  // above, proven against the status_changed side instead.
+  it(
+    'a real moderation.round_rating.status_changed.v1 event (newStatus: approved) results in an approval email, and redelivery never sends a second one',
+    async () => {
+      const marker = unique();
+      const email = `candidate-${marker}@example.com`;
+      const candidateId = await seedCandidateWithEmail(prisma, email);
+      const roundRatingId = randomUUID();
+
+      const event = {
+        eventType: 'moderation.round_rating.status_changed' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        roundRatingId,
+        roundId: randomUUID(),
+        candidateId,
+        companyId: randomUUID(),
+        previousStatus: 'pending' as const,
+        newStatus: 'approved' as const,
+      };
+
+      await publishTestEvent(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, roundRatingId);
+
+      const message = await waitForMailpitMessage(email);
+      expect(message.To[0].Address).toBe(email);
+      expect(message.Subject).toBe('Your submission has been approved');
+
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          entityType_entityId_eventType: {
+            entityType: 'round_rating',
+            entityId: roundRatingId,
+            eventType: 'moderation.round_rating.status_changed',
+          },
+        },
+      });
+      expect(logged).not.toBeNull();
+
+      await publishTestEvent(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, roundRatingId);
+      await assertMailpitMessageCountStaysAt(email, 1);
+
+      const messagesForRecipient = await searchMailpit(`to:${email}`);
+      expect(messagesForRecipient).toHaveLength(1);
+    },
+    25000,
+  );
+
+  // 'flagged' is the one newStatus this consumer deliberately never emails
+  // for (see notification-consumer.service.ts's notificationFor()) —
+  // proven here against the real broker so a future change to that
+  // no-op can't silently start sending a "flagged" email.
+  it(
+    'a real moderation.round_rating.status_changed.v1 event (newStatus: flagged) never sends an email',
+    async () => {
+      const marker = unique();
+      const email = `candidate-${marker}@example.com`;
+      const candidateId = await seedCandidateWithEmail(prisma, email);
+      const roundRatingId = randomUUID();
+
+      const event = {
+        eventType: 'moderation.round_rating.status_changed' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        roundRatingId,
+        roundId: randomUUID(),
+        candidateId,
+        companyId: randomUUID(),
+        previousStatus: 'pending' as const,
+        newStatus: 'flagged' as const,
+      };
+
+      await publishTestEvent(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, roundRatingId);
+
+      await assertMailpitMessageCountStaysAt(email, 0);
+      expect(await searchMailpit(`to:${email}`)).toHaveLength(0);
     },
     25000,
   );

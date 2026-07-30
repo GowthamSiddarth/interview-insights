@@ -38,3 +38,15 @@ model NotificationLog {
   @@unique([entityType, entityId, eventType])
   @@map("notification_log")
 }
+
+// Duplicated from api/prisma/schema.prisma's own ModerationStatus enum
+// (GitHub issue #336) — needed to type the `newStatus` field on the
+// *.status_changed.v1 event schemas duplicated into events/schemas/.
+// This service never writes a ModerationStatus column itself, so this
+// exists purely to generate the matching TypeScript type.
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+  flagged
+}
