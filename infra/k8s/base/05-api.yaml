@@ -39,6 +39,16 @@ data:
   # in anthropic-credentials) is actually set; the feature is a no-op
   # advisory triage otherwise, never a hard requirement to boot.
   ANTHROPIC_MODEL: claude-haiku-4-5
+  # GitHub issues #439/#441 (Phase 39, D71) — the auto-approval layer on
+  # top of the base triage above. Both default to disabled; empty string
+  # is a safe "unset" for the threshold (GitHub issue #450 fixed a bug
+  # where it wasn't — Number('') is 0, not NaN, which silently made every
+  # clean verdict eligible). Not sensitive — same reasoning as
+  # ANTHROPIC_MODEL — but wiki/deployment-guide.md section 5c documents
+  # actually turning this on since it also requires a real
+  # ANTHROPIC_API_KEY (anthropic-credentials Secret, below).
+  AI_MODERATION_AUTO_APPROVE_THRESHOLD: ""
+  AI_AUTO_APPROVAL_ENABLED: "false"
 ---
 # Plaintext, same local-only reasoning as 01-postgres-secret.yaml.
 # DATABASE_URL duplicates 01-postgres-secret.yaml's credentials as a single

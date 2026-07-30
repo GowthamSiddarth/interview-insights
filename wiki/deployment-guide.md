@@ -466,7 +466,37 @@ password stops working the moment the new Secret is live and `api`
 restarts — there's no overlap window, matching this project's single-
 admin, single-credential scope (`docs/ROADMAP.md` Phase 18).
 
-## 5c. AI moderation triage credentials (GitHub issue #163, Phase 19)
+## 5c. AI moderation triage & auto-approval (GitHub issues #163, #439, #441, Phase 19/39)
+
+Three env vars gate this feature, layered — each one is a complete "off"
+switch on its own, and all three must be configured for a submission to
+ever auto-publish without a human:
+
+| Var | What it gates | Where it lives | Safe/default value |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | The LLM triage call itself. Empty/unset = `AiModerationService` is a complete no-op — nothing else below ever runs. | `anthropic-credentials` Secret (imperative, never committed) | unset |
+| `AI_MODERATION_AUTO_APPROVE_THRESHOLD` | The confidence cutoff (D71). Unset (or an empty string — see the issue #450 gotcha below) = nothing is ever auto-approve-eligible; triage still runs and stores an advisory verdict. | `api-config` ConfigMap (not a secret) | `""` |
+| `AI_AUTO_APPROVAL_ENABLED` | The kill switch (issue #441). Must be exactly `"true"`; anything else = advisory-only regardless of the threshold. | `api-config` ConfigMap (not a secret) | `"false"` |
+
+Today, in every environment this project actually runs (local dev,
+`kind`), all three are at their disabled defaults — the feature has never
+been turned on outside of unit tests. Confirm the live state of the first
+one at any time with `gh secret list` (no `ANTHROPIC_API_KEY` row means
+disabled everywhere CD deploys); the other two are visible directly in
+`infra/k8s/base/05-api.yaml` and `infra/docker-compose.yml`, or via
+`kubectl get configmap api-config -n interview-insights -o yaml` against
+a live cluster.
+
+**Gotcha fixed by GitHub issue #450:** `AI_MODERATION_AUTO_APPROVE_THRESHOLD=""`
+(an explicit empty string, this project's own convention for "disabled"
+optional vars) used to silently parse as threshold `0` — `Number('')` is
+`0`, not `NaN` — which would have made *every* clean verdict
+auto-approve-eligible regardless of confidence the moment
+`AI_AUTO_APPROVAL_ENABLED` was flipped on, the opposite of the documented
+fail-closed behavior. `getAutoApprovalConfidenceThreshold()` now treats
+an empty string the same as truly unset.
+
+### Step 1 — base triage: `ANTHROPIC_API_KEY`
 
 `ANTHROPIC_API_KEY` follows the same never-committed, imperatively-
 provisioned pattern as `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` (5b
@@ -478,8 +508,29 @@ else in the app depends on this Secret existing. `ANTHROPIC_MODEL` is not
 a secret — it lives in the plain `api-config` ConfigMap alongside
 `ADMIN_USERNAME`.
 
-**One-time setup (only if you want the feature enabled):**
+**Native local dev** (section 1): edit `api/.env` directly, then restart
+`npm run start:dev`. This works even though nothing in `api/src` calls
+`dotenv` explicitly — `PrismaModule` (imported first, and `@Global()`,
+in `app.module.ts`) constructs a `PrismaClient`, and merely requiring
+`@prisma/client` loads the nearest `.env` file into `process.env` for
+the *whole* Node process as a side effect, not just for Prisma's own
+`DATABASE_URL` resolution (verified directly: `node -e "require('@prisma/client')"`
+populates `process.env.ANTHROPIC_API_KEY` from `api/.env` with no other
+code involved). This is Prisma's own behavior, not something this
+project wires up deliberately — worth knowing since it's easy to assume
+(as this guide previously did) that `.env` is CLI-only:
+```bash
+# api/.env
+ANTHROPIC_API_KEY="sk-ant-..."
+ANTHROPIC_MODEL="claude-haiku-4-5"          # required once the key is set — no fallback
+```
 
+**Docker Compose full profile** (section 2): edit the `ANTHROPIC_API_KEY`
+value directly in `infra/docker-compose.yml`'s `api` service — it's set
+there as a real value, not read from `api/.env` either — then
+`docker compose --profile full up --build`.
+
+**Real `kind`/k8s deploy** (section 3+) — one-time setup:
 ```bash
 gh secret set ANTHROPIC_API_KEY   # paste a real Claude API key
 
@@ -496,6 +547,52 @@ secret" step): upserts `anthropic-credentials` from the
 feature disabled, not a failed deploy. `infra/scripts/bootstrap-kind.sh`
 does the same, defaulting to an empty value when `ANTHROPIC_API_KEY`
 isn't exported locally.
+
+### Step 2 — auto-approval layer: threshold + kill switch (GitHub issues #439, #441, D71)
+
+With triage running (step 1 done), a clean verdict is still only ever
+advisory until both of these are set together. Neither is a secret — both
+live in `api-config` (added by GitHub issue #450; previously undocumented
+in any committed manifest, `.env.example` only):
+
+```bash
+# Native local dev — same api/.env editing as step 1:
+AI_MODERATION_AUTO_APPROVE_THRESHOLD="0.9"   # tune empirically, no prescribed starting value (D71)
+AI_AUTO_APPROVAL_ENABLED="true"              # must be exactly this string
+
+# Docker Compose full profile: edit the same two keys directly in
+# infra/docker-compose.yml's api service.
+
+# Real k8s deploy: edit infra/k8s/base/05-api.yaml's api-config ConfigMap
+# (or a per-overlay patch, e.g. infra/k8s/overlays/staging, if only one
+# environment should have it on), commit, then either push (CD picks it
+# up) or apply manually:
+kubectl apply -k infra/k8s/overlays/<overlay>
+kubectl -n interview-insights rollout restart deployment/api   # ConfigMap changes don't hot-reload
+```
+
+There's no starting threshold value prescribed anywhere in this repo —
+D71 is explicit that it should be tuned empirically once real verdict/
+confidence data exists in an environment, not guessed here.
+
+### Verifying it's actually live
+
+1. `gh secret list` shows `ANTHROPIC_API_KEY`, and
+   `kubectl get configmap api-config -n interview-insights -o yaml` (or
+   `infra/docker-compose.yml`/`api/.env` locally) shows
+   `AI_AUTO_APPROVAL_ENABLED: "true"` and a real
+   `AI_MODERATION_AUTO_APPROVE_THRESHOLD`.
+2. Submit a clean, unremarkable rating through the app. Its
+   `moderationVerdict` should show `autoApprovalEligible: true` and its
+   `status` should already be `approved` (check via `kubectl exec` psql,
+   section 11.5) — with no moderator action in between.
+3. `ai_auto_approval_audit` (GitHub issue #440) has a matching row, and
+   `moderation_queue` shows that entry's `reviewed_by` as
+   `system:ai-auto-approval`.
+4. The reconciliation sweep (GitHub issue #442) runs hourly and is silent
+   unless something stalls — check `api` pod logs for
+   `ReconciliationSweepService` entries if a submission seems stuck
+   `pending` with no verdict past 24h.
 
 ## 6. Smoke-testing the whole stack end to end
 
