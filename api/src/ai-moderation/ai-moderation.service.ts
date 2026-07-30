@@ -194,7 +194,17 @@ export class AiModerationService {
     );
     if (!textBlock) return null;
 
-    const parsed: unknown = JSON.parse(textBlock.text);
+    // GitHub issue #453 — despite SYSTEM_PROMPT's explicit "a single JSON
+    // object and nothing else," real responses (verified live against
+    // claude-haiku-4-5) sometimes wrap the object in a markdown code
+    // fence (```json ... ``` or plain ```). Every unit test here mocks a
+    // bare JSON string, so this never surfaced until a real API call was
+    // made. Stripped defensively rather than tightened via a stricter
+    // prompt — models drifting back to this shape later shouldn't cause a
+    // silent regression back to "every real triage call fails to parse."
+    const jsonText = textBlock.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+
+    const parsed: unknown = JSON.parse(jsonText);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
 
     const record = parsed as Record<string, unknown>;

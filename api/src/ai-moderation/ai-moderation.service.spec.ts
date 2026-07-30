@@ -523,6 +523,38 @@ describe('AiModerationService', () => {
     expect(prisma.roundRating.update).not.toHaveBeenCalled();
   });
 
+  it('parses a verdict wrapped in a markdown code fence, despite the system prompt asking for bare JSON (GitHub issue #453)', async () => {
+    prisma.roundRating.findUnique.mockResolvedValue({
+      id: 'rating-1',
+      difficulty: 3,
+      fluency: 4,
+      clarity: 5,
+      focus: 4,
+      technicalDepth: null,
+      freeText: 'x',
+      round: { roundType: 'coding', typeMetadata: null },
+    });
+    anthropicClient.messages.create.mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [
+        {
+          type: 'text',
+          text: '```json\n{"concerning": false, "reasons": [], "summary": "Looks fine.", "confidence": 0.9}\n```',
+        },
+      ],
+    });
+
+    const service = buildService();
+    await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+    expect(prisma.roundRating.update).toHaveBeenCalledWith({
+      where: { id: 'rating-1' },
+      data: expect.objectContaining({
+        moderationVerdict: expect.objectContaining({ concerning: false, confidence: 0.9 }) as unknown,
+      }) as unknown,
+    });
+  });
+
   it('swallows an unparseable response instead of throwing, and never updates the row', async () => {
     prisma.roundRating.findUnique.mockResolvedValue({
       id: 'rating-1',
