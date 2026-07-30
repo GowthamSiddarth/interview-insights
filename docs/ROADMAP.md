@@ -1237,7 +1237,7 @@ Phases 31-32 build on. The synchronous write path itself (including
 - [x] Wire creation + moderation status-change events for all three
       moderated entity types, in both the single-create and
       bulk-submission paths (GitHub issue #332)
-- [ ] Ad-hoc: `DomainEventPublisher` reconnect-on-recovery — surfaced in
+- [x] Ad-hoc: `DomainEventPublisher` reconnect-on-recovery — surfaced in
       a design review of #330-#332; today a Redpanda connection lost (or
       never established) at boot never retries, so events silently drop
       until the app restarts even after the broker recovers. Filed under

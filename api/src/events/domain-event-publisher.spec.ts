@@ -8,7 +8,14 @@ import {
 
 describe('DomainEventPublisher', () => {
   let service: DomainEventPublisher;
-  let producer: { connect: jest.Mock; disconnect: jest.Mock; send: jest.Mock };
+  let producer: {
+    connect: jest.Mock;
+    disconnect: jest.Mock;
+    send: jest.Mock;
+    on: jest.Mock;
+    events: { CONNECT: string; DISCONNECT: string };
+  };
+  let disconnectListener: (() => void) | undefined;
 
   const event: RoundRatingCreatedEventV1 = {
     eventType: 'moderation.round_rating.created',
@@ -30,10 +37,15 @@ describe('DomainEventPublisher', () => {
   }
 
   beforeEach(() => {
+    disconnectListener = undefined;
     producer = {
       connect: jest.fn().mockResolvedValue(undefined),
       disconnect: jest.fn().mockResolvedValue(undefined),
       send: jest.fn().mockResolvedValue(undefined),
+      events: { CONNECT: 'producer.connect', DISCONNECT: 'producer.disconnect' },
+      on: jest.fn((eventName: string, listener: () => void) => {
+        if (eventName === 'producer.disconnect') disconnectListener = listener;
+      }),
     };
   });
 
@@ -86,5 +98,69 @@ describe('DomainEventPublisher', () => {
     await service.onModuleDestroy();
 
     expect(producer.disconnect).not.toHaveBeenCalled();
+  });
+
+  describe('reconnect-on-recovery (GitHub issue #459)', () => {
+    it('retries a connect that never succeeded at boot, and resumes publishing once it does', async () => {
+      producer.connect.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      service = await buildService();
+      await service.onModuleInit();
+
+      await expect(
+        service.publish(ROUND_RATING_CREATED_V1_TOPIC, event),
+      ).resolves.toBeUndefined();
+      expect(producer.send).not.toHaveBeenCalled();
+
+      producer.connect.mockResolvedValueOnce(undefined);
+      await service.retryConnectIfNeeded();
+
+      await service.publish(ROUND_RATING_CREATED_V1_TOPIC, event, event.roundRatingId);
+      expect(producer.send).toHaveBeenCalledWith({
+        topic: ROUND_RATING_CREATED_V1_TOPIC,
+        messages: [{ key: event.roundRatingId, value: JSON.stringify(event) }],
+      });
+    });
+
+    it('does not attempt to reconnect while already connected', async () => {
+      service = await buildService();
+      await service.onModuleInit();
+      producer.connect.mockClear();
+
+      await service.retryConnectIfNeeded();
+
+      expect(producer.connect).not.toHaveBeenCalled();
+    });
+
+    it('reconnects after a live disconnect surfaced via the DISCONNECT listener', async () => {
+      service = await buildService();
+      await service.onModuleInit();
+      expect(disconnectListener).toBeDefined();
+
+      disconnectListener?.();
+      await expect(
+        service.publish(ROUND_RATING_CREATED_V1_TOPIC, event),
+      ).resolves.toBeUndefined();
+      expect(producer.send).not.toHaveBeenCalled();
+
+      await service.retryConnectIfNeeded();
+
+      await service.publish(ROUND_RATING_CREATED_V1_TOPIC, event, event.roundRatingId);
+      expect(producer.send).toHaveBeenCalledWith({
+        topic: ROUND_RATING_CREATED_V1_TOPIC,
+        messages: [{ key: event.roundRatingId, value: JSON.stringify(event) }],
+      });
+    });
+
+    it('does not reconnect after module destroy', async () => {
+      producer.connect.mockRejectedValue(new Error('ECONNREFUSED'));
+      service = await buildService();
+      await service.onModuleInit();
+      await service.onModuleDestroy();
+      producer.connect.mockClear();
+
+      await service.retryConnectIfNeeded();
+
+      expect(producer.connect).not.toHaveBeenCalled();
+    });
   });
 });
