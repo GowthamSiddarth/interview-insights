@@ -51,6 +51,13 @@ data:
   # ANTHROPIC_API_KEY.
   AI_MODERATION_AUTO_APPROVE_THRESHOLD: ""
   AI_AUTO_APPROVAL_ENABLED: "false"
+  # In-cluster Service DNS name + internal listener port (09-redpanda.yaml)
+  # — without this, redpanda-client.provider.ts falls back to its
+  # localhost:19092 default (the docker-compose *external* listener,
+  # meant for running api on the host machine), which is unreachable from
+  # inside the cluster. Mirrors 10-notification-service.yaml's own
+  # REDPANDA_BROKERS entry.
+  REDPANDA_BROKERS: redpanda:9092
 ---
 apiVersion: v1
 kind: Service

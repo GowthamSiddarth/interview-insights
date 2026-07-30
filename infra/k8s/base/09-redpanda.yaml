@@ -42,13 +42,22 @@ spec:
       containers:
         - name: redpanda
           image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
-          command:
+          # args (Docker CMD), not command (Docker ENTRYPOINT) — the image's
+          # real entrypoint is /entrypoint.sh, which execs via rpk (the only
+          # thing that understands --mode/--kafka-addr etc). command: here
+          # would replace that entrypoint and invoke the raw seastar binary
+          # directly, which doesn't recognize these flags at all.
+          args:
             - redpanda
             - start
-            - --mode dev-container
-            - --smp 1
-            - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-            - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+            - --mode
+            - dev-container
+            - --smp
+            - "1"
+            - --kafka-addr
+            - internal://0.0.0.0:9092,external://0.0.0.0:19092
+            - --advertise-kafka-addr
+            - internal://redpanda:9092,external://localhost:19092
           ports:
             - containerPort: 9092
             - containerPort: 9644
