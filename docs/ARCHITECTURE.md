@@ -63,6 +63,7 @@ the original plan" below.
 | Moderation | In-process NestJS module (D12) | Only `RoundRating` has a write path (see gaps below) |
 | Fraud checks | In-process, same module family | Rate-limit (3/24h) + duplicate-text flag, never blocks writes (D13) |
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
+| Event bus | Redpanda | Broker deployed (Phase 30, D53); `DomainEventPublisher` plumbing exists (#331) but nothing publishes yet — see `docs/EVENTS.md` |
 | Secrets/IAM | LocalStack (dev-localstack overlay) | Default CD target as of Phase 12 issue #99 (D23) |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,dev-localstack,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |
@@ -86,13 +87,17 @@ the original plan" below.
   strained under load — that point has never been reached, so it was
   never built. Not deferred vaguely; there's a concrete "revisit when
   views measurably strain" trigger and it hasn't fired.
-- **Moderation runs in-process, not as a Kafka consumer (D12).** The
-  original plan had a separate event-bus-driven moderation worker. What
-  actually shipped: `RoundRatingsService.create()` inserts a
+- **Moderation runs in-process, not as a Kafka consumer (D12, revisited
+  by D53).** The original plan had a separate event-bus-driven moderation
+  worker. What actually shipped: `RoundRatingsService.create()` inserts a
   `moderation_queue` row in the *same DB transaction* as the rating —
   simpler, transactionally safe, and there's been no async load yet to
-  justify decoupling it. No Kafka/Redpanda was ever deployed; `workers/`
-  stayed an empty placeholder for exactly this reason.
+  justify decoupling it. Redpanda now exists (Phase 30) for
+  distributed-systems practice, not because this reasoning changed — it's
+  additive, best-effort plumbing for new downstream consumers
+  (notification-service, review-analyzer), not a replacement for the
+  synchronous write path. `workers/` stays an empty placeholder for the
+  same reason it always has: no consumer runs from inside the monolith.
 - **No Redis.** The original plan included Redis for hot aggregates and
   sessions. Neither materialized, so it was never added — same
   "don't build infrastructure nothing is asking for yet" instinct as D9.

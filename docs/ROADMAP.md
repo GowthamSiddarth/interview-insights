@@ -1231,7 +1231,7 @@ Phases 31-32 build on. The synchronous write path itself (including
 
 - [x] Add Redpanda to local infra (docker-compose + k8s), mirroring
       how OpenSearch was added in Phase 5 (GitHub issue #330)
-- [ ] Shared event-publishing module (`api/src/events/`) + a versioned
+- [x] Shared event-publishing module (`api/src/events/`) + a versioned
       event-schema contract, best-effort/after-commit per D16/D17
       (GitHub issue #331)
 - [ ] Wire creation + moderation status-change events for all three
