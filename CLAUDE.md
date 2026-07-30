@@ -43,6 +43,21 @@ Full schema: `docs/DATA_MODEL.md`.
    constraints in the schema — don't relax this without a specific reason.
 5. **Migrations are the source of truth for schema.** Never hand-edit
    production schema directly. Every schema change is a Prisma migration.
+6. **No secret is ever committed as plaintext — real or placeholder.**
+   Every credential, API key, or sensitive config value is fetched from a
+   secrets management service at boot (LocalStack Secrets Manager locally
+   via each service's own `localstack-secrets-bootstrap.ts`-style module;
+   real AWS Secrets Manager once Phase 8b's actual AWS environment
+   exists) — never baked into a committed k8s manifest, CI workflow file,
+   or Dockerfile, and never left as an inert "dev-only, change-me"
+   fallback value either. A `.env.example` may document *which* env var a
+   service reads; it must never carry a real or plausible-looking value.
+   See GitHub issue #466 (tracked under the Phase 20 epic, #214) for the
+   migration bringing this project's existing secrets into compliance —
+   until that lands, `EMAIL_ENCRYPTION_KEY`/`CANDIDATE_JWT_SECRET`/
+   notification-service's `DATABASE_URL`/`EMAIL_ENCRYPTION_KEY`/
+   `postgres-credentials` are known, tracked exceptions, not a precedent
+   to extend.
 
 ## Stack (decided)
 
