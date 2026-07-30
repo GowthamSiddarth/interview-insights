@@ -1657,4 +1657,4 @@ no verdict past 24h.
       `pending` row past 24h with no verdict yet — closes the
       "lost/never-ran triage" gap without a transactional outbox
       (GitHub issue #442)
-- [ ] Engineering blog (last) (GitHub issue #443)
+- [x] Engineering blog (last) (GitHub issue #443)
