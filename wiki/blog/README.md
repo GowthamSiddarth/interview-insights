@@ -190,9 +190,9 @@ issues are now done — this phase's blog is complete.
 See `docs/ROADMAP.md` Phase 20. Filed retroactively — cross-cutting
 fixes and tooling discovered via live verification, stress-testing, and
 product review rather than planned feature work. Declared fully done,
-then reopened six times — for issues #222, #240, #278, #312, #347, and
-#349 — the same non-linear precedent Phase 6/8/18 already set. All ten
-feature issues are now done — this phase's blog is complete.
+then reopened repeatedly since — the same non-linear precedent
+Phase 6/8/18 already set. Not every reopen gets its own post below;
+only ones introducing a real design decision (a new D-number) do.
 
 1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20-operational-hardening/issue-215-cd-artifact-pruning/README.md)
 2. [Issue #216 — Full golden-path smoke test (D36)](phase-20-operational-hardening/issue-216-golden-path-smoke-test/README.md)
@@ -204,6 +204,7 @@ feature issues are now done — this phase's blog is complete.
 8. [Issue #312 — Port-forwards that outlive the shell that started them](phase-20-operational-hardening/issue-312-launchd-port-forwards/README.md)
 9. [Issue #347 — Company reviews, grouped by submission (D54)](phase-20-operational-hardening/issue-347-company-reviews-grouping/README.md)
 10. [Issue #349 — Labeling `/me`'s process outcome distinctly from moderation status (D55)](phase-20-operational-hardening/issue-349-me-outcome-label/README.md)
+11. [Issue #466 — Closing out the last plaintext secrets (D76, D77)](phase-20-operational-hardening/issue-466-secrets-manager-completion/README.md)
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
