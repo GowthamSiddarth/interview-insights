@@ -31,6 +31,7 @@ describe('ModerationService', () => {
       findUniqueOrThrow: jest.Mock;
       findMany: jest.Mock;
     };
+    aiAutoApprovalAudit: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
@@ -73,6 +74,7 @@ describe('ModerationService', () => {
         findUniqueOrThrow: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      aiAutoApprovalAudit: { create: jest.fn().mockResolvedValue(undefined) },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
@@ -760,6 +762,118 @@ describe('ModerationService', () => {
       expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
       expect(prisma.roundRating.update).not.toHaveBeenCalled();
       expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // GitHub issue #440 (Phase 39, D71) — the system-attributed auto-approval
+  // entry point AiModerationService calls. Reuses the exact same review()
+  // path approve() does (mockPendingRoundRatingEntry() below is the same
+  // helper the human-moderator approve() tests above use), with the one
+  // addition that a durable audit row is written in the same transaction.
+  describe('approveWithAudit', () => {
+    function mockPendingRoundRatingEntry() {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        entityType: 'round_rating',
+        entityId: 'rating-1',
+        reviewedAt: null,
+        flagReason: null,
+      });
+      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
+        Promise.resolve({ id: 'queue-1', ...args.data }),
+      );
+      prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        freeText: 'Great round',
+        createdAt: new Date('2026-01-01'),
+        difficulty: 3,
+        fluency: 4,
+        clarity: 4,
+        focus: 4,
+        round: {
+          roundType: 'coding',
+          process: { companyId: 'company-1', roleTitle: 'Engineer' },
+        },
+      });
+    }
+
+    const auditInput = {
+      entityType: 'round_rating' as const,
+      entityId: 'rating-1',
+      promptContent: 'Content type: interview round rating\n...',
+      responseText: '{"concerning":false,"reasons":[],"summary":"Fine.","confidence":0.92}',
+      verdict: { concerning: false, reasons: [], summary: 'Fine.', confidence: 0.92 },
+      confidence: 0.92,
+      model: 'claude-haiku-4-5',
+    };
+
+    it('approves the queue entry exactly like approve() does', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approveWithAudit('queue-1', { reviewedBy: 'system:ai-auto-approval' }, auditInput);
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: { status: 'approved' },
+      });
+      expect(prisma.moderationQueueEntry.update).toHaveBeenCalledWith({
+        where: { id: 'queue-1' },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+        data: { reviewedAt: expect.any(Date), reviewedBy: 'system:ai-auto-approval', flagReason: undefined },
+      });
+    });
+
+    it('writes the audit row inside the same transaction as the approval', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approveWithAudit('queue-1', { reviewedBy: 'system:ai-auto-approval' }, auditInput);
+
+      expect(prisma.aiAutoApprovalAudit.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          moderationQueueEntryId: 'queue-1',
+          promptContent: auditInput.promptContent,
+          responseText: auditInput.responseText,
+          verdict: auditInput.verdict,
+          confidence: 0.92,
+          model: 'claude-haiku-4-5',
+        },
+      });
+      // Both writes went through the same $transaction callback — the
+      // clearest available signal, given the test's $transaction mock
+      // invokes its callback with `prisma` itself, that they share one
+      // atomic unit rather than being two independent calls.
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('never writes the audit row when the queue entry was already reviewed', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        entityType: 'round_rating',
+        entityId: 'rating-1',
+        reviewedAt: new Date('2026-01-01'),
+        flagReason: null,
+      });
+
+      await expect(
+        service.approveWithAudit('queue-1', { reviewedBy: 'system:ai-auto-approval' }, auditInput),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.aiAutoApprovalAudit.create).not.toHaveBeenCalled();
+    });
+
+    it('never writes the audit row when the underlying entity no longer exists', async () => {
+      mockPendingRoundRatingEntry();
+      prisma.roundRating.findUnique.mockResolvedValue(null);
+      prisma.moderationQueueEntry.delete.mockResolvedValue({ id: 'queue-1' });
+
+      await expect(
+        service.approveWithAudit('queue-1', { reviewedBy: 'system:ai-auto-approval' }, auditInput),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.aiAutoApprovalAudit.create).not.toHaveBeenCalled();
     });
   });
 

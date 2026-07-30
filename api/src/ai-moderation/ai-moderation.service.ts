@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { ModerationEntityType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { ANTHROPIC_CLIENT } from './anthropic-client.provider';
 import { getAnthropicModel, getAutoApprovalConfidenceThreshold } from './ai-moderation.env';
 
@@ -9,6 +10,24 @@ import { getAnthropicModel, getAutoApprovalConfidenceThreshold } from './ai-mode
 // triage — same exclusion FraudChecksService's per-type checks already
 // make.
 export type TriageableEntityType = Exclude<ModerationEntityType, 'company'>;
+
+// GitHub issue #440 (Phase 39, D71) — the fixed system-actor label
+// ModerationActionDto.reviewedBy carries for every auto-approval, reusing
+// that existing free-text field rather than inventing new plumbing (there's
+// no real auth/admin-user system yet — same gap the DTO's own comment
+// already documents).
+export const AUTO_APPROVAL_SYSTEM_ACTOR = 'system:ai-auto-approval';
+
+// requestVerdict()'s return shape — the parsed verdict plus everything
+// GitHub issue #440's audit trail needs alongside it (the exact prompt/
+// response pairing, confidence and model pulled out for easy reuse).
+interface VerdictResult {
+  verdict: Prisma.InputJsonObject;
+  promptContent: string;
+  responseText: string;
+  confidence: number;
+  model: string;
+}
 
 const SYSTEM_PROMPT = `You are a content-moderation triage assistant for an interview-experience review platform. Candidates submit ratings of individual interview rounds, recruiter interactions, and an overall process summary. You give a human moderator a second opinion on one submitted piece of content — you never approve or reject anything yourself, and your output is advisory only.
 
@@ -39,6 +58,7 @@ export class AiModerationService {
   constructor(
     @Inject(ANTHROPIC_CLIENT) private readonly client: Anthropic | null,
     private readonly prisma: PrismaService,
+    private readonly moderationService: ModerationService,
   ) {}
 
   async computeAndStoreVerdict(entityType: TriageableEntityType, entityId: string): Promise<void> {
@@ -50,16 +70,65 @@ export class AiModerationService {
       // sequence) by the time this runs — nothing to triage, not an error.
       if (!content) return;
 
-      const verdict = await this.requestVerdict(content);
-      if (!verdict) return;
+      const result = await this.requestVerdict(content);
+      if (!result) return;
 
-      await this.storeVerdict(entityType, entityId, verdict);
+      await this.storeVerdict(entityType, entityId, result.verdict);
+
+      // GitHub issue #440 (Phase 39, D71) — the only place a clean,
+      // high-confidence verdict is actually acted on, not just recorded.
+      // Still inside this method's own try/catch: a failure here (no
+      // pending queue entry, a DB error) degrades to today's D66
+      // advisory-only behavior — the entity simply stays `pending` for a
+      // human moderator, the same fail-closed default an unset threshold
+      // already produces.
+      if (result.verdict.autoApprovalEligible === true) {
+        await this.autoApprove(entityType, entityId, result);
+      }
     } catch (err) {
       this.logger.error(
         `AI moderation triage failed for ${entityType} ${entityId} — leaving moderationVerdict unchanged`,
         err instanceof Error ? err.stack : err,
       );
     }
+  }
+
+  // Looks up the pending moderation_queue entry every write path already
+  // created (enqueue()/reenqueue() always run before computeAndStoreVerdict()
+  // is called — see round-ratings.service.ts etc.) and routes it through the
+  // exact same ModerationService.approve() a human moderator's action already
+  // calls, attributed to a fixed system actor — never a new, parallel path
+  // that skips moderation_queue (D71). The audit row commits atomically with
+  // that approval; see ModerationService.approveWithAudit().
+  private async autoApprove(
+    entityType: TriageableEntityType,
+    entityId: string,
+    result: VerdictResult,
+  ): Promise<void> {
+    const queueEntry = await this.prisma.moderationQueueEntry.findFirst({
+      where: { entityType, entityId, reviewedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!queueEntry) {
+      this.logger.warn(
+        `Auto-approval eligible for ${entityType} ${entityId} but no pending moderation queue entry was found — leaving it advisory-only`,
+      );
+      return;
+    }
+
+    await this.moderationService.approveWithAudit(
+      queueEntry.id,
+      { reviewedBy: AUTO_APPROVAL_SYSTEM_ACTOR },
+      {
+        entityType,
+        entityId,
+        promptContent: result.promptContent,
+        responseText: result.responseText,
+        verdict: result.verdict,
+        confidence: result.confidence,
+        model: result.model,
+      },
+    );
   }
 
   private async buildContent(entityType: TriageableEntityType, entityId: string): Promise<string | null> {
@@ -102,7 +171,7 @@ export class AiModerationService {
     }
   }
 
-  private async requestVerdict(userContent: string): Promise<Prisma.InputJsonObject | null> {
+  private async requestVerdict(userContent: string): Promise<VerdictResult | null> {
     const model = getAnthropicModel();
     const response = await this.client!.messages.create({
       model,
@@ -125,19 +194,35 @@ export class AiModerationService {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
 
     const record = parsed as Record<string, unknown>;
-    return {
+    const autoApprovalEligible = this.isEligibleForAutoApproval(record.concerning, record.confidence);
+    const verdict: Prisma.InputJsonObject = {
       ...(parsed as Prisma.InputJsonObject),
       model,
       analyzedAt: new Date().toISOString(),
       // GitHub issue #439 (D71) — single hard confidence cutoff, computed
-      // and persisted here so the follow-up issue (#440, the actual
-      // system-attributed ModerationService.approve() call) can just read
+      // and persisted here so the actual system-attributed
+      // ModerationService.approve() call (GitHub issue #440) can just read
       // this field rather than re-deriving it. Never true when the
       // threshold env var is unset — same "no numeric default" discipline
       // as ANTHROPIC_MODEL, but fails closed (not eligible) instead of
       // throwing, so an unconfigured threshold degrades to today's D66
       // advisory-only behavior rather than losing the verdict entirely.
-      autoApprovalEligible: this.isEligibleForAutoApproval(record.concerning, record.confidence),
+      autoApprovalEligible,
+    };
+
+    return {
+      verdict,
+      promptContent: userContent,
+      // Kept verbatim (not just the parsed object) for issue #440's audit
+      // trail — the exact text the model returned, before any
+      // reshaping/field-adding above.
+      responseText: textBlock.text,
+      // Safe only when autoApprovalEligible is true — isEligibleForAutoApproval()
+      // already checked record.confidence is a finite number in that case.
+      // Never read when it isn't (autoApprove() is only ever called when
+      // autoApprovalEligible === true).
+      confidence: record.confidence as number,
+      model,
     };
   }
 

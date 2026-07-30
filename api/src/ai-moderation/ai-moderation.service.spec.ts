@@ -1,5 +1,6 @@
-import { AiModerationService } from './ai-moderation.service';
+import { AiModerationService, AUTO_APPROVAL_SYSTEM_ACTOR } from './ai-moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ModerationService } from '../moderation/moderation.service';
 
 // GitHub issue #163 (Phase 19) — the service is instantiated directly
 // (not via the Nest DI container) since @Inject(ANTHROPIC_CLIENT) accepts
@@ -11,7 +12,9 @@ describe('AiModerationService', () => {
     roundRating: { findUnique: jest.Mock; update: jest.Mock };
     recruiterRating: { findUnique: jest.Mock; update: jest.Mock };
     overallReview: { findUnique: jest.Mock; update: jest.Mock };
+    moderationQueueEntry: { findFirst: jest.Mock };
   };
+  let moderationService: { approveWithAudit: jest.Mock };
   interface RequestParams {
     model: string;
     messages: { content: string }[];
@@ -28,7 +31,9 @@ describe('AiModerationService', () => {
       roundRating: { findUnique: jest.fn(), update: jest.fn() },
       recruiterRating: { findUnique: jest.fn(), update: jest.fn() },
       overallReview: { findUnique: jest.fn(), update: jest.fn() },
+      moderationQueueEntry: { findFirst: jest.fn() },
     };
+    moderationService = { approveWithAudit: jest.fn().mockResolvedValue(undefined) };
     anthropicClient = { messages: { create: jest.fn<Promise<unknown>, [RequestParams]>() } };
   });
 
@@ -40,6 +45,7 @@ describe('AiModerationService', () => {
     return new AiModerationService(
       client as never,
       prisma as unknown as PrismaService,
+      moderationService as unknown as ModerationService,
     );
   }
 
@@ -226,6 +232,103 @@ describe('AiModerationService', () => {
         where: { id: 'rating-1' },
         data: expect.objectContaining({
           moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+    });
+  });
+
+  describe('system-attributed auto-approval (GitHub issue #440, D71)', () => {
+    function mockCleanRating(): void {
+      prisma.roundRating.findUnique.mockResolvedValue({
+        id: 'rating-1',
+        difficulty: 3,
+        fluency: 4,
+        clarity: 5,
+        focus: 4,
+        technicalDepth: null,
+        freeText: 'Fine round, nothing notable.',
+        round: { roundType: 'coding', typeMetadata: null },
+      });
+    }
+
+    it('routes an eligible verdict through ModerationService.approveWithAudit, attributed to the system actor', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.8';
+      mockCleanRating();
+      prisma.moderationQueueEntry.findFirst.mockResolvedValue({ id: 'queue-entry-1' });
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 0.9 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.moderationQueueEntry.findFirst).toHaveBeenCalledWith({
+        where: { entityType: 'round_rating', entityId: 'rating-1', reviewedAt: null },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(moderationService.approveWithAudit).toHaveBeenCalledWith(
+        'queue-entry-1',
+        { reviewedBy: AUTO_APPROVAL_SYSTEM_ACTOR },
+        expect.objectContaining({
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          confidence: 0.9,
+          model: 'claude-haiku-4-5',
+          promptContent: expect.stringContaining('Fine round, nothing notable.') as unknown,
+          responseText: expect.stringContaining('"confidence":0.9') as unknown,
+          verdict: expect.objectContaining({ autoApprovalEligible: true }) as unknown,
+        }),
+      );
+    });
+
+    it('does not call approveWithAudit when the verdict is not auto-approval eligible', async () => {
+      delete process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD;
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.moderationQueueEntry.findFirst).not.toHaveBeenCalled();
+      expect(moderationService.approveWithAudit).not.toHaveBeenCalled();
+    });
+
+    it('leaves the entity advisory-only (never throws) when no pending queue entry is found', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.8';
+      mockCleanRating();
+      prisma.moderationQueueEntry.findFirst.mockResolvedValue(null);
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 0.9 }),
+      );
+
+      const service = buildService();
+      await expect(
+        service.computeAndStoreVerdict('round_rating', 'rating-1'),
+      ).resolves.toBeUndefined();
+
+      expect(moderationService.approveWithAudit).not.toHaveBeenCalled();
+    });
+
+    it('degrades to advisory-only (verdict already stored) when approveWithAudit itself throws', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.8';
+      mockCleanRating();
+      prisma.moderationQueueEntry.findFirst.mockResolvedValue({ id: 'queue-entry-1' });
+      moderationService.approveWithAudit.mockRejectedValue(new Error('DB error'));
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 0.9 }),
+      );
+
+      const service = buildService();
+      await expect(
+        service.computeAndStoreVerdict('round_rating', 'rating-1'),
+      ).resolves.toBeUndefined();
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: true }) as unknown,
         }) as unknown,
       });
     });

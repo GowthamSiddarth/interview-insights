@@ -379,6 +379,60 @@ model ModerationQueueEntry {
 
   @@index([entityType, entityId])
   @@map("moderation_queue")
+
+  aiAutoApprovalAudits AiAutoApprovalAudit[]
+}
+
+// ---------------------------------------------------------------------------
+// 9b. ai_auto_approval_audit — GitHub issue #440 (Phase 39, D71)
+// ---------------------------------------------------------------------------
+// Append-only record of every system-attributed auto-approval decision —
+// deliberately a separate table from the mutable per-entity
+// moderationVerdict JSONB column (round_ratings/recruiter_ratings/
+// overall_reviews above), so this row survives a later human override or
+// re-triage of that same JSONB column, which a shared column would not.
+// Written atomically with the moderation_queue approval it documents (see
+// ModerationService.approveWithAudit) — never inserted separately/
+// best-effort the way D16/D17's search indexing is, since a wrong
+// auto-approve is real user-facing content published unattended.
+model AiAutoApprovalAudit {
+  id                     String               @id @default(uuid()) @db.Uuid
+  // Same polymorphic (entityType, entityId) pairing moderation_queue uses —
+  // intentionally not an FK, see docs/DATA_MODEL.md. Always one of the
+  // triageable types (round_rating/recruiter_rating/overall_review); never
+  // `company`, which AiModerationService never triages.
+  entityType             ModerationEntityType @map("entity_type")
+  entityId               String               @map("entity_id") @db.Uuid
+  // The moderation_queue row this decision approved — a real FK (unlike the
+  // polymorphic pair above), since moderation_queue entries are never
+  // deleted once resolved and this is the one place record identity is
+  // stable enough to reference directly.
+  moderationQueueEntryId String               @map("moderation_queue_entry_id") @db.Uuid
+  // The exact content sent to the model and its raw text response, kept
+  // verbatim alongside the parsed verdict below — the durable "prompt/
+  // response" pairing this issue's scope calls for.
+  promptContent          String               @map("prompt_content")
+  responseText           String               @map("response_text")
+  // Full parsed verdict (concerning/reasons/summary/confidence/model/
+  // analyzedAt/autoApprovalEligible) — same shape as moderationVerdict at
+  // the moment this decision was made, preserved here even if that column
+  // later changes. confidence/model are pulled out as their own columns too
+  // (denormalized from verdict) purely so they're queryable without a JSON
+  // path expression.
+  verdict                Json
+  confidence             Float
+  model                  String
+  // Always "approved" today — auto-approval never auto-rejects (D71) — kept
+  // as its own column rather than hardcoded so this table could describe a
+  // wider set of system decisions without a schema change if that scope
+  // ever grows.
+  decision               ModerationStatus     @default(approved)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  moderationQueueEntry ModerationQueueEntry @relation(fields: [moderationQueueEntryId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("ai_auto_approval_audit")
 }
 
 // ---------------------------------------------------------------------------
