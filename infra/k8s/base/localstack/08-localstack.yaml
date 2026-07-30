@@ -1,14 +1,17 @@
 # NOT in base/kustomization.yaml's resources list — only
-# infra/k8s/overlays/dev-localstack composes `../dev` with this extra
-# manifest, so a direct `kubectl apply -k infra/k8s/base` (or the plain
-# `dev` overlay) never picks this up. As of GitHub issue #99
-# (docs/DECISIONS.md D23), dev-localstack is .github/workflows/cd.yml's
-# actual deploy target — this isn't a rarely-touched side path anymore,
-# every automatic redeploy applies it. Scoped to just IAM + Secrets
+# infra/k8s/overlays/dev composes `../../base` with this extra manifest,
+# so a direct `kubectl apply -k infra/k8s/base` never picks this up.
+# `dev` requiring LocalStack was originally opt-in via a separate
+# `dev-localstack` overlay (GitHub issue #78); GitHub issue #99
+# (docs/DECISIONS.md D23) made it .github/workflows/cd.yml's actual
+# deploy target, and GitHub issue #466 (D76) later folded that overlay
+# into `dev` itself, unconditionally — `dev` now always requires
+# LocalStack, no separate variant left. Scoped to just IAM + Secrets
 # Manager, matching infra/docker-compose.yml's existing `localstack`
 # profile (GitHub issue #66, Phase 10) — that profile stays the
 # fast/no-cluster way to exercise the same two services; this is the
-# in-cluster equivalent so `api`'s pod can actually reach it.
+# in-cluster equivalent so `api`'s/`notification-service`'s pods can
+# actually reach it.
 #
 # LocalStack now requires a free-tier auth token just to start (see
 # infra/docker-compose.yml's comment) — never committed here. CD

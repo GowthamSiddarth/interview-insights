@@ -1,0 +1,18 @@
+# Strategic-merge patch (GitHub issue #79, Phase 11; moved here from the
+# once-separate `dev-localstack` overlay by GitHub issue #466/D76, which
+# folded LocalStack into `dev` unconditionally) — ConfigMap `data` is a
+# map, so this merges new keys into api-config alongside the ones
+# infra/k8s/base/05-api.yaml already sets, rather than replacing them.
+# Opts `api` into fetching its real secrets from the LocalStack instance
+# infra/k8s/base/localstack/ deploys, via seed-localstack.sh's
+# api-secrets-role — see api/src/secrets/localstack-secrets-bootstrap.ts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: interview-insights
+data:
+  SECRETS_SOURCE: localstack
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_REGION: us-east-1
+  AWS_SECRETS_ROLE_ARN: "arn:aws:iam::000000000000:role/api-secrets-role"

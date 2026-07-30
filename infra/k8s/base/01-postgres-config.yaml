@@ -1,0 +1,20 @@
+# GitHub issue #466, D77 — this file used to be a plaintext Secret.
+# POSTGRES_USER/POSTGRES_DB aren't credentials (same non-secret status as
+# 05-api.yaml's ADMIN_USERNAME), so they stay here as a plain ConfigMap.
+# POSTGRES_PASSWORD is the one real credential — it's provisioned
+# imperatively into a `postgres-credentials` Secret (never committed to
+# any manifest), same pattern as `admin-credentials` (GitHub issue #192):
+# see cd.yml's "Provision Postgres credentials secret" step and
+# infra/scripts/bootstrap-kind.sh, both of which must run before
+# 03-postgres.yaml's StatefulSet is created (envFrom doesn't hot-reload).
+# Postgres needs its credential before any of this project's own code
+# exists to fetch one from Secrets Manager, ruling out the LocalStack-
+# at-boot pattern api/notification-service's own secrets use instead.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: interview-insights
+data:
+  POSTGRES_USER: postgres
+  POSTGRES_DB: interview_insights

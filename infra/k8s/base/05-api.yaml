@@ -11,9 +11,9 @@ data:
   OPENSEARCH_URL: http://opensearch:9200
   CORS_ORIGIN: http://app.interview-insights.local
   # Explicit, not inferred from NODE_ENV — see admin-auth.controller.ts's
-  # comment for why. Every overlay today (dev, dev-localstack, staging,
-  # prod placeholders) is plain HTTP with no TLS termination, so this
-  # stays "false" everywhere until a real HTTPS-fronted environment exists.
+  # comment for why. Every overlay today (dev, staging, prod placeholders)
+  # is plain HTTP with no TLS termination, so this stays "false"
+  # everywhere until a real HTTPS-fronted environment exists.
   COOKIE_SECURE: "false"
   # web/api are served from genuinely different hostnames in every
   # deployed environment (app.* vs api.*), so a host-only session cookie
@@ -49,36 +49,6 @@ data:
   # ANTHROPIC_API_KEY (anthropic-credentials Secret, below).
   AI_MODERATION_AUTO_APPROVE_THRESHOLD: ""
   AI_AUTO_APPROVAL_ENABLED: "false"
----
-# Plaintext, same local-only reasoning as 01-postgres-secret.yaml.
-# DATABASE_URL duplicates 01-postgres-secret.yaml's credentials as a single
-# connection string — Kubernetes has no native way to compose one env var
-# out of several Secret keys, and a wrapper entrypoint script just to avoid
-# this duplication isn't worth it at local-dev scale.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: api-secrets
-  namespace: interview-insights
-type: Opaque
-stringData:
-  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
-  EMAIL_HASH_SECRET: dev-only-change-me
-  # GitHub issue #335, D74 — must be the exact same value as
-  # 10-notification-service.yaml's own EMAIL_ENCRYPTION_KEY: that pod can
-  # only decrypt what this one encrypted under it. Distinct secret from
-  # EMAIL_HASH_SECRET above on purpose (see D74's own reasoning). Not
-  # wired into the LocalStack secrets flow below (api-config-patch.yaml)
-  # — same "dev-only until it's ever rotated to something real" standing
-  # as CANDIDATE_JWT_SECRET.
-  EMAIL_ENCRYPTION_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
-  # Candidate magic-link session signing secret (GitHub issue #145,
-  # Phase 16) — a brand-new dev-only placeholder, not yet a "real"
-  # rotated value, so it stays here rather than in a separate
-  # imperative Secret the way ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET do
-  # (issue #192) — that move only happens once/if this value is ever
-  # rotated to something real.
-  CANDIDATE_JWT_SECRET: dev-only-change-me-candidate
 ---
 apiVersion: v1
 kind: Service
@@ -116,18 +86,27 @@ spec:
           envFrom:
             - configMapRef:
                 name: api-config
-            - secretRef:
-                name: api-secrets
-            # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET live here, deliberately
-            # NOT in api-secrets above (GitHub issue #192) — this whole file
-            # is checked into git, and a "real" rotated credential committed
-            # to it would be exactly as public as the dev-only placeholder
-            # it replaced. admin-credentials is instead provisioned
-            # imperatively from GitHub Actions repo secrets, same pattern as
-            # localstack-credentials/LOCALSTACK_AUTH_TOKEN (D23) — see
-            # cd.yml's "Provision admin credentials secret" step and
-            # infra/scripts/bootstrap-kind.sh, both of which must run before
-            # this Deployment's pod is created (envFrom doesn't hot-reload).
+            # DATABASE_URL/EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/
+            # CANDIDATE_JWT_SECRET all come from LocalStack Secrets
+            # Manager at boot (api/src/secrets/localstack-secrets-
+            # bootstrap.ts, this overlay's api-config-patch.yaml) — no
+            # committed Secret for them exists anymore (GitHub issue
+            # #466, D76): a plaintext k8s Secret carrying a "dev-only,
+            # change-me" fallback for four real credentials is exactly
+            # what CLAUDE.md's hard constraint #6 forbids.
+            #
+            # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET below were never in a
+            # committed Secret to begin with (GitHub issue #192) — this
+            # whole file is checked into git, and a "real" rotated
+            # credential committed to it would be exactly as public as
+            # the dev-only placeholder it replaced. admin-credentials is
+            # instead provisioned imperatively from GitHub Actions repo
+            # secrets, same pattern as localstack-credentials/
+            # LOCALSTACK_AUTH_TOKEN (D23, now also postgres-credentials,
+            # D77) — see cd.yml's "Provision admin credentials secret"
+            # step and infra/scripts/bootstrap-kind.sh, both of which
+            # must run before this Deployment's pod is created (envFrom
+            # doesn't hot-reload).
             - secretRef:
                 name: admin-credentials
             # GitHub issue #163 (Phase 19) — same imperative-provisioning

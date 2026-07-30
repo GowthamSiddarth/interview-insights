@@ -41,29 +41,27 @@ describe('bootstrapSecretsFromLocalStack', () => {
     await expect(bootstrapSecretsFromLocalStack()).rejects.toThrow('AWS_SECRETS_ROLE_ARN');
   });
 
-  it('assumes the role and sets DATABASE_URL/EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/CANDIDATE_JWT_SECRET from the fetched secrets', async () => {
+  it('assumes the role and sets DATABASE_URL/EMAIL_ENCRYPTION_KEY from the fetched secrets', async () => {
     process.env.SECRETS_SOURCE = 'localstack';
-    process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
+    process.env.AWS_SECRETS_ROLE_ARN =
+      'arn:aws:iam::000000000000:role/notification-service-secrets-role';
     stsSend.mockResolvedValue({
       Credentials: { AccessKeyId: 'AKIA', SecretAccessKey: 'shh', SessionToken: 'token' },
     });
     secretsManagerSend
       .mockResolvedValueOnce({ SecretString: 'postgresql://real-db' })
-      .mockResolvedValueOnce({ SecretString: 'real-email-hash-secret' })
-      .mockResolvedValueOnce({ SecretString: 'real-email-encryption-key' })
-      .mockResolvedValueOnce({ SecretString: 'real-candidate-jwt-secret' });
+      .mockResolvedValueOnce({ SecretString: 'real-email-encryption-key' });
 
     await bootstrapSecretsFromLocalStack();
 
     expect(process.env.DATABASE_URL).toBe('postgresql://real-db');
-    expect(process.env.EMAIL_HASH_SECRET).toBe('real-email-hash-secret');
     expect(process.env.EMAIL_ENCRYPTION_KEY).toBe('real-email-encryption-key');
-    expect(process.env.CANDIDATE_JWT_SECRET).toBe('real-candidate-jwt-secret');
   });
 
   it('throws when AssumeRole returns no usable temporary credentials', async () => {
     process.env.SECRETS_SOURCE = 'localstack';
-    process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
+    process.env.AWS_SECRETS_ROLE_ARN =
+      'arn:aws:iam::000000000000:role/notification-service-secrets-role';
     stsSend.mockResolvedValue({});
 
     await expect(bootstrapSecretsFromLocalStack()).rejects.toThrow(
@@ -73,7 +71,8 @@ describe('bootstrapSecretsFromLocalStack', () => {
 
   it('throws when a fetched secret has no SecretString value', async () => {
     process.env.SECRETS_SOURCE = 'localstack';
-    process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
+    process.env.AWS_SECRETS_ROLE_ARN =
+      'arn:aws:iam::000000000000:role/notification-service-secrets-role';
     stsSend.mockResolvedValue({
       Credentials: { AccessKeyId: 'AKIA', SecretAccessKey: 'shh', SessionToken: 'token' },
     });

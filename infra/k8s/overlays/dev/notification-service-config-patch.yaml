@@ -1,0 +1,18 @@
+# Strategic-merge patch (GitHub issue #466/D76) — same pattern as this
+# overlay's own api-config-patch.yaml, for notification-service's own
+# LocalStack-backed secrets (own IAM role, own bootstrap module — D73/
+# D75's duplicate-rather-than-share precedent). Opts
+# notification-service into fetching DATABASE_URL/EMAIL_ENCRYPTION_KEY
+# from the LocalStack instance infra/k8s/base/localstack/ deploys, via
+# seed-localstack.sh's notification-service-secrets-role — see
+# services/notification-service/src/secrets/localstack-secrets-bootstrap.ts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: interview-insights
+data:
+  SECRETS_SOURCE: localstack
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_REGION: us-east-1
+  AWS_SECRETS_ROLE_ARN: "arn:aws:iam::000000000000:role/notification-service-secrets-role"

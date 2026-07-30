@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - 00-namespace.yaml
-  - 01-postgres-secret.yaml
+  - 01-postgres-config.yaml
   - 02-opensearch-config.yaml
   - 03-postgres.yaml
   - 04-opensearch.yaml

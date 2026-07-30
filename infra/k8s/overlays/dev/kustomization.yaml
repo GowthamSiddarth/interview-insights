@@ -8,11 +8,30 @@
 # still real: it gives `dev` an explicit, labeled identity in the same
 # structure staging/prod use, rather than a special case that skips
 # Kustomize entirely.
+#
+# GitHub issue #466/D76: what used to be a separate `dev-localstack`
+# overlay (an opt-in variant nothing actually applied — `cd.yml`/
+# bootstrap-kind.sh already only ever targeted it, never plain `dev`) is
+# folded in here unconditionally: the `localstack` resource + both
+# *-config-patch.yaml files below. `dev` itself now requires LocalStack
+# to boot `api`/`notification-service` — there is no more plaintext-
+# Secret fallback path to opt out into (removed from infra/k8s/base's
+# own Secrets in the same change), so a separate variant overlay for it
+# stopped making sense to keep around.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
   - ../../base
+  - ../../base/localstack
+
+# See api-config-patch.yaml/notification-service-config-patch.yaml's own
+# comments — each opts its service into fetching secrets from the
+# localstack resource above instead of a committed plaintext Secret,
+# merging into that service's existing ConfigMap `data`, not replacing it.
+patches:
+  - path: api-config-patch.yaml
+  - path: notification-service-config-patch.yaml
 
 labels:
   - pairs:

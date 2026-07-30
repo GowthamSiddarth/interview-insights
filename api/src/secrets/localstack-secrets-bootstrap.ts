@@ -4,12 +4,18 @@ import { localstackAwsClientConfig } from './aws-client-config.util';
 
 const DATABASE_URL_SECRET_ID = 'interview-insights/database-url';
 const EMAIL_HASH_SECRET_SECRET_ID = 'interview-insights/email-hash-secret';
+const EMAIL_ENCRYPTION_KEY_SECRET_ID = 'interview-insights/email-encryption-key';
+const CANDIDATE_JWT_SECRET_SECRET_ID = 'interview-insights/candidate-jwt-secret';
 
 // Opt-in (GitHub issue #79, Phase 11): only runs when SECRETS_SOURCE=
-// localstack is set (see infra/k8s/overlays/dev-localstack's api-config
-// patch) — every other environment (docker-compose, the plain `dev`
-// overlay) keeps reading DATABASE_URL/EMAIL_HASH_SECRET from plain env
-// vars/the k8s Secret, completely unchanged.
+// localstack is set (see infra/k8s/overlays/dev's api-config patch) —
+// every other environment (docker-compose) keeps reading these from
+// plain env vars, completely unchanged. GitHub issue #466 (D76) folded
+// the once-separate `dev-localstack` overlay into `dev` itself and
+// removed the plaintext-Secret fallback these four values used to carry
+// in infra/k8s/base/05-api.yaml — `dev` now requires LocalStack
+// unconditionally, so this is no longer truly "opt-in" for that overlay,
+// just still gated behind the same env var for docker-compose's sake.
 //
 // Must run before NestFactory.create(AppModule): PrismaService's
 // PrismaClient reads DATABASE_URL from env at construction time (it
@@ -50,13 +56,17 @@ export async function bootstrapSecretsFromLocalStack(): Promise<void> {
     },
   });
 
-  const [databaseUrl, emailHashSecret] = await Promise.all([
+  const [databaseUrl, emailHashSecret, emailEncryptionKey, candidateJwtSecret] = await Promise.all([
     fetchSecret(secretsManager, DATABASE_URL_SECRET_ID),
     fetchSecret(secretsManager, EMAIL_HASH_SECRET_SECRET_ID),
+    fetchSecret(secretsManager, EMAIL_ENCRYPTION_KEY_SECRET_ID),
+    fetchSecret(secretsManager, CANDIDATE_JWT_SECRET_SECRET_ID),
   ]);
 
   process.env.DATABASE_URL = databaseUrl;
   process.env.EMAIL_HASH_SECRET = emailHashSecret;
+  process.env.EMAIL_ENCRYPTION_KEY = emailEncryptionKey;
+  process.env.CANDIDATE_JWT_SECRET = candidateJwtSecret;
 }
 
 async function fetchSecret(client: SecretsManagerClient, secretId: string): Promise<string> {

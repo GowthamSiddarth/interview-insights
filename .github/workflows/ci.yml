@@ -237,8 +237,12 @@ jobs:
         with:
           version: 'v1.31.0'
       - name: Validate Kustomize overlays build cleanly
+        # dev-localstack no longer exists as its own overlay (GitHub
+        # issue #466, D76) — its LocalStack resource + patches were
+        # folded into `dev` itself, which now requires LocalStack
+        # unconditionally.
         run: |
-          for overlay in dev dev-localstack staging prod; do
+          for overlay in dev staging prod; do
             echo "== infra/k8s/overlays/$overlay =="
             kubectl kustomize "infra/k8s/overlays/$overlay" > /dev/null
           done
