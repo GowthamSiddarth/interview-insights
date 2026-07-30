@@ -1,0 +1,11 @@
+# GitHub issue #450 — found while documenting AI auto-approval env vars:
+# Dockerfile's `COPY . .` had no .dockerignore to exclude .env, so a real
+# local secret (ANTHROPIC_API_KEY, ADMIN_JWT_SECRET, etc.) present at
+# build time would get baked into the image layer. Mirrors .gitignore.
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.log
+scripts/.seed-runs/

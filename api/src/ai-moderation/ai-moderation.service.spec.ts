@@ -199,6 +199,24 @@ describe('AiModerationService', () => {
       });
     });
 
+    it('is never eligible when the threshold env var is an explicit empty string, same as unset (GitHub issue #450)', async () => {
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+    });
+
     it('never stores a verdict when the threshold env var is set but out of range', async () => {
       process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '1.5';
       mockCleanRating();

@@ -33,7 +33,14 @@ export function getAnthropicModel(): string {
 // misconfiguration worth failing loudly for.
 export function getAutoApprovalConfidenceThreshold(): number | null {
   const raw = process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD;
-  if (raw === undefined) return null;
+  // GitHub issue #450 — an explicitly empty string (as opposed to a truly
+  // unset var) must also mean "unset": this project's own convention
+  // (.env.example, docker-compose.yml) uses "" for every disabled optional
+  // var, including this one's sibling ANTHROPIC_API_KEY. Without this
+  // check, Number('') is 0 (not NaN), so an operator following that exact
+  // convention here would silently get threshold=0 — every clean verdict
+  // eligible regardless of confidence, the opposite of fail-closed.
+  if (raw === undefined || raw === '') return null;
 
   const threshold = Number(raw);
   if (Number.isNaN(threshold) || threshold < 0 || threshold > 1) {
