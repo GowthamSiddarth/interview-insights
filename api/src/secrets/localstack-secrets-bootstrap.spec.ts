@@ -41,7 +41,7 @@ describe('bootstrapSecretsFromLocalStack', () => {
     await expect(bootstrapSecretsFromLocalStack()).rejects.toThrow('AWS_SECRETS_ROLE_ARN');
   });
 
-  it('assumes the role and sets DATABASE_URL/EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/CANDIDATE_JWT_SECRET from the fetched secrets', async () => {
+  it('assumes the role and sets every secret from the fetched values, including an admin/Anthropic key (D78)', async () => {
     process.env.SECRETS_SOURCE = 'localstack';
     process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
     stsSend.mockResolvedValue({
@@ -51,7 +51,10 @@ describe('bootstrapSecretsFromLocalStack', () => {
       .mockResolvedValueOnce({ SecretString: 'postgresql://real-db' })
       .mockResolvedValueOnce({ SecretString: 'real-email-hash-secret' })
       .mockResolvedValueOnce({ SecretString: 'real-email-encryption-key' })
-      .mockResolvedValueOnce({ SecretString: 'real-candidate-jwt-secret' });
+      .mockResolvedValueOnce({ SecretString: 'real-candidate-jwt-secret' })
+      .mockResolvedValueOnce({ SecretString: 'real-admin-password-hash' })
+      .mockResolvedValueOnce({ SecretString: 'real-admin-jwt-secret' })
+      .mockResolvedValueOnce({ SecretString: 'sk-ant-real-key' });
 
     await bootstrapSecretsFromLocalStack();
 
@@ -59,6 +62,29 @@ describe('bootstrapSecretsFromLocalStack', () => {
     expect(process.env.EMAIL_HASH_SECRET).toBe('real-email-hash-secret');
     expect(process.env.EMAIL_ENCRYPTION_KEY).toBe('real-email-encryption-key');
     expect(process.env.CANDIDATE_JWT_SECRET).toBe('real-candidate-jwt-secret');
+    expect(process.env.ADMIN_PASSWORD_HASH).toBe('real-admin-password-hash');
+    expect(process.env.ADMIN_JWT_SECRET).toBe('real-admin-jwt-secret');
+    expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-real-key');
+  });
+
+  it('sets ANTHROPIC_API_KEY to an empty string rather than throwing when the secret is seeded empty (D78)', async () => {
+    process.env.SECRETS_SOURCE = 'localstack';
+    process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
+    stsSend.mockResolvedValue({
+      Credentials: { AccessKeyId: 'AKIA', SecretAccessKey: 'shh', SessionToken: 'token' },
+    });
+    secretsManagerSend
+      .mockResolvedValueOnce({ SecretString: 'postgresql://real-db' })
+      .mockResolvedValueOnce({ SecretString: 'real-email-hash-secret' })
+      .mockResolvedValueOnce({ SecretString: 'real-email-encryption-key' })
+      .mockResolvedValueOnce({ SecretString: 'real-candidate-jwt-secret' })
+      .mockResolvedValueOnce({ SecretString: 'real-admin-password-hash' })
+      .mockResolvedValueOnce({ SecretString: 'real-admin-jwt-secret' })
+      .mockResolvedValueOnce({ SecretString: '' });
+
+    await bootstrapSecretsFromLocalStack();
+
+    expect(process.env.ANTHROPIC_API_KEY).toBe('');
   });
 
   it('throws when AssumeRole returns no usable temporary credentials', async () => {

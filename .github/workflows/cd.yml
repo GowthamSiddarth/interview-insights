@@ -138,6 +138,25 @@ jobs:
         run: kubectl wait --for=condition=ready pod -l app=localstack -n interview-insights --timeout=120s
 
       - name: Seed LocalStack secrets + IAM
+        # POSTGRES_PASSWORD must match the postgres-credentials Secret
+        # provisioned above (GitHub issue #466, D77) — seed-localstack.sh
+        # embeds it into the seeded database-url secret's connection
+        # string, otherwise api/notification-service would fetch a
+        # DATABASE_URL whose password doesn't match Postgres's actual one.
+        # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET/ANTHROPIC_API_KEY (GitHub
+        # issue #466's own follow-up, D78) are required here too --
+        # seed-localstack.sh seeds Secrets Manager with these directly on
+        # every run (the actual mechanism that keeps them current, not
+        # LocalStack's own pod restarting -- that only matters for
+        # surviving an *unplanned* restart between deploys, via the
+        # init-hook). Job steps don't share env with each other by
+        # default, so these have to be passed through explicitly even
+        # though earlier steps already read them from the same secrets.
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
           PF_PID=$!

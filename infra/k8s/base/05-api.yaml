@@ -35,9 +35,11 @@ data:
   MAIL_SMTP_HOST: mailpit
   MAIL_SMTP_PORT: "1025"
   # Not sensitive — which Claude model AiModerationService calls (GitHub
-  # issue #163, Phase 19). Only takes effect once ANTHROPIC_API_KEY (below,
-  # in anthropic-credentials) is actually set; the feature is a no-op
-  # advisory triage otherwise, never a hard requirement to boot.
+  # issue #163, Phase 19). Only takes effect once ANTHROPIC_API_KEY
+  # (fetched from LocalStack Secrets Manager at boot, D78 — see this
+  # Deployment's own envFrom comment) is actually a real value; the
+  # feature is a no-op advisory triage otherwise, never a hard
+  # requirement to boot.
   ANTHROPIC_MODEL: claude-haiku-4-5
   # GitHub issues #439/#441 (Phase 39, D71) — the auto-approval layer on
   # top of the base triage above. Both default to disabled; empty string
@@ -46,7 +48,7 @@ data:
   # clean verdict eligible). Not sensitive — same reasoning as
   # ANTHROPIC_MODEL — but wiki/deployment-guide.md section 5c documents
   # actually turning this on since it also requires a real
-  # ANTHROPIC_API_KEY (anthropic-credentials Secret, below).
+  # ANTHROPIC_API_KEY.
   AI_MODERATION_AUTO_APPROVE_THRESHOLD: ""
   AI_AUTO_APPROVAL_ENABLED: "false"
 ---
@@ -86,39 +88,26 @@ spec:
           envFrom:
             - configMapRef:
                 name: api-config
-            # DATABASE_URL/EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/
-            # CANDIDATE_JWT_SECRET all come from LocalStack Secrets
-            # Manager at boot (api/src/secrets/localstack-secrets-
-            # bootstrap.ts, this overlay's api-config-patch.yaml) — no
-            # committed Secret for them exists anymore (GitHub issue
-            # #466, D76): a plaintext k8s Secret carrying a "dev-only,
-            # change-me" fallback for four real credentials is exactly
-            # what CLAUDE.md's hard constraint #6 forbids.
+            # Every secret api reads — DATABASE_URL/EMAIL_HASH_SECRET/
+            # EMAIL_ENCRYPTION_KEY/CANDIDATE_JWT_SECRET (GitHub issue
+            # #466, D76) and, as of #466's own follow-up (D78),
+            # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET/ANTHROPIC_API_KEY too
+            # — comes from LocalStack Secrets Manager at boot
+            # (api/src/secrets/localstack-secrets-bootstrap.ts, this
+            # overlay's api-config-patch.yaml). No committed Secret for
+            # any of them exists here: a plaintext k8s Secret carrying a
+            # "dev-only, change-me" fallback for a real credential is
+            # exactly what CLAUDE.md's hard constraint #6 forbids.
             #
-            # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET below were never in a
-            # committed Secret to begin with (GitHub issue #192) — this
-            # whole file is checked into git, and a "real" rotated
-            # credential committed to it would be exactly as public as
-            # the dev-only placeholder it replaced. admin-credentials is
-            # instead provisioned imperatively from GitHub Actions repo
-            # secrets, same pattern as localstack-credentials/
-            # LOCALSTACK_AUTH_TOKEN (D23, now also postgres-credentials,
-            # D77) — see cd.yml's "Provision admin credentials secret"
-            # step and infra/scripts/bootstrap-kind.sh, both of which
-            # must run before this Deployment's pod is created (envFrom
-            # doesn't hot-reload).
-            - secretRef:
-                name: admin-credentials
-            # GitHub issue #163 (Phase 19) — same imperative-provisioning
-            # pattern as admin-credentials/localstack-credentials above,
-            # but genuinely optional: an empty ANTHROPIC_API_KEY (the
-            # default whenever nobody has supplied a real one) just leaves
-            # AiModerationService's advisory triage disabled — nothing
-            # else depends on this Secret existing or being non-empty. See
-            # cd.yml's "Provision AI moderation secret" step and
-            # infra/scripts/bootstrap-kind.sh.
-            - secretRef:
-                name: anthropic-credentials
+            # admin-credentials/anthropic-credentials still exist as
+            # imperatively-provisioned Secrets (GitHub issue #192/#163)
+            # — they're just no longer read here directly. D78 wires them
+            # into LocalStack's own pod instead
+            # (infra/k8s/base/localstack/08-localstack.yaml), so its
+            # init-hook can seed Secrets Manager with the *real* value on
+            # every start (including an unplanned restart) rather than a
+            # committed placeholder — see docs/SECRETS.md for the full
+            # mechanism and docs/DECISIONS.md D78 for why.
           readinessProbe:
             httpGet:
               path: /health
