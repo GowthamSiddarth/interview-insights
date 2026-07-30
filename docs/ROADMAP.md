@@ -1265,6 +1265,17 @@ Phases 31-32 build on. The synchronous write path itself (including
       this phase's own epic per the ad-hoc-work convention, not the
       Phase 20 catch-all, since it's specific to this phase's own
       plumbing (GitHub issue #459)
+- [x] Ad-hoc: fix Redpanda `CrashLoopBackOff` — `09-redpanda.yaml` used
+      `command:` (overrides the image's Docker `ENTRYPOINT`, bypassing
+      `/entrypoint.sh` and the `rpk` translation layer that understands
+      `--mode`/`--kafka-addr`/etc) instead of `args:` (overrides `CMD`,
+      keeps the entrypoint); the raw seastar binary invoked directly
+      doesn't recognize `--mode` at all, so the broker never came up.
+      Also gave `api`'s ConfigMap the `REDPANDA_BROKERS: redpanda:9092`
+      entry `notification-service`'s already had (it was silently
+      falling back to the docker-compose-only `localhost:19092`
+      default). Filed under this phase's own epic, same pattern as
+      #459 (GitHub issue #478)
 - [x] Engineering blog (last) (GitHub issue #333)
 
 ## Phase 31 — Notification Service
