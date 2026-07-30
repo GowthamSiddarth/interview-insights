@@ -135,6 +135,23 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
+  notification-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/notification-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/notification-service/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
   # Build-only validation (GitHub-hosted, no cluster or self-hosted runner
   # needed) - GitHub issue #106. Without this, a broken Kustomize overlay
   # or a broken Dockerfile merges with a green CI check and only fails
@@ -159,3 +176,7 @@ jobs:
         run: |
           docker build -t interview-insights-web:ci-check -f web/Dockerfile \
             --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local web
+      - name: Build notification-service image (validation only, no push/run)
+        run: |
+          docker build -t interview-insights-notification-service:ci-check \
+            -f services/notification-service/Dockerfile services/notification-service

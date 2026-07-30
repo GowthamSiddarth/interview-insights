@@ -25,6 +25,8 @@ images:
     newTag: prod # placeholder — real value: a CI-produced release tag
   - name: interview-insights-web
     newTag: prod # placeholder — a build of its own, see overlays/staging's note
+  - name: interview-insights-notification-service
+    newTag: prod # placeholder — same environment-agnostic-image reasoning as api
 
 replicas:
   - name: api
@@ -45,6 +47,17 @@ patches:
   - target:
       kind: Deployment
       name: web
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  # notification-service stays single-replica, same reasoning as
+  # overlays/staging/kustomization.yaml.
+  - target:
+      kind: Deployment
+      name: notification-service
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources

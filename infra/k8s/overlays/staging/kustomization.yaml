@@ -40,6 +40,8 @@ images:
     newTag: staging # placeholder — real value: a CI-produced release tag
   - name: interview-insights-web
     newTag: staging # placeholder — a DIFFERENT build than dev's, not a re-tag
+  - name: interview-insights-notification-service
+    newTag: staging # placeholder — same environment-agnostic-image reasoning as api
 
 # More than one replica for the app tier once there's a real environment
 # to justify it — deliberately not a large number without evidence it's
@@ -69,6 +71,18 @@ patches:
   - target:
       kind: Deployment
       name: web
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  # notification-service stays single-replica (no replicas: entry above,
+  # same as postgres/opensearch) — a background consumer, not user-facing
+  # traffic; no evidence yet that it needs more than one instance.
+  - target:
+      kind: Deployment
+      name: notification-service
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources

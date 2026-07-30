@@ -30,3 +30,5 @@ images:
     newTag: k8s
   - name: interview-insights-web
     newTag: k8s
+  - name: interview-insights-notification-service
+    newTag: k8s
