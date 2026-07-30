@@ -3352,6 +3352,116 @@ two copies in sync becomes its own maintenance cost.
 
 ---
 
+### D74 — `Candidate.emailEncrypted`: a reversible, AES-256-GCM copy of the email, alongside the existing irreversible hash (GitHub issue #335, Phase 31)
+
+**Context:** Issue #335 needs notification-service to send a candidate
+"your submission is pending review" email once a `*.created` event
+fires. But `Candidate.emailHash` (docs/DATA_MODEL.md design principle 1)
+is an HMAC — by construction, not reversible even with the server-side
+secret — and nothing else in this codebase ever persists a raw email
+past the single request that computes that hash
+(`CandidatesService.create()`, `CandidateAuthService.requestLink()`).
+By the time a `*.created` event reaches a consumer, there is no code
+path anywhere that can turn a `candidateId` back into an address to
+send to. This is a real gap in the schema, not an oversight to design
+around at the consumer layer — no amount of clever event payload design
+fixes "the address was never kept."
+
+**Decision:** Add `Candidate.emailEncrypted`, written alongside
+`emailHash` in the same `CandidatesService.create()` upsert (both
+`create` and `update`, so a returning candidate's row self-heals from
+`null` the next time they touch the write path — no dedicated backfill
+script needed). Encrypted with AES-256-GCM (authenticated: a tampered
+ciphertext fails to decrypt rather than silently returning garbage)
+under `EMAIL_ENCRYPTION_KEY`, a 32-byte key distinct from
+`EMAIL_HASH_SECRET` — compromising the reversible key must never also
+compromise the irreversible one, or vice versa. `email-encryption.util.ts`
+(api) holds both `encryptEmail()`/`decryptEmail()`; notification-service
+carries its own copy of just `decryptEmail()`, same duplicate-rather-
+than-share reasoning as D73.
+
+This is a deliberate, narrow loosening of design principle 1's "never
+store raw email" — it becomes "never store *plaintext* email; exactly
+one reversible, encrypted copy exists, scoped to the one consumer that
+has no other way to do its job." D34's GDPR-erasure reasoning
+("no raw candidate identity is stored anywhere") is updated by this
+decision, not silently contradicted by it —
+`emailEncrypted` is deleted by `MeService.eraseMe()` along with every
+other row belonging to a `Candidate` being erased, same as `emailHash`
+always was; there's no new retention surface, just a new field on an
+already-covered row.
+
+**Alternatives considered:**
+- *Carry email in the event payload itself.* Rejected: api's write path
+  authenticates by `candidateId`/JWT at rating-submission time, not
+  email — this would mean threading a raw email through session/JWT
+  claims just to put it on an event, which both is more invasive than
+  it sounds and starts leaking PII into every consumer of a Kafka topic
+  (review-analyzer, Phase 32, included), not just the one that needs it.
+- *A synchronous callback from notification-service into `api` to
+  resolve an address.* Rejected: issue #332's own design explicitly
+  scoped `*.created` events to carry "enough data for a consumer to act
+  without an immediate callback into the monolith" — reintroducing a
+  callback here undoes the one property Phase 30 was built to get.
+
+**Revisit when:** a second consumer needs the same reversible lookup
+(review-analyzer, Phase 32, is not expected to — it never emails
+anyone), or this project adopts a real KMS/envelope-encryption story for
+`EMAIL_ENCRYPTION_KEY` itself rather than a single static secret (today's
+placeholder is exactly as "dev-only, rotate before real production" as
+every other secret in `api-secrets`/`.env.example`).
+
+---
+
+### D75 — `notification-service` gets its own minimal Prisma schema against the same Postgres database, not a shared client or raw `pg` queries (GitHub issue #335, Phase 31)
+
+**Context:** Issue #335's consumer needs two things from Postgres:
+decrypting a candidate's email requires reading `Candidate.emailEncrypted`
+by `candidateId`, and idempotent consumption (the issue's own acceptance
+criteria — a redelivered event must never send a duplicate email) needs
+somewhere durable to record "already acted on this event." Both are new
+needs for a service that, as of #334's skeleton, had no database access
+at all — `services/notification-service/Dockerfile`'s own comment
+flagged this as deferred to #335/#336 from the start.
+
+**Decision:** notification-service gets its own `prisma/schema.prisma`
+— genuinely minimal, modeling only the two tables it actually touches
+(`Candidate`, read-only in practice, and the new `NotificationLog`) —
+generating its own independent `@prisma/client`, pointed at the same
+`DATABASE_URL` `api` uses. It never runs `prisma migrate`: `api`'s
+migrations stay this project's one source of truth for schema
+(CLAUDE.md hard constraint #5), including for `notification_log` itself
+even though `api` has no runtime use for that table. Ruled out:
+- *A shared internal package for the Prisma client/schema.* Same
+  tooling-overhead reasoning D73 already gave for SMTP wiring — no npm
+  workspaces root, no clean way to `COPY` a sibling package into either
+  service's Docker build context, for a schema subset small enough that
+  duplicating it is genuinely cheaper than the plumbing to share it.
+- *Raw `pg` queries, skipping Prisma entirely.* Rejected as a needless
+  departure from how every other service in this codebase talks to
+  Postgres — Prisma is already the project's one ORM convention
+  (root `CLAUDE.md`'s stack table), and two duplicated models is not
+  enough surface to justify introducing a second query-building
+  convention alongside it.
+- *A synchronous callback into `api` for both lookups.* Same rejection
+  as D74's — defeats the purpose of events carrying enough context to
+  act without calling back into the monolith.
+
+`notification_log.entity_type`/`event_type` are plain `TEXT` columns in
+the migration, not the `ModerationEntityType` Postgres enum `api`'s
+schema already defines elsewhere — a shared enum type would couple
+notification-service's independently-generated client to an enum
+definition it doesn't own, undermining the whole point of keeping the
+two schemas decoupled.
+
+**Revisit when:** review-analyzer (Phase 32, issue #339) is built and
+needs the same pattern — if a third service ends up hand-maintaining
+its own partial `schema.prisma` against this database, that's the
+signal (matching D73's own "third consumer" revisit trigger) that some
+shared tooling might finally be worth its cost.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

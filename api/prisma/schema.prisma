@@ -56,6 +56,16 @@ model Candidate {
   id                 String             @id @default(uuid()) @db.Uuid
   // Hashed, never store raw email — see docs/DATA_MODEL.md design principle 1.
   emailHash          String             @unique @map("email_hash")
+  // Reversible (AES-256-GCM, GitHub issue #335, D74) — the one deliberate
+  // exception to "never store raw email". notification-service needs an
+  // actual address to send to, and nothing else in this system ever
+  // retains one past the request that computed emailHash above.
+  // Decryptable only with EMAIL_ENCRYPTION_KEY, a secret distinct from
+  // EMAIL_HASH_SECRET (an HMAC key, not reversible even in principle) so
+  // compromising one doesn't compromise the other. Nullable: rows written
+  // before this column existed have no way to backfill a raw email from
+  // a hash.
+  emailEncrypted     String?            @map("email_encrypted")
   verificationStatus VerificationStatus @default(unverified) @map("verification_status")
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz
   createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz
@@ -493,3 +503,35 @@ model CompanyLevelMapping {
 // manage them well. They'll be added as raw SQL in a dedicated migration
 // (`prisma migrate dev --create-only` + hand-written CREATE MATERIALIZED VIEW)
 // when Phase 4 (analytics) starts. See docs/ROADMAP.md Phase 4.
+
+// ---------------------------------------------------------------------------
+// 13. notification_log — Phase 31 (D53), GitHub issue #335
+// ---------------------------------------------------------------------------
+// Written and read exclusively by notification-service (services/
+// notification-service/), never by api — this table's migration still
+// lives here because api's migrations are this project's one source of
+// truth for schema (CLAUDE.md hard constraint #5), not because api has
+// any runtime use for it. entityType/eventType are plain text, not the
+// ModerationEntityType enum used elsewhere in this file: notification-
+// service generates its own, independent Prisma client against a
+// deliberately minimal schema.prisma of its own (see docs/DECISIONS.md
+// D75), and a shared Postgres enum type would couple that client's
+// generation to an enum definition it doesn't own — same
+// duplicate-rather-than-share reasoning D73 already established for the
+// SMTP wiring itself.
+model NotificationLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  eventType  String   @map("event_type")
+  sentAt     DateTime @default(now()) @map("sent_at") @db.Timestamptz
+
+  // The idempotency key itself (issue #335's acceptance criteria): a
+  // redelivered event's INSERT hits this constraint and is skipped rather
+  // than sending a second email, same "insert first, only act if the
+  // insert actually happened" shape as every unique-constraint-as-lock
+  // pattern already used elsewhere in this schema (e.g. one rating per
+  // candidate per round).
+  @@unique([entityType, entityId, eventType])
+  @@map("notification_log")
+}

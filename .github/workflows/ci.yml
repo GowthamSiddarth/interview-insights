@@ -76,6 +76,10 @@ jobs:
       MAIL_HTTP_URL: http://localhost:8025
       REDPANDA_BROKERS: localhost:9092
       EMAIL_HASH_SECRET: ci-test-secret
+      # GitHub issue #335, D74 — 32-byte AES-256 key, hex-encoded (64 hex
+      # chars). Must match notification-service's own value below so it
+      # can decrypt what api encrypts.
+      EMAIL_ENCRYPTION_KEY: '1111111111111111111111111111111111111111111111111111111111111111'
       # bcrypt("dev-only-admin-password") — see api/test/support/admin-session.ts,
       # which every moderation-touching e2e spec logs in with (GitHub issue #159).
       ADMIN_USERNAME: admin
@@ -137,6 +141,60 @@ jobs:
 
   notification-service:
     runs-on: ubuntu-latest
+    services:
+      # GitHub issue #335 — this service's own Postgres access
+      # (docs/DECISIONS.md D75). A separate, ephemeral container from the
+      # `api` job's — no shared state, so reusing the same DB/user name is
+      # fine (same reasoning `api`'s own service containers already rely on).
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: interview_insights_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # Same "no consumer, no test" standing as api's own mailpit service
+      # (D29) — test/notifications.e2e-spec.ts needs a real inbox to
+      # confirm the pending-review email actually lands, not a mock.
+      mailpit:
+        image: axllent/mailpit:v1.21
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "wget --spider -q http://localhost:8025/ || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # Same reasoning as api's own redpanda service (GitHub issue #332)
+      # — this is the first real *consumer*, so its own e2e test needs a
+      # real broker to subscribe to and a real producer to publish onto,
+      # not a mock of either side.
+      redpanda:
+        image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+        ports:
+          - 9092:9092
+          - 9644:9644
+        options: >-
+          --health-cmd "rpk cluster health | grep -q 'Healthy:.*true'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
+      MAIL_SMTP_HOST: localhost
+      MAIL_SMTP_PORT: "1025"
+      MAIL_HTTP_URL: http://localhost:8025
+      REDPANDA_BROKERS: localhost:9092
+      # Must match the api job's own EMAIL_ENCRYPTION_KEY — same
+      # reasoning as infra/k8s/base's two Secrets, D74.
+      EMAIL_ENCRYPTION_KEY: '1111111111111111111111111111111111111111111111111111111111111111'
     defaults:
       run:
         working-directory: services/notification-service
@@ -148,9 +206,23 @@ jobs:
           cache: npm
           cache-dependency-path: services/notification-service/package-lock.json
       - run: npm ci
+      - run: npx prisma generate
       - run: npm run lint
       - run: npm run build
       - run: npm test
+      # No `prisma migrate deploy` here (docs/DECISIONS.md D75) — api's
+      # own job below applies every migration, including
+      # notification_log/candidates.email_encrypted, to the same
+      # DATABASE_URL this job's Postgres would use; this job instead
+      # applies api's migrations directly against its own throwaway
+      # database so it stays runnable in complete isolation from the api
+      # job (each job gets its own ephemeral service containers).
+      - name: Apply api's migrations (this service's own schema source of truth, D75)
+        working-directory: api
+        run: |
+          npm ci
+          npx prisma migrate deploy
+      - run: npm run test:e2e
 
   # Build-only validation (GitHub-hosted, no cluster or self-hosted runner
   # needed) - GitHub issue #106. Without this, a broken Kustomize overlay

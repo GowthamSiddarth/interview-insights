@@ -43,7 +43,8 @@ Represents a reviewer. Kept minimal and pseudonymous.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| email_hash | text | unique — hashed, never store raw email |
+| email_hash | text | unique — hashed (HMAC), never reversible |
+| email_encrypted | text | nullable — reversible (AES-256-GCM), GitHub issue #335/D74. The one deliberate exception to "never store the plaintext email": notification-service needs an actual address to send to, and email_hash can never be reversed back into one. Decryptable only with EMAIL_ENCRYPTION_KEY, a secret distinct from EMAIL_HASH_SECRET. |
 | verification_status | text | `unverified`, `email_verified`, `document_verified` |
 | verified_at | timestamptz | nullable |
 | created_at | timestamptz | |

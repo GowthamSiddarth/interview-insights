@@ -1,0 +1,40 @@
+// GitHub issue #335, docs/DECISIONS.md D75 — a deliberately minimal
+// mirror of api/prisma/schema.prisma's Candidate model plus the
+// notification_log table this service owns. api's migrations
+// (api/prisma/migrations/) are this project's one source of truth for
+// the *actual* database schema (CLAUDE.md hard constraint #5) — this
+// file exists only to generate a typed Prisma client against tables
+// that already exist by the time this service boots. Never run
+// `prisma migrate` from here; there is no `prisma/migrations/` directory
+// in this package on purpose.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Read-only in practice: only emailEncrypted is ever selected, to
+// decrypt a candidate's address for the "pending review" email.
+model Candidate {
+  id             String  @id @db.Uuid
+  emailEncrypted String? @map("email_encrypted")
+
+  @@map("candidates")
+}
+
+// See api/prisma/schema.prisma's own NotificationLog model for why
+// entityType/eventType are plain text here, not a shared Postgres enum.
+model NotificationLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  eventType  String   @map("event_type")
+  sentAt     DateTime @default(now()) @map("sent_at") @db.Timestamptz
+
+  @@unique([entityType, entityId, eventType])
+  @@map("notification_log")
+}

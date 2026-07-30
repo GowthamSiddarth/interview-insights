@@ -64,6 +64,14 @@ type: Opaque
 stringData:
   DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
   EMAIL_HASH_SECRET: dev-only-change-me
+  # GitHub issue #335, D74 — must be the exact same value as
+  # 10-notification-service.yaml's own EMAIL_ENCRYPTION_KEY: that pod can
+  # only decrypt what this one encrypted under it. Distinct secret from
+  # EMAIL_HASH_SECRET above on purpose (see D74's own reasoning). Not
+  # wired into the LocalStack secrets flow below (api-config-patch.yaml)
+  # — same "dev-only until it's ever rotated to something real" standing
+  # as CANDIDATE_JWT_SECRET.
+  EMAIL_ENCRYPTION_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
   # Candidate magic-link session signing secret (GitHub issue #145,
   # Phase 16) — a brand-new dev-only placeholder, not yet a "real"
   # rotated value, so it stays here rather than in a separate

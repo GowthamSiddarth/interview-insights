@@ -1,15 +1,18 @@
 FROM node:22-slim AS base
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# No Prisma yet — this issue (#334) only proves the skeleton deploys as
-# its own unit, zero consumers wired. #335/#336 will add Prisma (for
-# idempotent-consumption tracking) and, with it, api/Dockerfile's
-# `prisma generate` build step + openssl runtime dependency.
-FROM base AS deps
+# GitHub issue #335 — Prisma's own docker pattern (same as api/Dockerfile):
+# generate the client once in the full (dev+prod) dependency tree, then
+# the runtime stage below copies node_modules wholesale rather than
+# reinstalling. Unlike api, this service never runs `prisma migrate` —
+# there is no prisma/migrations/ directory here at all (docs/DECISIONS.md
+# D75) — so there's no migrate-on-boot step, just `prisma generate`.
+FROM base AS build
 COPY package.json package-lock.json ./
 RUN npm ci
-
-FROM deps AS build
+COPY prisma ./prisma
+RUN npx prisma generate
 COPY . .
 RUN npm run build
 
