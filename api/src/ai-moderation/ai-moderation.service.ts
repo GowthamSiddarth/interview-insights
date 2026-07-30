@@ -4,7 +4,11 @@ import { ModerationEntityType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { ANTHROPIC_CLIENT } from './anthropic-client.provider';
-import { getAnthropicModel, getAutoApprovalConfidenceThreshold } from './ai-moderation.env';
+import {
+  getAnthropicModel,
+  getAutoApprovalConfidenceThreshold,
+  isAutoApprovalEnabled,
+} from './ai-moderation.env';
 
 // A create-company request has no round/recruiter/overall content to
 // triage — same exclusion FraudChecksService's per-type checks already
@@ -227,6 +231,12 @@ export class AiModerationService {
   }
 
   private isEligibleForAutoApproval(concerning: unknown, confidence: unknown): boolean {
+    // GitHub issue #441 (Phase 39, D71) — single global kill switch, checked
+    // first and here alongside the confidence-threshold routing decision
+    // (GitHub issue #439) rather than in a separate call site: one obvious
+    // gate that forces every verdict back to D66's original advisory-only
+    // behavior, no deploy needed to flip it.
+    if (!isAutoApprovalEnabled()) return false;
     if (concerning !== false) return false;
     if (typeof confidence !== 'number' || Number.isNaN(confidence)) return false;
 

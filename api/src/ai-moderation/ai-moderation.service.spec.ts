@@ -102,6 +102,13 @@ describe('AiModerationService', () => {
   });
 
   describe('auto-approval eligibility routing (GitHub issue #439, D71)', () => {
+    beforeEach(() => {
+      // Isolates these tests to the confidence/threshold logic they name —
+      // the kill switch (GitHub issue #441) is covered in its own describe
+      // block below.
+      process.env.AI_AUTO_APPROVAL_ENABLED = 'true';
+    });
+
     function mockCleanRating(): void {
       prisma.roundRating.findUnique.mockResolvedValue({
         id: 'rating-1',
@@ -238,6 +245,13 @@ describe('AiModerationService', () => {
   });
 
   describe('system-attributed auto-approval (GitHub issue #440, D71)', () => {
+    beforeEach(() => {
+      // Isolates these tests to the audit/routing plumbing they name — the
+      // kill switch (GitHub issue #441) is covered in its own describe
+      // block below.
+      process.env.AI_AUTO_APPROVAL_ENABLED = 'true';
+    });
+
     function mockCleanRating(): void {
       prisma.roundRating.findUnique.mockResolvedValue({
         id: 'rating-1',
@@ -331,6 +345,87 @@ describe('AiModerationService', () => {
           moderationVerdict: expect.objectContaining({ autoApprovalEligible: true }) as unknown,
         }) as unknown,
       });
+    });
+  });
+
+  describe('auto-approval kill switch (GitHub issue #441, D71)', () => {
+    function mockCleanRating(): void {
+      prisma.roundRating.findUnique.mockResolvedValue({
+        id: 'rating-1',
+        difficulty: 3,
+        fluency: 4,
+        clarity: 5,
+        focus: 4,
+        technicalDepth: null,
+        freeText: 'Fine round, nothing notable.',
+        round: { roundType: 'coding', typeMetadata: null },
+      });
+    }
+
+    it('is not eligible when AI_AUTO_APPROVAL_ENABLED is unset, even when clean and above threshold', async () => {
+      delete process.env.AI_AUTO_APPROVAL_ENABLED;
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.5';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+      expect(prisma.moderationQueueEntry.findFirst).not.toHaveBeenCalled();
+      expect(moderationService.approveWithAudit).not.toHaveBeenCalled();
+    });
+
+    it('is not eligible when AI_AUTO_APPROVAL_ENABLED is set to any value other than "true"', async () => {
+      process.env.AI_AUTO_APPROVAL_ENABLED = 'TRUE';
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.5';
+      mockCleanRating();
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: false }) as unknown,
+        }) as unknown,
+      });
+      expect(moderationService.approveWithAudit).not.toHaveBeenCalled();
+    });
+
+    it('is eligible when AI_AUTO_APPROVAL_ENABLED is "true" and every other condition is met', async () => {
+      process.env.AI_AUTO_APPROVAL_ENABLED = 'true';
+      process.env.AI_MODERATION_AUTO_APPROVE_THRESHOLD = '0.5';
+      mockCleanRating();
+      prisma.moderationQueueEntry.findFirst.mockResolvedValue({ id: 'queue-entry-1' });
+      anthropicClient.messages.create.mockResolvedValue(
+        textResponse({ concerning: false, reasons: [], summary: 'Looks fine.', confidence: 1 }),
+      );
+
+      const service = buildService();
+      await service.computeAndStoreVerdict('round_rating', 'rating-1');
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: expect.objectContaining({
+          moderationVerdict: expect.objectContaining({ autoApprovalEligible: true }) as unknown,
+        }) as unknown,
+      });
+      expect(moderationService.approveWithAudit).toHaveBeenCalledWith(
+        'queue-entry-1',
+        { reviewedBy: AUTO_APPROVAL_SYSTEM_ACTOR },
+        expect.objectContaining({ entityType: 'round_rating', entityId: 'rating-1' }),
+      );
     });
   });
 
