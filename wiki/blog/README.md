@@ -433,3 +433,16 @@ is complete.
 2. [Issue #331 — Shared event-publishing module + versioned event schema](phase-30-event-driven-foundation/issue-331-event-publishing-module/README.md)
 3. [Issue #332 — Wire creation + moderation status-change events for all three moderated entity types](phase-30-event-driven-foundation/issue-332-wire-domain-events/README.md)
 4. [Issue #459 — `DomainEventPublisher` reconnect-on-recovery](phase-30-event-driven-foundation/issue-459-reconnect-on-recovery/README.md)
+
+## Phase 31 — Notification Service
+
+See `docs/ROADMAP.md` Phase 31 and `docs/DECISIONS.md` D73/D74/D75/D79.
+Filed alongside Phase 30 from the same brainstorm — the lowest-risk of
+the two service extractions discussed, proving the whole broker/
+consumer/idempotent-side-effect pattern end to end on a real, standalone
+microservice for the first time. All three feature issues are done —
+this phase's blog is complete.
+
+1. [Issue #334 — `notification-service` skeleton: this project's first standalone microservice](phase-31-notification-service/issue-334-notification-service-skeleton/README.md)
+2. [Issue #335 — The first real consumer: `*.created` events → "pending review" email (D74, D75)](phase-31-notification-service/issue-335-created-consumer-pending-review-email/README.md)
+3. [Issue #336 — Extending the consumer: `*.status_changed` events → approved/rejected email (D79)](phase-31-notification-service/issue-336-status-changed-consumer-approved-rejected/README.md)
