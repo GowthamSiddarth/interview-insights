@@ -6,3 +6,5 @@ coverage/
 .env.local
 *.log
 next-env.d.ts
+
+tsconfig.tsbuildinfo
