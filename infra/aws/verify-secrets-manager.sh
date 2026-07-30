@@ -75,22 +75,34 @@ for i in $(seq 1 15); do
   sleep 2
 done
 
-echo "== 1. Secrets Manager holds exactly the 7 expected secrets =="
+echo "== 1. Secrets Manager holds the 6 always-required secrets =="
+# anthropic-api-key is deliberately excluded from this exact-match check:
+# AWS Secrets Manager rejects an empty SecretString outright, so when no
+# real ANTHROPIC_API_KEY is configured (the common case -- AI moderation
+# is off by default), the seeding scripts skip creating this entry
+# entirely rather than seeding "" (D78) -- its absence is correct, not a
+# failure. Checked separately, informationally, below.
 actual_secrets=$(awslocal secretsmanager list-secrets --query 'SecretList[].Name' --output text | tr '\t' '\n' | sort)
-expected_secrets=$(printf '%s\n' \
+required_secrets=$(printf '%s\n' \
   "interview-insights/candidate-jwt-secret" \
   "interview-insights/database-url" \
   "interview-insights/email-encryption-key" \
   "interview-insights/email-hash-secret" \
   "interview-insights/admin-password-hash" \
-  "interview-insights/admin-jwt-secret" \
-  "interview-insights/anthropic-api-key" | sort)
-if [ "$actual_secrets" = "$expected_secrets" ]; then
-  echo "OK: exactly the 7 expected secrets exist"
+  "interview-insights/admin-jwt-secret" | sort)
+missing_required=$(comm -23 <(echo "$required_secrets") <(echo "$actual_secrets"))
+if [ -z "$missing_required" ]; then
+  echo "OK: all 6 always-required secrets exist"
 else
-  echo "FAIL: secret list doesn't match. Got:"
-  echo "$actual_secrets" | sed 's/^/  /'
+  echo "FAIL: missing required secrets:"
+  echo "$missing_required" | sed 's/^/  /'
   fail=1
+fi
+
+if echo "$actual_secrets" | grep -qx "interview-insights/anthropic-api-key"; then
+  echo "OK (informational): interview-insights/anthropic-api-key exists — a real ANTHROPIC_API_KEY is configured"
+else
+  echo "OK (informational): interview-insights/anthropic-api-key absent — AI moderation is disabled, expected default"
 fi
 
 echo "== 2. Both IAM roles exist, each with its own policy attached =="

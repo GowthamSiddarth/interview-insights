@@ -47,7 +47,7 @@ just Pattern A.
 | `interview-insights/candidate-jwt-secret` | A | `api` only | `CANDIDATE_JWT_SECRET` |
 | `interview-insights/admin-password-hash` | A, hybrid root (D78) | `api` | `ADMIN_PASSWORD_HASH` |
 | `interview-insights/admin-jwt-secret` | A, hybrid root (D78) | `api` | `ADMIN_JWT_SECRET` |
-| `interview-insights/anthropic-api-key` | A, hybrid root (D78) | `api` | `ANTHROPIC_API_KEY` — genuinely optional, empty is valid |
+| `interview-insights/anthropic-api-key` | A, hybrid root (D78) | `api` | `ANTHROPIC_API_KEY` — genuinely optional; the *secret* is absent (not present-and-empty) when not configured |
 | `postgres-credentials` (k8s Secret) | B (D77) | Postgres's own container | `POSTGRES_PASSWORD` |
 | `admin-credentials` (k8s Secret) | B, root for the hybrid case above (issue #192) | LocalStack's own pod (D78) — no longer `api` directly | `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET` |
 | `localstack-credentials` (k8s Secret) | B (chicken-and-egg: needed to start LocalStack itself) | LocalStack's own pod | `LOCALSTACK_AUTH_TOKEN` |
@@ -94,9 +94,10 @@ post-#466, see "Adding a new secret" below):
   step explicitly passes it through. The three hybrid-root secrets have
   **no** `SEED_*` override and no default — they read
   `$ADMIN_PASSWORD_HASH`/`$ADMIN_JWT_SECRET` (required, hard-fails if
-  unset) and `$ANTHROPIC_API_KEY` (optional, defaults empty) directly,
-  matching `bootstrap-kind.sh`'s own required-env-var checks for these
-  specifically.
+  unset) and `$ANTHROPIC_API_KEY` (optional — skips creating the secret
+  entirely rather than seeding an empty one, see the gotcha below)
+  directly, matching `bootstrap-kind.sh`'s own required-env-var checks
+  for these specifically.
 - `infra/k8s/base/localstack/init/seed.sh` — LocalStack's own
   [lifecycle-hook](https://docs.localstack.cloud/user-guide/lifecycle-hooks/),
   mounted into the container, runs automatically on every LocalStack
@@ -156,6 +157,25 @@ identically — just one more place the value exists, acceptable at this
 project's current all-local-dev, Phase-8b-gated scope. If that scope
 ever changes, revisit alongside D78's own "Revisit when."
 
+**Gotcha found in production (well, the local cluster) within hours of
+merging this: never seed a Secrets Manager entry with an empty string.**
+`ANTHROPIC_API_KEY` being genuinely optional made seeding it as `""`
+when unset seem like the obvious move — it isn't. AWS Secrets Manager's
+`CreateSecret` requires `SecretString` to be at least 1 character; an
+empty string is rejected outright. Both seeding scripts run under
+`set -e`, so that one failed `create-secret` call silently aborted the
+rest of the script *before it ever reached IAM role provisioning* —
+`api-secrets-role`/`notification-service-secrets-role` went
+unprovisioned on that run, with no error surfaced anywhere except
+`verify-secrets-manager.sh` catching it after the fact. The fix: "not
+configured" means the Secrets Manager entry **doesn't exist**, not that
+it exists with an empty value — both seeding scripts skip creating
+`interview-insights/anthropic-api-key` when no real key is set, and
+`fetchOptionalSecret()` catches `ResourceNotFoundException` specifically
+to mean "disabled," re-throwing anything else. If a future optional
+secret needs this same treatment, skip-creating-when-absent is the
+correct pattern — an empty-string sentinel will fail the exact same way.
+
 ## Pattern B in detail: imperative provisioning
 
 Created via `kubectl create secret generic ... --from-literal=...
@@ -201,8 +221,11 @@ fallback to silently succeed with.
    If no → Pattern A, LocalStack, same shape as most of the table above.
 2. **For Pattern A:** add the secret ID + fetch + `process.env` write to
    the consuming service's `localstack-secrets-bootstrap.ts` (use
-   `fetchSecret` unless the value can legitimately be empty, in which
-   case `fetchOptionalSecret`, D78); add its ARN to that service's own
+   `fetchSecret` unless the value can legitimately be "not configured,"
+   in which case `fetchOptionalSecret`, D78 — and make the seeding
+   scripts skip *creating* that secret when unset, never seed it as an
+   empty string; Secrets Manager rejects that outright, see the gotcha
+   above); add its ARN to that service's own
    `*-secrets-access-policy.json` (only the services that actually need
    it — don't widen an existing role's policy as a shortcut); add
    seeding for it to **both** `infra/aws/seed-localstack.sh` **and**

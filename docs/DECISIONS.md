@@ -3622,17 +3622,32 @@ other secret it reads.
 
 **Optionality:** `ANTHROPIC_API_KEY` must stay genuinely optional
 (`isAiModerationEnabled()` treats an empty value exactly like unset).
-A Secrets Manager entry can hold an empty string, but the existing
-`fetchSecret()` helper throws on `!response.SecretString`, which is
-also true for `''`. Added a sibling `fetchOptionalSecret()`
-(`api/src/secrets/localstack-secrets-bootstrap.ts`) that returns
-`response.SecretString ?? ''` without throwing, used only for this one
-secret — `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` keep the strict
-`fetchSecret()`, since they must never legitimately be empty. This
-mirrors the project's own established "empty string is the deliberate
-off-switch value" idiom (`AI_MODERATION_AUTO_APPROVE_THRESHOLD`, GitHub
-issue #450) rather than inventing new semantics or catching
-`ResourceNotFoundException` to mean "disabled."
+The first version of this shipped seeding an empty string into Secrets
+Manager when no real key was configured, matching this project's
+established "empty string is the deliberate off-switch value" idiom
+(`AI_MODERATION_AUTO_APPROVE_THRESHOLD`, GitHub issue #450) — and broke
+the live cluster within hours of merging: AWS Secrets Manager's
+`CreateSecret` rejects an empty `SecretString` outright (minimum length
+1), so that `create-secret` call failed, and because both seeding
+scripts run under `set -e`, the failure silently aborted the rest of
+the script *before it ever reached IAM role provisioning* —
+`api-secrets-role`/`notification-service-secrets-role` were never
+created on that run, caught by `verify-secrets-manager.sh` reporting
+both roles missing.
+
+**Corrected:** "not configured" is represented by the Secrets Manager
+entry not existing at all, not existing-with-an-empty-value. Both
+seeding scripts skip creating `interview-insights/anthropic-api-key`
+entirely when `$ANTHROPIC_API_KEY` is empty (and delete it if a real
+key was previously set and has since been unset). `fetchOptionalSecret()`
+(`api/src/secrets/localstack-secrets-bootstrap.ts`) catches
+`ResourceNotFoundException` specifically and returns `''` in that case,
+re-throwing anything else — `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`
+keep the strict `fetchSecret()`, since they must never legitimately be
+absent. The empty-string idiom stays correct for plain `ConfigMap`
+values (`AI_MODERATION_AUTO_APPROVE_THRESHOLD`, issue #450) — it just
+doesn't transfer to Secrets Manager, which has its own, stricter input
+validation this project doesn't control.
 
 **Accepted tradeoff:** the real admin credential now also transits
 through LocalStack's own container environment, not just `api`'s. This
