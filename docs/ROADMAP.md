@@ -1305,7 +1305,9 @@ hasn't fired.
       email, idempotent (GitHub issue #335)
 - [x] Consume `*.status_changed` events → approved/rejected
       notification, idempotent (GitHub issue #336)
-- [ ] Engineering blog (last) (GitHub issue #337)
+- [x] Engineering blog (last) (GitHub issue #337) — `wiki/blog/
+      phase-31-notification-service/`, one post per issue (#334, #335,
+      #336), same convention Phase 30's own blog issue (#333) used
 
 ## Phase 32 — Review Analyzer Service
 
