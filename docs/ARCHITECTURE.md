@@ -19,11 +19,19 @@ flowchart TD
         FRAUD["FraudChecksService\n(rate-limit + duplicate-text flags)"]
         SEARCHSVC["CompanySearchService /\nreview indexing"]
         SECRETS["Secrets bootstrap\n(runs before NestFactory.create)"]
+        PUB["DomainEventPublisher\n(best-effort, after commit)"]
     end
 
-    PG[("PostgreSQL\nrounds, ratings, candidates,\nmaterialized views")]
+    subgraph notifpod["notification-service (NestJS, own Deployment, Phase 31)"]
+        CONSUMER["NotificationConsumerService\n(Redpanda consumer group)"]
+        NOTIFMAIL["MailService\n(own nodemailer copy, D73)"]
+    end
+
+    PG[("PostgreSQL\nrounds, ratings, candidates,\nmaterialized views, notification_log")]
     OS[("OpenSearch\ncompanies + reviews index")]
     LS[("LocalStack\nSecrets Manager + IAM\n(dev-localstack overlay only)")]
+    RP[("Redpanda\nmoderation created/status-changed events")]
+    MAILPIT[("Mailpit\nlocal SMTP catcher")]
 
     WEB -->|REST, CORS| API
     API --> PG
@@ -34,6 +42,13 @@ flowchart TD
     API -->|full-text + facets| OS
     SECRETS -.->|fetches DATABASE_URL,\nEMAIL_HASH_SECRET at boot| LS
     SECRETS -.-> API
+    MOD -->|publish, best-effort| PUB
+    PUB -->|moderation created events\n#332| RP
+    RP -->|subscribe, consumer group\nnotification-service| CONSUMER
+    CONSUMER -->|decrypt emailEncrypted\nby candidateId, D74| PG
+    CONSUMER -->|idempotency check/record,\nnotification_log, D75| PG
+    CONSUMER --> NOTIFMAIL
+    NOTIFMAIL -->|your submission is\npending review, #335| MAILPIT
 
     PG -->|REFRESH MATERIALIZED VIEW| ANALYTICS["AnalyticsService\n+ shrinkage scoring"]
     ANALYTICS --> WEB
@@ -50,8 +65,9 @@ flowchart LR
     K9S["k9s / kubectl top"] -.->|monitor| CLUSTER
 ```
 
-No Kafka, Redis, or ClickHouse were ever built — see "What changed from
-the original plan" below.
+Redis and ClickHouse were never built. Kafka/Redpanda eventually was
+(Phase 30, later than the original plan assumed) — see "What changed
+from the original plan" below.
 
 ## Component inventory (what's actually running, and why)
 
@@ -122,22 +138,34 @@ the original plan" below.
   for real and doesn't emulate EKS.
 - **CD reconciles a real automatic trigger with a deliberately
   session-scoped runner (Phase 12).** `cd.yml` triggers on every push to
-  `main` that touches `api/**`/`web/**`/`infra/k8s/**` — a genuine `on:
-  push`, not `workflow_dispatch`. But the runner that executes it is
+  `main` that touches `api/**`/`web/**`/`services/notification-service/**`/
+  `infra/k8s/**` — a genuine `on: push`, not `workflow_dispatch`. But the
+  runner that executes it is
   on-demand, not a persistent service: nothing repo-triggered runs on
   this machine unless a session explicitly starts `./run.sh` first.
 
 ## What changed from the original plan
 
 The Phase 1 version of this doc described a target state that included
-Kafka/Redpanda (event bus), Redis (cache), and ClickHouse (OLAP). None
-of the three were ever built. This isn't drift to quietly paper over —
-each is a real, deliberate decision, documented in `docs/DECISIONS.md`:
-D9 (materialized views before ClickHouse), D12 (moderation in-process,
-no event bus). Redis was never revisited because nothing has needed a
-cache yet. If any of these get built later, it'll be because a concrete
-trigger fired (real load, real async fan-out), not because the original
-diagram said so.
+Kafka/Redpanda (event bus), Redis (cache), and ClickHouse (OLAP). For a
+long time none of the three were built. This wasn't drift to quietly
+paper over — each was a real, deliberate decision, documented in
+`docs/DECISIONS.md`: D9 (materialized views before ClickHouse), D12
+(moderation in-process, no event bus). Redis was never revisited because
+nothing has needed a cache yet, and still hasn't.
+
+Kafka/Redpanda is the one exception: Phase 30 (D53) built it, deliberately
+later and for a different reason than the original Phase 1 plan assumed
+— not because moderation itself needed decoupling (D12's in-process
+reasoning still holds, unchanged), but as additive, best-effort plumbing
+for new downstream consumers that have no other way to react to a write
+without polling. `notification-service` (Phase 31, GitHub issue #335) is
+the first of those: it consumes `ModerationService`'s `moderation.*.created.v1`
+events and sends a "your submission is pending review" email, idempotently
+— see the system diagram above and `docs/EVENTS.md` for the full contract.
+ClickHouse and Redis remain unbuilt; if either gets built later, it'll be
+because a concrete trigger fired (real load, real async fan-out), not
+because the original diagram said so.
 
 ## Deployment shape (current)
 
