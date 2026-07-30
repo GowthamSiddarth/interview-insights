@@ -10,14 +10,33 @@
 #   3. notification-service-secrets-role's policy is scoped to exactly
 #      database-url + email-encryption-key — not email-hash-secret/
 #      candidate-jwt-secret, which only api-secrets-role should read.
-#   4. api's and notification-service's running pods both got their
-#      DATABASE_URL/EMAIL_ENCRYPTION_KEY from LocalStack (not empty, not a
-#      leftover default), and their EMAIL_ENCRYPTION_KEY values are
-#      byte-identical (D74 — notification-service can only decrypt what
-#      api encrypted).
+#   4. api's and notification-service's pods are Ready with zero restarts
+#      and no ResourceNotFoundException in their logs.
 #   5. The imperatively-provisioned Secrets (never LocalStack-sourced:
 #      postgres-credentials/D77, admin-credentials, localstack-credentials,
 #      anthropic-credentials) exist in the cluster.
+#
+# Why step 4 checks pod health instead of reading the env vars directly:
+# `bootstrapSecretsFromLocalStack()` sets `process.env.DATABASE_URL` etc.
+# inside the already-running Node process — a real mutation, but one only
+# visible to *that* live process. `kubectl exec ... -- printenv` spawns a
+# brand-new process inside the container, which gets the environment the
+# container was created with (envFrom/etc.), not whatever the long-running
+# process later did to its own in-memory process.env; since #466 removed
+# these vars from envFrom entirely, printenv predictably shows nothing,
+# whether or not the fetch actually succeeded (found the hard way running
+# an earlier version of this script against a healthy cluster). The
+# bootstrap function has no fallback and throws on any failure -- given
+# envFrom no longer provides these values at all, a `Ready` pod with 0
+# restarts is only reachable if the LocalStack fetch actually succeeded,
+# which is a more reliable signal than trying to peek at a value that
+# isn't externally observable this way. Same reasoning covers D74's
+# byte-identical EMAIL_ENCRYPTION_KEY requirement across both services --
+# not re-checked here at runtime, because step 1 already confirms exactly
+# one `email-encryption-key` Secrets Manager entry exists and step 3
+# confirms both roles' policies point at that same single entry; two
+# services fetching the same Secrets Manager entry get the same value by
+# construction, no live comparison needed.
 #
 # Same accepted limitation as verify-iam-policy.sh: LocalStack's free
 # tier doesn't evaluate IAM policy at runtime (D20) — step 3 proves the
@@ -101,35 +120,33 @@ fi
 kill "$PF_PID" 2>/dev/null || true
 trap - EXIT
 
-echo "== 4. Running pods actually resolved these from LocalStack =="
-api_db_url=$(kubectl -n "$NS" exec deploy/api -- printenv DATABASE_URL 2>/dev/null || echo "")
-api_key=$(kubectl -n "$NS" exec deploy/api -- printenv EMAIL_ENCRYPTION_KEY 2>/dev/null || echo "")
-api_hash=$(kubectl -n "$NS" exec deploy/api -- printenv EMAIL_HASH_SECRET 2>/dev/null || echo "")
-api_jwt=$(kubectl -n "$NS" exec deploy/api -- printenv CANDIDATE_JWT_SECRET 2>/dev/null || echo "")
-notif_db_url=$(kubectl -n "$NS" exec deploy/notification-service -- printenv DATABASE_URL 2>/dev/null || echo "")
-notif_key=$(kubectl -n "$NS" exec deploy/notification-service -- printenv EMAIL_ENCRYPTION_KEY 2>/dev/null || echo "")
-
-for pair in "api:DATABASE_URL:$api_db_url" "api:EMAIL_HASH_SECRET:$api_hash" \
-  "api:EMAIL_ENCRYPTION_KEY:$api_key" "api:CANDIDATE_JWT_SECRET:$api_jwt" \
-  "notification-service:DATABASE_URL:$notif_db_url" "notification-service:EMAIL_ENCRYPTION_KEY:$notif_key"; do
-  pod="${pair%%:*}"
-  rest="${pair#*:}"
-  var="${rest%%:*}"
-  value="${rest#*:}"
-  if [ -n "$value" ]; then
-    echo "OK: $pod's $var is non-empty"
+echo "== 4. api/notification-service pods are healthy (the only way to be, post-#466, if the fetch failed) =="
+for deploy in api notification-service; do
+  ready=$(kubectl -n "$NS" get deployment "$deploy" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  desired=$(kubectl -n "$NS" get deployment "$deploy" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+  if [ -n "$ready" ] && [ "$ready" = "$desired" ]; then
+    echo "OK: deployment/$deploy has $ready/$desired replicas Ready"
   else
-    echo "FAIL: $pod's $var is empty — LocalStack fetch likely failed"
+    echo "FAIL: deployment/$deploy has only ${ready:-0}/$desired replicas Ready"
     fail=1
   fi
-done
 
-if [ -n "$api_key" ] && [ "$api_key" = "$notif_key" ]; then
-  echo "OK: api's and notification-service's EMAIL_ENCRYPTION_KEY are byte-identical (D74)"
-else
-  echo "FAIL: EMAIL_ENCRYPTION_KEY mismatch between api and notification-service — D74 requires these identical"
-  fail=1
-fi
+  restarts=$(kubectl -n "$NS" get pods -l "app=$deploy" \
+    -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}' 2>/dev/null || echo "")
+  if [ "$restarts" = "0" ]; then
+    echo "OK: $deploy's pod has 0 restarts (no crash-loop from a failed LocalStack fetch)"
+  else
+    echo "FAIL: $deploy's pod has restarted ($restarts times) — check logs, possibly a failed fetch"
+    fail=1
+  fi
+
+  if kubectl -n "$NS" logs "deploy/$deploy" --tail=500 2>/dev/null | grep -qi "ResourceNotFoundException"; then
+    echo "FAIL: $deploy's logs show ResourceNotFoundException — a secret fetch failed at some point"
+    fail=1
+  else
+    echo "OK: $deploy's logs show no ResourceNotFoundException"
+  fi
+done
 
 echo "== 5. Imperatively-provisioned Secrets exist (never LocalStack-sourced) =="
 for secret in postgres-credentials admin-credentials localstack-credentials anthropic-credentials; do
