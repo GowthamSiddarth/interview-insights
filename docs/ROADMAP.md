@@ -1650,7 +1650,7 @@ no verdict past 24h.
       system actor, durably audited in a new dedicated table (never
       best-effort/swallowed the way D16/D17's search indexing is)
       (GitHub issue #440)
-- [ ] Config-driven kill switch (single global env var) forcing every
+- [x] Config-driven kill switch (single global env var) forcing every
       verdict back to D66's original advisory-only behavior, no deploy
       needed (GitHub issue #441)
 - [ ] Reconciliation sweep: scheduled job re-triages or escalates any

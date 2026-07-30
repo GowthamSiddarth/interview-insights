@@ -43,3 +43,16 @@ export function getAutoApprovalConfidenceThreshold(): number | null {
   }
   return threshold;
 }
+
+// GitHub issue #441 (Phase 39, D71) — single global kill switch for the
+// auto-approval decision, deliberately separate from
+// getAutoApprovalConfidenceThreshold() above: an operator flipping this off
+// doesn't lose whatever threshold they've already tuned, and flipping it
+// back on doesn't require re-entering it. Same fail-closed default as the
+// threshold (unset means disabled, not an error) and the same
+// COOKIE_SECURE-style `=== 'true'` boolean-env convention already used
+// elsewhere in this project (see session-cookie-options.util.ts) — no
+// deploy needed to flip it, just an env change.
+export function isAutoApprovalEnabled(): boolean {
+  return process.env.AI_AUTO_APPROVAL_ENABLED === 'true';
+}
