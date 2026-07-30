@@ -1,3 +1,15 @@
+// Must be the very first import: everything below it — starting with
+// `./app.module`, which pulls in AdminAuthModule's eager, module-init-time
+// getRequiredAdminEnv('ADMIN_JWT_SECRET') read — needs `.env` already in
+// process.env by the time its own module body runs. Before this, nothing
+// in api/src called dotenv explicitly, so `.env` only reached process.env
+// as an incidental side effect of @prisma/client's own auto-loading
+// behavior; whether that had already run by the time a given env var was
+// read depended entirely on module require order, not on anything
+// explicit (GitHub issue #452). Reads a real ADMIN_PASSWORD_HASH-style
+// eager var lazily and it "worked"; add one more eager read above
+// PrismaModule in app.module.ts's import order and it wouldn't have.
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
