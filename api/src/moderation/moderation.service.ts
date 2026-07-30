@@ -13,6 +13,20 @@ import { ModerationFlagDto } from './dto/moderation-flag.dto';
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
 
+// GitHub issue #440 (Phase 39, D71) — everything AiModerationService needs to
+// leave a durable trail of one auto-approval, written atomically with the
+// approve() decision it documents (see approveWithAudit() below) so the two
+// can never diverge (approved-without-audit, or audited-without-approve).
+export interface AiAutoApprovalAuditInput {
+  entityType: ModerationEntityType;
+  entityId: string;
+  promptContent: string;
+  responseText: string;
+  verdict: Prisma.InputJsonValue;
+  confidence: number;
+  model: string;
+}
+
 // The raw shape moderationQueueEntry.findMany() returns — the input
 // enrichEntries() takes, shared by listPending() and search() alike.
 interface RawQueueEntry {
@@ -391,11 +405,22 @@ export class ModerationService {
     return this.review(id, 'flagged', dto, dto.flagReason);
   }
 
+  // GitHub issue #440 (Phase 39, D71) — the one entry point AiModerationService
+  // uses for a system-attributed auto-approval. Deliberately still routes
+  // through review() below — never a new, parallel path that skips
+  // moderation_queue — with the one addition that the audit row is created
+  // inside the *same* transaction as the queue-entry/entity-status update,
+  // so the decision and its audit trail commit or fail together.
+  approveWithAudit(id: string, dto: ModerationActionDto, audit: AiAutoApprovalAuditInput) {
+    return this.review(id, 'approved', dto, undefined, audit);
+  }
+
   private async review(
     id: string,
     decision: ModerationDecision,
     dto: ModerationActionDto,
     flagReason?: ModerationFlagReason,
+    audit?: AiAutoApprovalAuditInput,
   ) {
     const entry = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
 
@@ -449,6 +474,23 @@ export class ModerationService {
         case 'company':
           await tx.company.update(statusUpdate);
           break;
+      }
+      // Same transaction as the queue-entry/entity-status update above —
+      // see approveWithAudit()'s own comment for why this can't be a
+      // separate, best-effort write.
+      if (audit) {
+        await tx.aiAutoApprovalAudit.create({
+          data: {
+            entityType: audit.entityType,
+            entityId: audit.entityId,
+            moderationQueueEntryId: id,
+            promptContent: audit.promptContent,
+            responseText: audit.responseText,
+            verdict: audit.verdict,
+            confidence: audit.confidence,
+            model: audit.model,
+          },
+        });
       }
       return updated;
     });

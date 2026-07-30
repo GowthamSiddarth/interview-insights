@@ -1645,7 +1645,7 @@ no verdict past 24h.
       audit log shape, sweep SLA (GitHub issue #437)
 - [x] Extend D66's verdict shape with a confidence score; single-cutoff
       auto-approve routing logic (GitHub issue #439)
-- [ ] System-attributed auto-approve path: `AiModerationService` calls
+- [x] System-attributed auto-approve path: `AiModerationService` calls
       `ModerationService.approve()` for clean verdicts, attributed to a
       system actor, durably audited in a new dedicated table (never
       best-effort/swallowed the way D16/D17's search indexing is)
