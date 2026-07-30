@@ -11,3 +11,4 @@ resources:
   - 06-web.yaml
   - 07-ingress.yaml
   - 08-mailpit.yaml
+  - 09-redpanda.yaml

@@ -127,6 +127,7 @@ echo "== 8. Wait for LocalStack + its non-api dependents ready =="
 # afterward instead of waiting on every pod up front.
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=postgres --timeout=180s
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=opensearch --timeout=180s
+kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=redpanda --timeout=180s
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=localstack --timeout=180s
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=web --timeout=180s
 
