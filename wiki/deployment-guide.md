@@ -124,13 +124,15 @@ runs every step below (3.1-3.4, plus provisioning/seeding LocalStack
 from section 5) in one shot, and is idempotent — safe to re-run against
 an already-running cluster; every step either skips or upgrades in
 place rather than erroring. Requires `LOCALSTACK_AUTH_TOKEN`,
-`ADMIN_PASSWORD_HASH`, and `ADMIN_JWT_SECRET` set in the environment
-first (see sections 5 and 5b):
+`ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET`, and `POSTGRES_PASSWORD` set
+in the environment first (see sections 5, 5b, and 5d;
+`POSTGRES_PASSWORD` added by GitHub issue #466/D77):
 
 ```bash
 export LOCALSTACK_AUTH_TOKEN="your_token_here"   # put in ~/.zshenv to persist
 export ADMIN_PASSWORD_HASH='the bcrypt hash'     # single-quoted, it contains $
 export ADMIN_JWT_SECRET="your_jwt_secret_here"
+export POSTGRES_PASSWORD="your_postgres_password_here"
 ./infra/scripts/bootstrap-kind.sh
 ```
 
@@ -151,9 +153,10 @@ step; `cd.yml` already had this right (it only waits on `localstack`,
 then seeds, then explicitly rolls `api` out afterward) — the bootstrap
 script just hadn't matched that ordering yet.
 
-**Gotcha (now self-healing): `api` could start crash-looping hours or days
-after a clean deploy, with no code change involved.** Symptom: `kubectl -n
-interview-insights logs -l app=api` shows
+**Gotcha (now self-healing): `api`/`notification-service` could start
+crash-looping hours or days after a clean deploy, with no code change
+involved.** Symptom: `kubectl -n interview-insights logs -l app=api`
+(or `-l app=notification-service`) shows
 `ResourceNotFoundException: Secrets Manager can't find the specified
 secret` as the issue #108 gotcha above, but on a cluster that's been
 running fine for a while. Root cause: LocalStack's Deployment
@@ -181,8 +184,9 @@ the same manual recovery still works as a fallback:
 ```bash
 kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
 LOCALSTACK_ENDPOINT=http://localhost:4566 ./infra/aws/seed-localstack.sh
-kubectl -n interview-insights rollout restart deployment/api
+kubectl -n interview-insights rollout restart deployment/api deployment/notification-service
 kubectl -n interview-insights rollout status deployment/api --timeout=90s
+kubectl -n interview-insights rollout status deployment/notification-service --timeout=90s
 ```
 
 Not fixed with a PVC — that would undo the deliberate "not a source of
@@ -249,9 +253,18 @@ kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
 
 ### 3.4 Apply the `dev` overlay
 
+Since GitHub issue #466/D76, `dev` requires LocalStack unconditionally —
+this same overlay now also creates the `localstack` Deployment and opts
+`api`/`notification-service` into fetching their secrets from it. Their
+pods will crash-loop with `ResourceNotFoundException` until LocalStack
+is seeded (section 5 below) — that's expected on a fresh apply, not a
+sign anything went wrong here:
+
 ```bash
 kubectl apply -k infra/k8s/overlays/dev
-kubectl -n interview-insights get pods    # all four should reach 1/1 Running
+kubectl -n interview-insights get pods    # postgres/opensearch/redpanda/localstack/web
+                                           # should reach 1/1 Running; api/notification-
+                                           # service won't until section 5 is done
 ```
 
 ### 3.5 Reach it
@@ -351,15 +364,18 @@ GIT_SHA`) confirms exactly which commit is live after a deploy —
 
 ## 5. LocalStack secrets/IAM integration (Phase 11-12)
 
-Extends section 3 so `api` fetches its real secrets from LocalStack via
-an assumed IAM role, instead of the plaintext `api-secrets` k8s
-`Secret`. As of GitHub issue #99 (`docs/DECISIONS.md` D23), this is
-CD's actual deploy target (`infra/k8s/overlays/dev-localstack`) — not
-just an occasional manual walkthrough. It's still structurally opt-in
-relative to the plain `dev` overlay (`docs/DECISIONS.md` D20/D22):
-nothing here is in base `kustomization.yaml`'s resources list, and
-`kubectl apply -k infra/k8s/overlays/dev` still gets the plaintext-Secret
-behavior back if ever applied directly.
+Extends section 3 so `api`/`notification-service` fetch their real
+secrets from LocalStack via an assumed IAM role each, instead of a
+plaintext k8s `Secret`. As of GitHub issue #99 (`docs/DECISIONS.md`
+D23), this is CD's actual deploy target — not just an occasional manual
+walkthrough. GitHub issue #466 (D76) later folded this fully into the
+`dev` overlay itself: what used to be a separate, structurally opt-in
+`dev-localstack` overlay (nothing actually applied plain `dev` in
+practice — CD/`bootstrap-kind.sh` already only ever targeted
+`dev-localstack`) is now just `dev`'s own behavior, unconditionally.
+There is no more plaintext-Secret fallback to opt out into —
+`kubectl apply -k infra/k8s/overlays/dev` *always* requires LocalStack
+to be seeded (below) before `api`/`notification-service` reach `Ready`.
 
 **One-time setup, only needed once per cluster** (CD handles all of this
 itself on every run afterward — see below):
@@ -381,45 +397,52 @@ kubectl create secret generic localstack-credentials \
 **What CD does on every push** (same steps, runnable by hand too):
 
 ```bash
-# 2. Apply the overlay that adds LocalStack + opts api's ConfigMap in
-kubectl apply -k infra/k8s/overlays/dev-localstack
+# 2. Apply the overlay — since D76 this always includes LocalStack +
+#    opts both api's and notification-service's ConfigMaps in
+kubectl apply -k infra/k8s/overlays/dev
 kubectl wait --for=condition=ready pod -l app=localstack -n interview-insights --timeout=120s
 
-# 3. Seed the two secrets api needs + the IAM role/policy (idempotent —
-#    CD reseeds fresh on every run, since LocalStack keeps no state
-#    across pod restarts, see the gotcha below)
+# 3. Seed every secret api/notification-service need + each service's own
+#    IAM role/policy (idempotent — CD reseeds fresh on every run, since
+#    LocalStack keeps no state across pod restarts, see the gotcha below)
 kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
 ./infra/aws/seed-localstack.sh
 
-# 4. Restart api to pick up SECRETS_SOURCE=localstack (rebuild first if
-#    api/src changed — see section 4)
-kubectl -n interview-insights rollout restart deployment/api
+# 4. Restart both to pick up SECRETS_SOURCE=localstack (rebuild first if
+#    api/src or services/notification-service/src changed — see section 4)
+kubectl -n interview-insights rollout restart deployment/api deployment/notification-service
 kubectl -n interview-insights rollout status deployment/api --timeout=90s
+kubectl -n interview-insights rollout status deployment/notification-service --timeout=90s
 ```
 
 Verify it's actually using LocalStack, not just reachable: create a
 candidate through the API, then compare the stored `email_hash` in
 Postgres against an HMAC computed with the LocalStack-seeded secret
-value (`localstack-seeded-secret-change-me` by default) vs. the
-plaintext k8s Secret's value (`dev-only-change-me`) — only the former
-should match. See `wiki/blog/phase-11-integrated-prototype/
-issue-79-secrets-boot-wiring/README.md` for the full worked example.
+value (`localstack-seeded-secret-change-me` by default) — there is no
+plaintext fallback value left to accidentally compare against (GitHub
+issue #466 removed it). See `wiki/blog/phase-11-integrated-prototype/
+issue-79-secrets-boot-wiring/README.md` for the original worked example
+(pre-#466 — the plaintext-comparison step it describes no longer
+applies, the LocalStack-fetch behavior does).
 
-**Gotcha: `api` crash-loops with `ResourceNotFoundException` after a
-`docker stop`/`docker start` of the `kind` node, outside of a CD run.**
-LocalStack's Deployment has no PVC by design (it's a practice tool, not
-a source of truth, see `infra/k8s/base/localstack/08-localstack.yaml`'s
-own comment) — its in-memory secrets/IAM state doesn't survive the pod
-restarting alongside the node. A CD run fixes this on its own (step 3
-above reseeds unconditionally); if you need it fixed before the next
-push, re-run step 3 by hand against the restarted LocalStack pod, then
-`rollout restart deployment/api` again.
+**Gotcha: `api`/`notification-service` crash-loop with
+`ResourceNotFoundException` after a `docker stop`/`docker start` of the
+`kind` node, outside of a CD run.** LocalStack's Deployment has no PVC
+by design (it's a practice tool, not a source of truth, see
+`infra/k8s/base/localstack/08-localstack.yaml`'s own comment) — its
+in-memory secrets/IAM state doesn't survive the pod restarting alongside
+the node. A CD run fixes this on its own (step 3 above reseeds
+unconditionally); if you need it fixed before the next push, re-run
+step 3 by hand against the restarted LocalStack pod, then
+`rollout restart deployment/api deployment/notification-service` again.
 
 ## 5b. Admin credential rotation (GitHub issue #192, Phase 18)
 
 `ADMIN_PASSWORD_HASH` and `ADMIN_JWT_SECRET` are deliberately **not** in
-any git-tracked manifest — `infra/k8s/base/05-api.yaml`'s `api-secrets`
-Secret only ever holds `DATABASE_URL`/`EMAIL_HASH_SECRET` now. A "real"
+any git-tracked manifest — `infra/k8s/base/05-api.yaml` has carried no
+committed Secret at all for `api` since GitHub issue #466/D76 (every one
+of `api`'s secrets now either comes from LocalStack at boot or, like
+these two, is provisioned imperatively). A "real"
 rotated admin credential committed to a manifest would be exactly as
 public as the dev-only placeholder it replaced (`bcrypt("dev-only-admin-
 password")`, `"dev-only-change-me-too"` — both still fine to use in
@@ -593,6 +616,47 @@ confidence data exists in an environment, not guessed here.
    unless something stalls — check `api` pod logs for
    `ReconciliationSweepService` entries if a submission seems stuck
    `pending` with no verdict past 24h.
+
+## 5d. Postgres credential rotation (GitHub issue #466, D77)
+
+`POSTGRES_PASSWORD` is deliberately **not** in any git-tracked manifest —
+`infra/k8s/base/01-postgres-config.yaml` now only carries a
+`postgres-config` ConfigMap (`POSTGRES_USER`/`POSTGRES_DB` — not
+sensitive, same status as `ADMIN_USERNAME`). The password itself lives in
+a separate `postgres-credentials` Secret, provisioned imperatively — same
+pattern as `admin-credentials` (5b above), just applied to Postgres
+because it needs its credential before any of this project's own code
+exists to fetch one from Secrets Manager, ruling out the LocalStack-at-
+boot pattern sections 5/5c's secrets use.
+
+**One-time setup:**
+
+```bash
+NEW_POSTGRES_PASSWORD=$(openssl rand -base64 24)
+gh secret set POSTGRES_PASSWORD   # paste NEW_POSTGRES_PASSWORD
+
+# Only needed to apply this manually, outside CD (e.g.
+# infra/scripts/bootstrap-kind.sh's own use of this same var):
+export POSTGRES_PASSWORD="NEW_POSTGRES_PASSWORD's value"
+kubectl create secret generic postgres-credentials \
+  --namespace interview-insights \
+  --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD"
+```
+
+**What CD does on every push** (`cd.yml`'s "Provision Postgres
+credentials secret" step): upserts `postgres-credentials` from the repo
+secret, before the overlay apply that (re)creates the Postgres
+`StatefulSet`'s pod — same "doesn't hot-reload" ordering requirement
+`admin-credentials`/LocalStack's own credential have.
+
+**To rotate again later:** changing this password only affects a *new*
+Postgres pod's own `initdb` — since GitHub issue #466 doesn't add a
+running-Postgres password-change step (out of scope; this project's
+Postgres is single-instance local-dev only, D24), rotating it for an
+already-initialized data volume needs `ALTER USER postgres WITH
+PASSWORD '...'` run directly against the live database first, matching
+whatever the new Secret will hold, before restarting anything that reads
+it.
 
 ## 6. Smoke-testing the whole stack end to end
 
@@ -894,14 +958,15 @@ an on-demand runner, not a problem to fix.
 
 Before any of this runs, `.github/workflows/ci.yml`'s `infra` job
 (GitHub-hosted, no cluster needed, Phase 13 issue #106) already
-validated the PR: `kubectl kustomize` against all four overlays
-(`dev`, `dev-localstack`, `staging`, `prod`) to catch a broken Kustomize
-edit, and a build-only `docker build` for both `api/Dockerfile` and
-`web/Dockerfile` to catch a Dockerfile regression — both at PR time,
-on every PR, regardless of whether the self-hosted runner is ever
-started. Previously, a broken manifest or Dockerfile would merge with
-a green CI check and only fail later, when the real CD job tried to
-build/apply it against the live cluster.
+validated the PR: `kubectl kustomize` against every overlay
+(`dev`, `staging`, `prod` — `dev-localstack` was folded into `dev`
+itself by GitHub issue #466/D76, so it's no longer a separate entry
+here) to catch a broken Kustomize edit, and a build-only `docker build`
+for both `api/Dockerfile` and `web/Dockerfile` to catch a Dockerfile
+regression — both at PR time, on every PR, regardless of whether the
+self-hosted runner is ever started. Previously, a broken manifest or
+Dockerfile would merge with a green CI check and only fail later, when
+the real CD job tried to build/apply it against the live cluster.
 
 What actually happens between a PR landing on `main` and the `kind`
 cluster running the new code, step by step:
@@ -938,9 +1003,13 @@ cluster running the new code, step by step:
      `interview-insights-web:k8s`, with `NEXT_PUBLIC_API_URL` passed as
      a build arg — it has to be set at build time, not runtime, per the
      Next.js inlining bug fixed in Phase 7 issue #28.
+   - **Build `notification-service` image** — `docker build -f
+     services/notification-service/Dockerfile`, tagged
+     `interview-insights-notification-service:k8s`, same `--build-arg
+     GIT_SHA` pattern as `api` (Phase 31, GitHub issue #334).
    - **Load images into kind** — `kind load docker-image ... --name
-     interview-insights` pushes both images straight into the cluster's
-     node containers, no registry involved.
+     interview-insights` pushes all three images straight into the
+     cluster's node containers, no registry involved.
    - **Ensure the namespace exists** — `kubectl apply -f
      infra/k8s/base/00-namespace.yaml`, idempotent, mostly relevant to a
      truly fresh cluster.
@@ -949,21 +1018,29 @@ cluster running the new code, step by step:
      `ADMIN_JWT_SECRET` repo secrets, before the overlay below ever
      (re)creates api's Deployment (GitHub issue #192, section 5b) — same
      ordering requirement as the LocalStack step right after this one.
+   - **Provision the Postgres credentials Secret** — upserts
+     `postgres-credentials` from the `POSTGRES_PASSWORD` repo secret,
+     before the overlay below ever (re)creates Postgres's `StatefulSet`
+     (GitHub issue #466, D77, section 5d) — same ordering requirement.
+   - **Provision the AI moderation Secret** — upserts
+     `anthropic-credentials` from the `ANTHROPIC_API_KEY` repo secret
+     (genuinely optional — see section 5c).
    - **Provision the LocalStack auth token Secret** — upserts
      `localstack-credentials` from the `LOCALSTACK_AUTH_TOKEN` repo
      secret, before the overlay below ever creates the LocalStack pod
      (GitHub issue #99, `docs/DECISIONS.md` D23).
-   - **Apply the dev-localstack overlay** — `kubectl apply -k
-     infra/k8s/overlays/dev-localstack` reconciles every manifest
-     (namespace, secrets, configmaps, both Deployments/Services, the
-     Ingress, the Postgres/OpenSearch StatefulSets, and now LocalStack)
-     declaratively.
+   - **Apply the `dev` overlay** — `kubectl apply -k
+     infra/k8s/overlays/dev` reconciles every manifest (namespace,
+     configmaps, all three Deployments/Services, the Ingress, the
+     Postgres/OpenSearch/Redpanda/LocalStack StatefulSets/Deployments)
+     declaratively. Since GitHub issue #466/D76, this always includes
+     LocalStack — there is no separate `dev-localstack` variant anymore.
    - **Wait for LocalStack, then seed it** — `kubectl wait
      --for=condition=ready pod -l app=localstack`, then a backgrounded
      `port-forward` + `infra/aws/seed-localstack.sh` (idempotent — see
-     section 5) recreates the two secrets `api` needs plus the IAM
-     role/policy, fresh every run, since LocalStack keeps no state
-     across pod restarts.
+     section 5) recreates every secret `api`/`notification-service`
+     need plus each service's own IAM role/policy, fresh every run,
+     since LocalStack keeps no state across pod restarts.
    - **Roll out `api`** — `kubectl rollout restart deployment/api` (the
      image tag string is unchanged even though its content is new, so a
      restart is what actually forces new pods to pull the freshly-loaded
@@ -971,6 +1048,8 @@ cluster running the new code, step by step:
      is `Ready` and the old one is gone.
    - **Roll out `web`** — same restart + status-wait for
      `deployment/web`.
+   - **Roll out `notification-service`** — same restart + status-wait
+     for `deployment/notification-service`.
 7. **Job reports success**, `run.sh --once` exits on its own, and the
    runner goes back to `offline` — expected steady state, not a problem
    (section 7).
@@ -1008,9 +1087,9 @@ exactly this situation.
 
 **What never needs migrating**: GitHub itself (repo, issues, PRs, project
 board, milestones), the `LOCALSTACK_AUTH_TOKEN`/`ADMIN_PASSWORD_HASH`/
-`ADMIN_JWT_SECRET` GitHub Actions repo secrets CD reads, and LocalStack's
-own secrets/IAM state (ephemeral by design, D25 — it self-seeds on any
-fresh cluster via its init-hook).
+`ADMIN_JWT_SECRET`/`POSTGRES_PASSWORD` GitHub Actions repo secrets CD
+reads, and LocalStack's own secrets/IAM state (ephemeral by design, D25
+— it self-seeds on any fresh cluster via its init-hook).
 
 1. **Verify what actually transferred** before doing anything else:
 
@@ -1045,14 +1124,16 @@ fresh cluster via its init-hook).
    export LOCALSTACK_AUTH_TOKEN="..."   # same token; add to ~/.zshenv to persist
    export ADMIN_PASSWORD_HASH='...'     # same hash — single-quoted, it contains $
    export ADMIN_JWT_SECRET="..."        # same secret
+   export POSTGRES_PASSWORD="..."       # same password
    ./infra/scripts/bootstrap-kind.sh
    ```
 
    The values are the same ones already in the `ADMIN_PASSWORD_HASH`/
-   `ADMIN_JWT_SECRET` GitHub Actions repo secrets (section 5b) — CD
-   itself doesn't need re-configuring, only this machine's local
-   bootstrap run does, since `bootstrap-kind.sh` reads from the
-   environment rather than from GitHub.
+   `ADMIN_JWT_SECRET` (section 5b) and `POSTGRES_PASSWORD` (section 5d)
+   GitHub Actions repo secrets — CD itself doesn't need re-configuring,
+   only this machine's local bootstrap run does, since
+   `bootstrap-kind.sh` reads from the environment rather than from
+   GitHub.
 
 5. **Recreate `api/.env` / `web/.env.local`** if the gitignored files
    didn't survive the transfer (`cp api/.env.example api/.env`,

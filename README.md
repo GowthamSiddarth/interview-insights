@@ -166,18 +166,34 @@ kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
   --name interview-insights
 ```
 
-**3. Apply the `dev` overlay:**
+**3. Provision Postgres's credentials.** Never committed to a manifest
+(GitHub issue #466, D77 — see `wiki/deployment-guide.md` section 5d for
+the full rotation story); the namespace must exist first:
+
+```bash
+kubectl apply -f infra/k8s/base/00-namespace.yaml
+kubectl create secret generic postgres-credentials \
+  --namespace interview-insights \
+  --from-literal=POSTGRES_PASSWORD="pick-a-password"
+```
+
+**4. Apply the `dev` overlay.** Since GitHub issue #466/D76 this also
+requires LocalStack (`api`/`notification-service` fetch their own
+secrets from it at boot) — see "LocalStack in the kind cluster" below;
+their pods won't reach `Ready` until that's seeded:
 
 ```bash
 kubectl apply -k infra/k8s/overlays/dev
-kubectl -n interview-insights get pods   # all four should reach 1/1 Running
+kubectl -n interview-insights get pods   # postgres/opensearch/redpanda/web should
+                                          # reach 1/1 Running; api/notification-service
+                                          # need LocalStack seeded first (below)
 ```
 
 (`kubectl kustomize infra/k8s/overlays/staging` / `.../prod` also build
 cleanly, for inspection — neither is meant to be applied against this
 local cluster.)
 
-**4. Reach it.** The Ingress routes two hostnames
+**5. Reach it.** The Ingress routes two hostnames
 (`app.interview-insights.local` for `web`, `api.interview-insights.local`
 for `api`) that don't resolve anywhere by default. Either add both to
 `/etc/hosts` pointing at `127.0.0.1`, or — to avoid touching a system file
@@ -251,13 +267,16 @@ AWS_ENDPOINT_URL=http://localhost:4566 npm run test:e2e -- secrets-provider
 ### LocalStack in the kind cluster (Phase 11)
 
 Extends the practice above into the actually-running `kind` cluster —
-`api`'s pod fetches its real secrets from this instance via an assumed
-IAM role, instead of the plaintext `api-secrets` k8s `Secret` (GitHub
-issue #79). Opt-in: `infra/k8s/base/localstack/` isn't in
-`infra/k8s/base/kustomization.yaml`'s resources list, and the
-`SECRETS_SOURCE=localstack` env var that opts `api` itself in is only set
-by the `dev-localstack` overlay's patch — so the plain `dev` overlay is
-unaffected either way.
+`api`'s and `notification-service`'s pods fetch their real secrets from
+this instance via an assumed IAM role each, instead of a plaintext k8s
+`Secret` (GitHub issue #79, extended to every remaining secret plus
+`notification-service`'s own role by GitHub issue #466/D76).
+`infra/k8s/base/localstack/` isn't in `infra/k8s/base/kustomization.yaml`'s
+resources list, but the `dev` overlay itself now composes it in
+unconditionally — there is no more separate opt-in `dev-localstack`
+overlay to apply instead; every `kubectl apply -k infra/k8s/overlays/dev`
+requires LocalStack to be seeded (step 3 below) before `api`/
+`notification-service` reach `Ready`.
 
 **1. Create the auth-token Secret** (same token as above, never committed):
 
@@ -267,30 +286,32 @@ kubectl create secret generic localstack-credentials \
   --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN"
 ```
 
-**2. Apply the `dev-localstack` overlay** — composes `dev` with the one
-extra LocalStack resource:
+**2. Apply the `dev` overlay** — includes LocalStack + both services'
+ConfigMap patches:
 
 ```bash
-kubectl apply -k infra/k8s/overlays/dev-localstack
+kubectl apply -k infra/k8s/overlays/dev
 kubectl wait --for=condition=ready pod -l app=localstack -n interview-insights --timeout=120s
 ```
 
-**3. Seed it** — the two secrets `api` needs, plus the IAM role with
-`infra/aws/api-secrets-access-policy.json` attached (idempotent, safe to
-re-run):
+**3. Seed it** — every secret `api`/`notification-service` need, plus
+each service's own IAM role with its own `infra/aws/
+*-secrets-access-policy.json` attached (idempotent, safe to re-run):
 
 ```bash
 kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
 ./infra/aws/seed-localstack.sh
 ```
 
-**4. Restart `api`** to pick up the new `SECRETS_SOURCE=localstack`
-ConfigMap value (`envFrom` doesn't hot-reload) and rebuild/reload its
-image first if you've changed `api/src`:
+**4. Restart `api`/`notification-service`** to pick up the new
+`SECRETS_SOURCE=localstack` ConfigMap value (`envFrom` doesn't
+hot-reload) and rebuild/reload their images first if you've changed
+`api/src` or `services/notification-service/src`:
 
 ```bash
-kubectl -n interview-insights rollout restart deployment/api
+kubectl -n interview-insights rollout restart deployment/api deployment/notification-service
 kubectl -n interview-insights rollout status deployment/api --timeout=90s
+kubectl -n interview-insights rollout status deployment/notification-service --timeout=90s
 ```
 
 ## Connecting a database client (DBeaver, etc.)
@@ -304,7 +325,7 @@ With the port-forward from "Quick start" step 1 running (Postgres lives in
 | Port     | `5432`               |
 | Database | `interview_insights` |
 | Username | `postgres`           |
-| Password | `postgres`           |
+| Password | whatever you set `POSTGRES_PASSWORD` to when provisioning `postgres-credentials` above (GitHub issue #466, D77 — no longer a fixed committed value) |
 
 ## Running tests
 

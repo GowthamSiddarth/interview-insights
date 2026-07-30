@@ -36,6 +36,10 @@ spec:
           ports:
             - containerPort: 5432
           envFrom:
+            - configMapRef:
+                name: postgres-config
+            # Provisioned imperatively, never committed (GitHub issue
+            # #466, D77) — see 01-postgres-config.yaml's own comment.
             - secretRef:
                 name: postgres-credentials
           env:

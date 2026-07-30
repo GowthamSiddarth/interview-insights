@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Seeds a LocalStack instance with what api needs for Phase 11's real
-# secrets/IAM path (GitHub issue #78): the two secrets it reads at boot,
-# an IAM role trusted to be assumed, and the existing
-# api-secrets-access-policy.json attached to that role. Idempotent —
-# safe to re-run against the same LocalStack instance.
+# Seeds a LocalStack instance with what api (and, since GitHub issue #466/
+# D76, notification-service) needs for its real secrets/IAM path (GitHub
+# issue #78 originally; #466 extended it to every remaining api secret
+# plus notification-service's own role): the secrets each service reads
+# at boot, an IAM role per service trusted to be assumed, and each
+# service's own *-secrets-access-policy.json attached to its own role.
+# Idempotent — safe to re-run against the same LocalStack instance.
 #
 # Works against either target: the docker-compose `localstack` profile
 # (GitHub issue #66) at its default localhost:4566, or the in-cluster
-# LocalStack from infra/k8s/overlays/dev-localstack (GitHub issue #78)
-# once port-forwarded, e.g.:
+# LocalStack from infra/k8s/overlays/dev (GitHub issue #78, folded out of
+# the once-separate `dev-localstack` overlay by #466/D76) once
+# port-forwarded, e.g.:
 #   kubectl -n interview-insights port-forward svc/localstack 4566:4566
 #
 # Requires: LocalStack running + reachable at $ENDPOINT.
@@ -17,16 +20,22 @@ set -euo pipefail
 ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localhost:4566}"
 REGION="us-east-1"
 ACCOUNT_ID="000000000000"
-ROLE_NAME="api-secrets-role"
-POLICY_NAME="api-secrets-access-policy"
-POLICY_DOC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/api-secrets-access-policy.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # database-url matches the in-cluster Postgres Service DNS (infra/k8s/base/
-# 03-postgres.yaml) — the same value infra/k8s/base/01-postgres-secret.yaml
-# hands api today, just sourced from Secrets Manager instead once GitHub
-# issue #79 wires the boot path to actually read it from here.
+# 03-postgres.yaml) — the same value api used to read from a plaintext
+# k8s Secret, just sourced from Secrets Manager instead once GitHub issue
+# #79 wired the boot path to actually read it from here.
 DATABASE_URL_VALUE="${SEED_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public}"
 EMAIL_HASH_SECRET_VALUE="${SEED_EMAIL_HASH_SECRET:-localstack-seeded-secret-change-me}"
+# GitHub issue #466 (D76) — the last two secrets api/notification-service
+# still carried as committed plaintext k8s-Secret fallbacks. Must be a
+# 32-byte AES-256 key, hex-encoded (64 hex chars) — see docs/DECISIONS.md
+# D74. EMAIL_ENCRYPTION_KEY is shared with notification-service (same
+# secret ID, read by both services' own IAM roles below) — that service
+# can only decrypt what api encrypted under it.
+EMAIL_ENCRYPTION_KEY_VALUE="${SEED_EMAIL_ENCRYPTION_KEY:-1111111111111111111111111111111111111111111111111111111111111111}"
+CANDIDATE_JWT_SECRET_VALUE="${SEED_CANDIDATE_JWT_SECRET:-localstack-seeded-candidate-jwt-secret-change-me}"
 
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
@@ -46,15 +55,42 @@ awslocal secretsmanager create-secret --name interview-insights/email-hash-secre
   --secret-string "$EMAIL_HASH_SECRET_VALUE" > /dev/null
 echo "OK: created"
 
-echo "== IAM: $ROLE_NAME trust policy + $POLICY_NAME attachment =="
-# Clean up anything left over from a previous run — a policy can't be
-# deleted while still attached, and create-role fails if the role exists.
-awslocal iam detach-role-policy --role-name "$ROLE_NAME" \
-  --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}" > /dev/null 2>&1 || true
-awslocal iam delete-role --role-name "$ROLE_NAME" > /dev/null 2>&1 || true
-awslocal iam delete-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}" > /dev/null 2>&1 || true
+echo "== Secrets Manager: interview-insights/email-encryption-key =="
+awslocal secretsmanager delete-secret --secret-id interview-insights/email-encryption-key \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/email-encryption-key \
+  --secret-string "$EMAIL_ENCRYPTION_KEY_VALUE" > /dev/null
+echo "OK: created"
 
-trust_policy=$(cat <<EOF
+echo "== Secrets Manager: interview-insights/candidate-jwt-secret =="
+awslocal secretsmanager delete-secret --secret-id interview-insights/candidate-jwt-secret \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/candidate-jwt-secret \
+  --secret-string "$CANDIDATE_JWT_SECRET_VALUE" > /dev/null
+echo "OK: created"
+
+# Provisions one IAM role + its attached least-privilege policy, given
+# role name / policy name / policy JSON path. Called once per service
+# (GitHub issue #466 added the second call, for notification-service's
+# own role, alongside api's pre-existing one) — each service gets its
+# own role/policy pair rather than sharing one, so a compromised or
+# over-permissioned service can't read secrets it has no business
+# reading (e.g. notification-service can't read email-hash-secret).
+provision_role_and_policy() {
+  local role_name="$1"
+  local policy_name="$2"
+  local policy_doc="$3"
+
+  echo "== IAM: $role_name trust policy + $policy_name attachment =="
+  # Clean up anything left over from a previous run — a policy can't be
+  # deleted while still attached, and create-role fails if the role exists.
+  awslocal iam detach-role-policy --role-name "$role_name" \
+    --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${policy_name}" > /dev/null 2>&1 || true
+  awslocal iam delete-role --role-name "$role_name" > /dev/null 2>&1 || true
+  awslocal iam delete-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${policy_name}" > /dev/null 2>&1 || true
+
+  local trust_policy
+  trust_policy=$(cat <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -67,35 +103,52 @@ trust_policy=$(cat <<EOF
 }
 EOF
 )
-awslocal iam create-role --role-name "$ROLE_NAME" \
-  --assume-role-policy-document "$trust_policy" > /dev/null
-echo "OK: role created"
+  awslocal iam create-role --role-name "$role_name" \
+    --assume-role-policy-document "$trust_policy" > /dev/null
+  echo "OK: role created"
 
-awslocal iam create-policy --policy-name "$POLICY_NAME" \
-  --policy-document "file://$POLICY_DOC" > /dev/null
-awslocal iam attach-role-policy --role-name "$ROLE_NAME" \
-  --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}" > /dev/null
-echo "OK: policy attached"
+  awslocal iam create-policy --policy-name "$policy_name" \
+    --policy-document "file://$policy_doc" > /dev/null
+  awslocal iam attach-role-policy --role-name "$role_name" \
+    --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${policy_name}" > /dev/null
+  echo "OK: policy attached"
+}
 
-echo "== Verifying: role assumable, secrets fetchable via assumed credentials =="
+provision_role_and_policy "api-secrets-role" "api-secrets-access-policy" \
+  "$SCRIPT_DIR/api-secrets-access-policy.json"
+provision_role_and_policy "notification-service-secrets-role" \
+  "notification-service-secrets-access-policy" \
+  "$SCRIPT_DIR/notification-service-secrets-access-policy.json"
+
+echo "== Verifying: each role assumable, its own secrets fetchable via assumed credentials =="
 # Proves the AssumeRole -> temporary-credentials -> GetSecretValue chain
-# actually works end to end. It does NOT prove the policy is what's
-# gating access — verify-iam-policy.sh already established that
+# actually works end to end, for both roles. It does NOT prove the policy
+# is what's gating access — verify-iam-policy.sh already established that
 # LocalStack's free tier doesn't evaluate IAM policies at all (explicit
 # allow/deny is not enforced), so this would succeed even against an
 # empty or overly-broad policy. Real enforcement only happens against
 # real AWS IAM; this stays an honest limitation, not something worked
 # around here (see docs/DECISIONS.md D20 and this phase's own decision).
-assumed=$(awslocal sts assume-role --role-arn "arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}" \
-  --role-session-name seed-verify)
-export AWS_ACCESS_KEY_ID2=$(echo "$assumed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Credentials"]["AccessKeyId"])')
-export AWS_SECRET_ACCESS_KEY2=$(echo "$assumed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Credentials"]["SecretAccessKey"])')
-export AWS_SESSION_TOKEN2=$(echo "$assumed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Credentials"]["SessionToken"])')
+verify_role_can_fetch() {
+  local role_name="$1"
+  local secret_id="$2"
 
-AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID2" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY2" \
-  AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN2" \
-  aws --endpoint-url="$ENDPOINT" --region "$REGION" secretsmanager get-secret-value \
-  --secret-id interview-insights/database-url --query SecretString --output text > /dev/null
-echo "OK: assumed-role credentials can fetch database-url"
+  local assumed
+  assumed=$(awslocal sts assume-role --role-arn "arn:aws:iam::${ACCOUNT_ID}:role/${role_name}" \
+    --role-session-name seed-verify)
+  local key_id secret_key session_token
+  key_id=$(echo "$assumed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Credentials"]["AccessKeyId"])')
+  secret_key=$(echo "$assumed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Credentials"]["SecretAccessKey"])')
+  session_token=$(echo "$assumed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Credentials"]["SessionToken"])')
+
+  AWS_ACCESS_KEY_ID="$key_id" AWS_SECRET_ACCESS_KEY="$secret_key" \
+    AWS_SESSION_TOKEN="$session_token" \
+    aws --endpoint-url="$ENDPOINT" --region "$REGION" secretsmanager get-secret-value \
+    --secret-id "$secret_id" --query SecretString --output text > /dev/null
+  echo "OK: $role_name credentials can fetch $secret_id"
+}
+
+verify_role_can_fetch "api-secrets-role" "interview-insights/database-url"
+verify_role_can_fetch "notification-service-secrets-role" "interview-insights/email-encryption-key"
 
 echo "== Done =="

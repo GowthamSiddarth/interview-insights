@@ -903,23 +903,24 @@ GitHub issue #214.
       excludes `scripts` explicitly (GitHub issue #393, D63). Epic #214
       reopened and re-closed the same day, same precedent as
       #222/#240/#278/#312/#347/#349/#387/#389.
-- [ ] No plaintext secrets anywhere in git — extend the LocalStack
+- [x] No plaintext secrets anywhere in git — extended the LocalStack
       Secrets Manager pattern already proven for `DATABASE_URL`/
       `EMAIL_HASH_SECRET` (issue #78/#79) to `EMAIL_ENCRYPTION_KEY`/
-      `CANDIDATE_JWT_SECRET`, build the equivalent for
+      `CANDIDATE_JWT_SECRET`, built the equivalent for
       notification-service (own bootstrap, own IAM role, D73/D75's
-      duplicate-rather-than-share precedent), and remove the plaintext
-      fallback both already-migrated secrets still carry for the plain
-      `dev` (non-LocalStack) overlay — a direct user request following
-      issue #335's `EMAIL_ENCRYPTION_KEY` addition, not a live-verified
-      incident like this phase's earlier items. Also the origin of
-      CLAUDE.md hard constraint #6 (no secret ever committed as
-      plaintext, not even a placeholder). Two open design questions
-      flagged in the issue itself, not pre-resolved: whether the plain
-      `dev` overlay starts requiring LocalStack too, and how
+      duplicate-rather-than-share precedent) — a direct user request
+      following issue #335's `EMAIL_ENCRYPTION_KEY` addition, not a
+      live-verified incident like this phase's earlier items. Also the
+      origin of CLAUDE.md hard constraint #6 (no secret ever committed
+      as plaintext, not even a placeholder). Both open design questions
+      the issue flagged, resolved and documented rather than silently:
+      the once-separate `dev-localstack` overlay is folded into `dev`
+      itself, which now requires LocalStack unconditionally — no more
+      plaintext-Secret escape hatch to opt out into (D76); and
       `postgres-credentials` — needed before any app code exists to
-      fetch a secret for it — gets handled (GitHub issue #466). Epic
-      #214 reopened, same precedent as
+      fetch a secret for it — is provisioned imperatively, same pattern
+      as `admin-credentials` (D77) (GitHub issue #466). Epic #214
+      reopened, same precedent as
       #222/#240/#278/#312/#347/#349/#387/#389.
 
 ## Phase 21 — Anonymous Visitor Soft-Gating

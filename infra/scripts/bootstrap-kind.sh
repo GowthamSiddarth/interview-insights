@@ -6,8 +6,9 @@
 # already-running cluster; every step either skips or upgrades in place.
 #
 # Requires: docker, kind, kubectl, helm, and LOCALSTACK_AUTH_TOKEN,
-# ADMIN_PASSWORD_HASH, ADMIN_JWT_SECRET set in the environment (see
-# wiki/deployment-guide.md sections 5 and 5b). ANTHROPIC_API_KEY is
+# ADMIN_PASSWORD_HASH, ADMIN_JWT_SECRET, POSTGRES_PASSWORD set in the
+# environment (see wiki/deployment-guide.md sections 5 and 5b;
+# POSTGRES_PASSWORD added by GitHub issue #466/D77). ANTHROPIC_API_KEY is
 # optional (GitHub issue #163) — leave it unset to keep AI moderation
 # triage disabled.
 set -euo pipefail
@@ -28,6 +29,18 @@ fi
 # checked-in placeholder — this Secret's whole point is to not have one.
 if [ -z "${ADMIN_PASSWORD_HASH:-}" ] || [ -z "${ADMIN_JWT_SECRET:-}" ]; then
   echo "ERROR: ADMIN_PASSWORD_HASH and/or ADMIN_JWT_SECRET is not set." >&2
+  echo "See wiki/deployment-guide.md section 5b." >&2
+  exit 1
+fi
+
+# GitHub issue #466, D77: same never-committed-fallback reasoning as
+# ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET above, applied to Postgres's own
+# credential — Postgres needs it before any of our app code exists to
+# fetch one from Secrets Manager, so it's provisioned imperatively
+# instead of via the LocalStack-at-boot pattern api/notification-service
+# use for their own secrets.
+if [ -z "${POSTGRES_PASSWORD:-}" ]; then
+  echo "ERROR: POSTGRES_PASSWORD is not set." >&2
   echo "See wiki/deployment-guide.md section 5b." >&2
   exit 1
 fi
@@ -111,20 +124,27 @@ kubectl create secret generic anthropic-credentials \
   --from-literal=ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "== 7. Apply the dev-localstack overlay =="
-kubectl apply -k "$REPO_ROOT/infra/k8s/overlays/dev-localstack"
+echo "== 6d. Postgres credentials secret (GitHub issue #466, D77) =="
+kubectl create secret generic postgres-credentials \
+  --namespace "$NAMESPACE" \
+  --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
 
-echo "== 8. Wait for LocalStack + its non-api dependents ready =="
-# Deliberately excludes api: on a truly fresh cluster api's entrypoint
-# fetches its secrets from LocalStack at boot (api/scripts/entrypoint.js)
-# and crash-loops with ResourceNotFoundException until LocalStack is
-# seeded below - it can never reach Ready before step 9 runs. Found by
+echo "== 7. Apply the dev overlay =="
+kubectl apply -k "$REPO_ROOT/infra/k8s/overlays/dev"
+
+echo "== 8. Wait for LocalStack + its non-api/notification-service dependents ready =="
+# Deliberately excludes api and (since GitHub issue #466/D76, which made
+# LocalStack unconditional for it too) notification-service: on a truly
+# fresh cluster their entrypoints fetch secrets from LocalStack at boot
+# and crash-loop with ResourceNotFoundException until LocalStack is
+# seeded below - neither can ever reach Ready before step 9 runs. Found by
 # this issue's own adversarial rebuild (GitHub issue #108): earlier
 # testing against an already-running cluster never restarted api from
 # zero, so this ordering bug stayed invisible until a truly fresh boot
 # forced api through its real first-start path. Same reason cd.yml only
-# waits on localstack here, then seeds, then explicitly rolls out api
-# afterward instead of waiting on every pod up front.
+# waits on localstack here, then seeds, then explicitly rolls out api/
+# notification-service afterward instead of waiting on every pod up front.
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=postgres --timeout=180s
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=opensearch --timeout=180s
 kubectl -n "$NAMESPACE" wait --for=condition=ready pod -l app=redpanda --timeout=180s
@@ -143,9 +163,11 @@ done
 kill $PF_PID 2>/dev/null || true
 trap - EXIT
 
-echo "== 10. Roll out api to pick up LocalStack-backed secrets =="
+echo "== 10. Roll out api/notification-service to pick up LocalStack-backed secrets =="
 kubectl -n "$NAMESPACE" rollout restart deployment/api
 kubectl -n "$NAMESPACE" rollout status deployment/api --timeout=90s
+kubectl -n "$NAMESPACE" rollout restart deployment/notification-service
+kubectl -n "$NAMESPACE" rollout status deployment/notification-service --timeout=90s
 
 echo ""
 echo "== Done =="

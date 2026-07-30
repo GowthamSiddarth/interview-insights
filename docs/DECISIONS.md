@@ -506,6 +506,12 @@ real AWS account, at which point this same sequencing (provision
 credentials → deploy → wait → seed/verify → roll out `api`) points at
 real AWS Secrets Manager/IAM instead of LocalStack.
 
+**Superseded by D76** (GitHub issue #466): the "still structurally
+opt-in relative to the plain `dev` overlay" framing above no longer
+holds — `dev-localstack` was folded into `dev` itself, which now
+requires LocalStack unconditionally. This decision's core call (CD
+targets the LocalStack-backed overlay) is otherwise unchanged.
+
 ---
 
 ### D24 — Postgres consolidates to a single instance: kind's, not Docker Compose's
@@ -3459,6 +3465,118 @@ needs the same pattern — if a third service ends up hand-maintaining
 its own partial `schema.prisma` against this database, that's the
 signal (matching D73's own "third consumer" revisit trigger) that some
 shared tooling might finally be worth its cost.
+
+---
+
+### D76 — `dev-localstack` folded into `dev`; LocalStack now required unconditionally (GitHub issue #466)
+
+**Context:** Issue #466 required eliminating the plaintext-Secret
+fallback `EMAIL_ENCRYPTION_KEY`/`CANDIDATE_JWT_SECRET` (and
+notification-service's own copies) still carried in
+`infra/k8s/base/05-api.yaml`/`10-notification-service.yaml`, which
+existed specifically to serve the plain `dev` overlay (D22's original
+"docker-compose and the plain `dev` overlay are unchanged" framing,
+reversed for CD's own deploy target by D23 but never revisited for
+`dev` itself). Once that fallback is gone, `dev` has nothing left to
+read if applied without LocalStack — the issue flagged this as an open
+question rather than pre-resolving it.
+
+**Decision:** Fold `dev-localstack`'s LocalStack resource
+(`../../base/localstack`) and both ConfigMap patches
+(`api-config-patch.yaml`, and the new
+`notification-service-config-patch.yaml`) directly into
+`infra/k8s/overlays/dev/kustomization.yaml`. `dev` itself now requires
+LocalStack unconditionally to boot `api`/`notification-service`. The
+separate `dev-localstack` overlay directory is deleted outright — not
+deprecated or aliased — since nothing in this repo ever applied plain
+`dev` in practice: `cd.yml` (D23) and `infra/scripts/bootstrap-kind.sh`
+already exclusively targeted `dev-localstack`, so folding it into `dev`
+changes zero actual deploy behavior, only removes a since-1-Phase-12
+dead branch (applying bare `dev` by hand) that existed only to preserve
+an escape hatch back to plaintext secrets — exactly what this issue
+exists to close off.
+
+**Why not keep both overlays, with `dev` still plaintext-capable?**
+That was the entire premise `dev-localstack` was created to be *strictly
+additive to* (D22): `dev-localstack` was explicitly a superset, opt-in
+variant, never the other way around. Keeping `dev` plaintext-capable
+would mean re-adding exactly the fallback Secret data this issue
+requires removing — there is no version of "keep both" that doesn't
+recreate the problem.
+
+**Consequences:**
+- `infra/k8s/base/05-api.yaml`'s `api-secrets` Secret and
+  `infra/k8s/base/10-notification-service.yaml`'s
+  `notification-service-secrets` Secret are deleted outright (their
+  `envFrom.secretRef` entries too) — nothing reads them once
+  `bootstrapSecretsFromLocalStack()` always runs for these overlays.
+- `.github/workflows/ci.yml`'s Kustomize-build validation step drops
+  `dev-localstack` from its overlay list (three overlays now, not four).
+- `staging`/`prod` are unaffected structurally (they compose `../../base`
+  directly and were never wired to LocalStack in the first place — still
+  gated on Phase 8b's real AWS Secrets Manager, per D20/D22's original
+  scope boundary).
+
+**Supersedes:** D23's "still structurally opt-in relative to the plain
+`dev` overlay" framing — that framing described `dev-localstack` as an
+*addition* to `dev`; this decision makes it `dev`'s own unconditional
+behavior instead. D23's core decision (CD targets the LocalStack-backed
+overlay, not a plaintext one) is unchanged, just now expressed as "CD
+targets `dev`" rather than "CD targets `dev-localstack`."
+
+**Revisit when:** a real Phase 8b/8d trigger against a real AWS account
+exists — same boundary D20/D22/D23 already drew — at which point `dev`
+itself may need its own real-AWS-vs-LocalStack split, the same shape
+`dev`/`dev-localstack` used to be.
+
+### D77 — `postgres-credentials` becomes an imperatively-provisioned Secret, not a LocalStack-at-boot one (GitHub issue #466)
+
+**Context:** Issue #466's other open question: `infra/k8s/base/
+01-postgres-secret.yaml` carried a plaintext `POSTGRES_USER`/
+`POSTGRES_PASSWORD`/`POSTGRES_DB` Secret with no LocalStack path,
+because Postgres itself — a stock `postgres:16-alpine` image, not this
+project's own NestJS code — needs its credential before any of our own
+bootstrap code (`localstack-secrets-bootstrap.ts`) could ever run to
+fetch one. The LocalStack-at-boot pattern D76 (and #78/#79/#466's own
+`api`/`notification-service` work) relies on assumes there's already a
+running Node process able to call `AssumeRole`/`GetSecretValue` before
+anything else needs the secret — that's never true for Postgres's own
+container startup.
+
+**Decision:** Treat `postgres-credentials` exactly like
+`admin-credentials` (GitHub issue #192) — provisioned imperatively via
+`kubectl create secret generic postgres-credentials
+--from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD"` in both `cd.yml`
+and `infra/scripts/bootstrap-kind.sh`, hard-failing if the env var is
+unset (no default, no fallback), before the overlay apply that creates
+Postgres's `StatefulSet`. `POSTGRES_USER`/`POSTGRES_DB` aren't
+credentials — same non-secret status `ADMIN_USERNAME` already has in
+`05-api.yaml` — so they move to a plain `postgres-config` ConfigMap
+(renamed from `01-postgres-secret.yaml` to `01-postgres-config.yaml`
+to match what it now actually holds).
+
+**Why not extend the LocalStack pattern here too?** It doesn't fit the
+problem: LocalStack-at-boot requires application code to run first to
+do the fetching, and Postgres's own startup has no such code — it's a
+stock image reading env vars at container-init time. Inventing an
+init-container or sidecar just to make Postgres fit the same pattern
+would be new infrastructure solely to preserve pattern uniformity, not
+because it solves anything the imperative-Secret pattern doesn't already
+solve more simply, and `admin-credentials` already proves the imperative
+pattern works for exactly this "real credential, never committed, needed
+before our own code runs" shape.
+
+**Consequences:** `infra/k8s/base/01-postgres-config.yaml`'s Secret is
+gone; a fresh `kind` cluster now needs `postgres-credentials` created
+before `kubectl apply -k infra/k8s/overlays/dev` (see
+`wiki/deployment-guide.md` §5d) — the same one-time-setup shape
+`admin-credentials`/`localstack-credentials` already have.
+
+**Revisit when:** Phase 8b's real AWS environment exists — Postgres
+credential provisioning there is a genuinely different problem (a
+managed RDS instance's master credential, likely never touching this
+project's own IAM/Secrets Manager wiring at all), not an extension of
+either pattern documented here.
 
 ---
 

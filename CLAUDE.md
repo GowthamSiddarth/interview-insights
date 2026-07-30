@@ -44,20 +44,24 @@ Full schema: `docs/DATA_MODEL.md`.
 5. **Migrations are the source of truth for schema.** Never hand-edit
    production schema directly. Every schema change is a Prisma migration.
 6. **No secret is ever committed as plaintext — real or placeholder.**
-   Every credential, API key, or sensitive config value is fetched from a
-   secrets management service at boot (LocalStack Secrets Manager locally
-   via each service's own `localstack-secrets-bootstrap.ts`-style module;
-   real AWS Secrets Manager once Phase 8b's actual AWS environment
-   exists) — never baked into a committed k8s manifest, CI workflow file,
-   or Dockerfile, and never left as an inert "dev-only, change-me"
-   fallback value either. A `.env.example` may document *which* env var a
-   service reads; it must never carry a real or plausible-looking value.
-   See GitHub issue #466 (tracked under the Phase 20 epic, #214) for the
-   migration bringing this project's existing secrets into compliance —
-   until that lands, `EMAIL_ENCRYPTION_KEY`/`CANDIDATE_JWT_SECRET`/
-   notification-service's `DATABASE_URL`/`EMAIL_ENCRYPTION_KEY`/
-   `postgres-credentials` are known, tracked exceptions, not a precedent
-   to extend.
+   Every credential, API key, or sensitive config value is either fetched
+   from a secrets management service at boot (LocalStack Secrets Manager
+   locally via each service's own `localstack-secrets-bootstrap.ts`-style
+   module; real AWS Secrets Manager once Phase 8b's actual AWS
+   environment exists), or — for the one case where a service needs its
+   credential before any of this project's own code exists to fetch one
+   (Postgres itself) — provisioned imperatively (`kubectl create secret
+   ... --from-literal=$ENV_VAR`, hard-failing if unset, same pattern as
+   `admin-credentials`), never baked into a committed k8s manifest, CI
+   workflow file, or Dockerfile, and never left as an inert "dev-only,
+   change-me" fallback value either. A `.env.example` may document
+   *which* env var a service reads; it must never carry a real or
+   plausible-looking value. GitHub issue #466 (D76/D77, tracked under the
+   Phase 20 epic, #214) brought this project's existing secrets into
+   compliance — `postgres-credentials`'s imperative provisioning is the
+   one deliberate, documented exception this constraint allows for, not a
+   precedent to extend beyond that same narrow "needed before our own
+   code can run" justification.
 
 ## Stack (decided)
 

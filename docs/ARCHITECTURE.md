@@ -25,11 +25,12 @@ flowchart TD
     subgraph notifpod["notification-service (NestJS, own Deployment, Phase 31)"]
         CONSUMER["NotificationConsumerService\n(Redpanda consumer group)"]
         NOTIFMAIL["MailService\n(own nodemailer copy, D73)"]
+        NOTIFSECRETS["Secrets bootstrap\n(own copy, runs before\nNestFactory.create, D73)"]
     end
 
     PG[("PostgreSQL\nrounds, ratings, candidates,\nmaterialized views, notification_log")]
     OS[("OpenSearch\ncompanies + reviews index")]
-    LS[("LocalStack\nSecrets Manager + IAM\n(dev-localstack overlay only)")]
+    LS[("LocalStack\nSecrets Manager + IAM\n(dev overlay, unconditional, D76)")]
     RP[("Redpanda\nmoderation created/status-changed events")]
     MAILPIT[("Mailpit\nlocal SMTP catcher")]
 
@@ -40,8 +41,10 @@ flowchart TD
     MOD -->|on approve| SEARCHSVC
     SEARCHSVC --> OS
     API -->|full-text + facets| OS
-    SECRETS -.->|fetches DATABASE_URL,\nEMAIL_HASH_SECRET at boot| LS
+    SECRETS -.->|fetches DATABASE_URL,\nEMAIL_HASH_SECRET,\nEMAIL_ENCRYPTION_KEY,\nCANDIDATE_JWT_SECRET at boot,\nown IAM role, D76| LS
     SECRETS -.-> API
+    NOTIFSECRETS -.->|fetches DATABASE_URL,\nEMAIL_ENCRYPTION_KEY at boot,\nown IAM role, D76| LS
+    NOTIFSECRETS -.-> CONSUMER
     MOD -->|publish, best-effort| PUB
     PUB -->|moderation created events\n#332| RP
     RP -->|subscribe, consumer group\nnotification-service| CONSUMER
@@ -59,7 +62,7 @@ flowchart LR
     DEV["git push to main"] --> GH["GitHub Actions\n(cd.yml, queued)"]
     GH -->|picked up when\n./run.sh is started| RUNNER["Self-hosted runner\n(on-demand, this laptop)"]
     RUNNER -->|build + kind load| IMAGES["api:k8s / web:k8s /\nnotification-service:k8s images"]
-    RUNNER -->|kubectl apply -k| OVERLAY["overlays/dev-localstack"]
+    RUNNER -->|kubectl apply -k| OVERLAY["overlays/dev"]
     OVERLAY --> CLUSTER["kind cluster\n(interview-insights namespace)"]
     RUNNER -->|reseed| LS2[("LocalStack")]
     K9S["k9s / kubectl top"] -.->|monitor| CLUSTER
@@ -81,8 +84,8 @@ from the original plan" below.
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
 | Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — see `docs/EVENTS.md` |
 | `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). As of #335, a real consumer: subscribes to all three `moderation.*.created.v1` topics and sends a "your submission is pending review" email, idempotently. `*.status_changed` consumption (approved/rejected) lands in #336 |
-| Secrets/IAM | LocalStack (dev-localstack overlay) | Default CD target as of Phase 12 issue #99 (D23) |
-| Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,dev-localstack,staging,prod}` |
+| Secrets/IAM | LocalStack (`dev` overlay, unconditional) | Default CD target as of Phase 12 issue #99 (D23); folded into `dev` itself, no separate `dev-localstack` variant, by GitHub issue #466 (D76) |
+| Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |
 | Cluster monitoring | `metrics-server` (Helm) + `k9s` | Phase 12 issue #90 |
 | CI | GitHub Actions, GitHub-hosted runners | Lint/build/test on every PR |
@@ -178,13 +181,15 @@ because the original diagram said so.
   containerized. §2.
 - **Local dev, full Kubernetes (`kind`):** the closest thing to a real
   deployment this project has. `ingress-nginx` + `metrics-server` via
-  Helm; `api`/`web`/`postgres`/`opensearch`/`localstack` via Kustomize
-  (`infra/k8s/base` + `overlays/dev-localstack`). §3.
+  Helm; `api`/`web`/`notification-service`/`postgres`/`opensearch`/
+  `redpanda`/`localstack` via Kustomize (`infra/k8s/base` +
+  `overlays/dev` — `dev` requires LocalStack unconditionally as of
+  GitHub issue #466/D76, no separate `dev-localstack` variant anymore).
+  §3.
 - **CD:** on every push to `main` touching deployable paths, a job
   queues automatically; starting the self-hosted runner picks it up and
-  runs build → `kind load` → `kubectl apply -k overlays/dev-localstack`
-  → provision + reseed LocalStack → rollout restart, fully automated.
-  §4, §7, §8.
+  runs build → `kind load` → `kubectl apply -k overlays/dev` → provision
+  + reseed LocalStack → rollout restart, fully automated. §4, §7, §8.
 - **`staging`/`prod` overlays exist but have never been deployed** —
   structurally complete (own namespace, replica counts, resource limits,
   distinct Ingress hosts), verified to produce valid, genuinely-differing
@@ -224,12 +229,11 @@ interview-insights/
 │       └── Dockerfile
 ├── infra/
 │   ├── docker-compose.yml      # inert reference only (D24/D26 — kind runs both stores) / --profile full / --profile localstack
-│   ├── aws/                    # seed-localstack.sh, IAM policy JSON
+│   ├── aws/                    # seed-localstack.sh, one IAM policy JSON per service
 │   ├── k8s/
 │   │   ├── base/                # numbered manifests (incl. 10-notification-service.yaml) + localstack/ subdir
 │   │   └── overlays/
-│   │       ├── dev              # the exact shape actually deployed
-│   │       ├── dev-localstack   # dev + LocalStack, CD's actual target
+│   │       ├── dev              # actually deployed; requires LocalStack unconditionally (D76)
 │   │       ├── staging / prod   # structural only, gated on Phase 8
 │   └── terraform/               # empty, gated on a real cloud account
 ├── wiki/
