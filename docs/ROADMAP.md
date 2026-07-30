@@ -1303,7 +1303,7 @@ hasn't fired.
       manifest/CD step (GitHub issue #334)
 - [x] Consume `*.created` events → "your submission is pending review"
       email, idempotent (GitHub issue #335)
-- [ ] Consume `*.status_changed` events → approved/rejected
+- [x] Consume `*.status_changed` events → approved/rejected
       notification, idempotent (GitHub issue #336)
 - [ ] Engineering blog (last) (GitHub issue #337)
 

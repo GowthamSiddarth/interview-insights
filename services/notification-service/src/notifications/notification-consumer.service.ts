@@ -15,13 +15,37 @@ import {
   OVERALL_REVIEW_CREATED_V1_TOPIC,
   OverallReviewCreatedEventV1,
 } from '../events/schemas/overall-review-created.event';
+import {
+  ROUND_RATING_STATUS_CHANGED_V1_TOPIC,
+  RoundRatingStatusChangedEventV1,
+} from '../events/schemas/round-rating-status-changed.event';
+import {
+  RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC,
+  RecruiterRatingStatusChangedEventV1,
+} from '../events/schemas/recruiter-rating-status-changed.event';
+import {
+  OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC,
+  OverallReviewStatusChangedEventV1,
+} from '../events/schemas/overall-review-status-changed.event';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { decryptEmail } from '../candidates/email-encryption.util';
 
 type CreatedEvent = RoundRatingCreatedEventV1 | RecruiterRatingCreatedEventV1 | OverallReviewCreatedEventV1;
+type StatusChangedEvent =
+  | RoundRatingStatusChangedEventV1
+  | RecruiterRatingStatusChangedEventV1
+  | OverallReviewStatusChangedEventV1;
+type ModerationEvent = CreatedEvent | StatusChangedEvent;
 
-const TOPICS = [ROUND_RATING_CREATED_V1_TOPIC, RECRUITER_RATING_CREATED_V1_TOPIC, OVERALL_REVIEW_CREATED_V1_TOPIC];
+const TOPICS = [
+  ROUND_RATING_CREATED_V1_TOPIC,
+  RECRUITER_RATING_CREATED_V1_TOPIC,
+  OVERALL_REVIEW_CREATED_V1_TOPIC,
+  ROUND_RATING_STATUS_CHANGED_V1_TOPIC,
+  RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC,
+  OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC,
+];
 
 // Same interval class of value as api's DomainEventPublisher.
 const RECONNECT_INTERVAL_MS = 30_000;
@@ -34,32 +58,61 @@ function getEmailEncryptionKey(): string {
   return key;
 }
 
-function entityTypeFor(event: CreatedEvent): string {
+function entityTypeFor(event: ModerationEvent): string {
   switch (event.eventType) {
     case 'moderation.round_rating.created':
+    case 'moderation.round_rating.status_changed':
       return 'round_rating';
     case 'moderation.recruiter_rating.created':
+    case 'moderation.recruiter_rating.status_changed':
       return 'recruiter_rating';
     case 'moderation.overall_review.created':
+    case 'moderation.overall_review.status_changed':
       return 'overall_review';
   }
 }
 
-function entityIdFor(event: CreatedEvent): string {
+function entityIdFor(event: ModerationEvent): string {
   switch (event.eventType) {
     case 'moderation.round_rating.created':
+    case 'moderation.round_rating.status_changed':
       return event.roundRatingId;
     case 'moderation.recruiter_rating.created':
+    case 'moderation.recruiter_rating.status_changed':
       return event.recruiterRatingId;
     case 'moderation.overall_review.created':
+    case 'moderation.overall_review.status_changed':
       return event.overallReviewId;
   }
+}
+
+// The two "approved"/"rejected" fixed templates D73 anticipated — never
+// called for 'flagged' (see processEvent's own comment for why that's a
+// deliberate no-op) or 'pending' (review() never re-emits the status it
+// started from).
+function subjectAndBodyFor(newStatus: 'approved' | 'rejected'): { subject: string; text: string; html: string } {
+  if (newStatus === 'approved') {
+    return {
+      subject: 'Your submission has been approved',
+      text: "Good news! Your submission has been reviewed and approved. It's now live.",
+      html: "<p>Good news! Your submission has been reviewed and approved. It's now live.</p>",
+    };
+  }
+  return {
+    subject: 'Your submission was not approved',
+    text: 'Your submission was reviewed and was not approved. Thank you for taking the time to share your feedback.',
+    html: '<p>Your submission was reviewed and was not approved. Thank you for taking the time to share your feedback.</p>',
+  };
 }
 
 // GitHub issue #335 (Phase 31) — the first real consumer of Phase 30's
 // event bus (docs/EVENTS.md). Subscribes to all three moderation.*.created.v1
 // topics and sends a "your submission is pending review" email per event,
-// idempotently.
+// idempotently. GitHub issue #336 extended the same consumer (same
+// consumer group, same idempotency plumbing) to also subscribe to the
+// three moderation.*.status_changed.v1 topics and send an
+// approved/rejected email — see notificationFor()'s own handling of
+// 'flagged' as the one status with no email.
 //
 // Connection handling mirrors api's DomainEventPublisher (GitHub issue
 // #461): a lost or never-established broker connection must never
@@ -110,7 +163,9 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
         eachMessage: (payload) => this.handleMessage(payload),
       });
       this.connected = true;
-      if (wasDisconnected) this.logger.log('Connected to Redpanda, consuming moderation.*.created.v1 topics');
+      if (wasDisconnected) {
+        this.logger.log('Connected to Redpanda, consuming moderation.*.created.v1 and moderation.*.status_changed.v1 topics');
+      }
     } catch (err) {
       this.logger.error(
         'Failed to connect to Redpanda — no pending-review notifications will be sent until the broker recovers',
@@ -127,7 +182,7 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
   private async handleMessage({ topic, message }: EachMessagePayload): Promise<void> {
     if (!message.value) return;
 
-    let event: CreatedEvent;
+    let event: ModerationEvent;
     try {
       event = this.parseEvent(message.value.toString());
     } catch (err) {
@@ -148,8 +203,8 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     }
   }
 
-  private parseEvent(raw: string): CreatedEvent {
-    const event = JSON.parse(raw) as CreatedEvent;
+  private parseEvent(raw: string): ModerationEvent {
+    const event = JSON.parse(raw) as ModerationEvent;
     if (!TOPICS_BY_EVENT_TYPE.has(event.eventType)) {
       throw new Error(`Unrecognized eventType "${String(event.eventType)}"`);
     }
@@ -161,41 +216,50 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
 
   // Public — the actual per-event business logic, deliberately separate
   // from handleMessage()'s kafkajs-shaped envelope so it's unit-testable
-  // against a plain CreatedEvent object, no fake EachMessagePayload
+  // against a plain ModerationEvent object, no fake EachMessagePayload
   // required. Same "keep the testable logic in a public method" shape
   // api's ModerationService.publishCreatedEvent() already uses.
-  async processEvent(event: CreatedEvent): Promise<void> {
+  async processEvent(event: ModerationEvent): Promise<void> {
+    // 'flagged' (GitHub issue #336): the issue/ROADMAP scope is explicitly
+    // "approved/rejected notification" — flagged has no corresponding
+    // email. No NotificationLog row is written for it either: with no
+    // side effect to dedupe, there's nothing idempotency needs to guard —
+    // api's ModerationService.review() rejects re-reviewing an entry that
+    // already has reviewedAt set, so this is a true no-op, not a decision
+    // that a later event could still need to build on.
+    const notification = notificationFor(event);
+    if (!notification) {
+      this.logger.log(`No notification for ${event.eventType}:${entityIdFor(event)} (newStatus is 'flagged') — skipping`);
+      return;
+    }
+
     const entityType = entityTypeFor(event);
     const entityId = entityIdFor(event);
 
-    // Idempotency (issue #335's own acceptance criteria): a redelivered
-    // event must never send a duplicate email. Checked up front so the
-    // common redelivery-of-an-already-handled-event path never re-sends;
-    // the create() below is the actual race-safe guard (a unique
-    // constraint, not this check) for the narrow window where a crash
-    // happens between a successful send and this row being written.
+    // Idempotency (issue #335's own acceptance criteria, extended to
+    // status_changed by #336): a redelivered event must never send a
+    // duplicate email. Checked up front so the common
+    // redelivery-of-an-already-handled-event path never re-sends; the
+    // create() below is the actual race-safe guard (a unique constraint,
+    // not this check) for the narrow window where a crash happens between
+    // a successful send and this row being written.
     const alreadySent = await this.prisma.notificationLog.findUnique({
       where: { entityType_entityId_eventType: { entityType, entityId, eventType: event.eventType } },
     });
     if (alreadySent) {
-      this.logger.log(`Already sent a pending-review email for ${event.eventType}:${entityId} — skipping duplicate`);
+      this.logger.log(`Already sent a notification for ${event.eventType}:${entityId} — skipping duplicate`);
       return;
     }
 
     const candidate = await this.prisma.candidate.findUnique({ where: { id: event.candidateId } });
     if (!candidate?.emailEncrypted) {
-      this.logger.warn(`No email on file for candidate ${event.candidateId} — cannot send pending-review notification`);
+      this.logger.warn(`No email on file for candidate ${event.candidateId} — cannot send notification`);
       return;
     }
 
     const email = decryptEmail(candidate.emailEncrypted, getEmailEncryptionKey());
 
-    await this.mailService.send({
-      to: email,
-      subject: 'Your submission is pending review',
-      text: "Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.",
-      html: "<p>Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.</p>",
-    });
+    await this.mailService.send({ to: email, ...notification });
 
     // Recorded only after a successful send, not before: marking this
     // "done" ahead of the send would mean a transient SMTP error (issue
@@ -217,8 +281,32 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
   }
 }
 
+function isStatusChangedEvent(event: ModerationEvent): event is StatusChangedEvent {
+  return event.eventType.endsWith('.status_changed');
+}
+
+// The notification content for an event, or null when the event is a
+// deliberate no-op (a 'flagged' status_changed — see processEvent's own
+// comment).
+function notificationFor(event: ModerationEvent): { subject: string; text: string; html: string } | null {
+  if (!isStatusChangedEvent(event)) {
+    return {
+      subject: 'Your submission is pending review',
+      text: "Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.",
+      html: "<p>Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.</p>",
+    };
+  }
+  if (event.newStatus === 'approved' || event.newStatus === 'rejected') {
+    return subjectAndBodyFor(event.newStatus);
+  }
+  return null;
+}
+
 const TOPICS_BY_EVENT_TYPE = new Set<string>([
   'moderation.round_rating.created',
   'moderation.recruiter_rating.created',
   'moderation.overall_review.created',
+  'moderation.round_rating.status_changed',
+  'moderation.recruiter_rating.status_changed',
+  'moderation.overall_review.status_changed',
 ]);

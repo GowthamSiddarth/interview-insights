@@ -9,6 +9,7 @@ import { MailService } from '../mail/mail.service';
 import { RoundRatingCreatedEventV1 } from '../events/schemas/round-rating-created.event';
 import { RecruiterRatingCreatedEventV1 } from '../events/schemas/recruiter-rating-created.event';
 import { OverallReviewCreatedEventV1 } from '../events/schemas/overall-review-created.event';
+import { RoundRatingStatusChangedEventV1 } from '../events/schemas/round-rating-status-changed.event';
 
 const ENCRYPTION_KEY = 'a'.repeat(64);
 
@@ -50,6 +51,18 @@ describe('NotificationConsumerService', () => {
     companyId: 'company-1',
     status: 'pending',
   };
+
+  const statusChangedEvent = (newStatus: 'approved' | 'rejected' | 'flagged'): RoundRatingStatusChangedEventV1 => ({
+    eventType: 'moderation.round_rating.status_changed',
+    eventVersion: 1,
+    occurredAt: '2026-07-30T00:00:00.000Z',
+    roundRatingId: 'rating-1',
+    roundId: 'round-1',
+    candidateId: 'candidate-1',
+    companyId: 'company-1',
+    previousStatus: 'pending',
+    newStatus,
+  });
 
   beforeEach(async () => {
     process.env.EMAIL_ENCRYPTION_KEY = ENCRYPTION_KEY;
@@ -183,6 +196,63 @@ describe('NotificationConsumerService', () => {
       await expect(service.processEvent(roundRatingEvent)).resolves.toBeUndefined();
 
       expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('processEvent — status_changed (GitHub issue #336)', () => {
+    it('sends an "approved" email and records it, keyed by the status_changed eventType', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(statusChangedEvent('approved'));
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission has been approved' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: { entityType: 'round_rating', entityId: 'rating-1', eventType: 'moderation.round_rating.status_changed' },
+      });
+    });
+
+    it('sends a "rejected" email and records it', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(statusChangedEvent('rejected'));
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission was not approved' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: { entityType: 'round_rating', entityId: 'rating-1', eventType: 'moderation.round_rating.status_changed' },
+      });
+    });
+
+    it('is a no-op for "flagged" — no email sent, no idempotency lookup, no log row written', async () => {
+      await service.processEvent(statusChangedEvent('flagged'));
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.findUnique).not.toHaveBeenCalled();
+      expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('never sends twice for the same entity+eventType — a redelivered status_changed event is a no-op', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
+
+      await service.processEvent(statusChangedEvent('approved'));
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
       expect(prisma.notificationLog.create).not.toHaveBeenCalled();
     });
   });

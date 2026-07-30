@@ -19,8 +19,13 @@ approve/reject/flag decision — and `EventsModule` is imported into
 all three `*.created` topics and sends a "your submission is pending
 review" email, idempotently (`services/notification-service/src/
 notifications/`, dedupes on entityType+entityId+eventType via its own
-`NotificationLog` table). `*.status_changed` consumption (approved/
-rejected notifications) is GitHub issue #336, not yet built. Phase 32
+`NotificationLog` table). As of GitHub issue #336, the same consumer
+also subscribes to all three `*.status_changed` topics and sends an
+approved/rejected email — `newStatus: 'flagged'` is a deliberate no-op
+(no email, no `NotificationLog` row), since `ModerationService.review()`
+rejects re-reviewing an entry that already has `reviewedAt` set, so a
+flagged item never gets a second status_changed event to act on. Phase
+31 is now fully built out except its closing blog post (#337). Phase 32
 (review-analyzer) hasn't started.
 
 ## Publishing semantics
@@ -94,9 +99,9 @@ Phase 32's review-analyzer, not yet built, is expected to consume the
 same three topics independently (its own consumer group — every
 consumer group gets its own copy of every message, so one consumer's
 processing never affects another's). `moderation.*.status_changed.v1`
-(the approved/rejected notification) has no consumer yet — that's
-GitHub issue #336. See #335/#336/#339 for the actual consumer-side
-wiring.
+(the approved/rejected notification) is consumed by the same
+`notification-service` consumer as of GitHub issue #336. See #335/#336/
+#339 for the actual consumer-side wiring.
 
 ## Adding a new event type
 
