@@ -9,9 +9,16 @@ const CANDIDATE_JWT_SECRET_SECRET_ID = 'interview-insights/candidate-jwt-secret'
 const ADMIN_PASSWORD_HASH_SECRET_ID = 'interview-insights/admin-password-hash';
 const ADMIN_JWT_SECRET_SECRET_ID = 'interview-insights/admin-jwt-secret';
 // Genuinely optional (GitHub issue #163) — unlike every other secret
-// here, an empty value is a valid, deliberate "feature disabled" state,
-// not a misconfiguration. Fetched via fetchOptionalSecret below, not
-// fetchSecret (D78).
+// here, "not configured" is a valid, deliberate state, not a
+// misconfiguration. Fetched via fetchOptionalSecret below, not
+// fetchSecret (D78). "Not configured" means this Secrets Manager entry
+// doesn't exist at all, not that it exists with an empty value: AWS
+// Secrets Manager's CreateSecret requires SecretString to be at least 1
+// character, so seed-localstack.sh/init/seed.sh skip creating this
+// entry entirely when no real key is set, rather than seeding an empty
+// string (found the hard way — seeding "" made the real create-secret
+// call fail, which aborted the rest of both seeding scripts under
+// set -e, silently leaving every IAM role unprovisioned on that run).
 const ANTHROPIC_API_KEY_SECRET_ID = 'interview-insights/anthropic-api-key';
 
 // Opt-in (GitHub issue #79, Phase 11): only runs when SECRETS_SOURCE=
@@ -102,14 +109,25 @@ async function fetchSecret(client: SecretsManagerClient, secretId: string): Prom
   return response.SecretString;
 }
 
-// D78 — unlike fetchSecret, an empty SecretString is a valid result here,
-// not a failure: ANTHROPIC_API_KEY is genuinely optional
-// (isAiModerationEnabled() already treats '' exactly like unset), so a
-// LocalStack-seeded empty string must round-trip as '', not throw.
+// D78 — unlike fetchSecret, a missing secret is a valid result here, not
+// a failure: ANTHROPIC_API_KEY is genuinely optional
+// (isAiModerationEnabled() already treats '' exactly like unset), and
+// "not configured" is represented by the Secrets Manager entry not
+// existing at all (see ANTHROPIC_API_KEY_SECRET_ID's own comment for
+// why an empty-string entry isn't used instead). Any other failure
+// still propagates — only a missing secret is a valid "disabled" state,
+// not e.g. a network error or a misconfigured role.
 async function fetchOptionalSecret(
   client: SecretsManagerClient,
   secretId: string,
 ): Promise<string> {
-  const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
-  return response.SecretString ?? '';
+  try {
+    const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
+    return response.SecretString ?? '';
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ResourceNotFoundException') {
+      return '';
+    }
+    throw err;
+  }
 }

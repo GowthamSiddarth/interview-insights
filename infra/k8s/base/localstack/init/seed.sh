@@ -91,10 +91,20 @@ awslocal secretsmanager delete-secret --secret-id interview-insights/admin-jwt-s
 awslocal secretsmanager create-secret --name interview-insights/admin-jwt-secret \
   --secret-string "$ADMIN_JWT_SECRET_VALUE" > /dev/null
 
-awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
-  --force-delete-without-recovery > /dev/null 2>&1 || true
-awslocal secretsmanager create-secret --name interview-insights/anthropic-api-key \
-  --secret-string "$ANTHROPIC_API_KEY_VALUE" > /dev/null
+# AWS Secrets Manager's CreateSecret rejects an empty SecretString --
+# found the hard way, against a live cluster: seeding "" here aborted
+# the rest of this script under set -e, silently skipping both roles'
+# provisioning below. "Not configured" means this secret doesn't exist
+# at all; api's fetchOptionalSecret() (D78) already treats that as ''.
+if [ -n "$ANTHROPIC_API_KEY_VALUE" ]; then
+  awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
+    --force-delete-without-recovery > /dev/null 2>&1 || true
+  awslocal secretsmanager create-secret --name interview-insights/anthropic-api-key \
+    --secret-string "$ANTHROPIC_API_KEY_VALUE" > /dev/null
+else
+  awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
+    --force-delete-without-recovery > /dev/null 2>&1 || true
+fi
 
 echo "[init-hook] seeding IAM"
 

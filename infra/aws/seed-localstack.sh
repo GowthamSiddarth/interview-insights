@@ -110,12 +110,26 @@ awslocal secretsmanager create-secret --name interview-insights/admin-jwt-secret
   --secret-string "$ADMIN_JWT_SECRET_VALUE" > /dev/null
 echo "OK: created"
 
-echo "== Secrets Manager: interview-insights/anthropic-api-key =="
-awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
-  --force-delete-without-recovery > /dev/null 2>&1 || true
-awslocal secretsmanager create-secret --name interview-insights/anthropic-api-key \
-  --secret-string "$ANTHROPIC_API_KEY_VALUE" > /dev/null
-echo "OK: created"
+# AWS Secrets Manager's CreateSecret requires SecretString to be at
+# least 1 character -- an empty string is rejected outright. Found the
+# hard way: seeding "" made this call fail, which under `set -e` aborted
+# the rest of this script before it ever reached IAM role provisioning
+# below, silently leaving api-secrets-role/notification-service-secrets-
+# role unprovisioned. "Not configured" is represented by this secret not
+# existing at all instead -- api's own fetchOptionalSecret() (D78)
+# already treats a missing secret as "" via ResourceNotFoundException.
+if [ -n "$ANTHROPIC_API_KEY_VALUE" ]; then
+  echo "== Secrets Manager: interview-insights/anthropic-api-key =="
+  awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
+    --force-delete-without-recovery > /dev/null 2>&1 || true
+  awslocal secretsmanager create-secret --name interview-insights/anthropic-api-key \
+    --secret-string "$ANTHROPIC_API_KEY_VALUE" > /dev/null
+  echo "OK: created"
+else
+  echo "== Secrets Manager: interview-insights/anthropic-api-key (skipped, no real key configured) =="
+  awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
+    --force-delete-without-recovery > /dev/null 2>&1 || true
+fi
 
 # Provisions one IAM role + its attached least-privilege policy, given
 # role name / policy name / policy JSON path. Called once per service

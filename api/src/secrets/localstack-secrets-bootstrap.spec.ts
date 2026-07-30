@@ -67,7 +67,30 @@ describe('bootstrapSecretsFromLocalStack', () => {
     expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-real-key');
   });
 
-  it('sets ANTHROPIC_API_KEY to an empty string rather than throwing when the secret is seeded empty (D78)', async () => {
+  it('sets ANTHROPIC_API_KEY to an empty string rather than throwing when the secret does not exist (D78)', async () => {
+    process.env.SECRETS_SOURCE = 'localstack';
+    process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
+    stsSend.mockResolvedValue({
+      Credentials: { AccessKeyId: 'AKIA', SecretAccessKey: 'shh', SessionToken: 'token' },
+    });
+    const notFound = Object.assign(new Error("Secrets Manager can't find the specified secret."), {
+      name: 'ResourceNotFoundException',
+    });
+    secretsManagerSend
+      .mockResolvedValueOnce({ SecretString: 'postgresql://real-db' })
+      .mockResolvedValueOnce({ SecretString: 'real-email-hash-secret' })
+      .mockResolvedValueOnce({ SecretString: 'real-email-encryption-key' })
+      .mockResolvedValueOnce({ SecretString: 'real-candidate-jwt-secret' })
+      .mockResolvedValueOnce({ SecretString: 'real-admin-password-hash' })
+      .mockResolvedValueOnce({ SecretString: 'real-admin-jwt-secret' })
+      .mockRejectedValueOnce(notFound);
+
+    await bootstrapSecretsFromLocalStack();
+
+    expect(process.env.ANTHROPIC_API_KEY).toBe('');
+  });
+
+  it('rethrows a non-ResourceNotFoundException error while fetching the optional Anthropic secret', async () => {
     process.env.SECRETS_SOURCE = 'localstack';
     process.env.AWS_SECRETS_ROLE_ARN = 'arn:aws:iam::000000000000:role/api-secrets-role';
     stsSend.mockResolvedValue({
@@ -80,11 +103,9 @@ describe('bootstrapSecretsFromLocalStack', () => {
       .mockResolvedValueOnce({ SecretString: 'real-candidate-jwt-secret' })
       .mockResolvedValueOnce({ SecretString: 'real-admin-password-hash' })
       .mockResolvedValueOnce({ SecretString: 'real-admin-jwt-secret' })
-      .mockResolvedValueOnce({ SecretString: '' });
+      .mockRejectedValueOnce(new Error('network blip'));
 
-    await bootstrapSecretsFromLocalStack();
-
-    expect(process.env.ANTHROPIC_API_KEY).toBe('');
+    await expect(bootstrapSecretsFromLocalStack()).rejects.toThrow('network blip');
   });
 
   it('throws when AssumeRole returns no usable temporary credentials', async () => {

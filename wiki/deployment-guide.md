@@ -559,8 +559,14 @@ CD), then restart `api`. Genuinely optional, unlike `ADMIN_PASSWORD_HASH`/
 advisory LLM triage disabled — every write still succeeds normally,
 `moderationVerdict` simply stays `null`. This is also why the bootstrap
 fetches it via `fetchOptionalSecret`, not the strict `fetchSecret` every
-other secret uses (D78) — an empty value here is a valid result, not a
-failure. `ANTHROPIC_MODEL` is not a secret — it lives in the plain
+other secret uses (D78) — the Secrets Manager entry simply not existing
+is a valid "disabled" result here, not a failure. It's deliberately
+*not* seeded as an empty string when unset: AWS Secrets Manager rejects
+an empty `SecretString` outright, which broke this exact rollout once
+already (see `docs/SECRETS.md`'s gotcha for the full story) —
+`interview-insights/anthropic-api-key` is either a real value or absent
+entirely, never present-and-empty. `ANTHROPIC_MODEL` is not a secret —
+it lives in the plain
 `api-config` ConfigMap alongside `ADMIN_USERNAME`.
 
 **Native local dev** (section 1): edit `api/.env` directly, then restart
