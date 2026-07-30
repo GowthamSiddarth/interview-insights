@@ -64,7 +64,7 @@ the original plan" below.
 | Fraud checks | In-process, same module family | Rate-limit (3/24h) + duplicate-text flag, never blocks writes (D13) |
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
 | Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — see `docs/EVENTS.md` |
-| `notification-service` (`services/notification-service/`) | NestJS, own Deployment | First standalone microservice (Phase 31, D53/D73, GitHub issue #334) — deployed, zero consumers wired yet; `*.created`/`*.status_changed` consumption + candidate emails land in #335/#336 |
+| `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). As of #335, a real consumer: subscribes to all three `moderation.*.created.v1` topics and sends a "your submission is pending review" email, idempotently. `*.status_changed` consumption (approved/rejected) lands in #336 |
 | Secrets/IAM | LocalStack (dev-localstack overlay) | Default CD target as of Phase 12 issue #99 (D23) |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,dev-localstack,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |
@@ -190,7 +190,9 @@ interview-insights/
 ├── workers/                    # placeholder — no logic (D12)
 ├── services/
 │   └── notification-service/   # first standalone microservice (Phase 31, D53/D73)
-│       ├── src/health/         # only module wired so far (#334) — consumer lands in #335/#336
+│       ├── prisma/schema.prisma  # own minimal client, no migrations of its own (D75)
+│       ├── src/notifications/    # NotificationConsumerService — real *.created consumer (#335)
+│       ├── src/health/
 │       └── Dockerfile
 ├── infra/
 │   ├── docker-compose.yml      # inert reference only (D24/D26 — kind runs both stores) / --profile full / --profile localstack

@@ -14,8 +14,14 @@ like, how it's published, and how it's versioned.
 publishes all six event types below from the real write paths — every
 incremental create endpoint, the bulk-submission path, and every
 approve/reject/flag decision — and `EventsModule` is imported into
-`AppModule` (via `ModerationModule`). No consumer exists yet; Phase 31
-(notification-service) and Phase 32 (review-analyzer) are the first two.
+`AppModule` (via `ModerationModule`). As of GitHub issue #335,
+`notification-service` is the first real consumer — it subscribes to
+all three `*.created` topics and sends a "your submission is pending
+review" email, idempotently (`services/notification-service/src/
+notifications/`, dedupes on entityType+entityId+eventType via its own
+`NotificationLog` table). `*.status_changed` consumption (approved/
+rejected notifications) is GitHub issue #336, not yet built. Phase 32
+(review-analyzer) hasn't started.
 
 ## Publishing semantics
 
@@ -82,12 +88,15 @@ Published from:
   implementation behind `approve()`/`reject()`/`flag()` (and
   `approveWithAudit()`, the AI auto-approval entry point).
 
-No consumer exists yet. Once one does, `moderation.*.created.v1` is the
-event both Phase 31's "your submission is pending review" notification
-and Phase 32's review-analyzer are expected to consume, and
-`moderation.*.status_changed.v1` is what Phase 31's approved/rejected
-notification consumes — see their own issues (#335, #336, #339) for the
-actual consumer-side wiring.
+`moderation.*.created.v1` is consumed by `notification-service` as of
+GitHub issue #335 (the "your submission is pending review" email);
+Phase 32's review-analyzer, not yet built, is expected to consume the
+same three topics independently (its own consumer group — every
+consumer group gets its own copy of every message, so one consumer's
+processing never affects another's). `moderation.*.status_changed.v1`
+(the approved/rejected notification) has no consumer yet — that's
+GitHub issue #336. See #335/#336/#339 for the actual consumer-side
+wiring.
 
 ## Adding a new event type
 

@@ -6,9 +6,11 @@ describe('CandidatesService', () => {
   let service: CandidatesService;
   let prisma: { candidate: { upsert: jest.Mock; findUniqueOrThrow: jest.Mock } };
   const originalSecret = process.env.EMAIL_HASH_SECRET;
+  const originalEncryptionKey = process.env.EMAIL_ENCRYPTION_KEY;
 
   beforeEach(async () => {
     process.env.EMAIL_HASH_SECRET = 'test-secret';
+    process.env.EMAIL_ENCRYPTION_KEY = 'a'.repeat(64);
     prisma = {
       candidate: {
         upsert: jest.fn(),
@@ -25,10 +27,13 @@ describe('CandidatesService', () => {
 
   afterEach(() => {
     process.env.EMAIL_HASH_SECRET = originalSecret;
+    process.env.EMAIL_ENCRYPTION_KEY = originalEncryptionKey;
   });
 
   it('upserts on the hashed email, never the raw email', async () => {
-    let capturedArgs: { where: { emailHash: string }; create: { emailHash: string } } | undefined;
+    let capturedArgs:
+      | { where: { emailHash: string }; create: { emailHash: string; emailEncrypted: string } }
+      | undefined;
     prisma.candidate.upsert.mockImplementation((args: typeof capturedArgs) => {
       capturedArgs = args;
       return Promise.resolve({
@@ -45,6 +50,12 @@ describe('CandidatesService', () => {
     expect(capturedArgs?.where.emailHash).toBeDefined();
     expect(capturedArgs?.where.emailHash).not.toContain('candidate');
     expect(capturedArgs?.create.emailHash).toBe(capturedArgs?.where.emailHash);
+    // GitHub issue #335, D74 — the reversible copy notification-service
+    // needs is written alongside the hash, but the stored value must
+    // still never contain the plaintext.
+    expect(capturedArgs?.create.emailEncrypted).toBeDefined();
+    expect(capturedArgs?.create.emailEncrypted).not.toContain('candidate');
+    expect(capturedArgs?.create.emailEncrypted).not.toContain('example.com');
   });
 
   it('never returns emailHash from create()', async () => {
@@ -72,6 +83,14 @@ describe('CandidatesService', () => {
 
     await expect(service.create({ email: 'candidate@example.com' })).rejects.toThrow(
       'EMAIL_HASH_SECRET',
+    );
+  });
+
+  it('throws if EMAIL_ENCRYPTION_KEY is not configured', async () => {
+    delete process.env.EMAIL_ENCRYPTION_KEY;
+
+    await expect(service.create({ email: 'candidate@example.com' })).rejects.toThrow(
+      'EMAIL_ENCRYPTION_KEY',
     );
   });
 });

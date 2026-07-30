@@ -1,7 +1,10 @@
 # Phase 31 (D53), GitHub issue #334 — the first standalone microservice
-# this project deploys. No Ingress: it has no public HTTP API of its own,
-# at least until #335/#336 wire in a real Redpanda consumer — /health is
-# reachable in-cluster only, same as postgres/opensearch/redpanda.
+# this project deploys. No Ingress: it has no public HTTP API of its own
+# — /health is reachable in-cluster only, same as postgres/opensearch/
+# redpanda. As of GitHub issue #335, this pod is a real Redpanda consumer
+# (moderation.*.created.v1) with its own Postgres access (docs/DECISIONS.md
+# D75) — REDPANDA_BROKERS/DATABASE_URL/MAIL_SMTP_* below mirror
+# 05-api.yaml's/09-redpanda.yaml's own in-cluster Service DNS names.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,6 +12,26 @@ metadata:
   namespace: interview-insights
 data:
   PORT: "3002"
+  REDPANDA_BROKERS: redpanda:9092
+  MAIL_SMTP_HOST: mailpit
+  MAIL_SMTP_PORT: "1025"
+---
+# Plaintext, same local-only reasoning as 01-postgres-secret.yaml/
+# 05-api.yaml's api-secrets — not wired into the LocalStack secrets flow
+# (docs/DECISIONS.md D74's own note: that move only happens once/if this
+# value is ever rotated to something real, same standing as
+# CANDIDATE_JWT_SECRET). EMAIL_ENCRYPTION_KEY must be the exact same
+# value as api-secrets' own EMAIL_ENCRYPTION_KEY (GitHub issue #335,
+# D74) — this service can only decrypt what api encrypted under it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-service-secrets
+  namespace: interview-insights
+type: Opaque
+stringData:
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public
+  EMAIL_ENCRYPTION_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
 ---
 apiVersion: v1
 kind: Service
@@ -46,6 +69,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: notification-service-config
+            - secretRef:
+                name: notification-service-secrets
           readinessProbe:
             httpGet:
               path: /health

@@ -1269,7 +1269,7 @@ hasn't fired.
 
 - [x] `notification-service` skeleton + its own Dockerfile/k8s
       manifest/CD step (GitHub issue #334)
-- [ ] Consume `*.created` events → "your submission is pending review"
+- [x] Consume `*.created` events → "your submission is pending review"
       email, idempotent (GitHub issue #335)
 - [ ] Consume `*.status_changed` events → approved/rejected
       notification, idempotent (GitHub issue #336)
