@@ -436,20 +436,33 @@ unconditionally); if you need it fixed before the next push, re-run
 step 3 by hand against the restarted LocalStack pod, then
 `rollout restart deployment/api deployment/notification-service` again.
 
-## 5b. Admin credential rotation (GitHub issue #192, Phase 18)
+## 5b. Admin credential rotation (GitHub issue #192, Phase 18; sourcing changed by #466's follow-up, D78)
 
 `ADMIN_PASSWORD_HASH` and `ADMIN_JWT_SECRET` are deliberately **not** in
 any git-tracked manifest — `infra/k8s/base/05-api.yaml` has carried no
-committed Secret at all for `api` since GitHub issue #466/D76 (every one
-of `api`'s secrets now either comes from LocalStack at boot or, like
-these two, is provisioned imperatively). A "real"
+committed Secret at all for `api` since GitHub issue #466/D76. A "real"
 rotated admin credential committed to a manifest would be exactly as
 public as the dev-only placeholder it replaced (`bcrypt("dev-only-admin-
 password")`, `"dev-only-change-me-too"` — both still fine to use in
 `api/.env` for native local dev, which never leaves `localhost`). Both
-keys instead live in a separate `admin-credentials` Secret, provisioned
-imperatively — same pattern as `localstack-credentials`/
+keys still live in a separate `admin-credentials` Secret, provisioned
+imperatively exactly as before — same pattern as `localstack-credentials`/
 `LOCALSTACK_AUTH_TOKEN` above (`docs/DECISIONS.md` D23).
+
+**What changed (D78):** `api` no longer reads `admin-credentials`
+directly. It fetches `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` from
+LocalStack Secrets Manager at boot, same as every other secret it reads
+(`docs/SECRETS.md` has the full mechanism). `admin-credentials` is now
+*also* consumed by **LocalStack's own pod**
+(`infra/k8s/base/localstack/08-localstack.yaml`), but only so its
+init-hook can self-heal Secrets Manager after an *unplanned* restart —
+routine rotation doesn't depend on that at all. The actual thing that
+updates Secrets Manager on a deliberate rotation is
+`infra/aws/seed-localstack.sh` (the outer script `cd.yml`/
+`bootstrap-kind.sh` already run explicitly every deploy), which
+re-seeds it directly from whatever `$ADMIN_PASSWORD_HASH`/
+`$ADMIN_JWT_SECRET` currently are — no LocalStack pod restart required.
+Only `api` needs restarting, to re-fetch the now-updated value.
 
 **One-time setup:**
 
@@ -475,19 +488,30 @@ kubectl create secret generic admin-credentials \
   --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET"
 ```
 
-**What CD does on every push** (`cd.yml`'s "Provision admin credentials
-secret" step, right before the LocalStack one): upserts
-`admin-credentials` from the two repo secrets, before the overlay apply
-that (re)creates `deployment/api`'s pod — same "doesn't hot-reload"
-ordering requirement LocalStack's own credential has.
+**What CD does on every push:** `cd.yml`'s "Provision admin credentials
+secret" step upserts `admin-credentials` from the two repo secrets
+first; its "Seed LocalStack secrets + IAM" step (D78 added
+`ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` to that step's own `env:`)
+re-seeds Secrets Manager directly from those same values on every run,
+regardless of whether LocalStack's pod itself restarted; "Roll out api"
+then restarts `api` to pick up the fresh fetch. LocalStack's pod only
+needs to restart if its own Deployment *spec* changed (e.g. this
+migration's own rollout) — not as part of routine rotation.
 
 **To rotate again later:** repeat the one-time setup with fresh values,
-then either push anything that triggers CD, or run
-`kubectl -n interview-insights rollout restart deployment/api` by hand
-after re-running the `kubectl create secret` command above. The *old*
-password stops working the moment the new Secret is live and `api`
-restarts — there's no overlap window, matching this project's single-
-admin, single-credential scope (`docs/ROADMAP.md` Phase 18).
+then either push anything that triggers CD, or run these two steps by
+hand — re-seed first, then restart `api`:
+
+```bash
+kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
+LOCALSTACK_ENDPOINT=http://localhost:4566 ./infra/aws/seed-localstack.sh
+kubectl -n interview-insights rollout restart deployment/api
+kubectl -n interview-insights rollout status deployment/api --timeout=90s
+```
+
+The *old* password stops working the moment `api`'s restart completes —
+there's no overlap window, matching this project's single-admin,
+single-credential scope (`docs/ROADMAP.md` Phase 18).
 
 ## 5c. AI moderation triage & auto-approval (GitHub issues #163, #439, #441, Phase 19/39)
 
@@ -497,7 +521,7 @@ ever auto-publish without a human:
 
 | Var | What it gates | Where it lives | Safe/default value |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | The LLM triage call itself. Empty/unset = `AiModerationService` is a complete no-op — nothing else below ever runs. | `anthropic-credentials` Secret (imperative, never committed) | unset |
+| `ANTHROPIC_API_KEY` | The LLM triage call itself. Empty/unset = `AiModerationService` is a complete no-op — nothing else below ever runs. | Fetched from LocalStack Secrets Manager at boot (D78) — rooted in the `anthropic-credentials` Secret (imperative, never committed), consumed by LocalStack's own pod rather than `api` directly (`docs/SECRETS.md` has the mechanism) | unset |
 | `AI_MODERATION_AUTO_APPROVE_THRESHOLD` | The confidence cutoff (D71). Unset (or an empty string — see the issue #450 gotcha below) = nothing is ever auto-approve-eligible; triage still runs and stores an advisory verdict. | `api-config` ConfigMap (not a secret) | `""` |
 | `AI_AUTO_APPROVAL_ENABLED` | The kill switch (issue #441). Must be exactly `"true"`; anything else = advisory-only regardless of the threshold. | `api-config` ConfigMap (not a secret) | `"false"` |
 
@@ -521,15 +545,23 @@ an empty string the same as truly unset.
 
 ### Step 1 — base triage: `ANTHROPIC_API_KEY`
 
-`ANTHROPIC_API_KEY` follows the same never-committed, imperatively-
-provisioned pattern as `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` (5b
-above) and `LOCALSTACK_AUTH_TOKEN` (5 above) — but unlike those two, it's
-genuinely optional. An empty/unset key just leaves
-`AiModerationService`'s advisory LLM triage disabled: every write still
-succeeds normally, `moderationVerdict` simply stays `null`, and nothing
-else in the app depends on this Secret existing. `ANTHROPIC_MODEL` is not
-a secret — it lives in the plain `api-config` ConfigMap alongside
-`ADMIN_USERNAME`.
+`ANTHROPIC_API_KEY` is rooted in the same never-committed, imperatively-
+provisioned `anthropic-credentials` Secret as `ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET` (5b above), but since D78, `api` fetches it from
+LocalStack Secrets Manager at boot like every other secret, rather than
+reading `anthropic-credentials` directly — see `docs/SECRETS.md` for
+the full mechanism (LocalStack's own pod is the one consuming
+`anthropic-credentials` now, so its init-hook can reseed the real value
+after an unplanned restart). Rotation is the same two-step shape 5b
+describes: re-run `infra/aws/seed-localstack.sh` (or push to trigger
+CD), then restart `api`. Genuinely optional, unlike `ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET`: an empty/unset key just leaves `AiModerationService`'s
+advisory LLM triage disabled — every write still succeeds normally,
+`moderationVerdict` simply stays `null`. This is also why the bootstrap
+fetches it via `fetchOptionalSecret`, not the strict `fetchSecret` every
+other secret uses (D78) — an empty value here is a valid result, not a
+failure. `ANTHROPIC_MODEL` is not a secret — it lives in the plain
+`api-config` ConfigMap alongside `ADMIN_USERNAME`.
 
 **Native local dev** (section 1): edit `api/.env` directly, then restart
 `npm run start:dev`. This works even though nothing in `api/src` calls
@@ -629,10 +661,40 @@ because it needs its credential before any of this project's own code
 exists to fetch one from Secrets Manager, ruling out the LocalStack-at-
 boot pattern sections 5/5c's secrets use.
 
+**You can pick any value — with two gotchas:**
+
+1. **It must reach `seed-localstack.sh`, not just `postgres-credentials`.**
+   `api`/`notification-service` don't read `POSTGRES_PASSWORD` directly —
+   they get a `DATABASE_URL` connection string from LocalStack, and
+   `seed-localstack.sh` builds that string as `postgresql://postgres:
+   ${POSTGRES_PASSWORD:-postgres}@postgres:...` (GitHub issue #466, D77).
+   If `$POSTGRES_PASSWORD` isn't set in the environment `seed-localstack.sh`
+   itself runs in, it silently falls back to the literal `postgres` —
+   `bootstrap-kind.sh` and `cd.yml`'s "Seed LocalStack secrets + IAM" step
+   both already export/pass it through for exactly this reason, so this
+   is only a risk if you're invoking `seed-localstack.sh` by hand.
+   Picking a password and only setting it on `postgres-credentials`
+   (without it reaching the seed step too) means Postgres's real
+   password and the `DATABASE_URL` api/notification-service fetch go out
+   of sync — connections start failing with an auth error, not
+   immediately obviously connected to this setting.
+2. **It only takes effect on a genuinely fresh Postgres data volume.**
+   Postgres only reads `POSTGRES_PASSWORD` during `initdb` (first startup
+   against an empty data directory) — changing the Secret's value against
+   an *already-initialized* PVC does nothing to the running database's
+   real password. See "To rotate again later" below for that case.
+   **If you're setting this up for the first time against a cluster that
+   already has Postgres data from before this change (when the password
+   was the hardcoded `postgres`), keep `POSTGRES_PASSWORD=postgres` for
+   now** — that matches what's already `initdb`'d, and this change was
+   about not committing the value to git, not about forcing an
+   unrelated rotation. Pick a real value only on a fresh cluster, or
+   once you've done the `ALTER USER` rotation below.
+
 **One-time setup:**
 
 ```bash
-NEW_POSTGRES_PASSWORD=$(openssl rand -base64 24)
+NEW_POSTGRES_PASSWORD=$(openssl rand -base64 24)   # or: postgres, if reusing existing data — see above
 gh secret set POSTGRES_PASSWORD   # paste NEW_POSTGRES_PASSWORD
 
 # Only needed to apply this manually, outside CD (e.g.
@@ -647,7 +709,9 @@ kubectl create secret generic postgres-credentials \
 credentials secret" step): upserts `postgres-credentials` from the repo
 secret, before the overlay apply that (re)creates the Postgres
 `StatefulSet`'s pod — same "doesn't hot-reload" ordering requirement
-`admin-credentials`/LocalStack's own credential have.
+`admin-credentials`/LocalStack's own credential have. The "Seed
+LocalStack secrets + IAM" step further down also reads the same repo
+secret (gotcha 1 above), so `DATABASE_URL` stays in sync automatically.
 
 **To rotate again later:** changing this password only affects a *new*
 Postgres pod's own `initdb` — since GitHub issue #466 doesn't add a

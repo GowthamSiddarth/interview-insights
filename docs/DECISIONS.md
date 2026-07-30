@@ -3580,6 +3580,84 @@ either pattern documented here.
 
 ---
 
+### D78 — `admin-credentials`/`anthropic-credentials` migrate to LocalStack too, via envFrom into LocalStack's own pod (GitHub issue #466 follow-up)
+
+**Context:** Issue #466 explicitly left migrating
+`admin-credentials`/`anthropic-credentials` to LocalStack Secrets
+Manager as "stretch/lower-priority" — both were already compliant with
+CLAUDE.md's hard constraint #6 (imperatively provisioned, never
+committed), so this was about reducing to one canonical pattern for
+`api`'s secrets, not fixing a violation. A direct follow-up request
+asked for it anyway.
+
+The naive version of this migration has a real problem, found before
+writing any code: LocalStack's Deployment has no PVC by design
+(`08-localstack.yaml`'s own comment — "practice tool, not a source of
+truth") and loses its Secrets Manager state on any unplanned restart.
+The init-hook (`infra/k8s/base/localstack/init/seed.sh`) already
+self-heals this for `EMAIL_HASH_SECRET`-style secrets by reseeding a
+committed dev-only placeholder value on every start. It cannot do the
+same for `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` — by this project's
+own explicit intent (`admin-auth.env.ts`'s own comment, GitHub issue
+#192), those never have a committed placeholder at all. Migrating them
+naively would make the admin login newly dependent on LocalStack's
+uptime, with no way for the init-hook to recover the real value after a
+restart — a real regression from today, where `admin-credentials` has
+zero dependency on LocalStack.
+
+**Decision:** Give LocalStack's own pod targeted `env.valueFrom.
+secretKeyRef` access to `admin-credentials`/`anthropic-credentials` —
+the exact mechanism it already uses for its own `localstack-credentials`/
+`LOCALSTACK_AUTH_TOKEN`. The init-hook reads
+`$ADMIN_PASSWORD_HASH`/`$ADMIN_JWT_SECRET`/`$ANTHROPIC_API_KEY` from its
+own now-populated environment and seeds Secrets Manager with those real
+values on every start, including an unplanned restart — genuine
+self-healing, not a placeholder. `admin-credentials`/
+`anthropic-credentials` stay provisioned imperatively exactly as before
+(GitHub issue #192/#163, unchanged in `cd.yml`/`bootstrap-kind.sh`) —
+they simply feed LocalStack now instead of feeding `api` directly.
+`api`'s own Deployment (`05-api.yaml`) drops its direct `secretRef`
+entries for both; it fetches these from Secrets Manager like every
+other secret it reads.
+
+**Optionality:** `ANTHROPIC_API_KEY` must stay genuinely optional
+(`isAiModerationEnabled()` treats an empty value exactly like unset).
+A Secrets Manager entry can hold an empty string, but the existing
+`fetchSecret()` helper throws on `!response.SecretString`, which is
+also true for `''`. Added a sibling `fetchOptionalSecret()`
+(`api/src/secrets/localstack-secrets-bootstrap.ts`) that returns
+`response.SecretString ?? ''` without throwing, used only for this one
+secret — `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` keep the strict
+`fetchSecret()`, since they must never legitimately be empty. This
+mirrors the project's own established "empty string is the deliberate
+off-switch value" idiom (`AI_MODERATION_AUTO_APPROVE_THRESHOLD`, GitHub
+issue #450) rather than inventing new semantics or catching
+`ResourceNotFoundException` to mean "disabled."
+
+**Accepted tradeoff:** the real admin credential now also transits
+through LocalStack's own container environment, not just `api`'s. This
+isn't a new *kind* of exposure — `LOCALSTACK_AUTH_TOKEN` already works
+identically — just one more place the value exists, at this project's
+current all-local-dev, Phase-8b-gated scope.
+
+**This closes the "stretch work" question from #466 for good, in both
+directions:** `admin-credentials`/`anthropic-credentials` are migrated;
+`postgres-credentials`/`localstack-credentials` (D77 and this project's
+LocalStack-bootstrap-token problem respectively) remain permanent,
+structural exceptions — not future migration candidates, because both
+are needed before *any* mechanism that could fetch them from Secrets
+Manager exists yet. `docs/SECRETS.md` documents the full inventory and
+this envFrom mechanism in detail.
+
+**Revisit when:** Phase 8b's real AWS environment exists — real IAM
+roles for service accounts (IRSA) or a different secrets-injection
+mechanism entirely would likely replace this whole envFrom-into-
+LocalStack trick, which is specific to LocalStack's own restart
+fragility and has no equivalent problem against real, durable AWS
+Secrets Manager.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

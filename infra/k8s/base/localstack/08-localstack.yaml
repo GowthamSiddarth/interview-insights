@@ -20,6 +20,19 @@
 #   kubectl create secret generic localstack-credentials \
 #     --namespace interview-insights \
 #     --from-literal=LOCALSTACK_AUTH_TOKEN="$LOCALSTACK_AUTH_TOKEN"
+#
+# ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET/ANTHROPIC_API_KEY below (GitHub
+# issue #466's own follow-up, D78) exist here for exactly one reason:
+# init/seed.sh (mounted below) needs the *real* values to seed Secrets
+# Manager with on every LocalStack start, including an unplanned
+# restart — it can't hardcode a committed placeholder the way it does
+# for e.g. EMAIL_HASH_SECRET, because ADMIN_PASSWORD_HASH/
+# ADMIN_JWT_SECRET deliberately never have one (same reasoning
+# admin-auth.env.ts's own comment gives). Same admin-credentials/
+# anthropic-credentials Secrets `api` used to read directly — those
+# entries were removed from api's own Deployment (05-api.yaml) once api
+# started fetching these from Secrets Manager instead; LocalStack's pod
+# is now the only consumer of them as k8s Secrets.
 apiVersion: v1
 kind: Service
 metadata:
@@ -60,6 +73,21 @@ spec:
                 secretKeyRef:
                   name: localstack-credentials
                   key: LOCALSTACK_AUTH_TOKEN
+            - name: ADMIN_PASSWORD_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: admin-credentials
+                  key: ADMIN_PASSWORD_HASH
+            - name: ADMIN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: admin-credentials
+                  key: ADMIN_JWT_SECRET
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-credentials
+                  key: ANTHROPIC_API_KEY
           # No PVC — this is a practice/prototype tool, not a source of
           # truth (unlike postgres/opensearch's StatefulSets); losing its
           # state on pod restart is expected. The init-hook mount below

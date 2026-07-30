@@ -21,7 +21,9 @@
 # shared code, same as this project's overlay pairs already are. GitHub
 # issue #466 (D76) extended this to every remaining api secret plus
 # notification-service's own role -- this file's own out-of-sync-ness
-# after that PR merged is exactly the risk this comment is warning about.
+# after that PR merged is exactly the risk this comment is warning
+# about. #466's own follow-up (D78) added admin-credentials/
+# anthropic-credentials on top -- same warning applies.
 #
 # POSTGRES_PASSWORD isn't available inside this container the way it is
 # for infra/aws/seed-localstack.sh's own DATABASE_URL_VALUE (GitHub issue
@@ -34,12 +36,27 @@
 # (with $POSTGRES_PASSWORD set) after any LocalStack restart, same as
 # this hook already can't help with anything infra/aws/seed-localstack.sh
 # takes as a SEED_* override.
+#
+# ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET/ANTHROPIC_API_KEY (GitHub issue
+# #466's own follow-up, D78) are different from every value above: they
+# have no dev-only placeholder to hardcode here at all -- by this
+# project's own explicit intent, ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET
+# never have one (admin-auth.env.ts's own comment), so this reads the
+# *real* values from its own environment instead
+# (../08-localstack.yaml's env.valueFrom.secretKeyRef entries, sourced
+# from the same admin-credentials/anthropic-credentials Secrets `api`
+# used to read directly before this issue). This is what actually closes
+# the durability gap: an unplanned restart now reseeds these with the
+# real value, not a placeholder api would reject anyway.
 set -euo pipefail
 
 DATABASE_URL_VALUE="postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public"
 EMAIL_HASH_SECRET_VALUE="localstack-seeded-secret-change-me"
 EMAIL_ENCRYPTION_KEY_VALUE="1111111111111111111111111111111111111111111111111111111111111111"
 CANDIDATE_JWT_SECRET_VALUE="localstack-seeded-candidate-jwt-secret-change-me"
+ADMIN_PASSWORD_HASH_VALUE="$ADMIN_PASSWORD_HASH"
+ADMIN_JWT_SECRET_VALUE="$ADMIN_JWT_SECRET"
+ANTHROPIC_API_KEY_VALUE="$ANTHROPIC_API_KEY"
 ACCOUNT_ID="000000000000"
 
 echo "[init-hook] seeding Secrets Manager"
@@ -63,6 +80,21 @@ awslocal secretsmanager delete-secret --secret-id interview-insights/candidate-j
   --force-delete-without-recovery > /dev/null 2>&1 || true
 awslocal secretsmanager create-secret --name interview-insights/candidate-jwt-secret \
   --secret-string "$CANDIDATE_JWT_SECRET_VALUE" > /dev/null
+
+awslocal secretsmanager delete-secret --secret-id interview-insights/admin-password-hash \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/admin-password-hash \
+  --secret-string "$ADMIN_PASSWORD_HASH_VALUE" > /dev/null
+
+awslocal secretsmanager delete-secret --secret-id interview-insights/admin-jwt-secret \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/admin-jwt-secret \
+  --secret-string "$ADMIN_JWT_SECRET_VALUE" > /dev/null
+
+awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/anthropic-api-key \
+  --secret-string "$ANTHROPIC_API_KEY_VALUE" > /dev/null
 
 echo "[init-hook] seeding IAM"
 
@@ -106,7 +138,10 @@ provision_role_and_policy "api-secrets-role" "api-secrets-access-policy" '{
         "arn:aws:secretsmanager:*:*:secret:interview-insights/email-hash-secret-*",
         "arn:aws:secretsmanager:*:*:secret:interview-insights/database-url-*",
         "arn:aws:secretsmanager:*:*:secret:interview-insights/email-encryption-key-*",
-        "arn:aws:secretsmanager:*:*:secret:interview-insights/candidate-jwt-secret-*"
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/candidate-jwt-secret-*",
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-password-hash-*",
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-jwt-secret-*",
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/anthropic-api-key-*"
       ]
     }
   ]

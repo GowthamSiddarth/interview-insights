@@ -2,7 +2,9 @@
 # Seeds a LocalStack instance with what api (and, since GitHub issue #466/
 # D76, notification-service) needs for its real secrets/IAM path (GitHub
 # issue #78 originally; #466 extended it to every remaining api secret
-# plus notification-service's own role): the secrets each service reads
+# plus notification-service's own role; #466's own follow-up, D78, added
+# admin-credentials/anthropic-credentials — every secret api reads now
+# comes from exactly this one path): the secrets each service reads
 # at boot, an IAM role per service trusted to be assumed, and each
 # service's own *-secrets-access-policy.json attached to its own role.
 # Idempotent — safe to re-run against the same LocalStack instance.
@@ -25,8 +27,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # database-url matches the in-cluster Postgres Service DNS (infra/k8s/base/
 # 03-postgres.yaml) — the same value api used to read from a plaintext
 # k8s Secret, just sourced from Secrets Manager instead once GitHub issue
-# #79 wired the boot path to actually read it from here.
-DATABASE_URL_VALUE="${SEED_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public}"
+# #79 wired the boot path to actually read it from here. Must embed the
+# *actual* Postgres password (GitHub issue #466, D77): since that
+# password now comes from the imperatively-provisioned
+# `postgres-credentials` Secret, not a fixed committed value, this
+# defaults to $POSTGRES_PASSWORD (already required/exported by
+# bootstrap-kind.sh, and passed explicitly by cd.yml's "Seed LocalStack
+# secrets + IAM" step) rather than a hardcoded "postgres" — getting this
+# out of sync with the real Postgres password is exactly the kind of
+# footgun D77 was trying to avoid by keeping the two wired together
+# instead of two independent places to update by hand. Falls back to the
+# literal "postgres" only for the no-real-Postgres-involved LocalStack
+# practice flow (README's "Alternative: LocalStack for IAM/Secrets
+# Manager practice", GitHub issue #66) where $POSTGRES_PASSWORD is never
+# set and this value is never actually dialed.
+DATABASE_URL_VALUE="${SEED_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/interview_insights?schema=public}"
 EMAIL_HASH_SECRET_VALUE="${SEED_EMAIL_HASH_SECRET:-localstack-seeded-secret-change-me}"
 # GitHub issue #466 (D76) — the last two secrets api/notification-service
 # still carried as committed plaintext k8s-Secret fallbacks. Must be a
@@ -36,6 +51,18 @@ EMAIL_HASH_SECRET_VALUE="${SEED_EMAIL_HASH_SECRET:-localstack-seeded-secret-chan
 # can only decrypt what api encrypted under it.
 EMAIL_ENCRYPTION_KEY_VALUE="${SEED_EMAIL_ENCRYPTION_KEY:-1111111111111111111111111111111111111111111111111111111111111111}"
 CANDIDATE_JWT_SECRET_VALUE="${SEED_CANDIDATE_JWT_SECRET:-localstack-seeded-candidate-jwt-secret-change-me}"
+# GitHub issue #466's own follow-up (D78) — admin-credentials/
+# anthropic-credentials still moved into Secrets Manager too, closing
+# the "stretch work" #466 explicitly deferred. Unlike every secret
+# above, these two have NO dev-only default: ADMIN_PASSWORD_HASH/
+# ADMIN_JWT_SECRET never had one on purpose (same reasoning
+# bootstrap-kind.sh's own pre-check already gives), so this hard-fails
+# rather than silently seeding a placeholder admin credential.
+# ANTHROPIC_API_KEY is the one exception allowed to default to empty —
+# it's genuinely optional (D78's fetchOptionalSecret).
+ADMIN_PASSWORD_HASH_VALUE="${ADMIN_PASSWORD_HASH:?ADMIN_PASSWORD_HASH must be set — see wiki/deployment-guide.md section 5b}"
+ADMIN_JWT_SECRET_VALUE="${ADMIN_JWT_SECRET:?ADMIN_JWT_SECRET must be set — see wiki/deployment-guide.md section 5b}"
+ANTHROPIC_API_KEY_VALUE="${ANTHROPIC_API_KEY:-}"
 
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
@@ -67,6 +94,27 @@ awslocal secretsmanager delete-secret --secret-id interview-insights/candidate-j
   --force-delete-without-recovery > /dev/null 2>&1 || true
 awslocal secretsmanager create-secret --name interview-insights/candidate-jwt-secret \
   --secret-string "$CANDIDATE_JWT_SECRET_VALUE" > /dev/null
+echo "OK: created"
+
+echo "== Secrets Manager: interview-insights/admin-password-hash =="
+awslocal secretsmanager delete-secret --secret-id interview-insights/admin-password-hash \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/admin-password-hash \
+  --secret-string "$ADMIN_PASSWORD_HASH_VALUE" > /dev/null
+echo "OK: created"
+
+echo "== Secrets Manager: interview-insights/admin-jwt-secret =="
+awslocal secretsmanager delete-secret --secret-id interview-insights/admin-jwt-secret \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/admin-jwt-secret \
+  --secret-string "$ADMIN_JWT_SECRET_VALUE" > /dev/null
+echo "OK: created"
+
+echo "== Secrets Manager: interview-insights/anthropic-api-key =="
+awslocal secretsmanager delete-secret --secret-id interview-insights/anthropic-api-key \
+  --force-delete-without-recovery > /dev/null 2>&1 || true
+awslocal secretsmanager create-secret --name interview-insights/anthropic-api-key \
+  --secret-string "$ANTHROPIC_API_KEY_VALUE" > /dev/null
 echo "OK: created"
 
 # Provisions one IAM role + its attached least-privilege policy, given
