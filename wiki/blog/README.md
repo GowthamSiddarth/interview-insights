@@ -400,3 +400,17 @@ deletion order), plus a real bug found during live CLI verification
 a static `AppModule` import). This phase's blog is complete.
 
 1. [Issue #406 — `seed:demo-data:undo`, manifest tracking, and three prerequisite gaps](phase-37-synthetic-data-seed-rollback/README.md)
+
+## Phase 39 — LLM Auto-Approval for High-Confidence Submissions
+
+See `docs/ROADMAP.md` Phase 39 and `docs/DECISIONS.md` D71/D72. Sketched
+from a brainstorm about extracting moderator/ticketing services into
+their own microservices (Phase 30-32, D53); its own kickoff brainstorm
+(issue #437) settled on a single hard confidence cutoff instead of the
+three-tier clean/ambiguous/concerning shape originally sketched. All
+four feature issues are done — this phase's blog is complete.
+
+1. [Issue #439 — Confidence score & single-cutoff auto-approve routing](phase-39-llm-auto-approval/issue-439-confidence-score-auto-approve-routing/README.md)
+2. [Issue #440 — System-attributed auto-approve path with a dedicated audit table](phase-39-llm-auto-approval/issue-440-system-attributed-audit-trail/README.md)
+3. [Issue #441 — Config-driven kill switch for LLM auto-approval](phase-39-llm-auto-approval/issue-441-kill-switch/README.md)
+4. [Issue #442 — Reconciliation sweep for stalled moderation triage (24h SLA, D72)](phase-39-llm-auto-approval/issue-442-reconciliation-sweep/README.md)
