@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AdminAuthModule } from './admin-auth/admin-auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
@@ -18,9 +19,13 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { SearchModule } from './search/search.module';
 import { MeModule } from './me/me.module';
 import { BulkProcessSubmissionModule } from './bulk-process-submission/bulk-process-submission.module';
+import { ReconciliationSweepModule } from './ai-moderation/reconciliation-sweep.module';
 
 @Module({
   imports: [
+    // GitHub issue #442 (Phase 39, D71) — enables @Cron() across the app;
+    // ReconciliationSweepService is the only consumer today.
+    ScheduleModule.forRoot(),
     PrismaModule,
     AdminAuthModule,
     HealthModule,
@@ -40,6 +45,7 @@ import { BulkProcessSubmissionModule } from './bulk-process-submission/bulk-proc
     SearchModule,
     MeModule,
     BulkProcessSubmissionModule,
+    ReconciliationSweepModule,
   ],
 })
 export class AppModule {}

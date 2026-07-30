@@ -364,6 +364,13 @@ enum ModerationFlagReason {
   rate_limit
   duplicate
   manual_report
+  // GitHub issue #442 (Phase 39, D71) — the reconciliation sweep's own
+  // escalation reason: a pending row past the 24h staleness window whose
+  // re-triage attempt still left moderationVerdict null (feature error,
+  // refusal, unparseable response, etc.). Distinguishes an AI-triage
+  // failure from every other flag reason above, all of which describe
+  // something about the submitted content itself.
+  ai_triage_stalled
 }
 
 model ModerationQueueEntry {

@@ -3282,6 +3282,32 @@ reviewed, or be rolled back independently — and auto-approval doesn't
 need Phase 30-32's event bus at all; it can land directly on today's
 in-process, synchronous D66 module.
 
+### D72 — Reconciliation sweep runs in-process via `@nestjs/schedule`, not a Kubernetes CronJob (GitHub issue #442, Phase 39)
+
+**Context:** D71 committed to a reconciliation sweep re-triaging any
+`pending` row with no verdict past 24h, but left *how* it runs
+unspecified. There's no cron/worker infrastructure anywhere in this
+project yet (D69's own note) — no `@nestjs/schedule` usage, no
+`infra/k8s` CronJob manifest — so there was no existing pattern to
+follow, despite issue #442's own scope note assuming one ("same
+pattern as this project's other cron-style jobs"). The closest
+precedent, `api/scripts/prune-orphaned-*-search-docs.js`, is
+explicitly a manual, run-by-hand script, not something scheduled.
+
+**Decision:** `@nestjs/schedule`'s `@Cron()`, in-process inside the API
+service (`ReconciliationSweepService`, hourly), not a Kubernetes
+CronJob hitting a new endpoint or invoking a new script. Matches D66's
+own precedent of building this feature in-process/synchronous before
+Phase 30-32 moves any of it async — same "prove the policy simply
+first" sequencing, and the same D9-style "don't build infrastructure
+ahead of a demonstrated need" instinct D71 already invoked for staying
+off a transactional outbox. A dedicated CronJob manifest is more
+moving parts (a new container entry point, RBAC, its own failure/retry
+semantics to design) for a job that, at today's scale, runs in
+well under a second per sweep. Revisit only if the API pod's own
+restart/scaling behavior makes an in-process cron unreliable, or if a
+real need for out-of-process scheduling emerges elsewhere first.
+
 ---
 
 ## Still open (revisit when you have more information)

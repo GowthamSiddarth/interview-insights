@@ -1653,7 +1653,7 @@ no verdict past 24h.
 - [x] Config-driven kill switch (single global env var) forcing every
       verdict back to D66's original advisory-only behavior, no deploy
       needed (GitHub issue #441)
-- [ ] Reconciliation sweep: scheduled job re-triages or escalates any
+- [x] Reconciliation sweep: scheduled job re-triages or escalates any
       `pending` row past 24h with no verdict yet — closes the
       "lost/never-ran triage" gap without a transactional outbox
       (GitHub issue #442)
