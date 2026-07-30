@@ -1244,7 +1244,7 @@ Phases 31-32 build on. The synchronous write path itself (including
       this phase's own epic per the ad-hoc-work convention, not the
       Phase 20 catch-all, since it's specific to this phase's own
       plumbing (GitHub issue #459)
-- [ ] Engineering blog (last) (GitHub issue #333)
+- [x] Engineering blog (last) (GitHub issue #333)
 
 ## Phase 31 — Notification Service
 

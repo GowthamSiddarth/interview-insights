@@ -414,3 +414,21 @@ four feature issues are done — this phase's blog is complete.
 2. [Issue #440 — System-attributed auto-approve path with a dedicated audit table](phase-39-llm-auto-approval/issue-440-system-attributed-audit-trail/README.md)
 3. [Issue #441 — Config-driven kill switch for LLM auto-approval](phase-39-llm-auto-approval/issue-441-kill-switch/README.md)
 4. [Issue #442 — Reconciliation sweep for stalled moderation triage (24h SLA, D72)](phase-39-llm-auto-approval/issue-442-reconciliation-sweep/README.md)
+
+## Phase 30 — Event-Driven Foundation
+
+See `docs/ROADMAP.md` Phase 30 and `docs/DECISIONS.md` D53. Filed from a
+brainstorm about moving toward event-driven microservices — a deliberate
+revisit of D12 ("moderation stays in-process, no event bus") for
+distributed-systems/microservices practice, not organic load. Deliberately
+narrow: a message broker (Redpanda) and a best-effort, after-commit
+event-publishing pattern matching D16/D17's "never block the write"
+shape — no new deployable service ships in this phase, and the
+synchronous moderation write path is unchanged. All three feature issues
+plus one ad-hoc fix found in design review are done — this phase's blog
+is complete.
+
+1. [Issue #330 — Add Redpanda to local infra (docker-compose + k8s)](phase-30-event-driven-foundation/issue-330-redpanda-infra/README.md)
+2. [Issue #331 — Shared event-publishing module + versioned event schema](phase-30-event-driven-foundation/issue-331-event-publishing-module/README.md)
+3. [Issue #332 — Wire creation + moderation status-change events for all three moderated entity types](phase-30-event-driven-foundation/issue-332-wire-domain-events/README.md)
+4. [Issue #459 — `DomainEventPublisher` reconnect-on-recovery](phase-30-event-driven-foundation/issue-459-reconnect-on-recovery/README.md)
