@@ -3715,5 +3715,7 @@ follow-up review path turns out to be.
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
 - Whether `company_overall_aggregates` should be sliced by role/level from
   the start or added later.
-- Moderator queue SLAs (~48h to start), request assignment, and breach
-  notifications (Phase 36, not yet planned — see `docs/ROADMAP.md`).
+- D80 itself: write up the SLA-clock-start / manual-claim / email-
+  channel decisions made during Phase 36's 2026-07-31 planning pass as
+  a real `### D80` entry — tracked as GitHub issue #491, implemented
+  alongside the rest of Phase 36 (epic #484, see `docs/ROADMAP.md`).

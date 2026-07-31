@@ -1502,31 +1502,57 @@ under epic #368.
       every queue load, it best-effort re-indexes each one (GitHub
       issue #416, D69)
 
-## Phase 36 — Moderator Queue SLAs, Assignment & Notifications (not yet planned)
+## Phase 36 — Moderator Queue SLAs, Assignment & Notifications
 
 Raised alongside Phase 35's planning: the project owner is thinking
 about queue SLAs (e.g. 48h in the beginning) once the moderation queue
 gets real search/filtering (Phase 35), plus how request *assignment*
 (which moderator owns which entry, once there's more than one
-moderator) and SLA-breach *notifications* would work. Explicitly not
-resolved or scoped now — no design decisions made, no issues filed —
-per direct instruction to keep this parked for a future planning pass,
-the same trigger-gated framing Phase 8's menu already uses. Real
-open questions for whenever this gets planned: what "the SLA clock"
-even starts from (entry creation? first moderator view?); whether
-assignment is manual (a moderator claims an entry) or automatic
-(round-robin/least-loaded); and what a breach notification looks like
-given there's no current out-of-band channel (email via the existing
-`mail/` module is the obvious candidate, but unconfirmed). Revisit once
-there's a concrete trigger — e.g. Phase 35 shipping and the queue
-actually needing this, or a second moderator account existing at all.
+moderator) and SLA-breach *notifications* would work. Was explicitly
+parked (no design decisions, no issues) until a future planning pass —
+that pass happened 2026-07-31, triggered by a direct request to plan
+it, resolving the open questions below:
+
+- **SLA clock start**: entry creation (`ModerationQueueEntry.createdAt`
+  + configurable hours, default 48h) — not first moderator view, which
+  would need a new view-tracking event that doesn't exist.
+- **Assignment model**: manual claim only. `AdminAuthService` today is
+  a single shared credential, not a user table (Phase 18 scope note,
+  `api/src/admin-auth/admin-auth.service.ts`), so round-robin/
+  least-loaded auto-assignment is moot with one moderator — but a real
+  `Moderator` identity table is introduced this phase so `claim`/
+  `reviewedBy` become real FKs, not free text, unblocking a second
+  moderator later.
+- **Breach notification channel**: email, by extending Phase 31's
+  `notification-service` consumer with a new
+  `moderation.queue.sla_breach.v1` topic — reuses the one out-of-band
+  channel that already exists rather than standing up new infra.
+
+Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
+(#37). Epic: GitHub issue #484.
+
+- [ ] Add Admin/Moderator identity table, replace shared admin
+      credential (GitHub issue #485)
+- [ ] Add SLA deadline + claim fields to `ModerationQueueEntry`
+      (GitHub issue #486)
+- [ ] Claim/release endpoints + moderation queue UI affordance
+      (GitHub issue #487)
+- [ ] SLA breach detection job (GitHub issue #488)
+- [ ] `notification-service`: consume SLA breach events, email the
+      moderator (GitHub issue #489)
+- [ ] Queue UI: surface SLA deadline and breach state (GitHub issue
+      #490)
+- [ ] Docs: resolve D80 and update DATA_MODEL/ARCHITECTURE for Phase 36
+      (GitHub issue #491)
+- [ ] Engineering blog (last) (GitHub issue #492)
 
 **Amendment (sketched 2026-07-29, from Phase 39's own brainstorm):**
 also now a downstream consumer of Phase 39's flagged/ambiguous LLM
 verdicts, once that phase exists — a new automatic ticket source
 alongside today's manual-flag path. Doesn't resolve any of this
 phase's own parked questions above, just adds a second thing capable
-of creating a ticket.
+of creating a ticket. Out of scope for the issues filed above; revisit
+once Phase 39 exists.
 
 ## Phase 37 — Synthetic Data Seed Rollback (Undo by Run ID)
 
