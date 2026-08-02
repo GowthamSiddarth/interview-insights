@@ -25,8 +25,15 @@ approved/rejected email — `newStatus: 'flagged'` is a deliberate no-op
 (no email, no `NotificationLog` row), since `ModerationService.review()`
 rejects re-reviewing an entry that already has `reviewedAt` set, so a
 flagged item never gets a second status_changed event to act on. Phase
-31 is now fully built out except its closing blog post (#337). Phase 32
-(review-analyzer) hasn't started.
+31 is fully built out including its blog post. As of GitHub issue #339,
+`review-analyzer` is the second real consumer — its own consumer group
+(`review-analyzer`, independent of `notification-service`'s) subscribing
+to all three `*.created` topics, logging receipt only. GitHub issue #340
+ports Phase 19 (#163)'s LLM triage logic in and adds a new event,
+`moderation.<type>.verdict_computed.v1`, which `api` itself will consume
+— its first-ever event consumer, not just a producer — to write
+`moderationVerdict` and run the existing (D71) auto-approval flow; see
+`docs/DECISIONS.md` D81.
 
 ## Publishing semantics
 
@@ -94,14 +101,14 @@ Published from:
   `approveWithAudit()`, the AI auto-approval entry point).
 
 `moderation.*.created.v1` is consumed by `notification-service` as of
-GitHub issue #335 (the "your submission is pending review" email);
-Phase 32's review-analyzer, not yet built, is expected to consume the
-same three topics independently (its own consumer group — every
-consumer group gets its own copy of every message, so one consumer's
-processing never affects another's). `moderation.*.status_changed.v1`
-(the approved/rejected notification) is consumed by the same
-`notification-service` consumer as of GitHub issue #336. See #335/#336/
-#339 for the actual consumer-side wiring.
+GitHub issue #335 (the "your submission is pending review" email) and,
+independently, by `review-analyzer` as of GitHub issue #339 (its own
+consumer group — every consumer group gets its own copy of every
+message, so one consumer's processing never affects another's; logs
+receipt only for now, real triage lands in #340).
+`moderation.*.status_changed.v1` (the approved/rejected notification) is
+consumed by the same `notification-service` consumer as of GitHub issue
+#336. See #335/#336/#339 for the actual consumer-side wiring.
 
 ## Adding a new event type
 

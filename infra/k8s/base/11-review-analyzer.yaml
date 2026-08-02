@@ -1,0 +1,69 @@
+# Phase 32 (D53), GitHub issue #339 — the second standalone microservice
+# this project deploys, same shape as 10-notification-service.yaml. No
+# Ingress: it has no public HTTP API of its own — /health is reachable
+# in-cluster only, same as postgres/opensearch/redpanda/notification-service.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: review-analyzer-config
+  namespace: interview-insights
+data:
+  PORT: "3003"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: review-analyzer
+  namespace: interview-insights
+spec:
+  selector:
+    app: review-analyzer
+  ports:
+    - port: 3003
+      targetPort: 3003
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: review-analyzer
+  namespace: interview-insights
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: review-analyzer
+  template:
+    metadata:
+      labels:
+        app: review-analyzer
+    spec:
+      containers:
+        - name: review-analyzer
+          image: interview-insights-review-analyzer:k8s
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3003
+          envFrom:
+            - configMapRef:
+                name: review-analyzer-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

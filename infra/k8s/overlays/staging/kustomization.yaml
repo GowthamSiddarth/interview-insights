@@ -42,6 +42,8 @@ images:
     newTag: staging # placeholder — a DIFFERENT build than dev's, not a re-tag
   - name: interview-insights-notification-service
     newTag: staging # placeholder — same environment-agnostic-image reasoning as api
+  - name: interview-insights-review-analyzer
+    newTag: staging # placeholder — same environment-agnostic-image reasoning as api
 
 # More than one replica for the app tier once there's a real environment
 # to justify it — deliberately not a large number without evidence it's
@@ -83,6 +85,17 @@ patches:
   - target:
       kind: Deployment
       name: notification-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  # review-analyzer stays single-replica too, same reasoning as
+  # notification-service above.
+  - target:
+      kind: Deployment
+      name: review-analyzer
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources

@@ -1338,8 +1338,11 @@ LocalStack secrets bootstrap (D73/D75 precedent) rather than sharing
 - [x] Kickoff brainstorm: review-analyzer's relationship to
       `FraudChecksService`, LLM choice, data ownership (GitHub issue
       #338)
-- [ ] `review-analyzer` service skeleton, consumes `*.created` events
-      (GitHub issue #339)
+- [x] `review-analyzer` service skeleton, consumes `*.created` events
+      (GitHub issue #339) — `services/review-analyzer/`, own Deployment/
+      Dockerfile/CD step, own Redpanda consumer group subscribing to all
+      three `moderation.*.created.v1` topics; logs receipt only, no
+      DB/secrets yet — the real LLM triage logic lands in #340
 - [ ] Port Phase 19 issue #163's LLM-assisted triage into
       review-analyzer as an async, arrives-later enrichment, publishing
       `moderation.<type>.verdict_computed.v1`; `api` gains its first

@@ -13,3 +13,4 @@ resources:
   - 08-mailpit.yaml
   - 09-redpanda.yaml
   - 10-notification-service.yaml
+  - 11-review-analyzer.yaml

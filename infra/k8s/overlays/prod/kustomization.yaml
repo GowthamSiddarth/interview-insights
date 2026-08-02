@@ -27,6 +27,8 @@ images:
     newTag: prod # placeholder — a build of its own, see overlays/staging's note
   - name: interview-insights-notification-service
     newTag: prod # placeholder — same environment-agnostic-image reasoning as api
+  - name: interview-insights-review-analyzer
+    newTag: prod # placeholder — same environment-agnostic-image reasoning as api
 
 replicas:
   - name: api
@@ -58,6 +60,16 @@ patches:
   - target:
       kind: Deployment
       name: notification-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 1Gi }
+  # review-analyzer stays single-replica too, same reasoning.
+  - target:
+      kind: Deployment
+      name: review-analyzer
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources
