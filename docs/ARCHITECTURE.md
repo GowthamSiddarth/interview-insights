@@ -28,6 +28,10 @@ flowchart TD
         NOTIFSECRETS["Secrets bootstrap\n(own copy, runs before\nNestFactory.create, D73)"]
     end
 
+    subgraph analyzerpod["review-analyzer (NestJS, own Deployment, Phase 32)"]
+        ANALYZER["AnalysisConsumerService\n(own Redpanda consumer group,\n#339 — logs receipt only,\nLLM triage lands in #340)"]
+    end
+
     PG[("PostgreSQL\nrounds, ratings, candidates,\nmaterialized views, notification_log")]
     OS[("OpenSearch\ncompanies + reviews index")]
     LS[("LocalStack\nSecrets Manager + IAM\n(dev overlay, unconditional, D76)")]
@@ -52,6 +56,7 @@ flowchart TD
     CONSUMER -->|idempotency check/record,\nnotification_log, D75| PG
     CONSUMER --> NOTIFMAIL
     NOTIFMAIL -->|your submission is\npending review, #335| MAILPIT
+    RP -->|subscribe, own consumer group\nreview-analyzer, #339| ANALYZER
 
     PG -->|REFRESH MATERIALIZED VIEW| ANALYTICS["AnalyticsService\n+ shrinkage scoring"]
     ANALYTICS --> WEB
@@ -61,7 +66,7 @@ flowchart TD
 flowchart LR
     DEV["git push to main"] --> GH["GitHub Actions\n(cd.yml, queued)"]
     GH -->|picked up when\n./run.sh is started| RUNNER["Self-hosted runner\n(on-demand, this laptop)"]
-    RUNNER -->|build + kind load| IMAGES["api:k8s / web:k8s /\nnotification-service:k8s images"]
+    RUNNER -->|build + kind load| IMAGES["api:k8s / web:k8s /\nnotification-service:k8s /\nreview-analyzer:k8s images"]
     RUNNER -->|kubectl apply -k| OVERLAY["overlays/dev"]
     OVERLAY --> CLUSTER["kind cluster\n(interview-insights namespace)"]
     RUNNER -->|reseed| LS2[("LocalStack")]
@@ -83,7 +88,8 @@ from the original plan" below.
 | Fraud checks | In-process, same module family | Rate-limit (3/24h) + duplicate-text flag, never blocks writes (D13) |
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
 | Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — see `docs/EVENTS.md` |
-| `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). As of #335, a real consumer: subscribes to all three `moderation.*.created.v1` topics and sends a "your submission is pending review" email, idempotently. `*.status_changed` consumption (approved/rejected) lands in #336 |
+| `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). Consumes all three `moderation.*.created.v1` topics ("your submission is pending review", #335) and all three `moderation.*.status_changed.v1` topics (approved/rejected, `flagged` is a no-op, #336), idempotently |
+| `review-analyzer` (`services/review-analyzer/`) | NestJS, own Deployment, no DB/secrets yet | Second standalone microservice (Phase 32, D53, GitHub issue #339). Own consumer group subscribing to all three `moderation.*.created.v1` topics — logs receipt only; porting Phase 19 (#163)'s LLM triage and publishing `moderation.<type>.verdict_computed.v1` (D81) lands in #340 |
 | Secrets/IAM | LocalStack (`dev` overlay, unconditional) | Default CD target as of Phase 12 issue #99 (D23); folded into `dev` itself, no separate `dev-localstack` variant, by GitHub issue #466 (D76). Full secret-by-secret inventory: `docs/SECRETS.md` |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,staging,prod}` |
 | Ingress | `ingress-nginx` (Helm) | Host-based routing, `app.`/`api.interview-insights.local` |
@@ -142,7 +148,8 @@ from the original plan" below.
 - **CD reconciles a real automatic trigger with a deliberately
   session-scoped runner (Phase 12).** `cd.yml` triggers on every push to
   `main` that touches `api/**`/`web/**`/`services/notification-service/**`/
-  `infra/k8s/**` — a genuine `on: push`, not `workflow_dispatch`. But the
+  `services/review-analyzer/**`/`infra/k8s/**` — a genuine `on: push`, not
+  `workflow_dispatch`. But the
   runner that executes it is
   on-demand, not a persistent service: nothing repo-triggered runs on
   this machine unless a session explicitly starts `./run.sh` first.
@@ -166,6 +173,11 @@ without polling. `notification-service` (Phase 31, GitHub issue #335) is
 the first of those: it consumes `ModerationService`'s `moderation.*.created.v1`
 events and sends a "your submission is pending review" email, idempotently
 — see the system diagram above and `docs/EVENTS.md` for the full contract.
+`review-analyzer` (Phase 32, GitHub issue #339) is the second: its own
+consumer group on the same three topics, proving the wiring end to end
+before #340 ports the LLM triage logic in and starts publishing a new
+`moderation.<type>.verdict_computed.v1` event (D81) for `api` itself to
+consume — its first event consumer, not just a producer.
 ClickHouse and Redis remain unbuilt; if either gets built later, it'll be
 because a concrete trigger fired (real load, real async fan-out), not
 because the original diagram said so.
@@ -181,8 +193,8 @@ because the original diagram said so.
   containerized. §2.
 - **Local dev, full Kubernetes (`kind`):** the closest thing to a real
   deployment this project has. `ingress-nginx` + `metrics-server` via
-  Helm; `api`/`web`/`notification-service`/`postgres`/`opensearch`/
-  `redpanda`/`localstack` via Kustomize (`infra/k8s/base` +
+  Helm; `api`/`web`/`notification-service`/`review-analyzer`/`postgres`/
+  `opensearch`/`redpanda`/`localstack` via Kustomize (`infra/k8s/base` +
   `overlays/dev` — `dev` requires LocalStack unconditionally as of
   GitHub issue #466/D76, no separate `dev-localstack` variant anymore).
   §3.
@@ -222,16 +234,20 @@ interview-insights/
 │   └── src/app/                # wizard, search, analytics pages
 ├── workers/                    # placeholder — no logic (D12)
 ├── services/
-│   └── notification-service/   # first standalone microservice (Phase 31, D53/D73)
-│       ├── prisma/schema.prisma  # own minimal client, no migrations of its own (D75)
-│       ├── src/notifications/    # NotificationConsumerService — real *.created consumer (#335)
+│   ├── notification-service/   # first standalone microservice (Phase 31, D53/D73)
+│   │   ├── prisma/schema.prisma  # own minimal client, no migrations of its own (D75)
+│   │   ├── src/notifications/    # NotificationConsumerService — real *.created/*.status_changed consumer (#335/#336)
+│   │   ├── src/health/
+│   │   └── Dockerfile
+│   └── review-analyzer/        # second standalone microservice (Phase 32, D53)
+│       ├── src/analysis/         # AnalysisConsumerService — *.created consumer, logs only (#339); LLM triage + verdict_computed publish lands in #340 (D81)
 │       ├── src/health/
 │       └── Dockerfile
 ├── infra/
 │   ├── docker-compose.yml      # inert reference only (D24/D26 — kind runs both stores) / --profile full / --profile localstack
 │   ├── aws/                    # seed-localstack.sh, one IAM policy JSON per service
 │   ├── k8s/
-│   │   ├── base/                # numbered manifests (incl. 10-notification-service.yaml) + localstack/ subdir
+│   │   ├── base/                # numbered manifests (incl. 10-notification-service.yaml, 11-review-analyzer.yaml) + localstack/ subdir
 │   │   └── overlays/
 │   │       ├── dev              # actually deployed; requires LocalStack unconditionally (D76)
 │   │       ├── staging / prod   # structural only, gated on Phase 8

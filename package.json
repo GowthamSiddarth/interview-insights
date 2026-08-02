@@ -3,8 +3,8 @@
   "private": true,
   "description": "Convenience scripts across api/web/workers/services. Each service keeps its own package-lock.json and is built/deployed independently (see each Dockerfile) — this is not an npm workspaces root.",
   "scripts": {
-    "lint": "npm run lint --prefix api && npm run lint --prefix web && npm run lint --prefix services/notification-service",
-    "test": "npm test --prefix api && npm test --prefix web && npm test --prefix services/notification-service",
-    "build": "npm run build --prefix api && npm run build --prefix web && npm run build --prefix workers && npm run build --prefix services/notification-service"
+    "lint": "npm run lint --prefix api && npm run lint --prefix web && npm run lint --prefix services/notification-service && npm run lint --prefix services/review-analyzer",
+    "test": "npm test --prefix api && npm test --prefix web && npm test --prefix services/notification-service && npm test --prefix services/review-analyzer",
+    "build": "npm run build --prefix api && npm run build --prefix web && npm run build --prefix workers && npm run build --prefix services/notification-service && npm run build --prefix services/review-analyzer"
   }
 }

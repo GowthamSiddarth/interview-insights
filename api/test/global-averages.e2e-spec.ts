@@ -50,7 +50,15 @@ async function seedCompanyWithCodingRatings(
 
 // Proves GlobalAveragesService's weighted-average SQL (docs/ROADMAP.md
 // Phase 4 issue #8) against real seeded data spanning multiple companies —
-// a unit test with mocked Prisma can't catch a wrong JOIN/GROUP BY.
+// a unit test with mocked Prisma can't catch a wrong JOIN/GROUP BY. The
+// null-for-no-data path is deliberately NOT covered here (it used to be,
+// via a "find an unused RoundType" scan) — that scan's premise breaks
+// permanently once every RoundType has real data somewhere in this shared
+// e2e-suite database (e.g. seed-demo-data.e2e-spec.ts iterates
+// Object.values(RoundType)), which is exactly what started happening.
+// The null path is pure application logic with no JOIN/GROUP BY to get
+// wrong, so it's already fully covered by
+// global-averages.service.spec.ts's mocked-Prisma tests instead.
 describe('GlobalAveragesService (e2e)', () => {
   afterAll(async () => {
     await prisma.$disconnect();
@@ -82,35 +90,5 @@ describe('GlobalAveragesService (e2e)', () => {
     `;
     expect(globalAverages!.avgDifficulty).toBeCloseTo(Number(rows[0].avg_difficulty), 5);
     expect(globalAverages!.sampleSize).toBe(rows[0].sample_size);
-  });
-
-  it('returns null for a round type nothing has ever been rated as', async () => {
-    // Don't assume any particular RoundType is unused — the dockerized dev
-    // Postgres persists data across every run of this whole suite (same
-    // lesson as the fraud-checks e2e fix). Find one that's actually absent
-    // from the view right now instead of guessing.
-    const ROUND_TYPES = [
-      'coding',
-      'system_design',
-      'behavioral',
-      'leadership',
-      'case_study',
-      'assessment',
-      'take_home',
-      'other',
-    ] as const;
-    const usedRoundTypes = await prisma.$queryRaw<{ round_type: string }[]>`
-      SELECT DISTINCT round_type FROM company_round_type_aggregates
-    `;
-    const usedSet = new Set(usedRoundTypes.map((r) => r.round_type));
-    const unusedRoundType = ROUND_TYPES.find((rt) => !usedSet.has(rt));
-    if (!unusedRoundType) {
-      throw new Error(
-        'Every RoundType has data in company_round_type_aggregates — cannot verify the null-for-no-data case. Add a new enum value or reset the dev database.',
-      );
-    }
-
-    const result = await service.getRoundTypeGlobalAverages(unusedRoundType);
-    expect(result).toBeNull();
   });
 });

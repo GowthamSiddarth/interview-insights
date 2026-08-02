@@ -30,6 +30,7 @@ on:
       - 'api/**'
       - 'web/**'
       - 'services/notification-service/**'
+      - 'services/review-analyzer/**'
       - 'infra/k8s/**'
 
 # A second push while an earlier deploy is still queued/running should
@@ -61,10 +62,18 @@ jobs:
             -f services/notification-service/Dockerfile \
             --build-arg GIT_SHA=$(git rev-parse --short HEAD) services/notification-service
 
+      - name: Build review-analyzer image
+        # Phase 32 (D53), GitHub issue #339 — second standalone microservice.
+        run: |
+          docker build -t interview-insights-review-analyzer:k8s \
+            -f services/review-analyzer/Dockerfile \
+            --build-arg GIT_SHA=$(git rev-parse --short HEAD) services/review-analyzer
+
       - name: Load images into kind
         run: |
           kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
-            interview-insights-notification-service:k8s --name interview-insights
+            interview-insights-notification-service:k8s interview-insights-review-analyzer:k8s \
+            --name interview-insights
 
       - name: Ensure namespace exists
         run: kubectl apply -f infra/k8s/base/00-namespace.yaml
@@ -181,6 +190,11 @@ jobs:
         run: |
           kubectl -n interview-insights rollout restart deployment/notification-service
           kubectl -n interview-insights rollout status deployment/notification-service --timeout=90s
+
+      - name: Roll out review-analyzer
+        run: |
+          kubectl -n interview-insights rollout restart deployment/review-analyzer
+          kubectl -n interview-insights rollout status deployment/review-analyzer --timeout=90s
 
       # Every run's "Build api/web image" step leaves the previous build's
       # now-untagged layers behind — `kind load docker-image` re-tags the
