@@ -52,7 +52,11 @@ describe('AnalysisConsumerService (e2e, against a real Redpanda broker)', () => 
       await publishTestEvent(ROUND_RATING_CREATED_V1_TOPIC, event, roundRatingId);
 
       await expect(
-        waitUntil(() => processed.mock.calls.some(([received]) => received.roundRatingId === roundRatingId)),
+        waitUntil(() =>
+          processed.mock.calls.some(
+            ([received]) => received.eventType === 'moderation.round_rating.created' && received.roundRatingId === roundRatingId,
+          ),
+        ),
       ).resolves.toBe(true);
     },
     20_000,
