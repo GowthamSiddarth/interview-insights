@@ -1322,20 +1322,30 @@ phase is about *where* issue #163's logic runs, not re-deciding *what*
 it does. Milestone: "Phase 32 — Review Analyzer Service". Epic: GitHub
 issue #329.
 
-Real open questions (review-analyzer vs. `FraudChecksService`'s
-existing synchronous checks, LLM/API choice, data ownership) are
-flagged for a kickoff brainstorm (issue #338) rather than resolved
-here, same pattern Phase 16/17/21/24/29 each used.
+**Kickoff brainstorm resolved 2026-08-02** (GitHub issue #338, D81):
+write-back happens via a new `moderation.<type>.verdict_computed.v1`
+event, not a shared-DB write or an internal HTTP call —
+`review-analyzer` computes and publishes the verdict only; `api` gets
+its first-ever event consumer, which writes `moderationVerdict` and
+runs the existing (D71) `approveWithAudit()` auto-approval flow for
+high-confidence verdicts. `FraudChecksService`'s synchronous checks are
+unchanged and unaffected — review-analyzer's verdict stays a secondary,
+arrives-later opinion alongside it, never a replacement. LLM/API choice
+stays Anthropic's Claude API, unchanged from D66, with its own
+LocalStack secrets bootstrap (D73/D75 precedent) rather than sharing
+`api`'s credential.
 
-- [ ] Kickoff brainstorm: review-analyzer's relationship to
+- [x] Kickoff brainstorm: review-analyzer's relationship to
       `FraudChecksService`, LLM choice, data ownership (GitHub issue
       #338)
 - [ ] `review-analyzer` service skeleton, consumes `*.created` events
       (GitHub issue #339)
 - [ ] Port Phase 19 issue #163's LLM-assisted triage into
-      review-analyzer as an async, arrives-later enrichment — never
-      auto-approves/rejects, hard constraint #2 stays intact (GitHub
-      issue #340)
+      review-analyzer as an async, arrives-later enrichment, publishing
+      `moderation.<type>.verdict_computed.v1`; `api` gains its first
+      event consumer to apply the verdict and run existing (D71)
+      auto-approval — never auto-approves/rejects itself, hard
+      constraint #2 stays intact (GitHub issue #340, D81)
 - [ ] Engineering blog (last) (GitHub issue #341)
 
 ## Phase 33 — Search-First Landing Page

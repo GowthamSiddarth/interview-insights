@@ -152,12 +152,14 @@ See `docs/ROADMAP.md` for phase-by-phase scope/status, `docs/DECISIONS.md`
 for decision rationale (D-numbered), and `wiki/blog/` for one engineering-blog
 post per phase — this file no longer inlines that running history.
 
-- Next step: Phase 30 (Event-Driven Foundation) is done, blog included.
-  Phase 31 (Notification Service) is the natural next body of work — it
-  depends on Phase 30's event bus, which now exists — or Phase 27's
-  already-complete backlog can be revisited if something else takes
-  priority. Continue merging without waiting for CI until the user says
-  the GitHub Actions billing limit has been refreshed.
+- Next step: Phase 31 (Notification Service) is done, blog included.
+  Phase 32 (Review Analyzer Service)'s kickoff brainstorm is resolved
+  (issue #338, D81) — next up is issue #339 (service skeleton) then
+  #340 (port the LLM triage logic). Phase 36 (Moderator Queue SLAs,
+  Assignment & Notifications) is fully planned too (issues #485-#492)
+  and can be picked up instead if that takes priority. Continue merging
+  without waiting for CI until the user says the GitHub Actions billing
+  limit has been refreshed.
 
 ## Open decisions still to make
 
