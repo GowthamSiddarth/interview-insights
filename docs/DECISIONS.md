@@ -3710,6 +3710,73 @@ follow-up review path turns out to be.
 
 ---
 
+### D81 — review-analyzer writes back via a new `verdict_computed` event; api gets its first-ever event consumer (GitHub issue #338, Phase 32)
+
+**Context:** Phase 32's kickoff brainstorm (issue #338), resolved
+2026-08-02. D66 built `AiModerationService` in-process inside `api`:
+it computes the LLM verdict, writes `moderationVerdict` directly onto
+the entity row, and — since D71/Phase 39 shipped — calls
+`ModerationService.approveWithAudit()` in-process for high-confidence
+verdicts. Porting this to `review-analyzer` as a separate process (per
+D53) breaks that in-process call chain: a standalone consumer has no
+way to invoke `ModerationService`'s methods directly. Three questions
+needed resolving before implementation: how the verdict gets back into
+`api`'s data (and triggers auto-approval), review-analyzer's
+relationship to `FraudChecksService`, and the LLM/API choice.
+
+**Decision:**
+
+- **Write-back via a new event, not a shared-DB write or an internal
+  HTTP call.** `review-analyzer` consumes the existing
+  `moderation.*.created.v1` topics (same as `notification-service`),
+  computes the verdict exactly as `AiModerationService.requestVerdict()`
+  does today, then publishes a new `moderation.<type>.verdict_computed.v1`
+  event carrying the full verdict payload (including the
+  `autoApprovalEligible`/confidence fields D71 added). `api` gains its
+  first-ever event *consumer* (everything until now has only been a
+  producer, per D53) to receive it: this consumer writes
+  `moderationVerdict` and, when `autoApprovalEligible` is true, calls
+  the same `ModerationService.approveWithAudit()` D71 already built —
+  unchanged, just triggered by a consumed event instead of an in-process
+  method call. `review-analyzer` itself never calls `approve()` or
+  touches `moderation_queue` — it only computes and publishes, so
+  issue #340's "never auto-approves/rejects" scope note stays literally
+  true: the decision to approve, and hard constraint #2's
+  "every write goes through moderation," both still happen entirely
+  inside `api`. Rejected alternatives: (a) `review-analyzer` getting its
+  own duplicated Prisma schema against `api`'s Postgres (notification-
+  service's read-only pattern, D75) and writing `moderationVerdict`
+  itself — this project has never had two services hold write access to
+  the same table, and auto-approval would still need a way to call back
+  into `api`'s `ModerationService`, most likely a new internal HTTP
+  endpoint; (b) that internal-HTTP-callback approach directly — rejected
+  for the same reason, plus it introduces synchronous service-to-service
+  calls, a pattern this project has deliberately avoided everywhere else
+  (D53's whole point is async, best-effort, after-commit plumbing).
+  The event-only approach keeps `api` as the sole writer of its own
+  tables (a stronger version of D75's "never write to a table you don't
+  own" precedent) and needs no new synchronous coupling between services.
+- **`FraudChecksService` relationship: unchanged, confirmed as D53
+  already framed it.** `FraudChecksService`'s synchronous rate-limit/
+  duplicate checks keep running in the write-path transaction exactly as
+  today; `review-analyzer`'s verdict is a secondary, arrives-later
+  opinion shown alongside the existing `flagReason`, never a
+  replacement and never something the write blocks on.
+- **LLM/API choice: Anthropic's Claude API (`@anthropic-ai/sdk`),
+  unchanged from D66.** Same `ANTHROPIC_MODEL`/`ANTHROPIC_API_KEY`
+  configuration discipline; `review-analyzer` gets its own LocalStack
+  secrets bootstrap duplicating the credential rather than sharing
+  `api`'s, same precedent D73/D75 already set for
+  `notification-service`'s own secrets.
+
+**Revisit when:** a second synchronous, cross-service call becomes
+unavoidable elsewhere — this decision's rejection of the internal-HTTP
+option is specific to this use case (auto-approval can tolerate the
+extra event round-trip's latency), not a blanket rule against
+service-to-service HTTP forever.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
