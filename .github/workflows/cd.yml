@@ -12,17 +12,19 @@ name: CD
 # D23; #99's original "dev-localstack, not plain dev" distinction was
 # folded away by GitHub issue #466/D76 — `dev` itself now requires
 # LocalStack, no separate variant overlay left) — every redeploy backs
-# api's/notification-service's secrets with LocalStack Secrets Manager/
-# IAM via an assumed role each, reseeded fresh each run since LocalStack
-# keeps no state across pod restarts. Requires the LOCALSTACK_AUTH_TOKEN
-# repo secret to be set (`gh secret set LOCALSTACK_AUTH_TOKEN`) — a
-# one-time manual step, since the token itself can't be provisioned by
-# this workflow. Also requires ADMIN_PASSWORD_HASH, ADMIN_JWT_SECRET,
-# and (GitHub issue #466/D77) POSTGRES_PASSWORD repo secrets (`gh secret
-# set ADMIN_PASSWORD_HASH` / `gh secret set ADMIN_JWT_SECRET` / `gh
-# secret set POSTGRES_PASSWORD`) — real credentials, never committed to
-# a manifest. ANTHROPIC_API_KEY (GitHub issue #163) is optional — an
-# unset repo secret just deploys with AI moderation triage disabled.
+# api's/notification-service's/review-analyzer's secrets with LocalStack
+# Secrets Manager/IAM via an assumed role each, reseeded fresh each run
+# since LocalStack keeps no state across pod restarts. Requires the
+# LOCALSTACK_AUTH_TOKEN repo secret to be set (`gh secret set
+# LOCALSTACK_AUTH_TOKEN`) — a one-time manual step, since the token itself
+# can't be provisioned by this workflow. Also requires ADMIN_PASSWORD_HASH,
+# ADMIN_JWT_SECRET, and (GitHub issue #466/D77) POSTGRES_PASSWORD repo
+# secrets (`gh secret set ADMIN_PASSWORD_HASH` / `gh secret set
+# ADMIN_JWT_SECRET` / `gh secret set POSTGRES_PASSWORD`) — real
+# credentials, never committed to a manifest. ANTHROPIC_API_KEY (GitHub
+# issue #163, now read by review-analyzer per GitHub issue #340/D81) is
+# optional — an unset repo secret just deploys with AI moderation triage
+# disabled.
 on:
   push:
     branches: [main]
@@ -113,10 +115,11 @@ jobs:
 
       - name: Provision AI moderation secret
         # Genuinely optional (GitHub issue #163) — an empty
-        # ANTHROPIC_API_KEY just leaves AiModerationService's advisory
-        # triage disabled; nothing else depends on this secret existing.
-        # Real values would come from an ANTHROPIC_API_KEY repo secret
-        # (`gh secret set ANTHROPIC_API_KEY`), same never-committed
+        # ANTHROPIC_API_KEY just leaves review-analyzer's advisory triage
+        # disabled (GitHub issue #340 moved this from api's own
+        # AiModerationService, D81); nothing else depends on this secret
+        # existing. Real values would come from an ANTHROPIC_API_KEY repo
+        # secret (`gh secret set ANTHROPIC_API_KEY`), same never-committed
         # pattern as ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET above.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

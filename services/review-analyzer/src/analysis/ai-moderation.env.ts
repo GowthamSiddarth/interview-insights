@@ -1,20 +1,18 @@
-// GitHub issue #163 (Phase 19) — ANTHROPIC_API_KEY is provisioned
-// imperatively, the same way ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET and
-// LOCALSTACK_AUTH_TOKEN are (see admin-auth.env.ts, D23) — never committed
-// to a manifest or checked into .env.example with a working value. Unlike
-// those two, this feature is advisory and entirely optional: an unset key
-// simply turns the feature off (isAiModerationEnabled() false), rather
-// than the app failing to boot. ANTHROPIC_MODEL is not a secret and has no
-// hardcoded fallback — it must be set explicitly whenever the key is, so
-// the model in use is always a deliberate choice, never an assumed default.
+// GitHub issue #340 (Phase 32, D81) — these four functions and their
+// backing env vars move here from api/src/ai-moderation/ai-moderation.env.ts
+// wholesale: this service is now the only place the LLM is ever called
+// from, and (since it's the one computing the verdict) the only place that
+// can decide whether a verdict clears the auto-approval bar. api no longer
+// reads ANTHROPIC_API_KEY/ANTHROPIC_MODEL/AI_MODERATION_AUTO_APPROVE_THRESHOLD/
+// AI_AUTO_APPROVAL_ENABLED at all — it only ever reads the resulting
+// autoApprovalEligible flag off the verdict_computed event.
 
 export function isAiModerationEnabled(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
 // Only ever called when isAiModerationEnabled() is true — same lazy,
-// throw-on-use pattern as candidates.service.ts's getEmailHashSecret() and
-// admin-auth.env.ts's getRequiredAdminEnv().
+// throw-on-use pattern as the original api copy.
 export function getAnthropicModel(): string {
   const model = process.env.ANTHROPIC_MODEL;
   if (!model) {
@@ -57,9 +55,8 @@ export function getAutoApprovalConfidenceThreshold(): number | null {
 // doesn't lose whatever threshold they've already tuned, and flipping it
 // back on doesn't require re-entering it. Same fail-closed default as the
 // threshold (unset means disabled, not an error) and the same
-// COOKIE_SECURE-style `=== 'true'` boolean-env convention already used
-// elsewhere in this project (see session-cookie-options.util.ts) — no
-// deploy needed to flip it, just an env change.
+// COOKIE_SECURE-style `=== 'true'` boolean-env convention this project uses
+// elsewhere. No deploy needed to flip it, just an env change.
 export function isAutoApprovalEnabled(): boolean {
   return process.env.AI_AUTO_APPROVAL_ENABLED === 'true';
 }

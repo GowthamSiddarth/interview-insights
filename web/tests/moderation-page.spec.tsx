@@ -274,6 +274,10 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     expect(screen.getByText('slug: globex-corp')).toBeInTheDocument();
     expect(screen.getByText('size: large')).toBeInTheDocument();
     expect(screen.getByText('industry: Manufacturing')).toBeInTheDocument();
+    // GitHub issue #340 (D81) — company requests are never triaged (not
+    // one of the three moderated content types), so no AI second opinion
+    // block of any kind — pending or otherwise — ever renders for one.
+    expect(screen.queryByText(/AI second opinion/)).not.toBeInTheDocument();
   });
 
   it('expanding a submission reveals its full entity detail, including round content beyond the highlighted scores', async () => {
@@ -297,8 +301,11 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     expect(screen.getByText(/AI second opinion.*flagged a concern/)).toBeInTheDocument();
     expect(screen.getByText('Free text may reveal interviewer identity.')).toBeInTheDocument();
     // The recruiter rating in the same submission has no verdict yet —
-    // absence renders nothing, not an empty box.
+    // GitHub issue #340 (D81) renders this as a distinct "analysis
+    // pending" state now, never conflated with "no concerns found" (which
+    // would mean a verdict actually arrived and was clean).
     expect(screen.queryByText(/no concerns found/)).not.toBeInTheDocument();
+    expect(screen.getByText(/AI second opinion.*analysis pending/)).toBeInTheDocument();
 
     // The other submission stays collapsed.
     expect(screen.queryByText('Overall review')).not.toBeInTheDocument();

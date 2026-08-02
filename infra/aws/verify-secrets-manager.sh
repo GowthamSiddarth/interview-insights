@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # Verifies the in-cluster LocalStack Secrets Manager/IAM setup end to end
-# (GitHub issue #466, D76/D77/D78) — a live-cluster companion to
-# verify-iam-policy.sh's own local, no-cluster policy-syntax check.
+# (GitHub issue #466, D76/D77/D78; GitHub issue #340, D81) — a live-cluster
+# companion to verify-iam-policy.sh's own local, no-cluster policy-syntax
+# check.
 #
 # Checks, in order:
-#   1. Secrets Manager holds exactly the 7 secrets api/notification-service
-#      need — no more, no fewer.
-#   2. Both IAM roles exist, each with its own policy attached.
-#   3. api-secrets-role and notification-service-secrets-role are each
-#      scoped to exactly the secrets they should read — api gets all 7,
-#      notification-service gets only database-url + email-encryption-key.
-#   4. api's and notification-service's pods are Ready with zero restarts
-#      and no ResourceNotFoundException in their logs.
+#   1. Secrets Manager holds exactly the 6 always-required secrets
+#      api/notification-service/review-analyzer need — no more, no fewer
+#      (anthropic-api-key is optional, checked separately).
+#   2. All three IAM roles exist, each with its own policy attached.
+#   3. api-secrets-role, notification-service-secrets-role, and
+#      review-analyzer-secrets-role are each scoped to exactly the secrets
+#      they should read — api gets 6 (no longer anthropic-api-key, moved to
+#      review-analyzer as of D81), notification-service gets only
+#      database-url + email-encryption-key, review-analyzer gets
+#      database-url + anthropic-api-key.
+#   4. api's, notification-service's, and review-analyzer's pods are Ready
+#      with zero restarts and no ResourceNotFoundException in their logs.
 #   5. The imperatively-provisioned Secrets (postgres-credentials/D77,
 #      admin-credentials, localstack-credentials, anthropic-credentials)
 #      exist in the cluster.
@@ -105,8 +110,8 @@ else
   echo "OK (informational): interview-insights/anthropic-api-key absent — AI moderation is disabled, expected default"
 fi
 
-echo "== 2. Both IAM roles exist, each with its own policy attached =="
-for role in api-secrets-role notification-service-secrets-role; do
+echo "== 2. All three IAM roles exist, each with its own policy attached =="
+for role in api-secrets-role notification-service-secrets-role review-analyzer-secrets-role; do
   if awslocal iam get-role --role-name "$role" > /dev/null 2>&1; then
     echo "OK: role $role exists"
   else
@@ -134,10 +139,9 @@ expected_api_resources=$(printf '%s\n' \
   "arn:aws:secretsmanager:*:*:secret:interview-insights/email-encryption-key-*" \
   "arn:aws:secretsmanager:*:*:secret:interview-insights/candidate-jwt-secret-*" \
   "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-password-hash-*" \
-  "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-jwt-secret-*" \
-  "arn:aws:secretsmanager:*:*:secret:interview-insights/anthropic-api-key-*" | sort)
+  "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-jwt-secret-*" | sort)
 if [ "$api_resources" = "$expected_api_resources" ]; then
-  echo "OK: api-secrets-role can read exactly the 7 secrets api needs"
+  echo "OK: api-secrets-role can read exactly the 6 secrets api needs"
 else
   echo "FAIL: api-secrets-role's resource list doesn't match. Got:"
   echo "$api_resources" | sed 's/^/  /'
@@ -158,11 +162,25 @@ else
   fail=1
 fi
 
+review_analyzer_resources=$(awslocal iam get-policy-version \
+  --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/review-analyzer-secrets-access-policy" \
+  --version-id v1 --query 'PolicyVersion.Document.Statement[0].Resource' --output text | tr '\t' '\n' | sort)
+expected_review_analyzer_resources=$(printf '%s\n' \
+  "arn:aws:secretsmanager:*:*:secret:interview-insights/database-url-*" \
+  "arn:aws:secretsmanager:*:*:secret:interview-insights/anthropic-api-key-*" | sort)
+if [ "$review_analyzer_resources" = "$expected_review_analyzer_resources" ]; then
+  echo "OK: review-analyzer-secrets-role can read only database-url + anthropic-api-key"
+else
+  echo "FAIL: review-analyzer-secrets-role's resource list doesn't match. Got:"
+  echo "$review_analyzer_resources" | sed 's/^/  /'
+  fail=1
+fi
+
 kill "$PF_PID" 2>/dev/null || true
 trap - EXIT
 
-echo "== 4. api/notification-service pods are healthy (the only way to be, post-#466, if the fetch failed) =="
-for deploy in api notification-service; do
+echo "== 4. api/notification-service/review-analyzer pods are healthy (the only way to be, post-#466/#340, if the fetch failed) =="
+for deploy in api notification-service review-analyzer; do
   ready=$(kubectl -n "$NS" get deployment "$deploy" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   desired=$(kubectl -n "$NS" get deployment "$deploy" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
   if [ -n "$ready" ] && [ "$ready" = "$desired" ]; then

@@ -1,0 +1,100 @@
+// GitHub issue #340, docs/DECISIONS.md D75 (revisit trigger fired) / D81 —
+// a deliberately minimal mirror of api/prisma/schema.prisma's Round/
+// RoundRating/RecruiterRating/OverallReview models: read-only in practice,
+// modeling only the fields buildContent() needs to build an LLM prompt.
+// api's migrations (api/prisma/migrations/) are this project's one source
+// of truth for the *actual* database schema (CLAUDE.md hard constraint #5)
+// — this file exists only to generate a typed Prisma client against tables
+// that already exist by the time this service boots. Never run
+// `prisma migrate` from here; there is no `prisma/migrations/` directory
+// in this package on purpose.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Duplicated from api/prisma/schema.prisma — needed for the reconciliation
+// sweep's stale-row query (status: pending, moderationVerdict: null).
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+  flagged
+}
+
+enum RoundType {
+  coding
+  system_design
+  behavioral
+  leadership
+  case_study
+  assessment
+  take_home
+  tech_screening
+  other
+}
+
+// Read-only: only roundType/typeMetadata are ever selected, for the round-
+// type context requestVerdict()'s prompt includes alongside RoundRating's
+// own fields.
+model Round {
+  id           String    @id @db.Uuid
+  roundType    RoundType @map("round_type")
+  typeMetadata Json?     @map("type_metadata")
+
+  ratings RoundRating[]
+
+  @@map("rounds")
+}
+
+model RoundRating {
+  id                String           @id @db.Uuid
+  roundId           String           @map("round_id") @db.Uuid
+  difficulty        Int              @db.SmallInt
+  fluency           Int              @db.SmallInt
+  clarity           Int              @db.SmallInt
+  focus             Int              @db.SmallInt
+  technicalDepth    Int?             @map("technical_depth") @db.SmallInt
+  freeText          String?          @map("free_text")
+  status            ModerationStatus @default(pending)
+  moderationVerdict Json?            @map("moderation_verdict")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  round Round @relation(fields: [roundId], references: [id])
+
+  @@map("round_ratings")
+}
+
+model RecruiterRating {
+  id                           String           @id @db.Uuid
+  reachability                 Int              @db.SmallInt
+  responsiveness               Int              @db.SmallInt
+  guidelinesShared             Int              @map("guidelines_shared") @db.SmallInt
+  rejectionMessageAuthenticity Int?             @map("rejection_message_authenticity") @db.SmallInt
+  freeText                     String?          @map("free_text")
+  status                       ModerationStatus @default(pending)
+  moderationVerdict            Json?            @map("moderation_verdict")
+  createdAt                    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("recruiter_ratings")
+}
+
+model OverallReview {
+  id                String           @id @db.Uuid
+  overallExperience Int              @map("overall_experience")
+  wouldRecommend    Boolean          @map("would_recommend")
+  reviewText        String?          @map("review_text")
+  status            ModerationStatus @default(pending)
+  moderationVerdict Json?            @map("moderation_verdict")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("overall_reviews")
+}
+
+// No ModerationQueueEntry model here on purpose — review-analyzer never
+// writes moderation_queue (D81), so it never needs to read it either.

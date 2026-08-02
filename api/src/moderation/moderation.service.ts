@@ -38,7 +38,8 @@ import { ModerationFlagDto } from './dto/moderation-flag.dto';
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
 
-// GitHub issue #440 (Phase 39, D71) — everything AiModerationService needs to
+// GitHub issue #440 (Phase 39, D71) — everything the verdict-consumer
+// (GitHub issue #340, D81 — this project's first event consumer) needs to
 // leave a durable trail of one auto-approval, written atomically with the
 // approve() decision it documents (see approveWithAudit() below) so the two
 // can never diverge (approved-without-audit, or audited-without-approve).
@@ -431,8 +432,9 @@ export class ModerationService {
     return this.review(id, 'flagged', dto, dto.flagReason);
   }
 
-  // GitHub issue #440 (Phase 39, D71) — the one entry point AiModerationService
-  // uses for a system-attributed auto-approval. Deliberately still routes
+  // GitHub issue #440 (Phase 39, D71) — the one entry point the
+  // verdict-consumer (GitHub issue #340, D81) uses for a system-attributed
+  // auto-approval. Deliberately still routes
   // through review() below — never a new, parallel path that skips
   // moderation_queue — with the one addition that the audit row is created
   // inside the *same* transaction as the queue-entry/entity-status update,

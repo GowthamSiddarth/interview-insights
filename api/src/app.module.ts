@@ -19,12 +19,15 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { SearchModule } from './search/search.module';
 import { MeModule } from './me/me.module';
 import { BulkProcessSubmissionModule } from './bulk-process-submission/bulk-process-submission.module';
-import { ReconciliationSweepModule } from './ai-moderation/reconciliation-sweep.module';
+import { VerdictConsumerModule } from './verdict-consumer/verdict-consumer.module';
 
 @Module({
   imports: [
-    // GitHub issue #442 (Phase 39, D71) — enables @Cron() across the app;
-    // ReconciliationSweepService is the only consumer today.
+    // Enables @Interval()/@Cron() across the app — DomainEventPublisher's
+    // reconnect loop and (GitHub issue #340) VerdictConsumerService's own
+    // reconnect loop both need it. GitHub issue #442 (Phase 39, D71) added
+    // this for ReconciliationSweepService, which moved to review-analyzer
+    // as of #340/D81 — kept here for the reconnect loops above.
     ScheduleModule.forRoot(),
     PrismaModule,
     AdminAuthModule,
@@ -45,7 +48,7 @@ import { ReconciliationSweepModule } from './ai-moderation/reconciliation-sweep.
     SearchModule,
     MeModule,
     BulkProcessSubmissionModule,
-    ReconciliationSweepModule,
+    VerdictConsumerModule,
   ],
 })
 export class AppModule {}

@@ -131,11 +131,13 @@ export interface ModerationQueueEntity {
   requestedCompanySlug?: string;
   requestedCompanySizeBucket?: string;
   requestedCompanyIndustry?: string | null;
-  // GitHub issue #163 (Phase 19) — advisory-only second opinion from an
-  // LLM triage pass, one of the three moderated content types only
-  // (never `company`). Null is unremarkable — the feature may be
-  // disabled, or the triage call simply hasn't landed yet — never itself
-  // a signal to a moderator.
+  // GitHub issue #163 (Phase 19), now computed async by review-analyzer
+  // (GitHub issue #340, D81) — advisory-only second opinion from an LLM
+  // triage pass, one of the three moderated content types only (never
+  // `company`). Null means either the feature is disabled or the verdict
+  // simply hasn't arrived yet — the moderation page renders this as a
+  // distinct "analysis pending" state (AiModerationVerdict), never
+  // conflated with "no concerns found".
   moderationVerdict?: { concerning: boolean; reasons: string[]; summary: string } | null;
 }
 

@@ -118,12 +118,33 @@ function CompanyRequestDetails({ entity }: { entity: ModerationQueueEntity }) {
 // GitHub issue #163 (Phase 19) — an advisory second opinion from an LLM
 // triage pass, rendered distinctly from the deterministic fraud-check flag
 // below: this is a suggestion to weigh, never a decision — the moderator
-// still makes the call either way (CLAUDE.md hard constraint #2). Renders
-// nothing when there's no verdict yet (feature disabled, or the triage
-// call simply hasn't landed).
-function AiModerationVerdict({ entity }: { entity: ModerationQueueEntity }) {
+// still makes the call either way (CLAUDE.md hard constraint #2).
+//
+// GitHub issue #340 (Phase 32, D81) moved the triage call to an async
+// service (review-analyzer) — a queue entry is now visible well before its
+// verdict arrives, so "no verdict yet" is no longer safe to treat as
+// nothing-to-show (issue #61's "loading vs. empty state" discipline).
+// `company` entries are never triaged at all (not one of the three
+// moderated content types) and render nothing here, same as before;
+// for every other entityType, a null verdict now renders a distinct
+// "Analysis pending" state instead of disappearing silently.
+function AiModerationVerdict({
+  entity,
+  entityType,
+}: {
+  entity: ModerationQueueEntity;
+  entityType: ModerationQueueEntry['entityType'];
+}) {
+  if (entityType === 'company') return null;
+
   const verdict = entity.moderationVerdict;
-  if (!verdict) return null;
+  if (!verdict) {
+    return (
+      <div className="rounded-md bg-gray-50 p-2 text-xs text-gray-500 italic dark:bg-gray-800 dark:text-gray-500">
+        AI second opinion (advisory only): analysis pending
+      </div>
+    );
+  }
   return (
     <div
       className={
@@ -176,7 +197,7 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
           Auto-flagged: {entry.flagReason} (fraud checks) — review with extra care.
         </p>
       )}
-      <AiModerationVerdict entity={entity} />
+      <AiModerationVerdict entity={entity} entityType={entry.entityType} />
     </div>
   );
 }

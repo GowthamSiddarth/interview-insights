@@ -513,26 +513,32 @@ The *old* password stops working the moment `api`'s restart completes —
 there's no overlap window, matching this project's single-admin,
 single-credential scope (`docs/ROADMAP.md` Phase 18).
 
-## 5c. AI moderation triage & auto-approval (GitHub issues #163, #439, #441, Phase 19/39)
+## 5c. AI moderation triage & auto-approval (GitHub issues #163, #439, #441, #340, Phase 19/32/39)
 
 Three env vars gate this feature, layered — each one is a complete "off"
 switch on its own, and all three must be configured for a submission to
-ever auto-publish without a human:
+ever auto-publish without a human. GitHub issue #340 (D81) moved all
+three, and the LLM call itself, from `api` (in-process, synchronous) to
+`review-analyzer` (its own async microservice, off Phase 30's event bus) —
+`api` no longer reads any of these or calls Anthropic at all; it only
+consumes the `verdict_computed` event `review-analyzer` publishes back.
 
 | Var | What it gates | Where it lives | Safe/default value |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | The LLM triage call itself. Empty/unset = `AiModerationService` is a complete no-op — nothing else below ever runs. | Fetched from LocalStack Secrets Manager at boot (D78) — rooted in the `anthropic-credentials` Secret (imperative, never committed), consumed by LocalStack's own pod rather than `api` directly (`docs/SECRETS.md` has the mechanism) | unset |
-| `AI_MODERATION_AUTO_APPROVE_THRESHOLD` | The confidence cutoff (D71). Unset (or an empty string — see the issue #450 gotcha below) = nothing is ever auto-approve-eligible; triage still runs and stores an advisory verdict. | `api-config` ConfigMap (not a secret) | `""` |
-| `AI_AUTO_APPROVAL_ENABLED` | The kill switch (issue #441). Must be exactly `"true"`; anything else = advisory-only regardless of the threshold. | `api-config` ConfigMap (not a secret) | `"false"` |
+| `ANTHROPIC_API_KEY` | The LLM triage call itself. Empty/unset = `AnalysisService` is a complete no-op — nothing else below ever runs. | Fetched from LocalStack Secrets Manager at boot (D78/D81) — rooted in the `anthropic-credentials` Secret (imperative, never committed), consumed by LocalStack's own pod rather than `review-analyzer` directly (`docs/SECRETS.md` has the mechanism) | unset |
+| `AI_MODERATION_AUTO_APPROVE_THRESHOLD` | The confidence cutoff (D71). Unset (or an empty string — see the issue #450 gotcha below) = nothing is ever auto-approve-eligible; triage still runs and publishes an advisory verdict. | `review-analyzer-config` ConfigMap (not a secret) | `""` |
+| `AI_AUTO_APPROVAL_ENABLED` | The kill switch (issue #441). Must be exactly `"true"`; anything else = advisory-only regardless of the threshold. | `review-analyzer-config` ConfigMap (not a secret) | `"false"` |
 
 Today, in every environment this project actually runs (local dev,
 `kind`), all three are at their disabled defaults — the feature has never
 been turned on outside of unit tests. Confirm the live state of the first
 one at any time with `gh secret list` (no `ANTHROPIC_API_KEY` row means
 disabled everywhere CD deploys); the other two are visible directly in
-`infra/k8s/base/05-api.yaml` and `infra/docker-compose.yml`, or via
-`kubectl get configmap api-config -n interview-insights -o yaml` against
-a live cluster.
+`infra/k8s/base/11-review-analyzer.yaml`, or via
+`kubectl get configmap review-analyzer-config -n interview-insights -o yaml`
+against a live cluster (local dev/Docker Compose don't run
+`review-analyzer` as a container — see `services/review-analyzer/.env.example`
+instead).
 
 **Gotcha fixed by GitHub issue #450:** `AI_MODERATION_AUTO_APPROVE_THRESHOLD=""`
 (an explicit empty string, this project's own convention for "disabled"
@@ -547,49 +553,38 @@ an empty string the same as truly unset.
 
 `ANTHROPIC_API_KEY` is rooted in the same never-committed, imperatively-
 provisioned `anthropic-credentials` Secret as `ADMIN_PASSWORD_HASH`/
-`ADMIN_JWT_SECRET` (5b above), but since D78, `api` fetches it from
-LocalStack Secrets Manager at boot like every other secret, rather than
-reading `anthropic-credentials` directly — see `docs/SECRETS.md` for
-the full mechanism (LocalStack's own pod is the one consuming
-`anthropic-credentials` now, so its init-hook can reseed the real value
-after an unplanned restart). Rotation is the same two-step shape 5b
-describes: re-run `infra/aws/seed-localstack.sh` (or push to trigger
-CD), then restart `api`. Genuinely optional, unlike `ADMIN_PASSWORD_HASH`/
-`ADMIN_JWT_SECRET`: an empty/unset key just leaves `AiModerationService`'s
-advisory LLM triage disabled — every write still succeeds normally,
-`moderationVerdict` simply stays `null`. This is also why the bootstrap
-fetches it via `fetchOptionalSecret`, not the strict `fetchSecret` every
-other secret uses (D78) — the Secrets Manager entry simply not existing
-is a valid "disabled" result here, not a failure. It's deliberately
-*not* seeded as an empty string when unset: AWS Secrets Manager rejects
-an empty `SecretString` outright, which broke this exact rollout once
-already (see `docs/SECRETS.md`'s gotcha for the full story) —
-`interview-insights/anthropic-api-key` is either a real value or absent
-entirely, never present-and-empty. `ANTHROPIC_MODEL` is not a secret —
-it lives in the plain
-`api-config` ConfigMap alongside `ADMIN_USERNAME`.
+`ADMIN_JWT_SECRET` (5b above). Since D78, and now read by
+`review-analyzer` instead of `api` as of D81, it's fetched from LocalStack
+Secrets Manager at boot like every other secret this service reads,
+rather than reading `anthropic-credentials` directly — see
+`docs/SECRETS.md` for the full mechanism (LocalStack's own pod is the one
+consuming `anthropic-credentials` now, so its init-hook can reseed the
+real value after an unplanned restart). Rotation is the same two-step
+shape 5b describes: re-run `infra/aws/seed-localstack.sh` (or push to
+trigger CD), then restart `review-analyzer`. Genuinely optional, unlike
+`ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`: an empty/unset key just leaves
+`AnalysisService`'s advisory LLM triage disabled — every write still
+succeeds normally, `moderationVerdict` simply stays `null` and the
+moderation UI shows "analysis pending" rather than a real verdict. This is
+also why the bootstrap fetches it via `fetchOptionalSecret`, not the
+strict `fetchSecret` every other secret uses (D78) — the Secrets Manager
+entry simply not existing is a valid "disabled" result here, not a
+failure. It's deliberately *not* seeded as an empty string when unset: AWS
+Secrets Manager rejects an empty `SecretString` outright, which broke this
+exact rollout once already (see `docs/SECRETS.md`'s gotcha for the full
+story) — `interview-insights/anthropic-api-key` is either a real value or
+absent entirely, never present-and-empty. `ANTHROPIC_MODEL` is not a
+secret — it lives in the plain `review-analyzer-config` ConfigMap.
 
-**Native local dev** (section 1): edit `api/.env` directly, then restart
-`npm run start:dev`. This works even though nothing in `api/src` calls
-`dotenv` explicitly — `PrismaModule` (imported first, and `@Global()`,
-in `app.module.ts`) constructs a `PrismaClient`, and merely requiring
-`@prisma/client` loads the nearest `.env` file into `process.env` for
-the *whole* Node process as a side effect, not just for Prisma's own
-`DATABASE_URL` resolution (verified directly: `node -e "require('@prisma/client')"`
-populates `process.env.ANTHROPIC_API_KEY` from `api/.env` with no other
-code involved). This is Prisma's own behavior, not something this
-project wires up deliberately — worth knowing since it's easy to assume
-(as this guide previously did) that `.env` is CLI-only:
+**Native local dev** (section 1): `review-analyzer` isn't part of the
+default `docker compose up` loop or the host-run api/web pair — run it
+directly via `cd services/review-analyzer && npm run start:dev`, reading
+its own `.env` (copy `services/review-analyzer/.env.example`):
 ```bash
-# api/.env
+# services/review-analyzer/.env
 ANTHROPIC_API_KEY="sk-ant-..."
 ANTHROPIC_MODEL="claude-haiku-4-5"          # required once the key is set — no fallback
 ```
-
-**Docker Compose full profile** (section 2): edit the `ANTHROPIC_API_KEY`
-value directly in `infra/docker-compose.yml`'s `api` service — it's set
-there as a real value, not read from `api/.env` either — then
-`docker compose --profile full up --build`.
 
 **Real `kind`/k8s deploy** (section 3+) — one-time setup:
 ```bash
@@ -613,23 +608,21 @@ isn't exported locally.
 
 With triage running (step 1 done), a clean verdict is still only ever
 advisory until both of these are set together. Neither is a secret — both
-live in `api-config` (added by GitHub issue #450; previously undocumented
-in any committed manifest, `.env.example` only):
+live in `review-analyzer-config` (moved here from `api-config` by D81;
+originally added by GitHub issue #450, previously undocumented in any
+committed manifest, `.env.example` only):
 
 ```bash
-# Native local dev — same api/.env editing as step 1:
+# Native local dev — same services/review-analyzer/.env editing as step 1:
 AI_MODERATION_AUTO_APPROVE_THRESHOLD="0.9"   # tune empirically, no prescribed starting value (D71)
 AI_AUTO_APPROVAL_ENABLED="true"              # must be exactly this string
 
-# Docker Compose full profile: edit the same two keys directly in
-# infra/docker-compose.yml's api service.
-
-# Real k8s deploy: edit infra/k8s/base/05-api.yaml's api-config ConfigMap
-# (or a per-overlay patch, e.g. infra/k8s/overlays/staging, if only one
-# environment should have it on), commit, then either push (CD picks it
-# up) or apply manually:
+# Real k8s deploy: edit infra/k8s/base/11-review-analyzer.yaml's
+# review-analyzer-config ConfigMap (or a per-overlay patch, e.g.
+# infra/k8s/overlays/staging, if only one environment should have it on),
+# commit, then either push (CD picks it up) or apply manually:
 kubectl apply -k infra/k8s/overlays/<overlay>
-kubectl -n interview-insights rollout restart deployment/api   # ConfigMap changes don't hot-reload
+kubectl -n interview-insights rollout restart deployment/review-analyzer   # ConfigMap changes don't hot-reload
 ```
 
 There's no starting threshold value prescribed anywhere in this repo —
@@ -639,21 +632,28 @@ confidence data exists in an environment, not guessed here.
 ### Verifying it's actually live
 
 1. `gh secret list` shows `ANTHROPIC_API_KEY`, and
-   `kubectl get configmap api-config -n interview-insights -o yaml` (or
-   `infra/docker-compose.yml`/`api/.env` locally) shows
+   `kubectl get configmap review-analyzer-config -n interview-insights -o yaml`
+   (or `services/review-analyzer/.env` locally) shows
    `AI_AUTO_APPROVAL_ENABLED: "true"` and a real
    `AI_MODERATION_AUTO_APPROVE_THRESHOLD`.
 2. Submit a clean, unremarkable rating through the app. Its
    `moderationVerdict` should show `autoApprovalEligible: true` and its
    `status` should already be `approved` (check via `kubectl exec` psql,
-   section 11.5) — with no moderator action in between.
+   section 11.5) — with no moderator action in between. This now takes a
+   real round-trip: `review-analyzer` computes the verdict and publishes
+   `moderation.<type>.verdict_computed.v1`; `api`'s own `VerdictConsumerService`
+   (its first event consumer, D81) is what actually stores the verdict and
+   calls `approveWithAudit()`.
 3. `ai_auto_approval_audit` (GitHub issue #440) has a matching row, and
    `moderation_queue` shows that entry's `reviewed_by` as
    `system:ai-auto-approval`.
-4. The reconciliation sweep (GitHub issue #442) runs hourly and is silent
-   unless something stalls — check `api` pod logs for
-   `ReconciliationSweepService` entries if a submission seems stuck
-   `pending` with no verdict past 24h.
+4. The reconciliation sweep (GitHub issue #442, moved to `review-analyzer`
+   by #340/D81) runs hourly and is silent unless something stalls — check
+   `review-analyzer` pod logs for `ReconciliationSweepService` entries if
+   a submission seems stuck `pending` with no verdict past 24h; a stall it
+   can't resolve publishes a `stalled: true` event, which shows up in
+   `api`'s own logs (`VerdictConsumerService`) as a call to
+   `ModerationService.flag()`.
 
 ## 5d. Postgres credential rotation (GitHub issue #466, D77)
 

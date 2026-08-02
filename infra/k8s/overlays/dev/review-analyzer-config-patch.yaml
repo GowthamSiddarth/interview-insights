@@ -1,0 +1,18 @@
+# Strategic-merge patch (GitHub issue #340, D81) — same pattern as this
+# overlay's own api-config-patch.yaml/notification-service-config-patch.yaml,
+# for review-analyzer's own LocalStack-backed secrets (own IAM role, own
+# bootstrap module — D75/D81's duplicate-rather-than-share precedent). Opts
+# review-analyzer into fetching DATABASE_URL/ANTHROPIC_API_KEY from the
+# LocalStack instance infra/k8s/base/localstack/ deploys, via
+# seed-localstack.sh's review-analyzer-secrets-role — see
+# services/review-analyzer/src/secrets/localstack-secrets-bootstrap.ts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: review-analyzer-config
+  namespace: interview-insights
+data:
+  SECRETS_SOURCE: localstack
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_REGION: us-east-1
+  AWS_SECRETS_ROLE_ARN: "arn:aws:iam::000000000000:role/review-analyzer-secrets-role"

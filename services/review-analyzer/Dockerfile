@@ -1,15 +1,18 @@
 FROM node:22-slim AS base
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# No Prisma yet — this service only computes and publishes a verdict
-# (docs/DECISIONS.md D81), it never writes to api's database, so there's
-# no Prisma client to generate here at all (unlike notification-service's
-# Dockerfile, which grew a `prisma generate` step once #335 needed one).
-FROM base AS deps
+# GitHub issue #340 — Prisma's own docker pattern (same as
+# notification-service's Dockerfile, D75/D81): generate the client once in
+# the full (dev+prod) dependency tree, then the runtime stage below copies
+# node_modules wholesale rather than reinstalling. This service never runs
+# `prisma migrate` — there is no prisma/migrations/ directory here at all —
+# so there's no migrate-on-boot step, just `prisma generate`.
+FROM base AS build
 COPY package.json package-lock.json ./
 RUN npm ci
-
-FROM deps AS build
+COPY prisma ./prisma
+RUN npx prisma generate
 COPY . .
 RUN npm run build
 

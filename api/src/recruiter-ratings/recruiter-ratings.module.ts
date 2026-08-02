@@ -5,10 +5,9 @@ import { CandidateAuthModule } from '../candidate-auth/candidate-auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { FraudChecksModule } from '../fraud-checks/fraud-checks.module';
 import { EditThrottleModule } from '../common/edit-throttle.module';
-import { AiModerationModule } from '../ai-moderation/ai-moderation.module';
 
 @Module({
-  imports: [ModerationModule, FraudChecksModule, CandidateAuthModule, EditThrottleModule, AiModerationModule],
+  imports: [ModerationModule, FraudChecksModule, CandidateAuthModule, EditThrottleModule],
   controllers: [RecruiterRatingsController],
   providers: [RecruiterRatingsService],
   exports: [RecruiterRatingsService],

@@ -28,12 +28,14 @@ flagged item never gets a second status_changed event to act on. Phase
 31 is fully built out including its blog post. As of GitHub issue #339,
 `review-analyzer` is the second real consumer — its own consumer group
 (`review-analyzer`, independent of `notification-service`'s) subscribing
-to all three `*.created` topics, logging receipt only. GitHub issue #340
-ports Phase 19 (#163)'s LLM triage logic in and adds a new event,
-`moderation.<type>.verdict_computed.v1`, which `api` itself will consume
-— its first-ever event consumer, not just a producer — to write
-`moderationVerdict` and run the existing (D71) auto-approval flow; see
-`docs/DECISIONS.md` D81.
+to all three `*.created` topics. As of GitHub issue #340, it ports Phase
+19 (#163)'s LLM triage logic in (its own read-only Prisma schema, D75/D81)
+and publishes a new event, `moderation.<type>.verdict_computed.v1`, which
+`api` itself consumes — its first-ever event consumer (own consumer group
+`api`), not just a producer — to write `moderationVerdict` and run the
+existing (D71) auto-approval flow; see `docs/DECISIONS.md` D81.
+`review-analyzer` never writes to `moderation_queue` itself — it only
+computes and publishes.
 
 ## Publishing semantics
 
@@ -71,44 +73,67 @@ version in place.
 
 ## Defined events
 
-Six event types — one `*.created` and one `*.status_changed` per
-moderated entity type (`round_rating`, `recruiter_rating`,
-`overall_review`). `company` (a create-company request, Phase 35) is
-deliberately out of scope — see `ModerationService.publishCreatedEvent`/
-`publishStatusChangedEvent`'s own comments for why. Every `*.created`
-event carries `candidateId`/`companyId` context so a consumer can act
-without an immediate callback into the monolith; every `*.status_changed`
-event additionally carries `previousStatus` (always `'pending'` —
-`ModerationService.review()` only ever runs against an unreviewed entry),
-`newStatus`, and the optional `reviewedBy` label.
+Nine event types — one `*.created`, one `*.status_changed`, and (GitHub
+issue #340) one `*.verdict_computed` per moderated entity type
+(`round_rating`, `recruiter_rating`, `overall_review`). `company` (a
+create-company request, Phase 35) is deliberately out of scope for all
+three — see `ModerationService.publishCreatedEvent`/
+`publishStatusChangedEvent`'s own comments for why, and D81 for why
+`review-analyzer` never subscribes to `company`'s own `*.created` topic
+either. Every `*.created` event carries `candidateId`/`companyId` context
+so a consumer can act without an immediate callback into the monolith;
+every `*.status_changed` event additionally carries `previousStatus`
+(always `'pending'` — `ModerationService.review()` only ever runs against
+an unreviewed entry), `newStatus`, and the optional `reviewedBy` label.
+Every `*.verdict_computed` event carries the full LLM verdict payload
+(`verdict`, `autoApprovalEligible`, `confidence`, `model`,
+`promptContent`, `responseText`) plus an optional `stalled: true` marker
+for a reconciliation-sweep escalation with no verdict at all.
 
 | Topic | Type | Schema file |
 |---|---|---|
 | `moderation.round_rating.created.v1` | `RoundRatingCreatedEventV1` | `api/src/events/schemas/round-rating-created.event.ts` |
 | `moderation.round_rating.status_changed.v1` | `RoundRatingStatusChangedEventV1` | `api/src/events/schemas/round-rating-status-changed.event.ts` |
+| `moderation.round_rating.verdict_computed.v1` | `RoundRatingVerdictComputedEventV1` | `services/review-analyzer/src/events/schemas/round-rating-verdict-computed.event.ts` (duplicated into `api/src/events/schemas/`) |
 | `moderation.recruiter_rating.created.v1` | `RecruiterRatingCreatedEventV1` | `api/src/events/schemas/recruiter-rating-created.event.ts` |
 | `moderation.recruiter_rating.status_changed.v1` | `RecruiterRatingStatusChangedEventV1` | `api/src/events/schemas/recruiter-rating-status-changed.event.ts` |
+| `moderation.recruiter_rating.verdict_computed.v1` | `RecruiterRatingVerdictComputedEventV1` | `services/review-analyzer/src/events/schemas/recruiter-rating-verdict-computed.event.ts` (duplicated into `api/src/events/schemas/`) |
 | `moderation.overall_review.created.v1` | `OverallReviewCreatedEventV1` | `api/src/events/schemas/overall-review-created.event.ts` |
 | `moderation.overall_review.status_changed.v1` | `OverallReviewStatusChangedEventV1` | `api/src/events/schemas/overall-review-status-changed.event.ts` |
+| `moderation.overall_review.verdict_computed.v1` | `OverallReviewVerdictComputedEventV1` | `services/review-analyzer/src/events/schemas/overall-review-verdict-computed.event.ts` (duplicated into `api/src/events/schemas/`) |
 
 Published from:
 - **`*.created`** — `RoundRatingsService.create()`, `RecruiterRatingsService.create()`,
   `OverallReviewsService.create()`, and `BulkProcessSubmissionService.create()`
   (one call per rated/reviewed entity it creates) — all after their
-  transaction commits, alongside `indexForSearch()`/AI triage.
+  transaction commits, alongside `indexForSearch()`. LLM triage no longer
+  runs synchronously here (moved to `review-analyzer` by #340/D81) — an
+  edit (`update()`) resets `moderationVerdict` to null instead, so
+  `review-analyzer`'s reconciliation sweep picks the edited row back up
+  within its 24h window; there's no `*.created`-shaped event on edit.
 - **`*.status_changed`** — `ModerationService.review()`, the shared
   implementation behind `approve()`/`reject()`/`flag()` (and
   `approveWithAudit()`, the AI auto-approval entry point).
+- **`*.verdict_computed`** — `review-analyzer`'s `AnalysisConsumerService`
+  (a freshly-computed verdict, off a consumed `*.created` event) and its
+  own `ReconciliationSweepService` (a re-triaged stale row, or a
+  `stalled: true` escalation when even the retry can't produce one).
 
 `moderation.*.created.v1` is consumed by `notification-service` as of
 GitHub issue #335 (the "your submission is pending review" email) and,
 independently, by `review-analyzer` as of GitHub issue #339 (its own
 consumer group — every consumer group gets its own copy of every
-message, so one consumer's processing never affects another's; logs
-receipt only for now, real triage lands in #340).
+message, so one consumer's processing never affects another's; real LLM
+triage as of #340).
 `moderation.*.status_changed.v1` (the approved/rejected notification) is
 consumed by the same `notification-service` consumer as of GitHub issue
-#336. See #335/#336/#339 for the actual consumer-side wiring.
+#336.
+`moderation.*.verdict_computed.v1` is consumed by `api` as of GitHub
+issue #340 — its first-ever event consumer (`VerdictConsumerService`,
+own consumer group `api`), which writes `moderationVerdict` and, when
+`autoApprovalEligible` is true, calls the existing `approveWithAudit()`;
+a `stalled: true` event instead calls `ModerationService.flag()`. See
+#335/#336/#339/#340 for the actual consumer-side wiring.
 
 ## Adding a new event type
 
