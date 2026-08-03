@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
+import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
@@ -30,6 +31,7 @@ function body<T>(res: request.Response): T {
 }
 
 const unique = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+const rawPrisma = new PrismaClient();
 
 async function waitUntil(condition: () => Promise<boolean>, timeoutMs = 15000, intervalMs = 250): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -69,9 +71,10 @@ describe('VerdictConsumerService (e2e, against a real Redpanda broker)', () => {
     process.env.API_KAFKA_CONSUMER_GROUP_ID = `api-verdict-consumer-e2e-${randomUUID()}`;
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     if (ORIGINAL_GROUP_ID_ENV === undefined) delete process.env.API_KAFKA_CONSUMER_GROUP_ID;
     else process.env.API_KAFKA_CONSUMER_GROUP_ID = ORIGINAL_GROUP_ID_ENV;
+    await rawPrisma.$disconnect();
   });
 
   beforeEach(async () => {
@@ -179,6 +182,14 @@ describe('VerdictConsumerService (e2e, against a real Redpanda broker)', () => {
   // GitHub issue #442 (Phase 39, D71), ported by #340 — the reconciliation
   // sweep now lives in review-analyzer and publishes this same event shape
   // with `stalled: true` when a retry still can't produce a verdict.
+  //
+  // ModerationService.flag() — same review() path approve()/reject() use
+  // — sets reviewedAt and the entity's own status to 'flagged'; it's a
+  // terminal decision, not an annotation left on a still-pending entry.
+  // So the escalated entry disappears from GET /moderation/queue (pending-
+  // only) the same way an approved/rejected one does — checked directly
+  // against the row instead, same rawPrisma pattern
+  // bulk-process-submission.e2e-spec.ts already uses.
   it('flags a stalled escalation event to a human-visible flag reason', async () => {
     const ratingId = await submitRoundRating();
     const event: RoundRatingVerdictComputedEventV1 = {
@@ -199,11 +210,21 @@ describe('VerdictConsumerService (e2e, against a real Redpanda broker)', () => {
 
     await expect(
       waitUntil(async () => {
-        const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
-        const entry = findQueueEntry(body<QueueGroupBody[]>(queueRes), ratingId);
-        return entry?.flagReason === 'ai_triage_stalled';
+        const queueEntry = await rawPrisma.moderationQueueEntry.findFirst({ where: { entityId: ratingId } });
+        return queueEntry?.flagReason === 'ai_triage_stalled';
       }),
     ).resolves.toBe(true);
+
+    const queueEntry = await rawPrisma.moderationQueueEntry.findFirst({ where: { entityId: ratingId } });
+    expect(queueEntry?.reviewedAt).not.toBeNull();
+    expect(queueEntry?.reviewedBy).toBe('system:ai-reconciliation-sweep');
+    const rating = await rawPrisma.roundRating.findUnique({ where: { id: ratingId } });
+    expect(rating?.status).toBe('flagged');
+
+    // Confirms it's really gone from the pending queue, not lingering —
+    // the same terminal-decision behavior approve()/reject() already have.
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+    expect(findQueueEntry(body<QueueGroupBody[]>(queueRes), ratingId)).toBeUndefined();
   }, 20000);
 
   it('ignores an event for an id it has never seen without crashing (malformed/unknown redelivery)', async () => {
