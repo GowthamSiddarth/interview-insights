@@ -153,14 +153,11 @@ for decision rationale (D-numbered), and `wiki/blog/` for one engineering-blog
 post per phase — this file no longer inlines that running history.
 
 - Next step: Phase 31 (Notification Service) is done, blog included.
-  Phase 32 (Review Analyzer Service) has issues #338-#340 all done
-  (kickoff brainstorm, service skeleton, async LLM triage port +
-  api's first event consumer) — only #341 (engineering blog) is left to
-  close the phase. Phase 36 (Moderator Queue SLAs, Assignment &
+  Phase 32 (Review Analyzer Service) is fully done, blog included
+  (#338-#341). Phase 36 (Moderator Queue SLAs, Assignment &
   Notifications) is fully planned too (issues #485-#492) and can be
-  picked up instead if that takes priority. Continue merging without
-  waiting for CI until the user says the GitHub Actions billing
-  limit has been refreshed.
+  picked up next. Continue merging without waiting for CI until the
+  user says the GitHub Actions billing limit has been refreshed.
 
 ## Open decisions still to make
 
