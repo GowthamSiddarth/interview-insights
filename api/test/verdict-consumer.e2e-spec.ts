@@ -47,9 +47,32 @@ async function waitUntil(condition: () => Promise<boolean>, timeoutMs = 15000, i
 // the *.created publish side of this same pipeline). Stands in for
 // "review-analyzer's real consumer just published this," without needing
 // review-analyzer itself running as part of api's own CI job.
+//
+// Found in CI: this is the one e2e file that actually needs its Kafka
+// message delivered within a bounded poll — every other one of api's ~26
+// e2e spec files also boots the full AppModule (for plain HTTP testing,
+// unrelated to Kafka), and jest runs spec files across parallel workers.
+// All of them sharing the fixed 'api' consumer group caused constant
+// rebalancing (a join/leave from any other file could steal this file's
+// partition assignment mid-test), occasionally delaying delivery past the
+// polling window below. `API_KAFKA_CONSUMER_GROUP_ID` (read lazily by
+// redpanda-client.provider.ts) opts this file into its own private group,
+// set once for the whole file so its 4 tests' own beforeEach/afterEach
+// app cycles never contend with each other either.
+const ORIGINAL_GROUP_ID_ENV = process.env.API_KAFKA_CONSUMER_GROUP_ID;
+
 describe('VerdictConsumerService (e2e, against a real Redpanda broker)', () => {
   let app: INestApplication;
   let adminCookie: string;
+
+  beforeAll(() => {
+    process.env.API_KAFKA_CONSUMER_GROUP_ID = `api-verdict-consumer-e2e-${randomUUID()}`;
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_GROUP_ID_ENV === undefined) delete process.env.API_KAFKA_CONSUMER_GROUP_ID;
+    else process.env.API_KAFKA_CONSUMER_GROUP_ID = ORIGINAL_GROUP_ID_ENV;
+  });
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
