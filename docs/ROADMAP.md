@@ -1762,7 +1762,7 @@ code on the runner host (D82). Milestone: "Phase 40 — CI
 Infrastructure: Self-Hosted GitHub Actions Runner". Epic: GitHub issue
 #499.
 
-- [ ] Decision record (D82): self-hosted runner, private-repo-only
+- [x] Decision record (D82): self-hosted runner, private-repo-only
       rationale (GitHub issue #500)
 - [ ] Provision self-hosted-runner VM (Oracle Cloud Always Free ARM
       instance, hardened host) (GitHub issue #501)
