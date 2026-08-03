@@ -1743,3 +1743,28 @@ no verdict past 24h.
       "lost/never-ran triage" gap without a transactional outbox
       (GitHub issue #442)
 - [x] Engineering blog (last) (GitHub issue #443)
+
+## Phase 40 — CI Infrastructure: Self-Hosted GitHub Actions Runner
+
+Filed 2026-08-03, ahead of this repo's GitHub Actions minutes hitting a
+billing gate. Runs on a free-tier VM instead of paying for hosted
+minutes; deliberately keeps the repo private rather than trading to a
+public repo for GitHub's unlimited free hosted-runner minutes, since a
+self-hosted runner paired with a public repo lets any fork's PR execute
+code on the runner host (D82). Milestone: "Phase 40 — CI
+Infrastructure: Self-Hosted GitHub Actions Runner". Epic: GitHub issue
+#499.
+
+- [ ] Decision record (D82): self-hosted runner, private-repo-only
+      rationale (GitHub issue #500)
+- [ ] Provision self-hosted-runner VM (Oracle Cloud Always Free ARM
+      instance, hardened host) (GitHub issue #501)
+- [ ] Install and register the GitHub Actions self-hosted runner agent
+      (GitHub issue #502)
+- [ ] Run the runner as a resilient systemd service; verify job/
+      workspace isolation (GitHub issue #503)
+- [ ] Migrate `.github/workflows/*.yml` from `ubuntu-latest` to
+      `self-hosted` (GitHub issue #504)
+- [ ] Runbook: self-hosted CI runner setup, recovery, and token
+      rotation (GitHub issue #505)
+- [ ] Engineering blog (last) (GitHub issue #506)
