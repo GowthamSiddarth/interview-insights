@@ -3827,6 +3827,48 @@ an edit is no longer immediate (synchronous, same request) — it now lands
 within the sweep's 24h window, same latency the original "lost/never-ran
 triage" gap D72 was built for.
 
+### D82 — Self-hosted GitHub Actions runner stays private-repo-only, never paired with a public repo (GitHub issue #500, Phase 40)
+
+**Context:** this repo's GitHub Actions minutes are about to hit a
+billing gate. Three options were weighed: (a) a self-hosted runner on a
+free-tier VM, (b) moving the repo to public for GitHub's unlimited free
+hosted-runner minutes on public repos, (c) paying for hosted minutes.
+Runner-on-public-repo is the standard zero-cost combination usually
+suggested for this exact problem, but it was flagged before adopting
+it: pairing a self-hosted runner with a public repo lets any fork's
+`pull_request`-triggered workflow execute arbitrary code on the runner
+host — a well-documented GitHub Actions attack vector, not a
+hypothetical one.
+
+**Decision:**
+
+- **Self-hosted runner, adopted** — on an Oracle Cloud Always Free ARM
+  compute instance (up to 4 OCPUs / 24GB RAM at $0/month). Solves the
+  billing-gate problem with no workflow-platform change: `runs-on:
+  self-hosted` is a drop-in swap for `runs-on: ubuntu-latest`.
+- **Repo stays private** (already true today) rather than moving to
+  public. There's no current need for public visibility, so staying
+  private removes the untrusted-fork-PR attack surface entirely instead
+  of building mitigations around it (approval gates, restricting
+  self-hosted runs to trusted triggers, etc.) — the option that doesn't
+  introduce a new class of risk to manage, not just the cheaper one.
+- **If the repo goes public later**, self-hosted runners must never be
+  exposed to fork-originated `pull_request`/`pull_request_target`
+  workflow runs — external-contributor checks would route to
+  GitHub-hosted `ubuntu-latest` instead (free + ephemeral for public
+  repos), with the self-hosted runner reserved for `push`-to-main/
+  `workflow_dispatch` triggers only. Not implemented now since the repo
+  isn't public; revisit if that changes.
+- **Runner registration token: Pattern B** (provisioned imperatively,
+  never committed anywhere) per `docs/SECRETS.md` — same category as
+  `postgres-credentials`, since the runner has to authenticate to
+  GitHub before any of this project's own secrets-fetching code exists
+  to help it.
+
+**Revisit when:** the repo's visibility changes (public would require
+the fork-PR mitigations above before self-hosted runners could stay in
+use), or Oracle's Always Free tier terms change.
+
 ---
 
 ## Still open (revisit when you have more information)
