@@ -1,4 +1,4 @@
-type AdminEnvKey = 'ADMIN_USERNAME' | 'ADMIN_PASSWORD_HASH' | 'ADMIN_JWT_SECRET';
+type AdminEnvKey = 'ADMIN_USERNAME' | 'ADMIN_PASSWORD_HASH' | 'ADMIN_JWT_SECRET' | 'ADMIN_EMAIL';
 
 // Same lazy-throw-on-use pattern as candidates.service.ts's
 // getEmailHashSecret() — no env validation at app boot, only when the

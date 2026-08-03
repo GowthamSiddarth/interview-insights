@@ -104,7 +104,12 @@ describe('Admin auth (e2e)', () => {
     await server().get('/auth/admin/me').expect(401);
 
     const res = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
-    expect(body<{ username: string }>(res)).toEqual({ username: ADMIN_TEST_USERNAME });
+    // id is a real Moderator UUID as of GitHub issue #485 (Phase 36) —
+    // seeded fresh by AdminAuthService.onModuleInit, not a fixed value.
+    expect(body<{ id: string; username: string }>(res)).toEqual({
+      id: expect.any(String) as string,
+      username: ADMIN_TEST_USERNAME,
+    });
   });
 
   it('logout clears the session cookie', async () => {

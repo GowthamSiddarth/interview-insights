@@ -358,6 +358,26 @@ model OverallReview {
 }
 
 // ---------------------------------------------------------------------------
+// 8b. moderators — GitHub issue #485, Phase 36
+// ---------------------------------------------------------------------------
+
+// Replaces the single shared ADMIN_USERNAME/ADMIN_PASSWORD_HASH credential
+// (Phase 18) with a real identity per moderator. Still just one row today
+// (env-seeded on boot, see AdminAuthService.onModuleInit) — this table
+// exists to give claim/reviewedBy a real FK to point at once a second
+// moderator exists (Phase 36 issues #486/#487), not because multi-user
+// admin is implemented yet.
+model Moderator {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  email        String
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("moderators")
+}
+
+// ---------------------------------------------------------------------------
 // 9. moderation_queue
 // ---------------------------------------------------------------------------
 

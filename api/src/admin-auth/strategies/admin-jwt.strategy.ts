@@ -29,6 +29,6 @@ export class AdminJwtStrategy extends PassportStrategy(Strategy, 'admin-jwt') {
   // (and GET /auth/admin/me, which returns it directly) matches
   // AdminSessionPayload exactly, not "that plus whatever jsonwebtoken adds."
   validate(payload: AdminSessionPayload): AdminSessionPayload {
-    return { username: payload.username };
+    return { id: payload.id, username: payload.username };
   }
 }
