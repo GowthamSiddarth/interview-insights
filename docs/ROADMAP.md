@@ -1549,8 +1549,15 @@ it, resolving the open questions below:
 Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
 (#37). Epic: GitHub issue #484.
 
-- [ ] Add Admin/Moderator identity table, replace shared admin
-      credential (GitHub issue #485)
+- [x] Add Admin/Moderator identity table, replace shared admin
+      credential (GitHub issue #485) — `moderators` table
+      (id/username/passwordHash/email/createdAt), `AdminAuthService`
+      now queries it instead of comparing `ADMIN_USERNAME`/
+      `ADMIN_PASSWORD_HASH` directly; `onModuleInit` upserts the
+      env-configured moderator on every boot so login keeps working
+      and secret rotation still takes effect immediately.
+      `AdminSessionPayload` gained `id` alongside `username`, laying
+      the FK groundwork #486/#487 need
 - [ ] Add SLA deadline + claim fields to `ModerationQueueEntry`
       (GitHub issue #486)
 - [ ] Claim/release endpoints + moderation queue UI affordance

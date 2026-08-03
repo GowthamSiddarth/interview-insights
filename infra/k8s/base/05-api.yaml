@@ -27,6 +27,9 @@ data:
   # Not sensitive on its own (a single shared admin *username*, not the
   # credential) — GitHub issue #159, Phase 18.
   ADMIN_USERNAME: admin
+  # Same non-sensitive tier as ADMIN_USERNAME above — seeds
+  # moderators.email (GitHub issue #485, Phase 36).
+  ADMIN_EMAIL: admin@interview-insights.local
   # In-cluster Service DNS name for 08-mailpit.yaml (GitHub issue #144,
   # Phase 16) — mirrors OPENSEARCH_URL's pattern above. No consumer wires
   # MailService in yet (that's issue #145), so this is currently unused,

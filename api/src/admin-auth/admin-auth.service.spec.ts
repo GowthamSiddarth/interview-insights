@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { PrismaService } from '../prisma/prisma.service';
 import { AdminAuthService } from './admin-auth.service';
 
 describe('AdminAuthService', () => {
   let service: AdminAuthService;
   let jwtService: { sign: jest.Mock };
+  let prisma: { moderator: { findUnique: jest.Mock; upsert: jest.Mock } };
   const originalEnv = { ...process.env };
   let passwordHash: string;
 
@@ -16,11 +18,17 @@ describe('AdminAuthService', () => {
   beforeEach(async () => {
     process.env.ADMIN_USERNAME = 'admin';
     process.env.ADMIN_PASSWORD_HASH = passwordHash;
+    process.env.ADMIN_EMAIL = 'admin@interview-insights.local';
 
     jwtService = { sign: jest.fn().mockReturnValue('signed.jwt.token') };
+    prisma = { moderator: { findUnique: jest.fn(), upsert: jest.fn() } };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AdminAuthService, { provide: JwtService, useValue: jwtService }],
+      providers: [
+        AdminAuthService,
+        { provide: JwtService, useValue: jwtService },
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = module.get(AdminAuthService);
@@ -30,43 +38,79 @@ describe('AdminAuthService', () => {
     process.env = { ...originalEnv };
   });
 
-  it('validates correct credentials', async () => {
-    const result = await service.validateAdmin('admin', 'correct-horse-battery-staple');
-    expect(result).toEqual({ username: 'admin' });
+  describe('validateAdmin', () => {
+    it('validates correct credentials against the stored Moderator row', async () => {
+      prisma.moderator.findUnique.mockResolvedValue({
+        id: 'mod-1',
+        username: 'admin',
+        passwordHash,
+        email: 'admin@interview-insights.local',
+      });
+
+      const result = await service.validateAdmin('admin', 'correct-horse-battery-staple');
+      expect(result).toEqual({ id: 'mod-1', username: 'admin' });
+      expect(prisma.moderator.findUnique).toHaveBeenCalledWith({ where: { username: 'admin' } });
+    });
+
+    it('rejects a wrong password', async () => {
+      prisma.moderator.findUnique.mockResolvedValue({
+        id: 'mod-1',
+        username: 'admin',
+        passwordHash,
+        email: 'admin@interview-insights.local',
+      });
+
+      const result = await service.validateAdmin('admin', 'wrong-password');
+      expect(result).toBeNull();
+    });
+
+    it('rejects a username with no matching Moderator row, without touching bcrypt', async () => {
+      prisma.moderator.findUnique.mockResolvedValue(null);
+
+      const result = await service.validateAdmin('someone-else', 'correct-horse-battery-staple');
+      expect(result).toBeNull();
+    });
+
+    it('rejects non-string credentials without throwing or querying the DB', async () => {
+      await expect(service.validateAdmin(undefined, undefined)).resolves.toBeNull();
+      await expect(service.validateAdmin(['admin'], 123)).resolves.toBeNull();
+      expect(prisma.moderator.findUnique).not.toHaveBeenCalled();
+    });
   });
 
-  it('rejects a wrong password', async () => {
-    const result = await service.validateAdmin('admin', 'wrong-password');
-    expect(result).toBeNull();
-  });
+  describe('onModuleInit', () => {
+    it('upserts the env-configured moderator by username', async () => {
+      await service.onModuleInit();
 
-  it('rejects a wrong username', async () => {
-    const result = await service.validateAdmin('someone-else', 'correct-horse-battery-staple');
-    expect(result).toBeNull();
-  });
+      expect(prisma.moderator.upsert).toHaveBeenCalledWith({
+        where: { username: 'admin' },
+        create: { username: 'admin', passwordHash, email: 'admin@interview-insights.local' },
+        update: { passwordHash, email: 'admin@interview-insights.local' },
+      });
+    });
 
-  it('rejects non-string credentials without throwing', async () => {
-    await expect(service.validateAdmin(undefined, undefined)).resolves.toBeNull();
-    await expect(service.validateAdmin(['admin'], 123)).resolves.toBeNull();
-  });
+    it('throws if ADMIN_USERNAME is not configured', async () => {
+      delete process.env.ADMIN_USERNAME;
+      await expect(service.onModuleInit()).rejects.toThrow('ADMIN_USERNAME');
+      expect(prisma.moderator.upsert).not.toHaveBeenCalled();
+    });
 
-  it('throws if ADMIN_USERNAME is not configured', async () => {
-    delete process.env.ADMIN_USERNAME;
-    await expect(service.validateAdmin('admin', 'correct-horse-battery-staple')).rejects.toThrow(
-      'ADMIN_USERNAME',
-    );
-  });
+    it('throws if ADMIN_PASSWORD_HASH is not configured', async () => {
+      delete process.env.ADMIN_PASSWORD_HASH;
+      await expect(service.onModuleInit()).rejects.toThrow('ADMIN_PASSWORD_HASH');
+      expect(prisma.moderator.upsert).not.toHaveBeenCalled();
+    });
 
-  it('throws if ADMIN_PASSWORD_HASH is not configured', async () => {
-    delete process.env.ADMIN_PASSWORD_HASH;
-    await expect(service.validateAdmin('admin', 'correct-horse-battery-staple')).rejects.toThrow(
-      'ADMIN_PASSWORD_HASH',
-    );
+    it('throws if ADMIN_EMAIL is not configured', async () => {
+      delete process.env.ADMIN_EMAIL;
+      await expect(service.onModuleInit()).rejects.toThrow('ADMIN_EMAIL');
+      expect(prisma.moderator.upsert).not.toHaveBeenCalled();
+    });
   });
 
   it('signs a JWT with the session payload', () => {
-    const token = service.issueToken({ username: 'admin' });
+    const token = service.issueToken({ id: 'mod-1', username: 'admin' });
     expect(token).toBe('signed.jwt.token');
-    expect(jwtService.sign).toHaveBeenCalledWith({ username: 'admin' });
+    expect(jwtService.sign).toHaveBeenCalledWith({ id: 'mod-1', username: 'admin' });
   });
 });

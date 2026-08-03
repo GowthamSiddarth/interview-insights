@@ -114,6 +114,7 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD_HASH: '$2b$10$5d3GXDikXoI./2wvbNoUIeG2/aoU72AKnueOEYLMYOxoeL8vD5dlG'
       ADMIN_JWT_SECRET: dev-only-change-me-too
+      ADMIN_EMAIL: admin@interview-insights.local
       COOKIE_SECURE: "false"
       CANDIDATE_JWT_SECRET: dev-only-change-me-candidate
     ports:
