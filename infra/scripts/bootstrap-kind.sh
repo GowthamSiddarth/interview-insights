@@ -114,9 +114,10 @@ kubectl create secret generic admin-credentials \
   --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "== 6c. AI moderation secret (GitHub issue #163) =="
+echo "== 6c. AI moderation secret (GitHub issue #163, D81) =="
 # Genuinely optional, unlike 6b above: an empty ANTHROPIC_API_KEY just
-# leaves AiModerationService's advisory triage disabled — nothing else in
+# leaves review-analyzer's advisory triage disabled (GitHub issue #340
+# moved this from api's own AiModerationService, D81) — nothing else in
 # the app depends on it, so this never exits non-zero the way the
 # ADMIN_*/LOCALSTACK_AUTH_TOKEN checks above do.
 kubectl create secret generic anthropic-credentials \

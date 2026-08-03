@@ -23,7 +23,6 @@
     "seed:demo-data:undo": "ts-node scripts/seed-demo-data-undo.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
     "@aws-sdk/client-secrets-manager": "^3.1089.0",
     "@aws-sdk/client-sts": "^3.1090.0",
     "@nestjs/common": "^11.0.0",

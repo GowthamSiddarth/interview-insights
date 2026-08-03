@@ -1,9 +1,9 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
 import { ReviewSearchService } from '../search/review-search.service';
-import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 import { CreateRoundRatingDto } from './dto/create-round-rating.dto';
 
 @Injectable()
@@ -13,7 +13,6 @@ export class RoundRatingsService {
     private readonly moderationService: ModerationService,
     private readonly fraudChecksService: FraudChecksService,
     private readonly reviewSearchService: ReviewSearchService,
-    private readonly aiModerationService: AiModerationService,
   ) {}
 
   async create(roundId: string, candidateId: string, dto: CreateRoundRatingDto) {
@@ -37,11 +36,11 @@ export class RoundRatingsService {
     });
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('round_rating', rating.id);
-    // GitHub issue #163 (Phase 19) — advisory LLM triage, after commit,
-    // fully best-effort (never throws, see AiModerationService).
-    await this.aiModerationService.computeAndStoreVerdict('round_rating', rating.id);
     // GitHub issue #332 (Phase 30, D53) — domain event, after commit,
     // fully best-effort (never throws, see DomainEventPublisher).
+    // review-analyzer's own AnalysisConsumerService picks this up async
+    // and publishes a verdict_computed event back (GitHub issue #340, D81)
+    // — the LLM triage that used to run synchronously right here.
     await this.moderationService.publishCreatedEvent('round_rating', rating.id);
     return rating;
   }
@@ -71,17 +70,22 @@ export class RoundRatingsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      // moderationVerdict reset to null: a stale verdict against the
+      // pre-edit text would be misleading to a moderator (GitHub issue
+      // #163), and — since GitHub issue #340/D81 — this is also what makes
+      // an edited row visible to review-analyzer's reconciliation sweep
+      // (it only re-triages rows with a null verdict). There's no
+      // *.created-shaped event published on edit today, so re-triage of
+      // edited content is no longer immediate: it now lands within the
+      // sweep's 24h window rather than synchronously in this request.
       const updated = await tx.roundRating.update({
         where: { id },
-        data: { ...dto, status: 'pending' },
+        data: { ...dto, status: 'pending', moderationVerdict: Prisma.DbNull },
       });
       await this.moderationService.reenqueue('round_rating', id, tx);
       return updated;
     });
     await this.moderationService.indexForSearch('round_rating', id);
-    // Re-triage the edited content — a stale verdict against the pre-edit
-    // text would be misleading to a moderator (GitHub issue #163).
-    await this.aiModerationService.computeAndStoreVerdict('round_rating', id);
     return updated;
   }
 

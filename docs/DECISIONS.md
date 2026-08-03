@@ -3775,6 +3775,58 @@ option is specific to this use case (auto-approval can tolerate the
 extra event round-trip's latency), not a blanket rule against
 service-to-service HTTP forever.
 
+**Addendum (2026-08-02, during implementation, GitHub issue #340):** two
+gaps surfaced once the write-back mechanism above met the actual
+in-process code it was replacing, both resolved directly with the
+project owner rather than guessed at:
+
+- **The old synchronous call sites are removed, and
+  `AiModerationService`/`anthropic-client.provider.ts` are deleted from
+  `api` entirely**, not left in place alongside the new async path.
+  Leaving them would double-triage and double-attempt auto-approval on
+  every submission (once synchronously in `api`, once async via
+  `review-analyzer`) — a real correctness risk this decision's own
+  "review-analyzer never touches moderation_queue" property doesn't
+  protect against, since both paths would still each try to call
+  `approveWithAudit()` independently. `review-analyzer` is now the only
+  place the LLM is ever called from; the four env functions
+  (`isAiModerationEnabled`/`getAnthropicModel`/
+  `getAutoApprovalConfidenceThreshold`/`isAutoApprovalEnabled`) and their
+  backing env vars move there wholesale — `api` no longer reads
+  `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`/
+  `AI_MODERATION_AUTO_APPROVE_THRESHOLD`/`AI_AUTO_APPROVAL_ENABLED` at
+  all.
+- **Phase 39's `ReconciliationSweepService` (D72's 24h staleness sweep)
+  ports into `review-analyzer` too**, reading its own read-only Prisma
+  tables for stale pending/null-verdict rows and re-running the same
+  triage. The one piece that can't port as-is: escalating a stalled row
+  to a human-visible flag is a `moderation_queue` write, which per this
+  decision only `api` may do. Resolved by extending the
+  `verdict_computed` event shape with an optional `stalled: true` marker
+  (verdict/confidence/promptContent/responseText all `null` on that
+  variant) — the sweep publishes this instead of calling
+  `ModerationService.flag()` directly, and `api`'s verdict-consumer
+  routes a `stalled: true` event to `flag()` (same `ai_triage_stalled`
+  reason, same `RECONCILIATION_SWEEP_SYSTEM_ACTOR`) instead of
+  `storeVerdict()`/`approveWithAudit()`.
+
+A third, smaller gap surfaced during the same implementation pass, not
+significant enough to warrant its own back-and-forth: removing the
+synchronous call sites also removed the only place that re-triaged an
+**edited** rating/review (`update()` used to call
+`computeAndStoreVerdict()` directly, right after `reenqueue()`). There is
+no `*.created`-shaped event published on edit today (`reenqueue()` never
+did, even before this issue), so an edit now resets `moderationVerdict`
+to `Prisma.DbNull` in the same transaction as `reenqueue()` instead — this
+is what makes an edited row visible to review-analyzer's reconciliation
+sweep (which only re-triages rows with a null verdict) and, as a side
+effect, is strictly safer than before: an edited row can no longer keep
+showing a stale pre-edit verdict (or be auto-approved against one) while
+waiting for re-triage. The one behavior change worth naming: re-triage of
+an edit is no longer immediate (synchronous, same request) — it now lands
+within the sweep's 24h window, same latency the original "lost/never-ran
+triage" gap D72 was built for.
+
 ---
 
 ## Still open (revisit when you have more information)

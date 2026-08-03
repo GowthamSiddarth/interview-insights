@@ -1343,12 +1343,17 @@ LocalStack secrets bootstrap (D73/D75 precedent) rather than sharing
       Dockerfile/CD step, own Redpanda consumer group subscribing to all
       three `moderation.*.created.v1` topics; logs receipt only, no
       DB/secrets yet — the real LLM triage logic lands in #340
-- [ ] Port Phase 19 issue #163's LLM-assisted triage into
+- [x] Port Phase 19 issue #163's LLM-assisted triage into
       review-analyzer as an async, arrives-later enrichment, publishing
       `moderation.<type>.verdict_computed.v1`; `api` gains its first
       event consumer to apply the verdict and run existing (D71)
       auto-approval — never auto-approves/rejects itself, hard
-      constraint #2 stays intact (GitHub issue #340, D81)
+      constraint #2 stays intact (GitHub issue #340, D81). Also removed
+      the old in-process synchronous triage call sites and Phase 39's
+      `ReconciliationSweepService` from `api` entirely (ported to
+      review-analyzer, publishing a `stalled: true` escalation event
+      instead of calling `ModerationService.flag()` directly) — see
+      D81's addendum for both resolutions.
 - [ ] Engineering blog (last) (GitHub issue #341)
 
 ## Phase 33 — Search-First Landing Page

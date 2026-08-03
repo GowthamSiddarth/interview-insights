@@ -20,9 +20,9 @@ Every real credential in this project uses exactly one of two patterns
 also feeding Pattern A. There is no third *independent* pattern.
 
 **Pattern A — fetched from LocalStack Secrets Manager at boot.** The
-default for anything a NestJS service (`api`, `notification-service`)
-needs, because that service's own code can run first and do the
-fetching before anything else needs the value.
+default for anything a NestJS service (`api`, `notification-service`,
+`review-analyzer`) needs, because that service's own code can run first
+and do the fetching before anything else needs the value.
 
 **Pattern B — provisioned imperatively, never committed anywhere.** Used
 only when a credential is needed *before* any of this project's own code
@@ -36,55 +36,59 @@ anything could fetch from it.
 imperatively exactly like the pure-B secrets, but also wired into
 LocalStack's own pod so its init-hook can seed Secrets Manager with the
 real value on every start. `api` only ever talks to Secrets Manager for
-these; see the dedicated section below for why this exists and isn't
-just Pattern A.
+`admin-credentials`; `anthropic-api-key` moved to `review-analyzer` as of
+GitHub issue #340 (D81) — see the dedicated section below for why the
+hybrid shape exists and isn't just Pattern A.
 
 | Secret | Pattern | Consumed by | Env var(s) |
 |---|---|---|---|
-| `interview-insights/database-url` | A | `api`, `notification-service` | `DATABASE_URL` |
+| `interview-insights/database-url` | A | `api`, `notification-service`, `review-analyzer` | `DATABASE_URL` |
 | `interview-insights/email-hash-secret` | A | `api` only | `EMAIL_HASH_SECRET` |
 | `interview-insights/email-encryption-key` | A | `api`, `notification-service` | `EMAIL_ENCRYPTION_KEY` (D74: byte-identical across both — same Secrets Manager entry, by construction) |
 | `interview-insights/candidate-jwt-secret` | A | `api` only | `CANDIDATE_JWT_SECRET` |
 | `interview-insights/admin-password-hash` | A, hybrid root (D78) | `api` | `ADMIN_PASSWORD_HASH` |
 | `interview-insights/admin-jwt-secret` | A, hybrid root (D78) | `api` | `ADMIN_JWT_SECRET` |
-| `interview-insights/anthropic-api-key` | A, hybrid root (D78) | `api` | `ANTHROPIC_API_KEY` — genuinely optional; the *secret* is absent (not present-and-empty) when not configured |
+| `interview-insights/anthropic-api-key` | A, hybrid root (D78) | `review-analyzer` (moved from `api` by GitHub issue #340/D81) | `ANTHROPIC_API_KEY` — genuinely optional; the *secret* is absent (not present-and-empty) when not configured |
 | `postgres-credentials` (k8s Secret) | B (D77) | Postgres's own container | `POSTGRES_PASSWORD` |
 | `admin-credentials` (k8s Secret) | B, root for the hybrid case above (issue #192) | LocalStack's own pod (D78) — no longer `api` directly | `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET` |
 | `localstack-credentials` (k8s Secret) | B (chicken-and-egg: needed to start LocalStack itself) | LocalStack's own pod | `LOCALSTACK_AUTH_TOKEN` |
-| `anthropic-credentials` (k8s Secret) | B, root for the hybrid case above (issue #163) | LocalStack's own pod (D78) — no longer `api` directly | `ANTHROPIC_API_KEY` |
+| `anthropic-credentials` (k8s Secret) | B, root for the hybrid case above (issue #163) | LocalStack's own pod (D78) — never `api`/`review-analyzer` directly | `ANTHROPIC_API_KEY` |
 
 Nothing else in the deployed system is a secret. `POSTGRES_USER`/
 `POSTGRES_DB` (`postgres-config` ConfigMap), `ADMIN_USERNAME`,
 `ANTHROPIC_MODEL`, `AI_MODERATION_AUTO_APPROVE_THRESHOLD`,
-`AI_AUTO_APPROVAL_ENABLED`, `CORS_ORIGIN`, `COOKIE_DOMAIN`,
-`COOKIE_SECURE`, `PORT`, `OPENSEARCH_URL`, `MAIL_SMTP_HOST`,
-`MAIL_SMTP_PORT`, `REDPANDA_BROKERS`, `SECRETS_SOURCE`,
-`AWS_ENDPOINT_URL`, `AWS_REGION`, `AWS_SECRETS_ROLE_ARN` all live in
-plain `ConfigMap`s (`api-config`, `notification-service-config`,
+`AI_AUTO_APPROVAL_ENABLED` (moved to `review-analyzer-config` by GitHub
+issue #340/D81), `CORS_ORIGIN`, `COOKIE_DOMAIN`, `COOKIE_SECURE`, `PORT`,
+`OPENSEARCH_URL`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `REDPANDA_BROKERS`,
+`SECRETS_SOURCE`, `AWS_ENDPOINT_URL`, `AWS_REGION`,
+`AWS_SECRETS_ROLE_ARN` all live in plain `ConfigMap`s (`api-config`,
+`notification-service-config`, `review-analyzer-config`,
 `postgres-config`) — not sensitive, safe to commit as-is.
 
 ## Pattern A in detail: LocalStack Secrets Manager
 
 **Fetched by:** each service's own copy of a `localstack-secrets-bootstrap.ts`
-module (`api/src/secrets/`, `services/notification-service/src/secrets/`
-— deliberately duplicated, not shared, per D73/D75's precedent), called
-at the top of `main.ts`'s `bootstrap()` before `NestFactory.create()`.
-No-op unless `SECRETS_SOURCE=localstack` is set. **Throws on any
-failure** — there is no fallback value, so a pod that's `Ready` proves
-the fetch succeeded (see the verification section below for why this
-matters more than it sounds).
+module (`api/src/secrets/`, `services/notification-service/src/secrets/`,
+`services/review-analyzer/src/secrets/` — deliberately duplicated, not
+shared, per D73/D75's precedent), called at the top of `main.ts`'s
+`bootstrap()` before `NestFactory.create()`. No-op unless
+`SECRETS_SOURCE=localstack` is set. **Throws on any failure** — there is
+no fallback value, so a pod that's `Ready` proves the fetch succeeded
+(see the verification section below for why this matters more than it
+sounds).
 
 **IAM roles, one per service, least-privilege:**
 
 | Role | Policy | Can read |
 |---|---|---|
-| `api-secrets-role` | `infra/aws/api-secrets-access-policy.json` | all 7 Pattern-A secrets (including the hybrid-root three) |
+| `api-secrets-role` | `infra/aws/api-secrets-access-policy.json` | 6 Pattern-A secrets (`database-url` through `admin-jwt-secret`; `anthropic-api-key` moved off this role by GitHub issue #340/D81) |
 | `notification-service-secrets-role` | `infra/aws/notification-service-secrets-access-policy.json` | `database-url`, `email-encryption-key` only |
+| `review-analyzer-secrets-role` | `infra/aws/review-analyzer-secrets-access-policy.json` | `database-url`, `anthropic-api-key` only (GitHub issue #340/D81) |
 
 **Seeded in two places that must be kept in sync** (a real bug found
 post-#466, see "Adding a new secret" below):
 - `infra/aws/seed-localstack.sh` — runs *outside* the container (CD,
-  `bootstrap-kind.sh`, or a human), creates all 7 secrets and both
+  `bootstrap-kind.sh`, or a human), creates all 7 secrets and all three
   IAM role/policy pairs. `SEED_*` env vars override the default seeded
   values for the four plain ones (`SEED_DATABASE_URL`,
   `SEED_EMAIL_HASH_SECRET`, `SEED_EMAIL_ENCRYPTION_KEY`,
@@ -110,8 +114,9 @@ post-#466, see "Adding a new secret" below):
   hybrid-root secrets, it reads them from **its own container
   environment** instead of a hardcoded value (see below for why).
 
-**Wired in:** `infra/k8s/overlays/dev/api-config-patch.yaml` and
-`.../notification-service-config-patch.yaml` set `SECRETS_SOURCE`/
+**Wired in:** `infra/k8s/overlays/dev/api-config-patch.yaml`,
+`.../notification-service-config-patch.yaml`, and (GitHub issue #340/D81)
+`.../review-analyzer-config-patch.yaml` set `SECRETS_SOURCE`/
 `AWS_ENDPOINT_URL`/`AWS_REGION`/`AWS_SECRETS_ROLE_ARN` on each service's
 ConfigMap. `dev` requires this unconditionally (D76) — there is no
 overlay left where these secrets come from anywhere else.
@@ -139,8 +144,11 @@ Secrets Manager with those **real** values on every start — genuine
 self-healing, not a placeholder. `admin-credentials`/
 `anthropic-credentials` themselves are untouched: still provisioned
 imperatively, exactly as before, in `cd.yml`/`bootstrap-kind.sh`. The
-only thing that changed is who reads them — LocalStack's pod now,
-instead of `api`'s.
+only thing that changed (D78) is who reads them from Secrets Manager —
+LocalStack's pod feeds the seeded value in, and (as of GitHub issue
+#340/D81) `review-analyzer` is now the one that fetches
+`anthropic-api-key` back out via its own role, not `api` — `api` still
+fetches `admin-password-hash`/`admin-jwt-secret`.
 
 **Why this is worth the extra indirection instead of just leaving
 `admin-credentials`/`anthropic-credentials` on Pattern B forever:**
@@ -195,14 +203,17 @@ moderation triage is disabled by default). Unchanged by D78 — the same
 four repo secrets (plus the one optional one) still source the same
 k8s Secrets; only the *consumer* of `admin-credentials`/
 `anthropic-credentials` changed, from `api` directly to LocalStack's
-own pod.
+own pod. GitHub issue #340/D81 changed one more hop downstream of that:
+which service's IAM role reads `anthropic-api-key` back out of Secrets
+Manager (`review-analyzer` now, not `api`) — the repo secret and the k8s
+Secret it provisions are unaffected.
 
 ## Verification tools
 
 | Script | Checks | Requires |
 |---|---|---|
 | `infra/aws/verify-iam-policy.sh` | `api-secrets-access-policy.json` is syntactically valid and structurally least-privilege (no cluster needed) | LocalStack running standalone (docker-compose `localstack` profile) |
-| `infra/aws/verify-secrets-manager.sh` | Full live-cluster check: exact 7-secret inventory, both roles/policies and their exact scoping, `api`/`notification-service` pod health as proof every fetch succeeded, all 4 Pattern-B secrets exist, and (D78) LocalStack's own pod is healthy with the hybrid-root `env` entries wired in | `kubectl` context on the real cluster, `aws` CLI |
+| `infra/aws/verify-secrets-manager.sh` | Full live-cluster check: exact 6-always-required-secret inventory (`anthropic-api-key` checked separately, informationally), all three roles/policies and their exact scoping, `api`/`notification-service`/`review-analyzer` pod health as proof every fetch succeeded, all 4 Pattern-B secrets exist, and (D78) LocalStack's own pod is healthy with the hybrid-root `env` entries wired in | `kubectl` context on the real cluster, `aws` CLI |
 
 `verify-secrets-manager.sh` deliberately does **not** try to read
 `DATABASE_URL`/etc. via `kubectl exec ... -- printenv` — that spawns a

@@ -230,9 +230,9 @@ jobs:
       # GitHub issue #339 (Phase 32, D53) — this service's own real broker
       # for analysis.e2e-spec.ts, same "needs a real instance, not a mock"
       # reasoning as the notification-service job's redpanda service above.
-      # No postgres/mailpit here — unlike notification-service, this
-      # service doesn't touch a database or send email (docs/DECISIONS.md
-      # D81 — it only computes and publishes a verdict, added in #340).
+      # GitHub issue #340 (D81) added its own Postgres too, same
+      # read-only-Prisma-schema pattern as notification-service's own job —
+      # no mailpit here, this service still never sends email.
       redpanda:
         image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
         ports:
@@ -243,7 +243,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: interview_insights_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public
       REDPANDA_BROKERS: localhost:9092
     defaults:
       run:
@@ -256,9 +270,20 @@ jobs:
           cache: npm
           cache-dependency-path: services/review-analyzer/package-lock.json
       - run: npm ci
+      - run: npx prisma generate
       - run: npm run lint
       - run: npm run build
       - run: npm test
+      # No `prisma migrate deploy` here (docs/DECISIONS.md D75) — same
+      # reasoning as the notification-service job above: api's migrations
+      # are this project's one schema source of truth, applied against
+      # this job's own throwaway database so it stays runnable in complete
+      # isolation from the api job.
+      - name: Apply api's migrations (this service's own schema source of truth, D75)
+        working-directory: api
+        run: |
+          npm ci
+          npx prisma migrate deploy
       - run: npm run test:e2e
 
   # Build-only validation (GitHub-hosted, no cluster or self-hosted runner

@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { RecruiterRatingsService } from './recruiter-ratings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
-import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 
 describe('RecruiterRatingsService', () => {
   let service: RecruiterRatingsService;
@@ -27,7 +27,6 @@ describe('RecruiterRatingsService', () => {
     publishCreatedEvent: jest.Mock;
   };
   let fraudChecksService: { detectFlagReason: jest.Mock };
-  let aiModerationService: { computeAndStoreVerdict: jest.Mock };
 
   const dto = {
     reachability: 4,
@@ -55,7 +54,6 @@ describe('RecruiterRatingsService', () => {
       publishCreatedEvent: jest.fn().mockResolvedValue(undefined),
     };
     fraudChecksService = { detectFlagReason: jest.fn().mockResolvedValue(undefined) };
-    aiModerationService = { computeAndStoreVerdict: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -63,7 +61,6 @@ describe('RecruiterRatingsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ModerationService, useValue: moderationService },
         { provide: FraudChecksService, useValue: fraudChecksService },
-        { provide: AiModerationService, useValue: aiModerationService },
       ],
     }).compile();
 
@@ -115,18 +112,9 @@ describe('RecruiterRatingsService', () => {
     );
   });
 
-  // GitHub issue #163 (Phase 19) — advisory LLM triage runs after commit.
-  it('triggers AI moderation triage after creating the rating', async () => {
-    await service.create('interaction-1', 'candidate-1', dto);
-
-    expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledWith(
-      'recruiter_rating',
-      'rating-1',
-    );
-  });
-
   // GitHub issue #332 (Phase 30, D53) — domain event publish runs after
-  // commit, same call shape as indexForSearch/AI triage.
+  // commit, same call shape as indexForSearch. GitHub issue #340/D81 —
+  // review-analyzer's own consumer picks this event up for LLM triage now.
   it('publishes a created domain event after creating the rating', async () => {
     await service.create('interaction-1', 'candidate-1', dto);
 
@@ -156,16 +144,14 @@ describe('RecruiterRatingsService', () => {
 
       expect(prisma.recruiterRating.update).toHaveBeenCalledWith({
         where: { id: 'rating-1' },
-        data: { ...dto, status: 'pending' },
+        // moderationVerdict reset to null (GitHub issue #340/D81) — makes
+        // the edited row visible to review-analyzer's reconciliation sweep.
+        data: { ...dto, status: 'pending', moderationVerdict: Prisma.DbNull },
       });
       expect(moderationService.reenqueue).toHaveBeenCalledWith(
         'recruiter_rating',
         'rating-1',
         prisma,
-      );
-      expect(aiModerationService.computeAndStoreVerdict).toHaveBeenCalledWith(
-        'recruiter_rating',
-        'rating-1',
       );
     });
 

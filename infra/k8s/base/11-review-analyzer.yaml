@@ -2,6 +2,10 @@
 # this project deploys, same shape as 10-notification-service.yaml. No
 # Ingress: it has no public HTTP API of its own — /health is reachable
 # in-cluster only, same as postgres/opensearch/redpanda/notification-service.
+# As of GitHub issue #340 (D81), this pod is a real LLM-triage worker with
+# its own Postgres access (own Prisma schema, D75) and its own Anthropic
+# credential — REDPANDA_BROKERS/DATABASE_URL/ANTHROPIC_* below mirror
+# 05-api.yaml's/10-notification-service.yaml's own in-cluster wiring.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,6 +13,27 @@ metadata:
   namespace: interview-insights
 data:
   PORT: "3003"
+  # In-cluster Service DNS name + internal listener port (09-redpanda.yaml)
+  # — mirrors 05-api.yaml's/10-notification-service.yaml's own
+  # REDPANDA_BROKERS entry.
+  REDPANDA_BROKERS: redpanda:9092
+  # GitHub issue #340 (Phase 32, D81) — moved here from api-config: this
+  # service is now the only place the LLM is ever called from. Not
+  # sensitive — which Claude model AnalysisService calls. Only takes effect
+  # once ANTHROPIC_API_KEY (fetched from LocalStack Secrets Manager at
+  # boot — see this Deployment's own envFrom comment) is actually a real
+  # value; the feature is a no-op advisory triage otherwise, never a hard
+  # requirement to boot.
+  ANTHROPIC_MODEL: claude-haiku-4-5
+  # GitHub issues #439/#441 (Phase 39, D71), moved here by #340/D81 — the
+  # auto-approval layer on top of the base triage above. Both default to
+  # disabled; empty string is a safe "unset" for the threshold (GitHub
+  # issue #450 fixed a bug where it wasn't). Not sensitive — same reasoning
+  # as ANTHROPIC_MODEL — but wiki/deployment-guide.md section 5c documents
+  # actually turning this on since it also requires a real
+  # ANTHROPIC_API_KEY.
+  AI_MODERATION_AUTO_APPROVE_THRESHOLD: ""
+  AI_AUTO_APPROVAL_ENABLED: "false"
 ---
 apiVersion: v1
 kind: Service
@@ -46,6 +71,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: review-analyzer-config
+            # DATABASE_URL/ANTHROPIC_API_KEY come from LocalStack Secrets
+            # Manager at boot (services/review-analyzer/src/secrets/
+            # localstack-secrets-bootstrap.ts, this overlay's
+            # review-analyzer-config-patch.yaml) — no committed Secret for
+            # either exists here, same CLAUDE.md hard constraint #6
+            # reasoning as api's own envFrom. GitHub issue #340 (D81).
           readinessProbe:
             httpGet:
               path: /health

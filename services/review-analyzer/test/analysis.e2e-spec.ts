@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { AnalysisConsumerService } from '../src/analysis/analysis-consumer.service';
+import { VerdictPublisher } from '../src/events/verdict-publisher.service';
 import { ROUND_RATING_CREATED_V1_TOPIC } from '../src/events/schemas/round-rating-created.event';
 import { publishTestEvent } from './support/redpanda-producer';
 
@@ -12,9 +13,18 @@ import { publishTestEvent } from './support/redpanda-producer';
 // api/test/domain-events.e2e-spec.ts. Stands in for "api's real write path
 // just published this," without needing api itself running as part of
 // this service's own CI job (see redpanda-producer.ts's own comment).
-// Deliberately doesn't assert anything beyond "the event was received and
-// dispatched" — GitHub issue #340 is where a real, assertable side effect
-// (a stored verdict, a published verdict_computed event) shows up.
+//
+// GitHub issue #340 gave processEvent() its real body, but this CI
+// environment has no real ANTHROPIC_API_KEY configured (D78 — never
+// committed, real or placeholder) — the same "disabled by default"
+// behavior production has whenever the key is unset. That means
+// computeVerdict() always short-circuits to null here without ever
+// touching Postgres, so the second test below asserts the one thing this
+// environment can honestly prove: no verdict_computed event escapes when
+// the feature is off. Actually exercising a real triage call (a real
+// verdict published, or api's own consumer applying it) needs a real
+// ANTHROPIC_API_KEY and is covered by the manual/live verification in
+// docs/DECISIONS.md D81's own plan, not by CI.
 describe('AnalysisConsumerService (e2e, against a real Redpanda broker)', () => {
   let app: INestApplication;
 
@@ -36,6 +46,8 @@ describe('AnalysisConsumerService (e2e, against a real Redpanda broker)', () => 
     async () => {
       const consumer = app.get(AnalysisConsumerService);
       const processed = jest.spyOn(consumer, 'processEvent');
+      const publisher = app.get(VerdictPublisher);
+      const publish = jest.spyOn(publisher, 'publish');
 
       const roundRatingId = randomUUID();
       const event = {
@@ -58,6 +70,11 @@ describe('AnalysisConsumerService (e2e, against a real Redpanda broker)', () => 
           ),
         ),
       ).resolves.toBe(true);
+
+      // Disabled by default in this environment (no ANTHROPIC_API_KEY) —
+      // computeVerdict() returns null before ever building content, so
+      // nothing gets published for this event.
+      expect(publish).not.toHaveBeenCalled();
     },
     20_000,
   );

@@ -3,10 +3,10 @@ import { Interval } from '@nestjs/schedule';
 import { Producer } from 'kafkajs';
 import { EVENT_PRODUCER } from './redpanda-client.provider';
 
-// Same interval class of value as ReconciliationSweepService's staleness
-// window (api/src/ai-moderation/reconciliation-sweep.service.ts) — long
-// enough to never hammer a broker that's actually down, short enough that
-// recovery is noticed promptly once it's back.
+// Same interval class of value as review-analyzer's own AnalysisConsumerService/
+// VerdictPublisher reconnect loops — long enough to never hammer a broker
+// that's actually down, short enough that recovery is noticed promptly
+// once it's back.
 const RECONNECT_INTERVAL_MS = 30_000;
 
 // Best-effort, after-commit event publishing — the same "never block or

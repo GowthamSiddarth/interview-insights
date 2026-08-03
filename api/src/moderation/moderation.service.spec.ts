@@ -885,7 +885,8 @@ describe('ModerationService', () => {
   });
 
   // GitHub issue #440 (Phase 39, D71) — the system-attributed auto-approval
-  // entry point AiModerationService calls. Reuses the exact same review()
+  // entry point the verdict-consumer (GitHub issue #340, D81) calls. Reuses
+  // the exact same review()
   // path approve() does (mockPendingRoundRatingEntry() below is the same
   // helper the human-moderator approve() tests above use), with the one
   // addition that a durable audit row is written in the same transaction.

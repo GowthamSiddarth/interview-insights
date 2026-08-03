@@ -153,11 +153,11 @@ describe('Bulk process submission (e2e)', () => {
     const overallReview = await rawPrisma.overallReview.findFirst({ where: { processId } });
     expect(overallReview).not.toBeNull();
 
-    // GitHub issue #163 (Phase 19) — advisory LLM triage runs for every
-    // one of these, but is fully best-effort: with no ANTHROPIC_API_KEY
-    // configured in this test environment (AiModerationService.disabled),
-    // every write still succeeds and moderationVerdict simply stays null
-    // rather than the request failing or hanging on a real API call.
+    // GitHub issue #163 (Phase 19), now async via review-analyzer (GitHub
+    // issue #340, D81) — this test never runs that service, so
+    // moderationVerdict simply stays null exactly as it did when the
+    // feature was disabled in-process (no ANTHROPIC_API_KEY configured);
+    // either way the write itself always succeeds regardless.
     expect(roundRatings[0].moderationVerdict).toBeNull();
     expect(recruiterRatings[0].moderationVerdict).toBeNull();
     expect(overallReview!.moderationVerdict).toBeNull();

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Seeds a LocalStack instance with what api (and, since GitHub issue #466/
-# D76, notification-service) needs for its real secrets/IAM path (GitHub
-# issue #78 originally; #466 extended it to every remaining api secret
-# plus notification-service's own role; #466's own follow-up, D78, added
-# admin-credentials/anthropic-credentials — every secret api reads now
-# comes from exactly this one path): the secrets each service reads
-# at boot, an IAM role per service trusted to be assumed, and each
-# service's own *-secrets-access-policy.json attached to its own role.
-# Idempotent — safe to re-run against the same LocalStack instance.
+# Seeds a LocalStack instance with what api, notification-service (GitHub
+# issue #466/D76), and review-analyzer (GitHub issue #340/D81) need for
+# their real secrets/IAM path (GitHub issue #78 originally; #466 extended it
+# to every remaining api secret plus notification-service's own role;
+# #466's own follow-up, D78, added admin-credentials/anthropic-credentials;
+# #340/D81 moved anthropic-api-key access from api's role to
+# review-analyzer's own, since review-analyzer is now the only service that
+# calls the LLM): the secrets each service reads at boot, an IAM role per
+# service trusted to be assumed, and each service's own
+# *-secrets-access-policy.json attached to its own role. Idempotent — safe
+# to re-run against the same LocalStack instance.
 #
 # Works against either target: the docker-compose `localstack` profile
 # (GitHub issue #66) at its default localhost:4566, or the in-cluster
@@ -181,6 +183,12 @@ provision_role_and_policy "api-secrets-role" "api-secrets-access-policy" \
 provision_role_and_policy "notification-service-secrets-role" \
   "notification-service-secrets-access-policy" \
   "$SCRIPT_DIR/notification-service-secrets-access-policy.json"
+# GitHub issue #340 (Phase 32, D81) — review-analyzer is now the only place
+# the LLM is ever called from, so it gets its own role reading database-url
+# + anthropic-api-key; api's own role above no longer includes the latter.
+provision_role_and_policy "review-analyzer-secrets-role" \
+  "review-analyzer-secrets-access-policy" \
+  "$SCRIPT_DIR/review-analyzer-secrets-access-policy.json"
 
 echo "== Verifying: each role assumable, its own secrets fetchable via assumed credentials =="
 # Proves the AssumeRole -> temporary-credentials -> GetSecretValue chain
@@ -212,5 +220,6 @@ verify_role_can_fetch() {
 
 verify_role_can_fetch "api-secrets-role" "interview-insights/database-url"
 verify_role_can_fetch "notification-service-secrets-role" "interview-insights/email-encryption-key"
+verify_role_can_fetch "review-analyzer-secrets-role" "interview-insights/database-url"
 
 echo "== Done =="

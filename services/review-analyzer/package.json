@@ -1,7 +1,7 @@
 {
   "name": "@interview-insights/review-analyzer",
   "version": "0.1.0",
-  "description": "Second standalone microservice extraction (Phase 32, D53). GitHub issue #339 proves the skeleton runs as its own deployable unit and wires a real consumer for the three moderation.*.created.v1 topics (own consumer group, logs receipt only); GitHub issue #340 ports Phase 19 issue #163's LLM-assisted triage logic here and publishes moderation.<type>.verdict_computed.v1 (see docs/DECISIONS.md D81).",
+  "description": "Second standalone microservice extraction (Phase 32, D53). GitHub issue #339 proved the skeleton runs as its own deployable unit and wired a real consumer for the three moderation.*.created.v1 topics; GitHub issue #340 ports Phase 19 issue #163's LLM-assisted triage logic here (own Prisma schema, D75/D81) and publishes moderation.<type>.verdict_computed.v1, which api consumes to apply the verdict and run its existing auto-approval flow (docs/DECISIONS.md D81).",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
@@ -12,13 +12,18 @@
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@aws-sdk/client-secrets-manager": "^3.1089.0",
+    "@aws-sdk/client-sts": "^3.1090.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/schedule": "^6.1.3",
+    "@prisma/client": "^6.19.3",
     "kafkajs": "^2.2.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
@@ -33,6 +38,7 @@
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "jest": "^29.7.0",
+    "prisma": "^6.19.3",
     "source-map-support": "^0.5.21",
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.1",

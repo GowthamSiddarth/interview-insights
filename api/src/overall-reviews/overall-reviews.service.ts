@@ -1,8 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { FraudChecksService } from '../fraud-checks/fraud-checks.service';
-import { AiModerationService } from '../ai-moderation/ai-moderation.service';
 import { CreateOverallReviewDto } from './dto/create-overall-review.dto';
 
 @Injectable()
@@ -11,7 +11,6 @@ export class OverallReviewsService {
     private readonly prisma: PrismaService,
     private readonly moderationService: ModerationService,
     private readonly fraudChecksService: FraudChecksService,
-    private readonly aiModerationService: AiModerationService,
   ) {}
 
   // Same shape as RoundRatingsService/RecruiterRatingsService.create():
@@ -38,9 +37,9 @@ export class OverallReviewsService {
     });
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('overall_review', review.id);
-    // GitHub issue #163 (Phase 19) — advisory LLM triage, best-effort.
-    await this.aiModerationService.computeAndStoreVerdict('overall_review', review.id);
     // GitHub issue #332 (Phase 30, D53) — domain event, best-effort.
+    // review-analyzer picks this up async for LLM triage now (GitHub issue
+    // #340, D81) — this used to be a direct, synchronous call here.
     await this.moderationService.publishCreatedEvent('overall_review', review.id);
     return review;
   }
@@ -66,15 +65,22 @@ export class OverallReviewsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      // moderationVerdict reset to null: a stale verdict against the
+      // pre-edit text would be misleading to a moderator (GitHub issue
+      // #163), and — since GitHub issue #340/D81 — this is also what makes
+      // an edited row visible to review-analyzer's reconciliation sweep
+      // (it only re-triages rows with a null verdict). There's no
+      // *.created-shaped event published on edit today, so re-triage of
+      // edited content is no longer immediate: it now lands within the
+      // sweep's 24h window rather than synchronously in this request.
       const updated = await tx.overallReview.update({
         where: { processId },
-        data: { ...dto, status: 'pending' },
+        data: { ...dto, status: 'pending', moderationVerdict: Prisma.DbNull },
       });
       await this.moderationService.reenqueue('overall_review', review.id, tx);
       return updated;
     });
     await this.moderationService.indexForSearch('overall_review', review.id);
-    await this.aiModerationService.computeAndStoreVerdict('overall_review', review.id);
     return updated;
   }
 

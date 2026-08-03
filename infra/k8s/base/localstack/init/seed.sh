@@ -16,14 +16,16 @@
 # *inside* the LocalStack container itself, where the bundled `awslocal`
 # wrapper needs none of that, and doesn't need the human-facing
 # assumed-role verification step. If the secret names/values, role names,
-# policy names, or either service's own *-secrets-access-policy.json
+# policy names, or any service's own *-secrets-access-policy.json
 # contents ever change, keep both in sync -- coupled by convention, not
 # shared code, same as this project's overlay pairs already are. GitHub
 # issue #466 (D76) extended this to every remaining api secret plus
 # notification-service's own role -- this file's own out-of-sync-ness
 # after that PR merged is exactly the risk this comment is warning
 # about. #466's own follow-up (D78) added admin-credentials/
-# anthropic-credentials on top -- same warning applies.
+# anthropic-credentials on top -- same warning applies. GitHub issue #340
+# (D81) added review-analyzer's own role, and moved anthropic-api-key
+# access from api's role to it.
 #
 # POSTGRES_PASSWORD isn't available inside this container the way it is
 # for infra/aws/seed-localstack.sh's own DATABASE_URL_VALUE (GitHub issue
@@ -136,7 +138,10 @@ provision_role_and_policy() {
 }
 
 # Mirrors infra/aws/api-secrets-access-policy.json -- least-privilege,
-# api's role can't read notification-service's own secrets and vice versa.
+# api's role can't read notification-service's/review-analyzer's own
+# secrets and vice versa. anthropic-api-key moved off this role as of
+# GitHub issue #340/D81 -- review-analyzer is now the only service that
+# calls the LLM.
 provision_role_and_policy "api-secrets-role" "api-secrets-access-policy" '{
   "Version": "2012-10-17",
   "Statement": [
@@ -150,8 +155,7 @@ provision_role_and_policy "api-secrets-role" "api-secrets-access-policy" '{
         "arn:aws:secretsmanager:*:*:secret:interview-insights/email-encryption-key-*",
         "arn:aws:secretsmanager:*:*:secret:interview-insights/candidate-jwt-secret-*",
         "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-password-hash-*",
-        "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-jwt-secret-*",
-        "arn:aws:secretsmanager:*:*:secret:interview-insights/anthropic-api-key-*"
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/admin-jwt-secret-*"
       ]
     }
   ]
@@ -169,6 +173,24 @@ provision_role_and_policy "notification-service-secrets-role" \
       "Resource": [
         "arn:aws:secretsmanager:*:*:secret:interview-insights/database-url-*",
         "arn:aws:secretsmanager:*:*:secret:interview-insights/email-encryption-key-*"
+      ]
+    }
+  ]
+}'
+
+# Mirrors infra/aws/review-analyzer-secrets-access-policy.json (GitHub
+# issue #340/D81).
+provision_role_and_policy "review-analyzer-secrets-role" \
+  "review-analyzer-secrets-access-policy" '{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadReviewAnalyzerSecretsOnly",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": [
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/database-url-*",
+        "arn:aws:secretsmanager:*:*:secret:interview-insights/anthropic-api-key-*"
       ]
     }
   ]
