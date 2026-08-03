@@ -446,3 +446,17 @@ this phase's blog is complete.
 1. [Issue #334 — `notification-service` skeleton: this project's first standalone microservice](phase-31-notification-service/issue-334-notification-service-skeleton/README.md)
 2. [Issue #335 — The first real consumer: `*.created` events → "pending review" email (D74, D75)](phase-31-notification-service/issue-335-created-consumer-pending-review-email/README.md)
 3. [Issue #336 — Extending the consumer: `*.status_changed` events → approved/rejected email (D79)](phase-31-notification-service/issue-336-status-changed-consumer-approved-rejected/README.md)
+
+## Phase 32 — Review Analyzer Service
+
+See `docs/ROADMAP.md` Phase 32 and `docs/DECISIONS.md` D81. Filed
+alongside Phases 30-31 from the same brainstorm — the second of the two
+service extractions discussed, and the harder one: unlike
+`notification-service`'s read-only side effect, this one has to change
+data `api` owns and trigger `api`'s own auto-approval logic from a
+standalone process. All three feature issues are done — this phase's
+blog is complete.
+
+1. [Issue #338 — Kickoff brainstorm: how does a standalone verdict get back into `api`? (D81)](phase-32-review-analyzer-service/issue-338-kickoff-brainstorm-writeback-event/README.md)
+2. [Issue #339 — `review-analyzer` service skeleton: this project's second standalone microservice](phase-32-review-analyzer-service/issue-339-review-analyzer-service-skeleton/README.md)
+3. [Issue #340 — Porting LLM-assisted triage into review-analyzer as an async enrichment (D81)](phase-32-review-analyzer-service/issue-340-async-llm-triage-verdict-consumer/README.md)

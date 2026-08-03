@@ -1354,7 +1354,7 @@ LocalStack secrets bootstrap (D73/D75 precedent) rather than sharing
       review-analyzer, publishing a `stalled: true` escalation event
       instead of calling `ModerationService.flag()` directly) — see
       D81's addendum for both resolutions.
-- [ ] Engineering blog (last) (GitHub issue #341)
+- [x] Engineering blog (last) (GitHub issue #341)
 
 ## Phase 33 — Search-First Landing Page
 
