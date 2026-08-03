@@ -1,19 +1,29 @@
 name: Self-hosted runner smoke test
 
 # Manual only, never fires on its own (GitHub issue #88, Phase 12) — this
-# exists purely to check "is the on-demand self-hosted runner alive and
-# correctly configured" independent of the real CD workflow (#89). The
-# runner is deliberately on-demand, not a persistent service: start it
-# with `./run.sh` (or `./run.sh --once` to process a single job and
-# exit) right before dispatching this, per wiki/deployment-guide.md.
+# exists purely to check "is a self-hosted runner alive and correctly
+# configured" independent of the real CD/CI workflows. Two distinct runner
+# pools exist (Phase 40, GitHub issue #504): the on-demand macOS runner
+# (start with `./run.sh` / `./run.sh --once` right before dispatching this,
+# per wiki/deployment-guide.md) and the always-on Oracle CI VM runners
+# (systemd services, no manual start needed). Explicit label sets on each
+# job below, not bare "self-hosted", so this always exercises the intended
+# runner rather than whichever one GitHub happens to route it to.
 on:
   workflow_dispatch: {}
 
 jobs:
-  smoke-test:
-    runs-on: self-hosted
+  mac-smoke-test:
+    runs-on: [self-hosted, macOS, local-kind]
     steps:
-      - run: echo "self-hosted runner is alive"
+      - run: echo "macOS self-hosted runner is alive"
       - run: uname -a
       - run: docker info --format '{{.ServerVersion}}'
       - run: kubectl config current-context
+
+  oracle-smoke-test:
+    runs-on: [self-hosted, linux, ARM64, oracle-ci]
+    steps:
+      - run: echo "Oracle CI runner is alive"
+      - run: uname -a
+      - run: docker info --format '{{.ServerVersion}}'

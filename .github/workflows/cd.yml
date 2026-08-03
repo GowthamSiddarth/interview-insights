@@ -43,7 +43,13 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    # Explicit labels, not bare "self-hosted" (Phase 40, GitHub issue #504)
+    # — this job needs the local kind cluster/kubectl access that only the
+    # Phase 12 macOS runner has. A second self-hosted runner pool exists
+    # now (the Oracle CI VM, labeled self-hosted,linux,ARM64,oracle-ci) —
+    # without this, GitHub could route this job to whichever runner grabs
+    # it first, and the Oracle VM has no kind cluster to deploy to.
+    runs-on: [self-hosted, macOS, local-kind]
     steps:
       - uses: actions/checkout@v4
 
