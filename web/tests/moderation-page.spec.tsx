@@ -289,6 +289,47 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     expect(screen.queryByText('tough but fair')).not.toBeInTheDocument();
   });
 
+  // GitHub issue #490 (Phase 36, D80) — a time-remaining/overdue
+  // indicator per entry, driven by slaDeadline. The fixture's
+  // slaDeadline values are all fixed 2026-07-19 dates, long past by the
+  // time this test actually runs — deterministically "overdue" no
+  // matter when the suite executes.
+  it('shows an overdue SLA badge on each entry once its group is expanded', async () => {
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Engineer/ }));
+
+    expect(screen.getAllByText(/Overdue by/).length).toBeGreaterThan(0);
+  });
+
+  it('shows a "Due in" badge, not overdue, for an entry whose deadline is still in the future', async () => {
+    const futureGroups = [
+      {
+        ...queueGroups[1],
+        entries: [{ ...queueGroups[1].entries[0], slaDeadline: new Date(Date.now() + 3_600_000).toISOString() }],
+      },
+    ];
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/auth/admin/me') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
+      }
+      if (url.endsWith('/moderation/queue') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(futureGroups) });
+      }
+      throw new Error(`Unmocked fetch: ${method} ${url}`);
+    }) as jest.Mock;
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Manager/ }));
+
+    expect(screen.getByText(/Due in/)).toBeInTheDocument();
+    expect(screen.queryByText(/Overdue by/)).not.toBeInTheDocument();
+  });
+
   // GitHub issue #369 (Phase 35) — a create-company request renders with
   // its own label and detail fields, standing alone since it has no
   // InterviewProcess to group under.
