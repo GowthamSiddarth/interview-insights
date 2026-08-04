@@ -1588,17 +1588,28 @@ Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
       `moderation.queue.sla_breach.v1` event once per entry, regardless
       of claim state (`claimedById: null` for an unclaimed breach — no
       recipient, but still detected/observable)
-- [ ] `notification-service`: consume SLA breach events, email the
-      moderator (GitHub issue #489)
+- [x] `notification-service`: consume SLA breach events, email the
+      moderator (GitHub issue #489) — extends the existing consumer
+      (Phase 31) to also subscribe to `moderation.queue.sla_breach.v1`;
+      recipient resolved via `claimedById` -> a new minimal `Moderator`
+      mirror model (D75), not a decrypted candidate email; an
+      unclaimed breach is logged and skipped (no recipient, D80)
 - [x] Queue UI: surface SLA deadline and breach state (GitHub issue
       #490) — a `SlaBadge` per entry (`formatSlaStatus()` in
       `web/src/lib/format-sla-status.ts`, minutes/hours/days,
       red "Overdue by X" vs. neutral "Due in X"), computed at render
       time (no live-ticking clock — a moderator who leaves the page
       open sees a slightly stale label until the next re-render/action)
-- [ ] Docs: resolve D80 and update DATA_MODEL/ARCHITECTURE for Phase 36
-      (GitHub issue #491)
-- [ ] Engineering blog (last) (GitHub issue #492)
+- [x] Docs: resolve D80 and update DATA_MODEL/ARCHITECTURE for Phase 36
+      (GitHub issue #491) — new `### D80` entry (SLA-clock-start,
+      manual-claim-only assignment and its unclaimed-breach
+      consequence, email channel), new `moderators` table section in
+      `docs/DATA_MODEL.md`, `docs/ARCHITECTURE.md` updated for
+      `SlaBreachDetectionService`/the new event/`notification-service`'s
+      new subscription
+- [x] Engineering blog (last) (GitHub issue #492) — `wiki/blog/
+      phase-36-moderator-queue-slas-assignment-notifications/`, one
+      post per issue (#485-#491)
 
 **Amendment (sketched 2026-07-29, from Phase 39's own brainstorm):**
 also now a downstream consumer of Phase 39's flagged/ambiguous LLM
