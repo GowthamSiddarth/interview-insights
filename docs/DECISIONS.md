@@ -3710,6 +3710,95 @@ follow-up review path turns out to be.
 
 ---
 
+### D80 — Phase 36's SLA clock, assignment model, and breach-notification channel (GitHub issue #491, Phase 36)
+
+**Context:** Phase 36 (queue SLAs, manual claim/assignment, breach
+notifications) was parked with no design decisions from the moment it
+was first raised alongside Phase 35's planning — three open questions
+needed resolving before any of #485-#490 could be filed: when the SLA
+clock starts, how work gets assigned to a moderator, and how a breach
+actually reaches anyone. Resolved during the phase's own 2026-07-31
+kickoff planning pass, implemented across #485-#490; this entry writes
+up the reasoning after the fact (deliberately deferred to this cleanup
+issue, #491, rather than blocking implementation on the write-up).
+
+**Decision:**
+
+- **SLA clock starts at `ModerationQueueEntry.createdAt`, not first
+  moderator view.** A "first view" clock would need a new view-tracking
+  event this project has no other use for — pure new surface for a
+  distinction (submitted-but-unseen vs. seen-but-unreviewed) nothing
+  else in the product cares about. `slaDeadline` (`createdAt` +
+  configurable `MODERATION_SLA_HOURS`, default 48) is computed once, at
+  `enqueue()`/`reenqueue()` time (#486), not a DB `DEFAULT` — the
+  configurable-hours value lives in app config, which a static column
+  default can't read.
+- **Assignment is manual-claim only, no auto-assignment.** Round-robin
+  or least-loaded routing is moot with the one moderator this project
+  has today (`AdminAuthService` was a single shared credential until
+  #485's `Moderator` table), and building a distribution algorithm
+  with no second moderator to validate it against would be exactly the
+  kind of "infrastructure ahead of a demonstrated need" this project's
+  standing bias (D9, D72, D81) already argues against. `claim`/
+  `release` (#487) give `claimedById`/`claimedAt` real FK-backed columns
+  instead — enough for a second moderator to coordinate by hand
+  (`GET /moderation/queue`'s "claimed by" badge, #487/#490) once one
+  exists, without pre-building routing logic nobody can exercise yet.
+  A direct, load-bearing consequence, surfaced during #488/#489's own
+  implementation rather than anticipated up front: **an entry that
+  breaches its SLA while still unclaimed has no notification
+  recipient.** `SlaBreachDetectionService` (#488) detects and publishes
+  the breach regardless — the event exists for observability either
+  way — but `notification-service` (#489) logs and skips rather than
+  guessing a recipient (e.g. "email every moderator," which doesn't
+  generalize past a one-moderator system and was never asked for).
+  Revisit this specific gap once a second moderator exists and an
+  unclaimed backlog becomes a real coordination problem, not before.
+- **Breach notifications email the claiming moderator, via
+  `notification-service`.** Reuses the one out-of-band channel this
+  project already has (Phase 31) rather than standing up new infra (a
+  Slack webhook, an in-app notification center) for a single new
+  message type. `SlaBreachDetectionService` publishes
+  `moderation.queue.sla_breach.v1` (`api`, `@Cron`, hourly — same D72
+  in-process-not-a-CronJob precedent, #488); `notification-service`
+  consumes it on the same consumer group as its other three
+  subscriptions, resolving `claimedById` to an email via a new minimal
+  `Moderator` mirror model (D75's established "duplicate a read-only
+  subset, generate an independent client" pattern, #489).
+
+**A second, narrower design point, settled during #488's implementation
+rather than in the original planning pass:** whether a breach still
+gets (re-)published if the broker was down the first time. It doesn't
+— `SlaBreachDetectionService` stamps `breachNotifiedAt` right after
+calling `DomainEventPublisher.publish()`, unconditionally, because
+`publish()` is deliberately best-effort (D16/D17/D53) and never
+surfaces a success/failure signal to its caller; there is nothing to
+condition the stamp on. The accepted tradeoff: a breach detected during
+a broker outage is silently dropped once, not retried indefinitely on
+every later hourly sweep tick — the same "tried once, moved on"
+contract every other domain event in this codebase already has, not a
+new gap specific to this feature.
+
+**Alternatives considered:**
+- *First-moderator-view as the SLA clock start.* Rejected for the new
+  view-tracking-event cost above — genuinely no existing signal this
+  could piggyback on.
+- *Round-robin or least-loaded auto-assignment.* Rejected as
+  premature — see the manual-claim-only reasoning above. Revisit once a
+  second moderator exists.
+- *A Slack webhook or new in-app notification center for breach
+  alerts.* Rejected for the same "don't stand up new infra for one
+  message type" reasoning D73 already gave for duplicating SMTP wiring
+  rather than sharing it — email via the existing notification-service
+  channel does the job with zero new infrastructure.
+
+**Revisit when:** a second moderator exists (unblocks both the
+unclaimed-breach gap above and makes auto-assignment worth designing
+for real), or breach volume/timing needs finer granularity than an
+hourly sweep provides.
+
+---
+
 ### D81 — review-analyzer writes back via a new `verdict_computed` event; api gets its first-ever event consumer (GitHub issue #338, Phase 32)
 
 **Context:** Phase 32's kickoff brainstorm (issue #338), resolved
@@ -3876,7 +3965,3 @@ use), or Oracle's Always Free tier terms change.
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
 - Whether `company_overall_aggregates` should be sliced by role/level from
   the start or added later.
-- D80 itself: write up the SLA-clock-start / manual-claim / email-
-  channel decisions made during Phase 36's 2026-07-31 planning pass as
-  a real `### D80` entry — tracked as GitHub issue #491, implemented
-  alongside the rest of Phase 36 (epic #484, see `docs/ROADMAP.md`).

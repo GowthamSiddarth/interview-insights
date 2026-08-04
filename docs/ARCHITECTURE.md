@@ -20,6 +20,7 @@ flowchart TD
         SEARCHSVC["CompanySearchService /\nreview indexing"]
         SECRETS["Secrets bootstrap\n(runs before NestFactory.create)"]
         PUB["DomainEventPublisher\n(best-effort, after commit)"]
+        SLABREACH["SlaBreachDetectionService\n(@Cron, hourly, in-process —\nsame D72 precedent as the\nreconciliation sweep, #488)"]
     end
 
     subgraph notifpod["notification-service (NestJS, own Deployment, Phase 31)"]
@@ -32,10 +33,10 @@ flowchart TD
         ANALYZER["AnalysisConsumerService\n(own Redpanda consumer group,\n#339 — logs receipt only,\nLLM triage lands in #340)"]
     end
 
-    PG[("PostgreSQL\nrounds, ratings, candidates,\nmaterialized views, notification_log")]
+    PG[("PostgreSQL\nrounds, ratings, candidates,\nmoderators (#485), materialized\nviews, notification_log")]
     OS[("OpenSearch\ncompanies + reviews index")]
     LS[("LocalStack\nSecrets Manager + IAM\n(dev overlay, unconditional, D76)")]
-    RP[("Redpanda\nmoderation created/status-changed events")]
+    RP[("Redpanda\nmoderation created/status-changed/\nsla_breach events")]
     MAILPIT[("Mailpit\nlocal SMTP catcher")]
 
     WEB -->|REST, CORS| API
@@ -51,11 +52,15 @@ flowchart TD
     NOTIFSECRETS -.-> CONSUMER
     MOD -->|publish, best-effort| PUB
     PUB -->|moderation created events\n#332| RP
+    SLABREACH -->|scans moderation_queue for\nunreviewed + past-deadline,\nnot yet notified| PG
+    SLABREACH -->|publish sla_breach.v1,\nonce per entry, #488| PUB
     RP -->|subscribe, consumer group\nnotification-service| CONSUMER
     CONSUMER -->|decrypt emailEncrypted\nby candidateId, D74| PG
+    CONSUMER -->|resolve claimedById ->\nModerator.email, own mirror\nmodel D75, #489| PG
     CONSUMER -->|idempotency check/record,\nnotification_log, D75| PG
     CONSUMER --> NOTIFMAIL
     NOTIFMAIL -->|your submission is\npending review, #335| MAILPIT
+    NOTIFMAIL -->|SLA breach —\nclaiming moderator only, #489| MAILPIT
     RP -->|subscribe, own consumer group\nreview-analyzer, #339| ANALYZER
 
     PG -->|REFRESH MATERIALIZED VIEW| ANALYTICS["AnalyticsService\n+ shrinkage scoring"]
@@ -87,8 +92,8 @@ from the original plan" below.
 | Moderation | In-process NestJS module (D12) | Only `RoundRating` has a write path (see gaps below) |
 | Fraud checks | In-process, same module family | Rate-limit (3/24h) + duplicate-text flag, never blocks writes (D13) |
 | Search | OpenSearch | Company + review indexes, best-effort sync writes (D16/D17) |
-| Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332) — see `docs/EVENTS.md` |
-| `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). Consumes all three `moderation.*.created.v1` topics ("your submission is pending review", #335) and all three `moderation.*.status_changed.v1` topics (approved/rejected, `flagged` is a no-op, #336), idempotently |
+| Event bus | Redpanda | Broker deployed (Phase 30, D53); `ModerationService` publishes all 6 create/status-change events (#332), plus `SlaBreachDetectionService`'s `moderation.queue.sla_breach.v1` (Phase 36, #488) — see `docs/EVENTS.md` |
+| `notification-service` (`services/notification-service/`) | NestJS, own Deployment, own minimal Prisma client (D75) | First standalone microservice (Phase 31, D53/D73, GitHub issue #334). Consumes all three `moderation.*.created.v1` topics ("your submission is pending review", #335), all three `moderation.*.status_changed.v1` topics (approved/rejected, `flagged` is a no-op, #336), and `moderation.queue.sla_breach.v1` (emails the claiming moderator via a new minimal `Moderator` mirror model, D75; no recipient — logged and skipped — if unclaimed, Phase 36 D80, #489), idempotently |
 | `review-analyzer` (`services/review-analyzer/`) | NestJS, own Deployment, no DB/secrets yet | Second standalone microservice (Phase 32, D53, GitHub issue #339). Own consumer group subscribing to all three `moderation.*.created.v1` topics — logs receipt only; porting Phase 19 (#163)'s LLM triage and publishing `moderation.<type>.verdict_computed.v1` (D81) lands in #340 |
 | Secrets/IAM | LocalStack (`dev` overlay, unconditional) | Default CD target as of Phase 12 issue #99 (D23); folded into `dev` itself, no separate `dev-localstack` variant, by GitHub issue #466 (D76). Full secret-by-secret inventory: `docs/SECRETS.md` |
 | Orchestration | Kubernetes via `kind` | `infra/k8s/base` + `overlays/{dev,staging,prod}` |
