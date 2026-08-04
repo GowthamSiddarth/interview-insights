@@ -35,7 +35,13 @@ and publishes a new event, `moderation.<type>.verdict_computed.v1`, which
 `api`), not just a producer — to write `moderationVerdict` and run the
 existing (D71) auto-approval flow; see `docs/DECISIONS.md` D81.
 `review-analyzer` never writes to `moderation_queue` itself — it only
-computes and publishes.
+computes and publishes. As of GitHub issue #488 (Phase 36, D80), `api`
+publishes a tenth event, `moderation.queue.sla_breach.v1`, from a new
+in-process `SlaBreachDetectionService` (`@Cron`, hourly) rather than
+from a write path — the first event in this doc not published from
+`ModerationService` itself. As of GitHub issue #489,
+`notification-service` consumes it too (same consumer group as its other
+subscriptions) and emails the claiming moderator, if any.
 
 ## Publishing semantics
 
@@ -73,11 +79,15 @@ version in place.
 
 ## Defined events
 
-Nine event types — one `*.created`, one `*.status_changed`, and (GitHub
+Ten event types — one `*.created`, one `*.status_changed`, and (GitHub
 issue #340) one `*.verdict_computed` per moderated entity type
-(`round_rating`, `recruiter_rating`, `overall_review`). `company` (a
-create-company request, Phase 35) is deliberately out of scope for all
-three — see `ModerationService.publishCreatedEvent`/
+(`round_rating`, `recruiter_rating`, `overall_review`), plus (GitHub
+issue #488) one `moderation.queue.sla_breach.v1`, not scoped to a single
+entity type — it fires off `ModerationQueueEntry` (`moderation_queue`)
+directly, the one table shared by all four entity types including
+`company`. `company` (a create-company request, Phase 35) is deliberately
+out of scope for the three per-entity-type events above — see
+`ModerationService.publishCreatedEvent`/
 `publishStatusChangedEvent`'s own comments for why, and D81 for why
 `review-analyzer` never subscribes to `company`'s own `*.created` topic
 either. Every `*.created` event carries `candidateId`/`companyId` context
@@ -89,6 +99,10 @@ Every `*.verdict_computed` event carries the full LLM verdict payload
 (`verdict`, `autoApprovalEligible`, `confidence`, `model`,
 `promptContent`, `responseText`) plus an optional `stalled: true` marker
 for a reconciliation-sweep escalation with no verdict at all.
+`moderation.queue.sla_breach.v1` carries `queueEntryId`, the underlying
+`entityType`/`entityId` (for context, not for gating), `slaDeadline`,
+and `claimedById` (nullable — who to notify, resolved by the consumer,
+not baked in as an email address).
 
 | Topic | Type | Schema file |
 |---|---|---|
@@ -101,6 +115,7 @@ for a reconciliation-sweep escalation with no verdict at all.
 | `moderation.overall_review.created.v1` | `OverallReviewCreatedEventV1` | `api/src/events/schemas/overall-review-created.event.ts` |
 | `moderation.overall_review.status_changed.v1` | `OverallReviewStatusChangedEventV1` | `api/src/events/schemas/overall-review-status-changed.event.ts` |
 | `moderation.overall_review.verdict_computed.v1` | `OverallReviewVerdictComputedEventV1` | `services/review-analyzer/src/events/schemas/overall-review-verdict-computed.event.ts` (duplicated into `api/src/events/schemas/`) |
+| `moderation.queue.sla_breach.v1` | `ModerationQueueSlaBreachEventV1` | `api/src/events/schemas/moderation-queue-sla-breach.event.ts` |
 
 Published from:
 - **`*.created`** — `RoundRatingsService.create()`, `RecruiterRatingsService.create()`,
@@ -118,6 +133,15 @@ Published from:
   (a freshly-computed verdict, off a consumed `*.created` event) and its
   own `ReconciliationSweepService` (a re-triaged stale row, or a
   `stalled: true` escalation when even the retry can't produce one).
+- **`moderation.queue.sla_breach.v1`** — `api`'s own
+  `SlaBreachDetectionService` (`@Cron`, hourly), the first event in this
+  doc not published from a write path. Scans `moderation_queue` directly
+  for `reviewedAt: null` rows past `slaDeadline` that haven't already
+  been notified (`breachNotifiedAt: null`), publishes once per row, then
+  stamps `breachNotifiedAt` regardless of whether the publish actually
+  reached the broker — same best-effort contract as every other event
+  here (D16/D17/D53), just applied to a scheduled scan instead of a
+  request-triggered write.
 
 `moderation.*.created.v1` is consumed by `notification-service` as of
 GitHub issue #335 (the "your submission is pending review" email) and,
@@ -134,6 +158,13 @@ own consumer group `api`), which writes `moderationVerdict` and, when
 `autoApprovalEligible` is true, calls the existing `approveWithAudit()`;
 a `stalled: true` event instead calls `ModerationService.flag()`. See
 #335/#336/#339/#340 for the actual consumer-side wiring.
+`moderation.queue.sla_breach.v1` is consumed by `notification-service`
+as of GitHub issue #489 — same consumer group as its other three
+subscriptions, resolving `claimedById` to an email via its own minimal
+`Moderator` mirror (D75's established pattern) and skipping (no email,
+no `NotificationLog` row) when `claimedById` is null — an unclaimed
+entry has no recipient under this phase's manual-claim-only assignment
+model (D80).
 
 ## Adding a new event type
 
