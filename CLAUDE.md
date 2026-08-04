@@ -155,9 +155,13 @@ post per phase — this file no longer inlines that running history.
 - Next step: Phase 31 (Notification Service) is done, blog included.
   Phase 32 (Review Analyzer Service) is fully done, blog included
   (#338-#341). Phase 36 (Moderator Queue SLAs, Assignment &
-  Notifications) is fully planned too (issues #485-#492) and can be
-  picked up next. Continue merging without waiting for CI until the
-  user says the GitHub Actions billing limit has been refreshed.
+  Notifications) is fully done too, blog included (issues #485-#492,
+  epic #484 closed). Phase 40 (CI Infrastructure: Self-Hosted GitHub
+  Actions Runner) is the current frontier — #501 (provision the runner
+  VM) is next, in progress as of 2026-08-04. The GitHub Actions billing
+  gate that prompted Phase 40 was refreshed 2026-08-03 — back to normal
+  wait-for-CI-green discipline before merging, not the temporary
+  merge-without-CI exception this line used to describe.
 
 ## Open decisions still to make
 
