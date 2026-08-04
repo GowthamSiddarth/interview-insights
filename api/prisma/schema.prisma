@@ -428,6 +428,14 @@ model ModerationQueueEntry {
   // entries sit unclaimed until a moderator picks them up.
   claimedById String?               @map("claimed_by") @db.Uuid
   claimedAt   DateTime?             @map("claimed_at") @db.Timestamptz
+  // GitHub issue #488 (Phase 36, D80) — set the first time
+  // SlaBreachDetectionService's sweep publishes a
+  // moderation.queue.sla_breach.v1 event for this entry, so a still-
+  // breached entry (still unreviewed, past slaDeadline) is never
+  // re-notified on every later sweep tick. Never cleared once set, even
+  // if the entry is later reviewed — same "record what had happened,
+  // don't erase history" precedent slaDeadline's own comment already set.
+  breachNotifiedAt DateTime?        @map("breach_notified_at") @db.Timestamptz
   createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz
 
   claimedBy Moderator? @relation(fields: [claimedById], references: [id])

@@ -1579,7 +1579,15 @@ Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
       badge (claimed by someone else) — approve/reject/flag stay enabled
       regardless of claim state, since a claim is an optional ownership
       signal, never a review gate
-- [ ] SLA breach detection job (GitHub issue #488)
+- [x] SLA breach detection job (GitHub issue #488) — new
+      `breach_notified_at` column (hand-authored migration, `migrate
+      deploy`) plus `SlaBreachDetectionService` (`@Cron`, hourly,
+      in-process — same D72 precedent as the reconciliation sweep, not a
+      Kubernetes CronJob), scanning for unreviewed entries past
+      `slaDeadline` not yet notified and publishing a new
+      `moderation.queue.sla_breach.v1` event once per entry, regardless
+      of claim state (`claimedById: null` for an unclaimed breach — no
+      recipient, but still detected/observable)
 - [ ] `notification-service`: consume SLA breach events, email the
       moderator (GitHub issue #489)
 - [ ] Queue UI: surface SLA deadline and breach state (GitHub issue
