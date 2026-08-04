@@ -10,6 +10,7 @@ import { RoundRatingCreatedEventV1 } from '../events/schemas/round-rating-create
 import { RecruiterRatingCreatedEventV1 } from '../events/schemas/recruiter-rating-created.event';
 import { OverallReviewCreatedEventV1 } from '../events/schemas/overall-review-created.event';
 import { RoundRatingStatusChangedEventV1 } from '../events/schemas/round-rating-status-changed.event';
+import { ModerationQueueSlaBreachEventV1 } from '../events/schemas/moderation-queue-sla-breach.event';
 
 const ENCRYPTION_KEY = 'a'.repeat(64);
 
@@ -36,6 +37,7 @@ describe('NotificationConsumerService', () => {
   let service: NotificationConsumerService;
   let prisma: {
     candidate: { findUnique: jest.Mock };
+    moderator: { findUnique: jest.Mock };
     notificationLog: { findUnique: jest.Mock; create: jest.Mock };
   };
   let mailService: { send: jest.Mock };
@@ -51,6 +53,17 @@ describe('NotificationConsumerService', () => {
     companyId: 'company-1',
     status: 'pending',
   };
+
+  const slaBreachEvent = (claimedById: string | null): ModerationQueueSlaBreachEventV1 => ({
+    eventType: 'moderation.queue.sla_breach',
+    eventVersion: 1,
+    occurredAt: '2026-08-04T00:00:00.000Z',
+    queueEntryId: 'queue-1',
+    entityType: 'round_rating',
+    entityId: 'rating-1',
+    slaDeadline: '2026-08-01T00:00:00.000Z',
+    claimedById,
+  });
 
   const statusChangedEvent = (newStatus: 'approved' | 'rejected' | 'flagged'): RoundRatingStatusChangedEventV1 => ({
     eventType: 'moderation.round_rating.status_changed',
@@ -68,6 +81,7 @@ describe('NotificationConsumerService', () => {
     process.env.EMAIL_ENCRYPTION_KEY = ENCRYPTION_KEY;
     prisma = {
       candidate: { findUnique: jest.fn() },
+      moderator: { findUnique: jest.fn() },
       notificationLog: { findUnique: jest.fn(), create: jest.fn() },
     };
     mailService = { send: jest.fn().mockResolvedValue(undefined) };
@@ -257,6 +271,66 @@ describe('NotificationConsumerService', () => {
     });
   });
 
+  describe('processEvent — moderation.queue.sla_breach (GitHub issue #489)', () => {
+    it('resolves the claiming moderator and sends the breach email, then records it', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.moderator.findUnique.mockResolvedValue({ id: 'mod-1', email: 'moderator@example.com' });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(slaBreachEvent('mod-1'));
+
+      expect(prisma.moderator.findUnique).toHaveBeenCalledWith({ where: { id: 'mod-1' } });
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'moderator@example.com',
+          subject: 'A moderation queue item you claimed is overdue',
+        }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: { entityType: 'moderation_queue', entityId: 'queue-1', eventType: 'moderation.queue.sla_breach' },
+      });
+    });
+
+    it('skips (without touching NotificationLog) when the entry was never claimed', async () => {
+      await service.processEvent(slaBreachEvent(null));
+
+      expect(prisma.notificationLog.findUnique).not.toHaveBeenCalled();
+      expect(prisma.moderator.findUnique).not.toHaveBeenCalled();
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('never sends twice for the same queue entry — idempotent against redelivery', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
+
+      await service.processEvent(slaBreachEvent('mod-1'));
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.moderator.findUnique).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('skips (without throwing) when the claiming moderator no longer resolves', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.moderator.findUnique.mockResolvedValue(null);
+
+      await expect(service.processEvent(slaBreachEvent('mod-1'))).resolves.toBeUndefined();
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('never touches Candidate — this event has no candidateId at all', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.moderator.findUnique.mockResolvedValue({ id: 'mod-1', email: 'moderator@example.com' });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(slaBreachEvent('mod-1'));
+
+      expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   describe('handleMessage (the kafkajs entrypoint)', () => {
     // Private, but this is exactly the boundary issue #335's acceptance
     // criteria is about ("a malformed event ... logged, not silently
@@ -302,6 +376,23 @@ describe('NotificationConsumerService', () => {
     it('ignores a tombstone message (null value)', async () => {
       await expect(handleMessage(payloadFor(null))).resolves.toBeUndefined();
       expect(mailService.send).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #489 — proves parseEvent()'s candidateId guard is
+    // conditional, not a blanket requirement: a well-formed sla_breach
+    // event (genuinely no candidateId field) must parse successfully,
+    // not be rejected as "missing candidateId" the way #335's original
+    // check would have treated it.
+    it('parses and processes a well-formed sla_breach event with no candidateId at all', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.moderator.findUnique.mockResolvedValue({ id: 'mod-1', email: 'moderator@example.com' });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await expect(handleMessage(payloadFor(JSON.stringify(slaBreachEvent('mod-1'))))).resolves.toBeUndefined();
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'moderator@example.com' }),
+      );
     });
   });
 });

@@ -6,7 +6,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { MAIL_TRANSPORTER } from '../src/mail/mail-transporter.provider';
 import { ROUND_RATING_CREATED_V1_TOPIC } from '../src/events/schemas/round-rating-created.event';
 import { ROUND_RATING_STATUS_CHANGED_V1_TOPIC } from '../src/events/schemas/round-rating-status-changed.event';
+import { MODERATION_QUEUE_SLA_BREACH_V1_TOPIC } from '../src/events/schemas/moderation-queue-sla-breach.event';
 import { seedCandidateWithEmail } from './support/seed-candidate';
+import { seedModeratorWithEmail } from './support/seed-moderator';
 import { publishTestEvent } from './support/redpanda-producer';
 import { assertMailpitMessageCountStaysAt, searchMailpit, waitForMailpitMessage } from './support/mailpit';
 
@@ -167,6 +169,94 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
 
       await assertMailpitMessageCountStaysAt(email, 0);
       expect(await searchMailpit(`to:${email}`)).toHaveLength(0);
+    },
+    25000,
+  );
+
+  // GitHub issue #489 (Phase 36) — same real-broker/real-Postgres/real-
+  // Mailpit standing as the tests above, proven against the structurally
+  // different sla_breach event instead: no candidateId, recipient
+  // resolved via claimedById -> Moderator.email.
+  it(
+    'a real moderation.queue.sla_breach.v1 event with a claimant results in an overdue email, and redelivery never sends a second one',
+    async () => {
+      const marker = unique();
+      const email = `moderator-${marker}@example.com`;
+      const moderatorId = await seedModeratorWithEmail(prisma, email);
+      const queueEntryId = randomUUID();
+
+      const event = {
+        eventType: 'moderation.queue.sla_breach' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        queueEntryId,
+        entityType: 'round_rating',
+        entityId: randomUUID(),
+        slaDeadline: new Date(Date.now() - 60_000).toISOString(),
+        claimedById: moderatorId,
+      };
+
+      await publishTestEvent(MODERATION_QUEUE_SLA_BREACH_V1_TOPIC, event, queueEntryId);
+
+      const message = await waitForMailpitMessage(email);
+      expect(message.To[0].Address).toBe(email);
+      expect(message.Subject).toBe('A moderation queue item you claimed is overdue');
+
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          entityType_entityId_eventType: {
+            entityType: 'moderation_queue',
+            entityId: queueEntryId,
+            eventType: 'moderation.queue.sla_breach',
+          },
+        },
+      });
+      expect(logged).not.toBeNull();
+
+      await publishTestEvent(MODERATION_QUEUE_SLA_BREACH_V1_TOPIC, event, queueEntryId);
+      await assertMailpitMessageCountStaysAt(email, 1);
+
+      const messagesForRecipient = await searchMailpit(`to:${email}`);
+      expect(messagesForRecipient).toHaveLength(1);
+    },
+    25000,
+  );
+
+  // No auto-assignment under this phase's manual-claim-only model (D80)
+  // — an unclaimed breach has no recipient. Proven against the real
+  // broker so a future change can't silently start guessing one.
+  it(
+    'a real moderation.queue.sla_breach.v1 event with no claimant never sends an email',
+    async () => {
+      const queueEntryId = randomUUID();
+      const event = {
+        eventType: 'moderation.queue.sla_breach' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        queueEntryId,
+        entityType: 'overall_review',
+        entityId: randomUUID(),
+        slaDeadline: new Date(Date.now() - 60_000).toISOString(),
+        claimedById: null,
+      };
+
+      await publishTestEvent(MODERATION_QUEUE_SLA_BREACH_V1_TOPIC, event, queueEntryId);
+
+      // No candidate/moderator email to search Mailpit by here — instead,
+      // confirm no NotificationLog row was ever written, which is the
+      // real signal this path was a no-op (same "wait a beat, then
+      // assert" shape assertMailpitMessageCountStaysAt uses elsewhere).
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          entityType_entityId_eventType: {
+            entityType: 'moderation_queue',
+            entityId: queueEntryId,
+            eventType: 'moderation.queue.sla_breach',
+          },
+        },
+      });
+      expect(logged).toBeNull();
     },
     25000,
   );
