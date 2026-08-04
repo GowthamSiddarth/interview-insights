@@ -7,6 +7,37 @@ import { CompanySearchService } from '../search/company-search.service';
 import { ModerationQueueSearchService } from '../search/moderation-queue-search.service';
 import { DomainEventPublisher } from '../events/domain-event-publisher';
 
+// GitHub issue #486 — computeSlaDeadline() is Date.now()-based, not
+// injectable, so assertions use a tolerance window rather than an exact
+// timestamp match.
+function expectSlaDeadlineHoursFromNow(deadline: unknown, hours: number) {
+  expect(deadline).toBeInstanceOf(Date);
+  const diffMs = (deadline as Date).getTime() - Date.now();
+  expect(Math.abs(diffMs - hours * 60 * 60 * 1000)).toBeLessThan(5000);
+}
+
+// `process.env.X = undefined` stringifies to "undefined" rather than
+// unsetting the var — restoring an originally-unset value needs `delete`.
+function restoreEnv(key: string, original: string | undefined) {
+  if (original === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = original;
+  }
+}
+
+// jest.Mock's `.mock.calls` is untyped (`any`) — this narrows the one shape
+// this spec cares about instead of scattering unsafe member accesses.
+interface CreateCallData {
+  entityType: string;
+  entityId: string;
+  slaDeadline: unknown;
+}
+function getCreateCallData(createMock: jest.Mock): CreateCallData {
+  const [args] = createMock.mock.calls[0] as [{ data: CreateCallData }];
+  return args.data;
+}
+
 describe('ModerationService', () => {
   let service: ModerationService;
   let prisma: {
@@ -115,14 +146,41 @@ describe('ModerationService', () => {
   });
 
   describe('enqueue', () => {
-    it('creates a moderation_queue row for the given entity', async () => {
+    it('creates a moderation_queue row for the given entity, with a default 48h SLA deadline', async () => {
       prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-1' });
 
       await service.enqueue('round_rating', 'rating-1');
 
-      expect(prisma.moderationQueueEntry.create).toHaveBeenCalledWith({
-        data: { entityType: 'round_rating', entityId: 'rating-1' },
-      });
+      const data = getCreateCallData(prisma.moderationQueueEntry.create);
+      expect(data.entityType).toBe('round_rating');
+      expect(data.entityId).toBe('rating-1');
+      expectSlaDeadlineHoursFromNow(data.slaDeadline, 48);
+    });
+
+    it('honors MODERATION_SLA_HOURS when set', async () => {
+      const original = process.env.MODERATION_SLA_HOURS;
+      process.env.MODERATION_SLA_HOURS = '12';
+      try {
+        prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-1' });
+
+        await service.enqueue('round_rating', 'rating-1');
+
+        expectSlaDeadlineHoursFromNow(getCreateCallData(prisma.moderationQueueEntry.create).slaDeadline, 12);
+      } finally {
+        restoreEnv('MODERATION_SLA_HOURS', original);
+      }
+    });
+
+    it('rejects a non-positive MODERATION_SLA_HOURS', () => {
+      const original = process.env.MODERATION_SLA_HOURS;
+      process.env.MODERATION_SLA_HOURS = '0';
+      try {
+        expect(() => service.enqueue('round_rating', 'rating-1')).toThrow(
+          'MODERATION_SLA_HOURS must be a positive number, got "0".',
+        );
+      } finally {
+        restoreEnv('MODERATION_SLA_HOURS', original);
+      }
     });
 
     it('uses the provided transaction client instead of the default one', async () => {
@@ -136,7 +194,7 @@ describe('ModerationService', () => {
   });
 
   describe('reenqueue', () => {
-    it('deletes any still-unreviewed entry for the entity before creating a fresh one', async () => {
+    it('deletes any still-unreviewed entry for the entity before creating a fresh one, with a fresh SLA deadline', async () => {
       prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
       prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-2' });
 
@@ -145,9 +203,10 @@ describe('ModerationService', () => {
       expect(prisma.moderationQueueEntry.deleteMany).toHaveBeenCalledWith({
         where: { entityType: 'round_rating', entityId: 'rating-1', reviewedAt: null },
       });
-      expect(prisma.moderationQueueEntry.create).toHaveBeenCalledWith({
-        data: { entityType: 'round_rating', entityId: 'rating-1' },
-      });
+      const data = getCreateCallData(prisma.moderationQueueEntry.create);
+      expect(data.entityType).toBe('round_rating');
+      expect(data.entityId).toBe('rating-1');
+      expectSlaDeadlineHoursFromNow(data.slaDeadline, 48);
     });
 
     it('uses the provided transaction client instead of the default one', async () => {

@@ -374,6 +374,8 @@ model Moderator {
   email        String
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
 
+  claimedQueueEntries ModerationQueueEntry[]
+
   @@map("moderators")
 }
 
@@ -404,15 +406,31 @@ enum ModerationFlagReason {
 }
 
 model ModerationQueueEntry {
-  id         String                @id @default(uuid()) @db.Uuid
-  entityType ModerationEntityType  @map("entity_type")
+  id          String                @id @default(uuid()) @db.Uuid
+  entityType  ModerationEntityType  @map("entity_type")
   // Polymorphic reference (by entityType) to round_ratings / recruiter_ratings
   // / overall_reviews — intentionally not an FK, see docs/DATA_MODEL.md.
-  entityId   String                @map("entity_id") @db.Uuid
-  flagReason ModerationFlagReason? @map("flag_reason")
-  reviewedBy String?               @map("reviewed_by")
-  reviewedAt DateTime?             @map("reviewed_at") @db.Timestamptz
-  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  entityId    String                @map("entity_id") @db.Uuid
+  flagReason  ModerationFlagReason? @map("flag_reason")
+  reviewedBy  String?               @map("reviewed_by")
+  reviewedAt  DateTime?             @map("reviewed_at") @db.Timestamptz
+  // GitHub issue #486 (Phase 36, D80) — createdAt + a configurable number
+  // of hours (default 48, see ModerationSlaService), computed at enqueue/
+  // reenqueue time, not a DB-only default: the configurable-hours value
+  // lives in app config, which a static column DEFAULT can't read. Always
+  // set, even on already-reviewed entries, so a resolved entry still
+  // records what its deadline had been.
+  slaDeadline DateTime              @map("sla_deadline") @db.Timestamptz
+  // Manual-claim assignment (#487 builds the claim/release endpoints on
+  // top of these two columns) — a real FK to Moderator, unlike the
+  // polymorphic entityType/entityId pair above, since Moderator rows are
+  // never deleted the way rating/review entities can be. Nullable: most
+  // entries sit unclaimed until a moderator picks them up.
+  claimedById String?               @map("claimed_by") @db.Uuid
+  claimedAt   DateTime?             @map("claimed_at") @db.Timestamptz
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz
+
+  claimedBy Moderator? @relation(fields: [claimedById], references: [id])
 
   @@index([entityType, entityId])
   @@map("moderation_queue")

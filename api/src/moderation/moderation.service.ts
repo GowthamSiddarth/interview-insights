@@ -34,6 +34,7 @@ import {
 } from '../events/schemas/overall-review-status-changed.event';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
+import { getModerationSlaHours } from './moderation-sla.env';
 
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
@@ -62,6 +63,12 @@ interface RawQueueEntry {
   flagReason: ModerationFlagReason | null;
   reviewedBy: string | null;
   reviewedAt: Date | null;
+  // GitHub issue #486 (Phase 36) — claim/release (#487) and SLA-breach
+  // detection (#488) both need these on hand; enrichEntries() just passes
+  // them through unchanged, same as every other raw column here.
+  slaDeadline: Date;
+  claimedById: string | null;
+  claimedAt: Date | null;
   createdAt: Date;
 }
 
@@ -116,6 +123,9 @@ export interface ModerationQueueEntry {
   flagReason: ModerationFlagReason | null;
   reviewedBy: string | null;
   reviewedAt: Date | null;
+  slaDeadline: Date;
+  claimedById: string | null;
+  claimedAt: Date | null;
   createdAt: Date;
   entity: ModerationQueueEntity | null;
 }
@@ -162,7 +172,9 @@ export class ModerationService {
     tx: PrismaTransaction = this.prisma,
     flagReason?: ModerationFlagReason,
   ) {
-    return tx.moderationQueueEntry.create({ data: { entityType, entityId, flagReason } });
+    return tx.moderationQueueEntry.create({
+      data: { entityType, entityId, flagReason, slaDeadline: this.computeSlaDeadline() },
+    });
   }
 
   // Called by an entity's update() path (GitHub issue #150): an edit
@@ -173,7 +185,14 @@ export class ModerationService {
   // entry first keeps exactly one live entry per entity.
   async reenqueue(entityType: ModerationEntityType, entityId: string, tx: PrismaTransaction = this.prisma) {
     await tx.moderationQueueEntry.deleteMany({ where: { entityType, entityId, reviewedAt: null } });
-    return tx.moderationQueueEntry.create({ data: { entityType, entityId } });
+    return tx.moderationQueueEntry.create({ data: { entityType, entityId, slaDeadline: this.computeSlaDeadline() } });
+  }
+
+  // GitHub issue #486 (Phase 36, D80) — SLA clock starts at entry creation
+  // (this call, from enqueue()/reenqueue()), not first moderator view,
+  // per docs/ROADMAP.md Phase 36's resolved open question.
+  private computeSlaDeadline(): Date {
+    return new Date(Date.now() + getModerationSlaHours() * 60 * 60 * 1000);
   }
 
   // Called by an entity's delete path (GitHub issue #150): the entity
