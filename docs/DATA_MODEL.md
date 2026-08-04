@@ -244,6 +244,22 @@ One per interview process — the summary review.
 | status | text | `pending`, `approved`, `rejected`, `flagged` |
 | created_at | timestamptz | |
 
+### `moderators`
+One row per moderator identity (GitHub issue #485, Phase 36) — replaces
+the single shared `ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH` credential
+(Phase 18). Still just one row in practice today, env-seeded on every
+boot (`AdminAuthService.onModuleInit`) — this table exists so
+`claimed_by`/`reviewed_by` can gain real FKs, not because multi-
+moderator admin is fully built out yet (see `docs/DECISIONS.md` D80).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| username | text | unique |
+| password_hash | text | bcrypt |
+| email | text | breach-notification recipient (GitHub issue #489, Phase 36) |
+| created_at | timestamptz | |
+
 ### `moderation_queue`
 Generic moderation record referencing any of the rating/review tables above.
 
@@ -258,6 +274,7 @@ Generic moderation record referencing any of the rating/review tables above.
 | sla_deadline | timestamptz | `created_at` + a configurable number of hours (default 48, `MODERATION_SLA_HOURS`), set at enqueue/re-enqueue time (GitHub issue #486, Phase 36) |
 | claimed_by | uuid FK → moderators, nullable | manual-claim assignment (GitHub issue #486/#487, Phase 36) |
 | claimed_at | timestamptz | nullable |
+| breach_notified_at | timestamptz | nullable — set once `SlaBreachDetectionService`'s hourly sweep has published a `moderation.queue.sla_breach.v1` event for this entry, so it's never re-notified on a later sweep tick (GitHub issue #488, Phase 36) |
 | created_at | timestamptz | |
 
 ---
