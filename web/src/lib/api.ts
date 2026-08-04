@@ -155,6 +155,13 @@ export type ModerationFlagReason = 'spam_pattern' | 'rate_limit' | 'duplicate' |
 // as its own field.
 export type ModerationQueueCategory = 'interview-review' | 'create-company';
 
+// GitHub issue #487 (Phase 36) — who currently has this entry claimed, if
+// anyone; the "claimed by" badge/claim-release buttons key off this alone.
+export interface ModerationQueueClaimedBy {
+  id: string;
+  username: string;
+}
+
 export interface ModerationQueueEntry {
   id: string;
   entityType: ModerationEntityType;
@@ -163,6 +170,9 @@ export interface ModerationQueueEntry {
   reviewedBy: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  slaDeadline: string;
+  claimedBy: ModerationQueueClaimedBy | null;
+  claimedAt: string | null;
   entity: ModerationQueueEntity | null;
 }
 
@@ -346,6 +356,7 @@ export interface CreateBulkProcessInput {
 }
 
 export interface AdminSession {
+  id: string;
   username: string;
 }
 
@@ -662,6 +673,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ flagReason, ...(reviewedBy ? { reviewedBy } : {}) }),
     }),
+
+  claimModerationEntry: (id: string) =>
+    request<ModerationQueueEntry>(`/moderation/queue/${id}/claim`, { method: 'POST' }),
+
+  releaseModerationEntry: (id: string) =>
+    request<ModerationQueueEntry>(`/moderation/queue/${id}/release`, { method: 'POST' }),
 
   getCompanyBySlug: (slug: string) =>
     request<Company>(`/companies/by-slug/${encodeURIComponent(slug)}`),

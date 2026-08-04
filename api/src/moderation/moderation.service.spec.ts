@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -246,6 +246,7 @@ describe('ModerationService', () => {
       expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith({
         where: { reviewedAt: null },
         orderBy: { createdAt: 'asc' },
+        include: { claimedBy: { select: { id: true, username: true } } },
       });
     });
 
@@ -940,6 +941,97 @@ describe('ModerationService', () => {
       domainEventPublisher.publish.mockRejectedValue(new Error('Redpanda unreachable'));
 
       await expect(service.approve('queue-1', {})).resolves.toBeDefined();
+    });
+  });
+
+  // GitHub issue #487 (Phase 36, D80) — manual claim/release.
+  describe('claim / release', () => {
+    it('claim() sets claimedById/claimedAt and returns the joined moderator', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        reviewedAt: null,
+        claimedById: null,
+      });
+      prisma.moderationQueueEntry.update.mockResolvedValue({
+        id: 'queue-1',
+        claimedById: 'mod-1',
+        claimedAt: new Date(),
+        claimedBy: { id: 'mod-1', username: 'gowtham' },
+      });
+
+      const result = await service.claim('queue-1', 'mod-1');
+
+      expect(prisma.moderationQueueEntry.update).toHaveBeenCalledWith({
+        where: { id: 'queue-1' },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+        data: { claimedById: 'mod-1', claimedAt: expect.any(Date) },
+        include: { claimedBy: { select: { id: true, username: true } } },
+      });
+      expect(result).toMatchObject({ claimedBy: { id: 'mod-1', username: 'gowtham' } });
+    });
+
+    it('claim() rejects claiming an already-claimed entry', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        reviewedAt: null,
+        claimedById: 'mod-2',
+      });
+
+      await expect(service.claim('queue-1', 'mod-1')).rejects.toThrow(ConflictException);
+      expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
+    });
+
+    it('claim() rejects claiming an already-reviewed entry', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        reviewedAt: new Date(),
+        claimedById: null,
+      });
+
+      await expect(service.claim('queue-1', 'mod-1')).rejects.toThrow(ConflictException);
+      expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
+    });
+
+    it('release() clears claimedById/claimedAt for the moderator holding the claim', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        claimedById: 'mod-1',
+      });
+      prisma.moderationQueueEntry.update.mockResolvedValue({
+        id: 'queue-1',
+        claimedById: null,
+        claimedAt: null,
+        claimedBy: null,
+      });
+
+      const result = await service.release('queue-1', 'mod-1');
+
+      expect(prisma.moderationQueueEntry.update).toHaveBeenCalledWith({
+        where: { id: 'queue-1' },
+        data: { claimedById: null, claimedAt: null },
+        include: { claimedBy: { select: { id: true, username: true } } },
+      });
+      expect(result).toMatchObject({ claimedBy: null });
+    });
+
+    it('release() rejects when the entry is not currently claimed', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        claimedById: null,
+      });
+
+      await expect(service.release('queue-1', 'mod-1')).rejects.toThrow(ConflictException);
+      expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
+    });
+
+    it('release() forbids releasing another moderator\'s claim', async () => {
+      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
+        id: 'queue-1',
+        claimedById: 'mod-2',
+      });
+
+      await expect(service.release('queue-1', 'mod-1')).rejects.toThrow(ForbiddenException);
+      expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
     });
   });
 

@@ -1565,8 +1565,20 @@ Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
       to `moderators`, nullable, `ON DELETE SET NULL`), `claimed_at`.
       Hand-authored migration (`migrate deploy`, same D64 shadow-DB
       workaround as #485's). Claim/release itself is #487
-- [ ] Claim/release endpoints + moderation queue UI affordance
-      (GitHub issue #487)
+- [x] Claim/release endpoints + moderation queue UI affordance
+      (GitHub issue #487) — `POST /moderation/queue/:id/claim` and
+      `/release`, always attributed to the authenticated caller
+      (`AdminJwtAuthGuard`'s own `req.user`, never a client-supplied id).
+      Claiming an already-claimed or already-reviewed entry 409s;
+      releasing someone else's claim 403s; releasing an unclaimed entry
+      409s. `GET /moderation/queue` and `/search` now join the claiming
+      `Moderator`'s username in alongside `claimed_by`/`claimed_at` so
+      the UI never needs a second lookup. `EntryActions` gained a Claim
+      button (unclaimed), a "claimed by you"/"claimed by `<name>`" badge
+      plus Release (claimed by the signed-in moderator), or just the
+      badge (claimed by someone else) — approve/reject/flag stay enabled
+      regardless of claim state, since a claim is an optional ownership
+      signal, never a review gate
 - [ ] SLA breach detection job (GitHub issue #488)
 - [ ] `notification-service`: consume SLA breach events, email the
       moderator (GitHub issue #489)
