@@ -460,3 +460,20 @@ blog is complete.
 1. [Issue #338 — Kickoff brainstorm: how does a standalone verdict get back into `api`? (D81)](phase-32-review-analyzer-service/issue-338-kickoff-brainstorm-writeback-event/README.md)
 2. [Issue #339 — `review-analyzer` service skeleton: this project's second standalone microservice](phase-32-review-analyzer-service/issue-339-review-analyzer-service-skeleton/README.md)
 3. [Issue #340 — Porting LLM-assisted triage into review-analyzer as an async enrichment (D81)](phase-32-review-analyzer-service/issue-340-async-llm-triage-verdict-consumer/README.md)
+
+## Phase 36 — Moderator Queue SLAs, Assignment & Notifications
+
+See `docs/ROADMAP.md` Phase 36 and `docs/DECISIONS.md` D80. Raised
+alongside Phase 35's planning, explicitly parked with no design
+decisions until a dedicated planning pass (2026-07-31, epic #484)
+resolved three open questions: when the SLA clock starts, how work
+gets assigned to a moderator, and how a breach reaches anyone. All
+seven feature/docs issues are done — this phase's blog is complete.
+
+1. [Issue #485 — Moderator identity table, replacing the shared admin credential](phase-36-moderator-queue-slas-assignment-notifications/issue-485-moderator-identity-table/README.md)
+2. [Issue #486 — SLA deadline + claim fields on `ModerationQueueEntry`](phase-36-moderator-queue-slas-assignment-notifications/issue-486-sla-deadline-claim-fields/README.md)
+3. [Issue #487 — Claim/release endpoints + moderation queue UI affordance](phase-36-moderator-queue-slas-assignment-notifications/issue-487-claim-release-endpoints/README.md)
+4. [Issue #488 — SLA breach detection job (D72's in-process-`@Cron` precedent, reused)](phase-36-moderator-queue-slas-assignment-notifications/issue-488-sla-breach-detection-job/README.md)
+5. [Issue #489 — `notification-service` consumes SLA breach events](phase-36-moderator-queue-slas-assignment-notifications/issue-489-notification-service-sla-breach-email/README.md)
+6. [Issue #490 — Queue UI: surface SLA deadline and breach state](phase-36-moderator-queue-slas-assignment-notifications/issue-490-queue-ui-sla-breach-indicator/README.md)
+7. [Issue #491 — Docs: resolve D80, update DATA_MODEL/ARCHITECTURE](phase-36-moderator-queue-slas-assignment-notifications/issue-491-d80-docs/README.md)
