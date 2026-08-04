@@ -34,6 +34,9 @@ const queueGroups = [
         reviewedBy: null,
         reviewedAt: null,
         createdAt: '2026-07-19T00:00:00Z',
+        slaDeadline: '2026-07-21T00:00:00Z',
+        claimedBy: null,
+        claimedAt: null,
         entity: {
           processId: 'process-1',
           companyName: 'Acme Corp',
@@ -65,6 +68,12 @@ const queueGroups = [
         reviewedBy: null,
         reviewedAt: null,
         createdAt: '2026-07-19T00:01:00Z',
+        slaDeadline: '2026-07-21T00:01:00Z',
+        // GitHub issue #487 — claimed by a moderator other than the
+        // signed-in one (see mockFetch's /auth/admin/me response), so the
+        // badge/no-Release-button branch has fixture coverage too.
+        claimedBy: { id: 'mod-other', username: 'other-mod' },
+        claimedAt: '2026-07-19T01:00:00Z',
         entity: {
           processId: 'process-1',
           companyName: 'Acme Corp',
@@ -92,6 +101,9 @@ const queueGroups = [
         reviewedBy: null,
         reviewedAt: null,
         createdAt: '2026-07-19T00:02:00Z',
+        slaDeadline: '2026-07-21T00:02:00Z',
+        claimedBy: null,
+        claimedAt: null,
         entity: {
           processId: 'process-2',
           companyName: 'Acme Corp',
@@ -118,6 +130,9 @@ const queueGroups = [
         reviewedBy: null,
         reviewedAt: null,
         createdAt: '2026-07-19T00:03:00Z',
+        slaDeadline: '2026-07-21T00:03:00Z',
+        claimedBy: null,
+        claimedAt: null,
         entity: {
           processId: 'company-request-comp1',
           companyName: 'Globex Corp',
@@ -141,7 +156,7 @@ function mockFetch() {
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url.endsWith('/auth/admin/me') && method === 'GET') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
     }
     if (url.endsWith('/auth/admin/logout') && method === 'POST') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) });
@@ -154,6 +169,19 @@ function mockFetch() {
     }
     if (/\/moderation\/queue\/.+\/(approve|reject|flag)$/.test(url) && method === 'POST') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
+    if (/\/moderation\/queue\/.+\/claim$/.test(url) && method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ claimedBy: { id: 'mod-me', username: 'admin' }, claimedAt: '2026-07-19T02:00:00Z' }),
+      });
+    }
+    if (/\/moderation\/queue\/.+\/release$/.test(url) && method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ claimedBy: null, claimedAt: null }),
+      });
     }
     throw new Error(`Unmocked fetch: ${method} ${url}`);
   }) as jest.Mock;
@@ -187,7 +215,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.endsWith('/auth/admin/me') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
       }
       if (url.endsWith('/moderation/queue') && method === 'GET') {
         return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
@@ -208,7 +236,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.endsWith('/auth/admin/me') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
       }
       if (url.endsWith('/moderation/queue') && method === 'GET') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
@@ -373,6 +401,74 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     await waitFor(() => expect(screen.queryByText('Acme Corp · Manager')).not.toBeInTheDocument());
   });
 
+  // GitHub issue #487 (Phase 36, D80) — claim/release, and the "claimed
+  // by" badge the queue read already carries via the joined Moderator
+  // relation.
+  describe('claim / release', () => {
+    it('an unclaimed entry shows a Claim button and no badge', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Acme Corp · Manager/ }));
+      expect(await screen.findAllByRole('button', { name: 'Claim' })).toHaveLength(1);
+      expect(screen.queryByText(/Claimed by/)).not.toBeInTheDocument();
+    });
+
+    it('an entry claimed by another moderator shows their name, with no Release button', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Acme Corp · Engineer/ }));
+
+      expect(screen.getByText('Claimed by other-mod')).toBeInTheDocument();
+      // Only the round rating (unclaimed) offers a Claim button in this
+      // submission — the recruiter rating (claimed by someone else) offers
+      // neither Claim nor Release.
+      expect(screen.getAllByRole('button', { name: 'Claim' })).toHaveLength(1);
+      expect(screen.queryByRole('button', { name: 'Release' })).not.toBeInTheDocument();
+    });
+
+    it('claiming calls the endpoint and swaps the Claim button for a "Claimed by you" badge + Release', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Acme Corp · Manager/ }));
+      await user.click(await screen.findByRole('button', { name: 'Claim' }));
+
+      await waitFor(() =>
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/moderation/queue/q-overall/claim'),
+          expect.objectContaining({ method: 'POST' }),
+        ),
+      );
+      expect(await screen.findByText('Claimed by you')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Release' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Claim' })).not.toBeInTheDocument();
+      // The entry is still in the queue — unlike approve/reject/flag,
+      // claiming never removes it.
+      expect(screen.getByText('Acme Corp · Manager')).toBeInTheDocument();
+    });
+
+    it('releasing calls the endpoint and restores the Claim button', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Acme Corp · Manager/ }));
+      await user.click(await screen.findByRole('button', { name: 'Claim' }));
+      await screen.findByText('Claimed by you');
+      await user.click(screen.getByRole('button', { name: 'Release' }));
+
+      await waitFor(() =>
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/moderation/queue/q-overall/release'),
+          expect.objectContaining({ method: 'POST' }),
+        ),
+      );
+      expect(await screen.findByRole('button', { name: 'Claim' })).toBeInTheDocument();
+      expect(screen.queryByText('Claimed by you')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the empty state when the queue is clear, distinct from loading', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -396,6 +492,9 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       reviewedBy: null,
       reviewedAt: null,
       createdAt: '2026-07-19T00:00:00Z',
+      slaDeadline: '2026-07-21T00:00:00Z',
+      claimedBy: null,
+      claimedAt: null,
       entity: {
         processId: 'process-1',
         companyName: 'Acme Corp',
@@ -417,6 +516,9 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       reviewedBy: null,
       reviewedAt: null,
       createdAt: '2026-07-19T00:03:00Z',
+      slaDeadline: '2026-07-21T00:03:00Z',
+      claimedBy: null,
+      claimedAt: null,
       entity: {
         processId: 'company-request-comp1',
         companyName: 'Globex Corp',

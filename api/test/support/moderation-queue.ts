@@ -10,6 +10,7 @@ export interface QueueEntryBody {
   reviewedAt: string | null;
   reviewedBy: string | null;
   flagReason: string | null;
+  claimedBy: { id: string; username: string } | null;
   entity: Record<string, unknown> | null;
 }
 

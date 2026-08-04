@@ -8,6 +8,7 @@ import {
   ApiError,
   ModerationFlagReason,
   ModerationQueueCategory,
+  ModerationQueueClaimedBy,
   ModerationQueueEntity,
   ModerationQueueEntry,
   ModerationQueueGroup,
@@ -49,6 +50,24 @@ function CategoryBadge({ category }: { category: ModerationQueueCategory }) {
   return (
     <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
       {CATEGORY_LABEL[category]}
+    </span>
+  );
+}
+
+// GitHub issue #487 (Phase 36, D80) — surfaces who (if anyone) currently
+// owns an entry. Distinguishes "you" from another moderator by name,
+// rather than just "claimed"/"unclaimed", since EntryActions below only
+// offers a Release button for a claim the current moderator holds.
+function ClaimBadge({
+  claimedBy,
+  isMine,
+}: {
+  claimedBy: ModerationQueueClaimedBy;
+  isMine: boolean;
+}) {
+  return (
+    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+      Claimed by {isMine ? 'you' : claimedBy.username}
     </span>
   );
 }
@@ -204,18 +223,28 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
 
 // GitHub issue #371 (Phase 35) — shared by both the grouped queue view
 // and the flat search-results view, so approve/reject/flag behave
-// identically no matter which one a moderator is looking at.
+// identically no matter which one a moderator is looking at. GitHub issue
+// #487 (Phase 36) adds claim/release alongside — a claim is an optional
+// "I've got this" signal, never a gate on approve/reject/flag, so those
+// three stay enabled no matter who (if anyone) holds the claim.
 function EntryActions({
   entry,
   flagReason,
+  currentModeratorId,
   onFlagReasonChange,
   onAct,
+  onClaim,
+  onRelease,
 }: {
   entry: ModerationQueueEntry;
   flagReason: ModerationFlagReason;
+  currentModeratorId: string | null;
   onFlagReasonChange: (reason: ModerationFlagReason) => void;
   onAct: (action: 'approve' | 'reject' | 'flag') => void;
+  onClaim: () => void;
+  onRelease: () => void;
 }) {
+  const isMine = entry.claimedBy !== null && entry.claimedBy.id === currentModeratorId;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button type="button" onClick={() => onAct('approve')}>
@@ -242,6 +271,21 @@ function EntryActions({
           ))}
         </select>
       </label>
+      {entry.claimedBy === null && (
+        <Button type="button" onClick={onClaim} variant="neutral">
+          Claim
+        </Button>
+      )}
+      {entry.claimedBy !== null && (
+        <>
+          <ClaimBadge claimedBy={entry.claimedBy} isMine={isMine} />
+          {isMine && (
+            <Button type="button" onClick={onRelease} variant="neutral">
+              Release
+            </Button>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -252,6 +296,10 @@ export default function ModerationPage() {
   // 401 here always means "go to /moderation/login", never "show an error
   // inline," unlike the entries/actions error state below.
   const [sessionChecked, setSessionChecked] = useState(false);
+  // GitHub issue #487 (Phase 36) — the authenticated moderator's own id,
+  // needed to tell "claimed by you" (offers a Release button) apart from
+  // "claimed by someone else" (badge only) in EntryActions.
+  const [currentModeratorId, setCurrentModeratorId] = useState<string | null>(null);
   const [groups, setGroups] = useState<ModerationQueueGroup[] | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [reviewedBy, setReviewedBy] = useState('');
@@ -271,7 +319,10 @@ export default function ModerationPage() {
   useEffect(() => {
     api
       .getAdminSession()
-      .then(() => setSessionChecked(true))
+      .then((session) => {
+        setCurrentModeratorId(session.id);
+        setSessionChecked(true);
+      })
       .catch(() => router.push('/moderation/login'));
   }, [router]);
 
@@ -349,6 +400,32 @@ export default function ModerationPage() {
             .filter((g) => g.entries.length > 0) ?? null,
       );
       setSearchResults((prev) => prev?.filter((e) => e.id !== entry.id) ?? null);
+    } catch (err) {
+      if (isSessionExpired(err)) router.push('/moderation/login');
+      else setError(errorMessage(err));
+    }
+  }
+
+  // GitHub issue #487 (Phase 36) — unlike act() above, claim/release never
+  // remove the entry from view: the entry stays right where it is, just
+  // with an updated claimedBy/claimedAt (taken from the response, so both
+  // list views reflect it without a full requery).
+  async function claimOrRelease(
+    entry: ModerationQueueEntry,
+    action: 'claim' | 'release',
+  ): Promise<void> {
+    setError(null);
+    try {
+      const updated =
+        action === 'claim'
+          ? await api.claimModerationEntry(entry.id)
+          : await api.releaseModerationEntry(entry.id);
+      const patch = (e: ModerationQueueEntry) =>
+        e.id === entry.id ? { ...e, claimedBy: updated.claimedBy, claimedAt: updated.claimedAt } : e;
+      setGroups(
+        (prev) => prev?.map((g) => ({ ...g, entries: g.entries.map(patch) })) ?? null,
+      );
+      setSearchResults((prev) => prev?.map(patch) ?? null);
     } catch (err) {
       if (isSessionExpired(err)) router.push('/moderation/login');
       else setError(errorMessage(err));
@@ -455,10 +532,13 @@ export default function ModerationPage() {
                   <EntryActions
                     entry={entry}
                     flagReason={flagReasonById[entry.id] ?? 'manual_report'}
+                    currentModeratorId={currentModeratorId}
                     onFlagReasonChange={(reason) =>
                       setFlagReasonById((prev) => ({ ...prev, [entry.id]: reason }))
                     }
                     onAct={(action) => void act(entry, action)}
+                    onClaim={() => void claimOrRelease(entry, 'claim')}
+                    onRelease={() => void claimOrRelease(entry, 'release')}
                   />
                 </Card>
               );
@@ -509,10 +589,13 @@ export default function ModerationPage() {
                         <EntryActions
                           entry={entry}
                           flagReason={flagReasonById[entry.id] ?? 'manual_report'}
+                          currentModeratorId={currentModeratorId}
                           onFlagReasonChange={(reason) =>
                             setFlagReasonById((prev) => ({ ...prev, [entry.id]: reason }))
                           }
                           onAct={(action) => void act(entry, action)}
+                          onClaim={() => void claimOrRelease(entry, 'claim')}
+                          onRelease={() => void claimOrRelease(entry, 'release')}
                         />
                       </div>
                     ))}

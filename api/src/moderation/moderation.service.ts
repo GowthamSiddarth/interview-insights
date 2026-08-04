@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ModerationEntityType, ModerationFlagReason, ModerationStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -69,6 +75,13 @@ interface RawQueueEntry {
   slaDeadline: Date;
   claimedById: string | null;
   claimedAt: Date | null;
+  // GitHub issue #487 — the claiming moderator's own username, joined in
+  // alongside the raw claimedById FK so the queue UI can render a
+  // "claimed by X" badge without a second round trip. Independent of
+  // claimedById: a raw-SQL moderator deletion is the only way these two
+  // could ever disagree, and the FK's ON DELETE SET NULL (#486) means
+  // that can't happen either — claimedBy is just claimedById resolved.
+  claimedBy: { id: string; username: string } | null;
   createdAt: Date;
 }
 
@@ -126,6 +139,7 @@ export interface ModerationQueueEntry {
   slaDeadline: Date;
   claimedById: string | null;
   claimedAt: Date | null;
+  claimedBy: { id: string; username: string } | null;
   createdAt: Date;
   entity: ModerationQueueEntity | null;
 }
@@ -217,6 +231,7 @@ export class ModerationService {
     const entries = await this.prisma.moderationQueueEntry.findMany({
       where: { reviewedAt: null },
       orderBy: { createdAt: 'asc' },
+      include: { claimedBy: { select: { id: true, username: true } } },
     });
     const enrichedEntries = await this.enrichEntries(entries);
 
@@ -286,6 +301,7 @@ export class ModerationService {
         reviewedAt: null,
         OR: hits.map((h) => ({ entityType: h.entityType, entityId: h.entityId })),
       },
+      include: { claimedBy: { select: { id: true, username: true } } },
     });
     const enrichedEntries = await this.enrichEntries(entries);
 
@@ -449,6 +465,49 @@ export class ModerationService {
 
   flag(id: string, dto: ModerationFlagDto) {
     return this.review(id, 'flagged', dto, dto.flagReason);
+  }
+
+  // GitHub issue #487 (Phase 36, D80) — manual claim: whichever moderator
+  // claims an entry first owns it until they release it (or resolve it
+  // outright via approve/reject/flag, which needs no claim at all — a
+  // claim is an optional "I've got this" signal, not a gate on reviewing).
+  // Rejects claiming an already-claimed entry outright rather than
+  // silently reassigning it out from under whoever already has it.
+  async claim(id: string, moderatorId: string) {
+    const entry = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
+
+    if (entry.reviewedAt) {
+      throw new ConflictException('This item has already been reviewed.');
+    }
+    if (entry.claimedById) {
+      throw new ConflictException('This item is already claimed by another moderator.');
+    }
+
+    return this.prisma.moderationQueueEntry.update({
+      where: { id },
+      data: { claimedById: moderatorId, claimedAt: new Date() },
+      include: { claimedBy: { select: { id: true, username: true } } },
+    });
+  }
+
+  // Counterpart to claim() — only the moderator currently holding the
+  // claim can release it, so one moderator can't clear another's
+  // in-progress work out from under them.
+  async release(id: string, moderatorId: string) {
+    const entry = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
+
+    if (!entry.claimedById) {
+      throw new ConflictException('This item is not currently claimed.');
+    }
+    if (entry.claimedById !== moderatorId) {
+      throw new ForbiddenException('This item is claimed by another moderator.');
+    }
+
+    return this.prisma.moderationQueueEntry.update({
+      where: { id },
+      data: { claimedById: null, claimedAt: null },
+      include: { claimedBy: { select: { id: true, username: true } } },
+    });
   }
 
   // GitHub issue #440 (Phase 39, D71) — the one entry point the

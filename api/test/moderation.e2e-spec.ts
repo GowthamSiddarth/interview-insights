@@ -5,7 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
-import { loginAsAdmin } from './support/admin-session';
+import { ADMIN_TEST_USERNAME, loginAsAdmin, loginAsSecondModerator } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
 import { createApprovedCompany, createPendingCompany } from './support/companies';
 
@@ -34,6 +34,7 @@ interface QueueEntryBody {
   reviewedAt: string | null;
   reviewedBy: string | null;
   flagReason: string | null;
+  claimedBy: { id: string; username: string } | null;
   entity: Record<string, unknown> | null;
 }
 interface QueueGroupBody {
@@ -279,6 +280,71 @@ describe('Moderation (e2e)', () => {
   it('rejects an unauthenticated request with 401', async () => {
     await server().get('/moderation/queue').expect(401);
     await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/approve').send({}).expect(401);
+  });
+
+  // GitHub issue #487 (Phase 36, D80) — manual claim/release, and the
+  // "claimed by" badge GET /moderation/queue now carries via the joined
+  // Moderator relation.
+  describe('claim / release', () => {
+    it('claiming an entry stamps claimedBy/claimedAt, visible on the next queue read', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+
+      const claimRes = await server()
+        .post(`/moderation/queue/${entry.id}/claim`)
+        .set('Cookie', adminCookie)
+        .expect(201);
+      expect(body<{ claimedBy: { username: string } | null }>(claimRes).claimedBy).toMatchObject({
+        username: ADMIN_TEST_USERNAME,
+      });
+
+      const requeried = await findQueueEntryFor(ratingId);
+      expect(requeried.claimedBy).toMatchObject({ username: ADMIN_TEST_USERNAME });
+    });
+
+    it('rejects claiming an already-claimed entry', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+
+      await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie).expect(201);
+      await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie).expect(409);
+    });
+
+    it('releasing clears the claim, letting another moderator claim it', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+      const second = await loginAsSecondModerator(app);
+
+      await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie).expect(201);
+      const releaseRes = await server()
+        .post(`/moderation/queue/${entry.id}/release`)
+        .set('Cookie', adminCookie)
+        .expect(201);
+      expect(body<{ claimedBy: unknown }>(releaseRes).claimedBy).toBeNull();
+
+      await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', second.cookie).expect(201);
+    });
+
+    it('forbids releasing a claim held by another moderator', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+      const second = await loginAsSecondModerator(app);
+
+      await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie).expect(201);
+      await server().post(`/moderation/queue/${entry.id}/release`).set('Cookie', second.cookie).expect(403);
+    });
+
+    it('rejects releasing an unclaimed entry', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+
+      await server().post(`/moderation/queue/${entry.id}/release`).set('Cookie', adminCookie).expect(409);
+    });
+
+    it('rejects unauthenticated claim/release requests with 401', async () => {
+      await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/claim').expect(401);
+      await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/release').expect(401);
+    });
   });
 
   // GitHub issue #369 (Phase 35) — company creation now goes through the
