@@ -26,6 +26,19 @@ model Candidate {
   @@map("candidates")
 }
 
+// GitHub issue #489 (Phase 36) — a deliberately minimal mirror of
+// api/prisma/schema.prisma's Moderator model, same D75 "duplicate a
+// read-only subset of an existing table, generate an independent client"
+// pattern already used for Candidate above. Only id/email are ever
+// read — resolving a moderation.queue.sla_breach.v1 event's claimedById
+// to an address to send the notification to.
+model Moderator {
+  id    String @id @db.Uuid
+  email String
+
+  @@map("moderators")
+}
+
 // See api/prisma/schema.prisma's own NotificationLog model for why
 // entityType/eventType are plain text here, not a shared Postgres enum.
 model NotificationLog {
