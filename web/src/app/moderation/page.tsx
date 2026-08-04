@@ -18,6 +18,7 @@ import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
 import { formatRoundLabel } from '@/lib/format-round-label';
+import { formatSlaStatus } from '@/lib/format-sla-status';
 import { ROUND_TYPE_LABELS } from '../wizard/round-type-labels';
 
 const ENTITY_TYPE_LABEL: Record<ModerationQueueEntry['entityType'], string> = {
@@ -68,6 +69,28 @@ function ClaimBadge({
   return (
     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
       Claimed by {isMine ? 'you' : claimedBy.username}
+    </span>
+  );
+}
+
+// GitHub issue #490 (Phase 36, D80) — a time-remaining/overdue indicator
+// per entry, driven by the same slaDeadline #486/#487 already wired
+// through end to end. Computed at render time (no live-ticking clock —
+// out of scope for this issue; a moderator who leaves the page open for
+// hours sees a slightly stale label until the next re-render, same
+// staleness every other value on this page already tolerates between
+// actions/reloads).
+function SlaBadge({ slaDeadline }: { slaDeadline: string }) {
+  const { label, overdue } = formatSlaStatus(slaDeadline);
+  return (
+    <span
+      className={
+        overdue
+          ? 'rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300'
+          : 'rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+      }
+    >
+      {label}
     </span>
   );
 }
@@ -522,6 +545,7 @@ export default function ModerationPage() {
                     <div className="flex items-center gap-2">
                       <h2 className="font-medium">{label}</h2>
                       <CategoryBadge category={category} />
+                      <SlaBadge slaDeadline={entry.slaDeadline} />
                     </div>
                     <span className="text-xs text-gray-500">
                       submitted {new Date(entry.createdAt).toLocaleString()}
@@ -579,8 +603,11 @@ export default function ModerationPage() {
                         key={entry.id}
                         className="flex flex-col gap-3 rounded-md border border-gray-100 p-3 dark:border-gray-800"
                       >
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-medium">{ENTITY_TYPE_LABEL[entry.entityType]}</h3>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-medium">{ENTITY_TYPE_LABEL[entry.entityType]}</h3>
+                            <SlaBadge slaDeadline={entry.slaDeadline} />
+                          </div>
                           <span className="text-xs text-gray-500">
                             submitted {new Date(entry.createdAt).toLocaleString()}
                           </span>

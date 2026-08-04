@@ -1590,8 +1590,12 @@ Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
       recipient, but still detected/observable)
 - [ ] `notification-service`: consume SLA breach events, email the
       moderator (GitHub issue #489)
-- [ ] Queue UI: surface SLA deadline and breach state (GitHub issue
-      #490)
+- [x] Queue UI: surface SLA deadline and breach state (GitHub issue
+      #490) — a `SlaBadge` per entry (`formatSlaStatus()` in
+      `web/src/lib/format-sla-status.ts`, minutes/hours/days,
+      red "Overdue by X" vs. neutral "Due in X"), computed at render
+      time (no live-ticking clock — a moderator who leaves the page
+      open sees a slightly stale label until the next re-render/action)
 - [ ] Docs: resolve D80 and update DATA_MODEL/ARCHITECTURE for Phase 36
       (GitHub issue #491)
 - [ ] Engineering blog (last) (GitHub issue #492)
