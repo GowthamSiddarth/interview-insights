@@ -255,6 +255,9 @@ Generic moderation record referencing any of the rating/review tables above.
 | flag_reason | text | nullable — `spam_pattern`, `rate_limit`, `duplicate`, `manual_report` |
 | reviewed_by | text | nullable — moderator id/system |
 | reviewed_at | timestamptz | nullable |
+| sla_deadline | timestamptz | `created_at` + a configurable number of hours (default 48, `MODERATION_SLA_HOURS`), set at enqueue/re-enqueue time (GitHub issue #486, Phase 36) |
+| claimed_by | uuid FK → moderators, nullable | manual-claim assignment (GitHub issue #486/#487, Phase 36) |
+| claimed_at | timestamptz | nullable |
 | created_at | timestamptz | |
 
 ---

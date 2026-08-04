@@ -1558,8 +1558,13 @@ Milestone: "Phase 36 — Moderator Queue SLAs, Assignment & Notifications"
       and secret rotation still takes effect immediately.
       `AdminSessionPayload` gained `id` alongside `username`, laying
       the FK groundwork #486/#487 need
-- [ ] Add SLA deadline + claim fields to `ModerationQueueEntry`
-      (GitHub issue #486)
+- [x] Add SLA deadline + claim fields to `ModerationQueueEntry`
+      (GitHub issue #486) — `sla_deadline` (`created_at` + configurable
+      `MODERATION_SLA_HOURS`, default 48, computed by
+      `ModerationService.enqueue()`/`reenqueue()`), `claimed_by` (real FK
+      to `moderators`, nullable, `ON DELETE SET NULL`), `claimed_at`.
+      Hand-authored migration (`migrate deploy`, same D64 shadow-DB
+      workaround as #485's). Claim/release itself is #487
 - [ ] Claim/release endpoints + moderation queue UI affordance
       (GitHub issue #487)
 - [ ] SLA breach detection job (GitHub issue #488)
