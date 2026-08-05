@@ -347,6 +347,76 @@ describe('Moderation (e2e)', () => {
     });
   });
 
+  // GitHub issue #522 (Phase 41) — GET /moderation/queue's own server-side
+  // filters, proven against a real Postgres rather than mocked Prisma
+  // calls (unlike moderation.service.spec.ts's per-filter unit coverage).
+  // Exercises entityType + claimState together, since claimState=mine
+  // only makes sense scoped to entries the caller can actually tell apart.
+  describe('GET /moderation/queue filters', () => {
+    it('entityType + claimState narrow the queue to the matching type and the caller\'s own claim', async () => {
+      const { ratingId: claimedRatingId } = await submitRating();
+      const { ratingId: unclaimedRatingId } = await submitRating();
+
+      const claimedEntry = await findQueueEntryFor(claimedRatingId);
+      await server().post(`/moderation/queue/${claimedEntry.id}/claim`).set('Cookie', adminCookie).expect(201);
+
+      const mineRes = await server()
+        .get('/moderation/queue')
+        .query({ entityType: 'round_rating', claimState: 'mine' })
+        .set('Cookie', adminCookie)
+        .expect(200);
+      const mineEntityIds = body<QueueGroupBody[]>(mineRes)
+        .flatMap((g) => g.entries)
+        .map((e) => e.entityId);
+      expect(mineEntityIds).toContain(claimedRatingId);
+      expect(mineEntityIds).not.toContain(unclaimedRatingId);
+
+      const unclaimedRes = await server()
+        .get('/moderation/queue')
+        .query({ entityType: 'round_rating', claimState: 'unclaimed' })
+        .set('Cookie', adminCookie)
+        .expect(200);
+      const unclaimedEntityIds = body<QueueGroupBody[]>(unclaimedRes)
+        .flatMap((g) => g.entries)
+        .map((e) => e.entityId);
+      expect(unclaimedEntityIds).toContain(unclaimedRatingId);
+      expect(unclaimedEntityIds).not.toContain(claimedRatingId);
+    });
+
+    it('companyId narrows the queue to entries whose process belongs to that company', async () => {
+      const { cookie: cookieA } = await loginAsCandidate(app, uniqueEmail());
+      const companyA = await createApprovedCompany(app, cookieA, { name: 'Filter Co A', slug: uniqueSlug() });
+      const processARes = await server()
+        .post(`/companies/${companyA.id}/processes`)
+        .set('Cookie', cookieA)
+        .send({ roleTitle: 'Engineer A', outcome: 'in_progress' })
+        .expect(201);
+      const processAId = body<ProcessBody>(processARes).id;
+      const { ratingId: ratingIdA } = await submitRatingUnderProcess(processAId);
+
+      const { cookie: cookieB } = await loginAsCandidate(app, uniqueEmail());
+      const companyB = await createApprovedCompany(app, cookieB, { name: 'Filter Co B', slug: uniqueSlug() });
+      const processBRes = await server()
+        .post(`/companies/${companyB.id}/processes`)
+        .set('Cookie', cookieB)
+        .send({ roleTitle: 'Engineer B', outcome: 'in_progress' })
+        .expect(201);
+      const processBId = body<ProcessBody>(processBRes).id;
+      const { ratingId: ratingIdB } = await submitRatingUnderProcess(processBId);
+
+      const filteredRes = await server()
+        .get('/moderation/queue')
+        .query({ companyId: companyA.id })
+        .set('Cookie', adminCookie)
+        .expect(200);
+      const filteredEntityIds = body<QueueGroupBody[]>(filteredRes)
+        .flatMap((g) => g.entries)
+        .map((e) => e.entityId);
+      expect(filteredEntityIds).toContain(ratingIdA);
+      expect(filteredEntityIds).not.toContain(ratingIdB);
+    });
+  });
+
   // GitHub issue #369 (Phase 35) — company creation now goes through the
   // same moderation loop as every other entity type, mirroring the
   // round_rating tests above.

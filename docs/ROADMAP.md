@@ -1849,12 +1849,17 @@ Two decisions made during planning:
 Milestone: "Phase 41 — Moderator Queue Priority, Filters & Seed-Data
 Parity" (#39). Epic: GitHub issue #521.
 
-- [ ] Moderation queue: server-side filters + SLA-urgency sort (GitHub
+- [x] Moderation queue: server-side filters + SLA-urgency sort (GitHub
       issue #522) — `GET /moderation/queue` gains `entityType`,
       `companyId`, `claimState` (mine/unclaimed/all, resolved via the
       authenticated caller same as `claim`/`release`), and `status`
       query params; sort changes from `createdAt: 'asc'` to
-      `slaDeadline: 'asc'`. No schema migration
+      `slaDeadline: 'asc'`. No schema migration. `companyId` is resolved
+      to concrete `entityType`/`entityId` pairs (round rating/recruiter
+      rating/overall review each joined up to their process's company;
+      `company` entityType's own `entityId` already *is* the company id)
+      since moderation_queue's entity reference is polymorphic, not an
+      FK
 - [ ] Moderation UI: filter controls + urgency-ordered queue view (GitHub
       issue #523) — filter controls on `web/src/app/moderation/page.tsx`
       wired to the new query params; reuses the existing `SlaBadge`/

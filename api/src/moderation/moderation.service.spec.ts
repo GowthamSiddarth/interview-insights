@@ -238,15 +238,165 @@ describe('ModerationService', () => {
   });
 
   describe('listPending', () => {
-    it('only returns unreviewed entries, oldest first', async () => {
+    it('only returns unreviewed entries, most urgent (earliest slaDeadline) first', async () => {
       prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
 
       await service.listPending();
 
       expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith({
         where: { reviewedAt: null },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { slaDeadline: 'asc' },
         include: { claimedBy: { select: { id: true, username: true } } },
+      });
+    });
+
+    // GitHub issue #522 (Phase 41) — GET /moderation/queue's own filters.
+    describe('filters', () => {
+      it('narrows by entityType', async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ entityType: 'round_rating' });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null, entityType: 'round_rating' } }),
+        );
+      });
+
+      it("claimState 'mine' filters to the given moderatorId", async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ claimState: 'mine', moderatorId: 'moderator-1' });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null, claimedById: 'moderator-1' } }),
+        );
+      });
+
+      it("claimState 'unclaimed' filters to claimedById: null", async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ claimState: 'unclaimed' });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null, claimedById: null } }),
+        );
+      });
+
+      it("claimState 'all' applies no claim filter", async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ claimState: 'all' });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null } }),
+        );
+      });
+
+      it("status: ['pending'] filters to flagReason: null", async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ status: ['pending'] });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null, flagReason: null } }),
+        );
+      });
+
+      it("status: ['flagged'] filters to flagReason not null", async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ status: ['flagged'] });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null, flagReason: { not: null } } }),
+        );
+      });
+
+      it('status covering both values applies no flagReason filter, same as omitting it', async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ status: ['pending', 'flagged'] });
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { reviewedAt: null } }),
+        );
+      });
+
+      it('companyId resolves matching entityType/entityId pairs across all three rated entity types plus company itself, and ORs them in', async () => {
+        prisma.roundRating.findMany.mockResolvedValueOnce([{ id: 'rr1' }]);
+        prisma.recruiterRating.findMany.mockResolvedValueOnce([{ id: 'cr1' }]);
+        prisma.overallReview.findMany.mockResolvedValueOnce([{ id: 'ov1' }]);
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ companyId: 'company-1' });
+
+        expect(prisma.roundRating.findMany).toHaveBeenCalledWith({
+          where: { round: { process: { companyId: 'company-1' } } },
+          select: { id: true },
+        });
+        expect(prisma.recruiterRating.findMany).toHaveBeenCalledWith({
+          where: { recruiterInteraction: { process: { companyId: 'company-1' } } },
+          select: { id: true },
+        });
+        expect(prisma.overallReview.findMany).toHaveBeenCalledWith({
+          where: { process: { companyId: 'company-1' } },
+          select: { id: true },
+        });
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              reviewedAt: null,
+              OR: [
+                { entityType: 'round_rating', entityId: 'rr1' },
+                { entityType: 'recruiter_rating', entityId: 'cr1' },
+                { entityType: 'overall_review', entityId: 'ov1' },
+                { entityType: 'company', entityId: 'company-1' },
+              ],
+            },
+          }),
+        );
+      });
+
+      it('companyId scoped to a specific entityType only queries that one type for company-scoping (enrichEntries below still fetches every type, but with empty ids)', async () => {
+        prisma.roundRating.findMany.mockResolvedValueOnce([{ id: 'rr1' }]);
+        prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+        await service.listPending({ companyId: 'company-1', entityType: 'round_rating' });
+
+        expect(prisma.roundRating.findMany).toHaveBeenCalledWith({
+          where: { round: { process: { companyId: 'company-1' } } },
+          select: { id: true },
+        });
+        expect(prisma.recruiterRating.findMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { recruiterInteraction: { process: { companyId: 'company-1' } } },
+          }),
+        );
+        expect(prisma.overallReview.findMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ where: { process: { companyId: 'company-1' } } }),
+        );
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              reviewedAt: null,
+              entityType: 'round_rating',
+              OR: [{ entityType: 'round_rating', entityId: 'rr1' }],
+            },
+          }),
+        );
+      });
+
+      // The 'company' ref is always a candidate for the OR (its own
+      // entityId trivially equals companyId) unless entityType excludes
+      // it — so only a non-company entityType with zero matches can ever
+      // produce a genuinely empty refs list.
+      it('companyId scoped to a non-company entityType with no matches short-circuits to an empty result without querying moderation_queue', async () => {
+        prisma.roundRating.findMany.mockResolvedValueOnce([]);
+
+        const result = await service.listPending({ companyId: 'company-with-nothing', entityType: 'round_rating' });
+
+        expect(result).toEqual([]);
+        expect(prisma.moderationQueueEntry.findMany).not.toHaveBeenCalled();
       });
     });
 
