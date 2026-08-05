@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Wires the local-dev port-forwards (Postgres, OpenSearch, Mailpit) into
-# macOS launchd LaunchAgents instead of plain backgrounded shell jobs.
+# Wires the local-dev port-forwards (Postgres, OpenSearch, Mailpit,
+# Redpanda) into macOS launchd LaunchAgents instead of plain backgrounded
+# shell jobs.
 #
 # Why: `kubectl port-forward ... & disown` only survives as long as the
 # shell process that started it stays alive. In an AI-assisted dev
@@ -34,12 +35,19 @@ KUBECTL_PATH="$(command -v kubectl)"
 
 # macOS ships bash 3.2 (no associative arrays) — a case statement instead
 # of `declare -A` keeps this portable without requiring Homebrew bash.
-SERVICES=(postgres opensearch mailpit)
+SERVICES=(postgres opensearch mailpit redpanda)
 ports_for() {
   case "$1" in
     postgres) echo "5432:5432" ;;
     opensearch) echo "9200:9200" ;;
     mailpit) echo "1025:1025 8025:8025" ;;
+    # redpanda's Service exposes this as a second port (`kafka-external`,
+    # infra/k8s/base/09-redpanda.yaml) specifically for this — the
+    # broker's own `--advertise-kafka-addr` already tells clients its
+    # external listener is "localhost:19092", the same address
+    # docker-compose's own redpanda service exposes directly, and what
+    # every REDPANDA_BROKERS default in this codebase already points at.
+    redpanda) echo "19092:19092" ;;
   esac
 }
 

@@ -22,6 +22,16 @@ spec:
     - name: admin
       port: 9644
       targetPort: 9644
+    # The broker's own `external://` listener below (--kafka-addr /
+    # --advertise-kafka-addr), meant for exactly this: `kubectl
+    # port-forward svc/redpanda 19092:19092` from the host machine, the
+    # same "localhost:19092" address docker-compose's own redpanda
+    # service already exposes directly. Not used by any in-cluster
+    # consumer — those all connect via the `kafka` port (9092) above,
+    # using the Service's own DNS name.
+    - name: kafka-external
+      port: 19092
+      targetPort: 19092
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -61,6 +71,7 @@ spec:
           ports:
             - containerPort: 9092
             - containerPort: 9644
+            - containerPort: 19092
           volumeMounts:
             - name: redpanda-data
               mountPath: /var/lib/redpanda/data
