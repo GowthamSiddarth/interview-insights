@@ -1,10 +1,14 @@
+import { ModerationFlagReason } from '@prisma/client';
 import {
   assertSeedTargetConfirmed,
   buildTypeMetadata,
   parseIntArg,
   parseStringArg,
+  pickFlagReason,
   pickModerationOutcome,
   pickProcessCount,
+  seedModerators,
+  SEED_MODERATOR_COUNT,
 } from './seed-demo-data';
 import { RoundTypeSchemaWithOptions } from '../src/round-type-registry/round-type-field-options.service';
 
@@ -112,6 +116,60 @@ describe('seed-demo-data', () => {
     ])('maps random() = %s to %s', (random, expected) => {
       jest.spyOn(Math, 'random').mockReturnValue(random);
       expect(pickModerationOutcome()).toBe(expected);
+    });
+  });
+
+  // GitHub issue #524 (Phase 41) — proves the fix for the previous
+  // hardcoded 'manual_report': every draw comes from the full enum, not
+  // just one member of it.
+  describe('pickFlagReason', () => {
+    it('only ever returns a value from the full ModerationFlagReason enum', () => {
+      const validReasons = new Set(Object.values(ModerationFlagReason));
+      for (let i = 0; i < 50; i++) {
+        expect(validReasons.has(pickFlagReason())).toBe(true);
+      }
+    });
+
+    it('is capable of returning every enum member, not just a subset', () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 500; i++) seen.add(pickFlagReason());
+      for (const reason of Object.values(ModerationFlagReason)) {
+        expect(seen.has(reason)).toBe(true);
+      }
+    });
+  });
+
+  // GitHub issue #524 (Phase 41) — a handful of real Moderator rows for
+  // claim()/release() to have something to claim against.
+  describe('seedModerators', () => {
+    interface CreateArgs {
+      data: { username: string; email: string; passwordHash: string };
+    }
+
+    it('creates SEED_MODERATOR_COUNT moderators via prisma.moderator.create by default', async () => {
+      let nextId = 0;
+      const create = jest.fn((_args: CreateArgs) => Promise.resolve({ id: `moderator-${nextId++}` }));
+      const prisma = { moderator: { create } } as unknown as Parameters<typeof seedModerators>[0];
+
+      const ids = await seedModerators(prisma);
+
+      expect(create).toHaveBeenCalledTimes(SEED_MODERATOR_COUNT);
+      expect(ids).toHaveLength(SEED_MODERATOR_COUNT);
+      // Every created row gets a distinct username — collisions would
+      // violate the moderators.username unique constraint against a real DB.
+      const usernames = create.mock.calls.map((call) => call[0].data.username);
+      expect(new Set(usernames).size).toBe(SEED_MODERATOR_COUNT);
+    });
+
+    it('honors an explicit count override', async () => {
+      let nextId = 0;
+      const create = jest.fn((_args: CreateArgs) => Promise.resolve({ id: `moderator-${nextId++}` }));
+      const prisma = { moderator: { create } } as unknown as Parameters<typeof seedModerators>[0];
+
+      const ids = await seedModerators(prisma, 2);
+
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(ids).toEqual(['moderator-0', 'moderator-1']);
     });
   });
 

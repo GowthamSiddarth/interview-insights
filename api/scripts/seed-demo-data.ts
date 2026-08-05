@@ -21,9 +21,11 @@
 import { randomUUID } from 'crypto';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
+import * as bcrypt from 'bcryptjs';
 import {
   CompanySizeBucket,
   ModerationEntityType,
+  ModerationFlagReason,
   ProcessOutcome,
   RoundType,
 } from '@prisma/client';
@@ -68,6 +70,16 @@ export interface Summary {
   pending: number;
   rejected: number;
   flagged: number;
+  // GitHub issue #524 (Phase 41) — how many of the seeded Moderator rows
+  // ended up claiming a still-pending entry via the real claim() path.
+  // Always <= pending, usually well under it (PENDING_CLAIM_RATE).
+  claimed: number;
+  // The generated moderators' own count/ids — a handful of real Moderator
+  // rows (see seedModerators()) so the moderation queue has something
+  // realistic to claim against, distinct from the single env-upserted
+  // admin row AdminAuthService.onModuleInit() maintains.
+  moderators: number;
+  moderatorIds: string[];
   // The generated companies' own ids — lets a caller (e.g. a real e2e
   // test) look up exactly what this run created directly, rather than a
   // createdAt-since-timestamp query that would also match whatever other
@@ -105,6 +117,46 @@ export function pickModerationOutcome(): ModerationOutcome {
   if (r < 0.8) return 'pending';
   if (r < 0.9) return 'rejected';
   return 'flagged';
+}
+
+// GitHub issue #524 (Phase 41) — previously hardcoded to 'manual_report'
+// for every flagged entry, so the moderation queue's flagReason filter had
+// nothing but one value to demo against. Picks across the full enum,
+// including 'ai_triage_stalled' (D71's reconciliation-sweep-only reason) —
+// this is synthetic demo data, not a claim about how any specific entry
+// was actually triaged.
+export function pickFlagReason(): ModerationFlagReason {
+  return faker.helpers.arrayElement(Object.values(ModerationFlagReason));
+}
+
+// GitHub issue #524 (Phase 41) — "a handful" of real Moderator rows so
+// claim()/release() and the "claimed by X" queue badge have something
+// realistic to show in a demo environment, not just the single admin row
+// AdminAuthService.onModuleInit() upserts from env vars. Raw prisma.create()
+// rather than a service call: unlike CompaniesService/CandidatesService,
+// there's no ModeratorsService in this codebase to go through — the admin
+// row's own creation path is env-driven, not built for stamping out N
+// synthetic accounts — and a Moderator row has no side effects (no search
+// indexing, no domain events) for a service to protect against bypassing.
+export const SEED_MODERATOR_COUNT = 4;
+
+export async function seedModerators(
+  prisma: PrismaService,
+  count: number = SEED_MODERATOR_COUNT,
+): Promise<string[]> {
+  const moderatorIds: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const passwordHash = await bcrypt.hash(faker.internet.password(), 10);
+    const moderator = await prisma.moderator.create({
+      data: {
+        username: `seed-moderator-${faker.string.alphanumeric(8).toLowerCase()}`,
+        email: faker.internet.email(),
+        passwordHash,
+      },
+    });
+    moderatorIds.push(moderator.id);
+  }
+  return moderatorIds;
 }
 
 export function buildTypeMetadata(
@@ -219,16 +271,32 @@ async function createApprovedCompany(
   return company;
 }
 
+// GitHub issue #524 (Phase 41) — how often a still-pending entry gets
+// claimed (not resolved) by one of the seeded moderators, simulating
+// someone having picked it up without having reviewed it yet.
+export const PENDING_CLAIM_RATE = 0.3;
+
 async function applyModerationOutcome(
   entityType: ModerationEntityType,
   entityId: string,
   moderationService: ModerationService,
   prisma: PrismaService,
   summary: Summary,
+  moderatorIds: string[],
 ): Promise<void> {
   const outcome = pickModerationOutcome();
   summary[outcome]++;
-  if (outcome === 'pending') return; // already pending by default — nothing to do
+
+  if (outcome === 'pending') {
+    if (moderatorIds.length === 0 || Math.random() >= PENDING_CLAIM_RATE) return;
+    const entry = await prisma.moderationQueueEntry.findFirst({
+      where: { entityType, entityId, reviewedAt: null },
+    });
+    if (!entry) return; // shouldn't happen, but never crash a whole run over one entity
+    await moderationService.claim(entry.id, faker.helpers.arrayElement(moderatorIds));
+    summary.claimed++;
+    return;
+  }
 
   const entry = await prisma.moderationQueueEntry.findFirst({
     where: { entityType, entityId, reviewedAt: null },
@@ -238,7 +306,7 @@ async function applyModerationOutcome(
   const dto = { reviewedBy: SEEDER_LABEL };
   if (outcome === 'approved') await moderationService.approve(entry.id, dto);
   else if (outcome === 'rejected') await moderationService.reject(entry.id, dto);
-  else await moderationService.flag(entry.id, { ...dto, flagReason: 'manual_report' });
+  else await moderationService.flag(entry.id, { ...dto, flagReason: pickFlagReason() });
 }
 
 async function moderateGeneratedEntities(
@@ -246,12 +314,13 @@ async function moderateGeneratedEntities(
   moderationService: ModerationService,
   prisma: PrismaService,
   summary: Summary,
+  moderatorIds: string[],
 ): Promise<void> {
   const rounds = await prisma.round.findMany({ where: { processId }, include: { ratings: true } });
   for (const round of rounds) {
     for (const rating of round.ratings) {
       summary.roundRatings++;
-      await applyModerationOutcome('round_rating', rating.id, moderationService, prisma, summary);
+      await applyModerationOutcome('round_rating', rating.id, moderationService, prisma, summary, moderatorIds);
     }
   }
 
@@ -262,14 +331,14 @@ async function moderateGeneratedEntities(
   for (const interaction of interactions) {
     for (const rating of interaction.ratings) {
       summary.recruiterRatings++;
-      await applyModerationOutcome('recruiter_rating', rating.id, moderationService, prisma, summary);
+      await applyModerationOutcome('recruiter_rating', rating.id, moderationService, prisma, summary, moderatorIds);
     }
   }
 
   const overallReview = await prisma.overallReview.findUnique({ where: { processId } });
   if (overallReview) {
     summary.overallReviews++;
-    await applyModerationOutcome('overall_review', overallReview.id, moderationService, prisma, summary);
+    await applyModerationOutcome('overall_review', overallReview.id, moderationService, prisma, summary, moderatorIds);
   }
 }
 
@@ -299,6 +368,7 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
 
   const schema = await roundTypeFieldOptionsService.getFullSchemaWithOptions();
   const roundTypes = Object.values(RoundType);
+  const moderatorIds = await seedModerators(prisma);
 
   const summary: Summary = {
     companies: 0,
@@ -310,6 +380,9 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
     pending: 0,
     rejected: 0,
     flagged: 0,
+    claimed: 0,
+    moderators: moderatorIds.length,
+    moderatorIds,
     companyIds: [],
     candidateIds: [],
   };
@@ -326,7 +399,7 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
       const dto = buildProcessDto(roundTypes, schema);
       const process = await bulkSubmissionService.create(company.id, candidate.id, dto);
       summary.processes++;
-      await moderateGeneratedEntities(process.id, moderationService, prisma, summary);
+      await moderateGeneratedEntities(process.id, moderationService, prisma, summary, moderatorIds);
     }
   }
 
