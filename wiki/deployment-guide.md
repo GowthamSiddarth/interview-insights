@@ -25,14 +25,15 @@ node --version                # need 22+
 
 ## 1. Native dev loop (fastest — no containers for api/web)
 
-`api`/`web` run directly on the host. **Postgres, OpenSearch, and
-Mailpit all live in kind only** (D24/D26/D29 in `docs/DECISIONS.md`) —
-reached via port-forward, not `infra/docker-compose.yml`'s containers
-(those service definitions stay in the file as inert reference only).
-This requires the `kind` cluster from section 3 to already be up.
+`api`/`web` run directly on the host. **Postgres, OpenSearch, Mailpit,
+and Redpanda all live in kind only** (D24/D26/D29/D53 in
+`docs/DECISIONS.md`) — reached via port-forward, not
+`infra/docker-compose.yml`'s containers (those service definitions stay
+in the file as inert reference only). This requires the `kind` cluster
+from section 3 to already be up.
 
 ```bash
-# 1. kind cluster must already exist (section 3) — all three live there
+# 1. kind cluster must already exist (section 3) — all four live there
 infra/scripts/dev-port-forwards.sh start
 
 cd api
@@ -57,7 +58,7 @@ plain backgrounded port-forward only survives as long as the shell
 that started it — fine in an ordinary terminal, but not in an
 AI-assisted dev session, where each tool call can run in a fresh
 shell and silently kill anything backgrounded in a previous one (GitHub
-issue #312). `infra/scripts/dev-port-forwards.sh` wires all three into
+issue #312). `infra/scripts/dev-port-forwards.sh` wires all four into
 macOS launchd LaunchAgents instead — supervised independently of any
 shell, with `KeepAlive` auto-restarting a forward if the underlying
 `kubectl port-forward` process ever exits (e.g. a pod restart breaking
@@ -66,12 +67,12 @@ one; logs land in `/tmp/interview-insights-port-forwards/`. Written for
 bash 3.2 (macOS's actual default `/bin/bash`, no associative arrays),
 matching every other script in `infra/scripts/`.
 
-**Gotcha:** if `infra/docker-compose.yml`'s OpenSearch or Mailpit
-containers happen to also be running, both it (`0.0.0.0` via Docker)
-and the port-forward (`127.0.0.1`) can coexist on the same port and
-`localhost` becomes ambiguous — the exact silent-wrong-target problem
-D24 hit with Postgres.app. Stop the compose container(s)
-(`docker stop interview-insights-opensearch-1 interview-insights-mailpit-1`)
+**Gotcha:** if `infra/docker-compose.yml`'s OpenSearch, Mailpit, or
+Redpanda containers happen to also be running, both it (`0.0.0.0` via
+Docker) and the port-forward (`127.0.0.1`) can coexist on the same port
+and `localhost` becomes ambiguous — the exact silent-wrong-target
+problem D24 hit with Postgres.app. Stop the compose container(s)
+(`docker stop interview-insights-opensearch-1 interview-insights-mailpit-1 interview-insights-redpanda-1`)
 before port-forwarding.
 
 ### Running `api`'s tests locally
@@ -96,6 +97,12 @@ npm test
 # database/index concept to isolate against; messages just accumulate in
 # Mailpit's inbox and can be cleared anytime with
 # `curl -X DELETE http://localhost:8025/api/v1/messages`.
+# Redpanda needs no knob either, and no env var below — every
+# REDPANDA_BROKERS default in this codebase already points at
+# localhost:19092, which the port-forward above now serves. Without it,
+# domain-events.e2e-spec.ts and verdict-consumer.e2e-spec.ts (the only
+# two files that talk to a real broker) fail with KafkaJSConnectionError
+# — every other e2e file is unaffected either way.
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
 OPENSEARCH_INDEX_PREFIX="e2etest-" \
 npm run test:e2e
