@@ -6,12 +6,16 @@ import Link from 'next/link';
 import {
   api,
   ApiError,
+  Company,
+  ModerationEntityType,
   ModerationFlagReason,
   ModerationQueueCategory,
   ModerationQueueClaimedBy,
+  ModerationQueueClaimState,
   ModerationQueueEntity,
   ModerationQueueEntry,
   ModerationQueueGroup,
+  ModerationQueueStatus,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -26,6 +30,19 @@ const ENTITY_TYPE_LABEL: Record<ModerationQueueEntry['entityType'], string> = {
   recruiter_rating: 'Recruiter rating',
   overall_review: 'Overall review',
   company: 'Company creation request',
+};
+
+// GitHub issue #523 (Phase 41) — the entity-type filter's own option
+// labels, deliberately distinct (plural) from ENTITY_TYPE_LABEL above:
+// that map renders as a per-entry heading once a submission is expanded,
+// and reusing the same singular text for a filter option that's always on
+// screen would make the two ambiguous to find (by a screen reader user
+// searching by text, same as this file's own tests).
+const ENTITY_TYPE_FILTER_LABEL: Record<ModerationQueueEntry['entityType'], string> = {
+  round_rating: 'Round ratings',
+  recruiter_rating: 'Recruiter ratings',
+  overall_review: 'Overall reviews',
+  company: 'Company creation requests',
 };
 
 const FLAG_REASONS: ModerationFlagReason[] = [
@@ -339,6 +356,16 @@ export default function ModerationPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const isSearching = query.trim() !== '' || categoryFilter !== '';
 
+  // GitHub issue #523 (Phase 41) — GET /moderation/queue's own filters,
+  // independent of the search box/category above (a different route,
+  // OpenSearch-backed). '' means "no filter" for each; the default view
+  // reflects the backend's own SLA-urgency sort with nothing narrowed.
+  const [entityTypeFilter, setEntityTypeFilter] = useState<ModerationEntityType | ''>('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [claimStateFilter, setClaimStateFilter] = useState<ModerationQueueClaimState | ''>('');
+  const [statusFilter, setStatusFilter] = useState<ModerationQueueStatus | ''>('');
+  const [companies, setCompanies] = useState<Company[]>([]);
+
   useEffect(() => {
     api
       .getAdminSession()
@@ -351,14 +378,30 @@ export default function ModerationPage() {
 
   useEffect(() => {
     if (!sessionChecked) return;
+    api.listCompanies().then(setCompanies).catch(() => undefined);
+  }, [sessionChecked]);
+
+  useEffect(() => {
+    if (!sessionChecked) return;
     api
-      .listModerationQueue()
-      .then(setGroups)
+      .listModerationQueue({
+        entityType: entityTypeFilter || undefined,
+        companyId: companyFilter || undefined,
+        claimState: claimStateFilter || undefined,
+        status: statusFilter ? [statusFilter] : undefined,
+      })
+      .then((result) => {
+        setGroups(result);
+        // A fresh filtered fetch invalidates any expanded-by-index state
+        // from the previous result set — indices no longer point at the
+        // same groups.
+        setExpanded(new Set());
+      })
       .catch((err: unknown) => {
         if (isSessionExpired(err)) router.push('/moderation/login');
         else setError(errorMessage(err));
       });
-  }, [sessionChecked, router]);
+  }, [sessionChecked, entityTypeFilter, companyFilter, claimStateFilter, statusFilter, router]);
 
   // Debounced — a query changes on every keystroke, and each search hits
   // real OpenSearch, not a client-side filter of already-loaded data.
@@ -522,6 +565,70 @@ export default function ModerationPage() {
           </select>
         </label>
       </div>
+
+      {/* GitHub issue #523 (Phase 41) — GET /moderation/queue's own
+          filters, combinable with each other (e.g. claim state +
+          status), applied server-side. These narrow the grouped queue
+          view only; the search box above is a separate, OpenSearch-backed
+          route with its own category filter. */}
+      {!isSearching && (
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col text-sm">
+            Entity type
+            <select
+              value={entityTypeFilter}
+              onChange={(e) => setEntityTypeFilter(e.target.value as ModerationEntityType | '')}
+              className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+            >
+              <option value="">Any</option>
+              {Object.entries(ENTITY_TYPE_FILTER_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col text-sm sm:w-48">
+            Company
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+            >
+              <option value="">Any</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col text-sm">
+            Claim state
+            <select
+              value={claimStateFilter}
+              onChange={(e) => setClaimStateFilter(e.target.value as ModerationQueueClaimState | '')}
+              className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+            >
+              <option value="">Any</option>
+              <option value="unclaimed">Unclaimed</option>
+              <option value="mine">Assigned to me</option>
+            </select>
+          </label>
+          <label className="flex flex-col text-sm">
+            Status
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as ModerationQueueStatus | '')}
+              className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+            >
+              <option value="">Any</option>
+              <option value="pending">Pending</option>
+              <option value="flagged">Flagged</option>
+            </select>
+          </label>
+        </div>
+      )}
 
       {isSearching ? (
         <>

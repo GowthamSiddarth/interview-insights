@@ -151,6 +151,13 @@ const queueGroups = [
 // without needing their own bespoke fetch mock.
 let searchResultsMock: unknown[] = [];
 
+// GitHub issue #523 (Phase 41) — the filter row's Company <select> is
+// populated from this, same as the real /companies list.
+const companiesMock = [
+  { id: 'comp-acme', name: 'Acme Corp', slug: 'acme-corp', industry: null, sizeBucket: 'mid', logoUrl: null, createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'comp-globex', name: 'Globex Corp', slug: 'globex-corp', industry: null, sizeBucket: 'large', logoUrl: null, createdAt: '2026-01-01T00:00:00Z' },
+];
+
 function mockFetch() {
   global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -161,7 +168,10 @@ function mockFetch() {
     if (url.endsWith('/auth/admin/logout') && method === 'POST') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) });
     }
-    if (url.endsWith('/moderation/queue') && method === 'GET') {
+    if (url.endsWith('/companies') && method === 'GET') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(companiesMock) });
+    }
+    if (url.includes('/moderation/queue') && !url.includes('/moderation/queue/') && method === 'GET') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
     }
     if (url.includes('/moderation/search') && method === 'GET') {
@@ -520,6 +530,80 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     // While the fetch is unresolved React shows Loading…, then the explicit
     // empty state — never a silently blank list.
     expect(await screen.findByText(/Queue is clear/)).toBeInTheDocument();
+  });
+
+  // GitHub issue #523 (Phase 41) — GET /moderation/queue's own filter
+  // controls (entity type, company, claim state, status), wired through
+  // api.ts's listModerationQueue() so the queue reloads with the new
+  // querystring on each change.
+  describe('queue filters', () => {
+    function lastQueueQuery(): string {
+      const calls = (global.fetch as jest.Mock).mock.calls as [string][];
+      const queueCalls = calls.filter(
+        ([url]) => url.includes('/moderation/queue') && !url.includes('/moderation/queue/'),
+      );
+      return String(queueCalls[queueCalls.length - 1][0]);
+    }
+
+    it('populates the Company filter from the company list', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.click(screen.getByLabelText('Company'));
+      expect(screen.getByRole('option', { name: 'Acme Corp' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Globex Corp' })).toBeInTheDocument();
+    });
+
+    it('selecting an entity type refetches the queue with entityType in the querystring', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.selectOptions(screen.getByLabelText('Entity type'), 'round_rating');
+
+      await waitFor(() => expect(lastQueueQuery()).toContain('entityType=round_rating'));
+    });
+
+    it('selecting a company refetches the queue with companyId in the querystring', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.selectOptions(screen.getByLabelText('Company'), 'comp-acme');
+
+      await waitFor(() => expect(lastQueueQuery()).toContain('companyId=comp-acme'));
+    });
+
+    it('combines claim state and status filters in a single request', async () => {
+      const user = userEvent.setup();
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.selectOptions(screen.getByLabelText('Claim state'), 'unclaimed');
+      await user.selectOptions(screen.getByLabelText('Status'), 'flagged');
+
+      await waitFor(() => {
+        const q = lastQueueQuery();
+        expect(q).toContain('claimState=unclaimed');
+        expect(q).toContain('status=flagged');
+      });
+    });
+
+    it('filter controls are hidden while searching', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      jest.useFakeTimers({ advanceTimers: true });
+      render(<ModerationPage />);
+      await screen.findByText('Acme Corp · Engineer');
+
+      await user.type(screen.getByLabelText('Search'), 'acme');
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+
+      expect(screen.queryByLabelText('Entity type')).not.toBeInTheDocument();
+      jest.useRealTimers();
+    });
   });
 
   // GitHub issue #371 (Phase 35) — the search box + category filter,
