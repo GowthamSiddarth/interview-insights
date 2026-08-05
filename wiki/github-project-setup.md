@@ -427,3 +427,30 @@ Steps, using an existing epic (substitute the real epic number):
   `gh auth status`'s scope list before assuming `gh project` commands will
   work, and use `gh auth refresh -s project` rather than logging out/in
   again.
+- `gh pr checks <pr> --watch` called right after `gh pr create` fails
+  immediately with `no checks reported on the '<branch>' branch` and a
+  non-zero exit — it does **not** wait for check runs to be *created*,
+  only for already-existing ones to *finish*. There's a real, several-
+  second-to-a-minute gap between the PR existing and GitHub Actions'
+  webhook registering the workflow's check runs against it; calling
+  `--watch` inside that gap looks like a hard failure but is a timing
+  race, not a broken workflow (confirmed by re-running `gh pr view <pr>
+  --json statusCheckRollup` moments later and seeing the same checks
+  `IN_PROGRESS`). In a script with `set -e`, this silently aborts every
+  step after it (merge, issue/epic close, board update) while looking
+  like a CI problem. Fix: poll for at least one check to *exist* first,
+  tolerating that specific error, before handing off to `--watch`:
+  ```bash
+  wait_for_checks_to_appear() {
+    local pr="$1" repo="$2" max_wait=120 waited=0
+    while true; do
+      if gh pr checks "$pr" --repo "$repo" --json name --jq 'length' 2>/dev/null | grep -qv '^0$'; then
+        return 0
+      fi
+      (( waited += 5 )); [ "$waited" -ge "$max_wait" ] && { echo "no checks appeared after ${max_wait}s"; return 1; }
+      sleep 5
+    done
+  }
+  wait_for_checks_to_appear "$PR_NUMBER" "$REPO"
+  gh pr checks "$PR_NUMBER" --repo "$REPO" --watch
+  ```
