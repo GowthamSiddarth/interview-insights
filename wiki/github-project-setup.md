@@ -427,3 +427,48 @@ Steps, using an existing epic (substitute the real epic number):
   `gh auth status`'s scope list before assuming `gh project` commands will
   work, and use `gh auth refresh -s project` rather than logging out/in
   again.
+- `gh pr checks <pr>` (with or without `--watch`) is flaky right after any
+  push to the PR's branch — not just the first `gh pr create`, but *every*
+  subsequent push too. It errors with `no checks reported on the
+  '<branch>' branch` and a non-zero exit whenever called inside the
+  window where GitHub is invalidating the previous commit's check runs
+  and hasn't yet created the new commit's ones — a real gap, not a fixed
+  one, since a first attempt at polling for "checks exist yet" can itself
+  observe the tail end of the *old* commit's checks, return success, and
+  then have `--watch` immediately see the empty reset a moment later
+  (hit live 2026-08-05 on the very next push after first documenting this
+  gotcha — a "wait for at least one check to exist" guard around
+  `--watch` still isn't enough, because *existing* isn't stable). In a
+  script with `set -e`, any of these silently aborts every later step
+  (merge, issue/epic close, board update) while looking like a CI
+  problem. Fix: don't use the `gh pr checks` subcommand for waiting at
+  all — poll the stable JSON field instead (`gh pr view --json
+  statusCheckRollup`), and treat an empty/incomplete result as "still
+  waiting," never as an error, until either something actually fails or
+  a timeout is hit:
+  ```bash
+  wait_for_ci() {
+    local pr="$1" repo="$2" max_wait=900 interval=15 waited=0
+    while true; do
+      local line count pending failed
+      line=$(gh pr view "$pr" --repo "$repo" --json statusCheckRollup --jq \
+        '"\(.statusCheckRollup | length) \(.statusCheckRollup | map(select(.status != "COMPLETED")) | length) \(.statusCheckRollup | map(select(.conclusion == "FAILURE" or .conclusion == "CANCELLED" or .conclusion == "TIMED_OUT")) | length)"')
+      read -r count pending failed <<< "$line"
+      if [ "$failed" -gt 0 ]; then
+        echo "CI failed:"
+        gh pr view "$pr" --repo "$repo" --json statusCheckRollup --jq \
+          '.statusCheckRollup[] | select(.conclusion=="FAILURE" or .conclusion=="CANCELLED" or .conclusion=="TIMED_OUT") | "\(.name): \(.conclusion) \(.detailsUrl)"'
+        return 1
+      fi
+      if [ "$count" -gt 0 ] && [ "$pending" -eq 0 ]; then
+        echo "All $count check(s) passed."
+        return 0
+      fi
+      echo "  ${count:-0} check(s), ${pending:-0} still running (waited ${waited}s)..."
+      waited=$((waited + interval))
+      [ "$waited" -ge "$max_wait" ] && { echo "timed out after ${max_wait}s"; return 1; }
+      sleep "$interval"
+    done
+  }
+  wait_for_ci "$PR_NUMBER" "$REPO"
+  ```

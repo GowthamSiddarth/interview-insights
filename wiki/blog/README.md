@@ -477,3 +477,20 @@ seven feature/docs issues are done — this phase's blog is complete.
 5. [Issue #489 — `notification-service` consumes SLA breach events](phase-36-moderator-queue-slas-assignment-notifications/issue-489-notification-service-sla-breach-email/README.md)
 6. [Issue #490 — Queue UI: surface SLA deadline and breach state](phase-36-moderator-queue-slas-assignment-notifications/issue-490-queue-ui-sla-breach-indicator/README.md)
 7. [Issue #491 — Docs: resolve D80, update DATA_MODEL/ARCHITECTURE](phase-36-moderator-queue-slas-assignment-notifications/issue-491-d80-docs/README.md)
+
+## Phase 41 — Moderator Queue Priority, Filters & Seed-Data Parity
+
+See `docs/ROADMAP.md` Phase 41. Raised while auditing which backend
+features actually have frontend consumption (2026-08-04): Phase 36 had
+already added `slaDeadline`/`claimedById` to every queue entry, but the
+queue itself still sorted by `createdAt` only and had no filters beyond
+the separate, OpenSearch-backed search route. Deliberately scoped to just
+the feed/filter work plus the one thing blocking it from being testable
+(seed-data parity) — an analytics dashboard and a moderator/candidate
+communication loop both came up in the same conversation and were
+scoped out to their own future phases instead. All three feature issues
+are done — this phase's blog is complete.
+
+1. [Issue #522 — Moderation queue: server-side filters + SLA-urgency sort](phase-41-moderator-queue-priority-filters-seed-data-parity/issue-522-server-side-filters-sla-sort/README.md)
+2. [Issue #523 — Moderation UI: filter controls + urgency-ordered queue view](phase-41-moderator-queue-priority-filters-seed-data-parity/issue-523-moderation-ui-filter-controls/README.md)
+3. [Issue #524 — seed-demo-data: simulate moderator claims and vary flagReason across the full enum](phase-41-moderator-queue-priority-filters-seed-data-parity/issue-524-seed-data-moderator-claims-flag-reasons/README.md)

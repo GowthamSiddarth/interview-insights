@@ -156,7 +156,9 @@ post per phase — this file no longer inlines that running history.
   Phase 32 (Review Analyzer Service) is fully done, blog included
   (#338-#341). Phase 36 (Moderator Queue SLAs, Assignment &
   Notifications) is fully done too, blog included (issues #485-#492,
-  epic #484 closed). Phase 40 (CI Infrastructure: Self-Hosted GitHub
+  epic #484 closed). Phase 41 (Moderator Queue Priority, Filters &
+  Seed-Data Parity) is fully done too, blog included (issues #522-#525,
+  epic #521 closed). Phase 40 (CI Infrastructure: Self-Hosted GitHub
   Actions Runner) is the current frontier — #501 (provision the runner
   VM) is next, in progress as of 2026-08-04. The GitHub Actions billing
   gate that prompted Phase 40 was refreshed 2026-08-03 — back to normal
