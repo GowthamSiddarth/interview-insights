@@ -990,6 +990,12 @@ GitHub issue #214.
       #482.
 - [ ] Switch local dev container engine from Docker to Podman (GitHub
       issue #496)
+- [ ] Spike: verify `kind` can run on Podman before further Docker
+      removal (GitHub issue #539)
+- [ ] Migrate `cd.yml` and the self-hosted runner off Docker onto
+      Podman (GitHub issue #540)
+- [ ] Remove Docker Desktop entirely: final re-verification + docs
+      update (GitHub issue #541)
 - [ ] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
       #530)
