@@ -1872,4 +1872,5 @@ Parity" (#39). Epic: GitHub issue #521.
       instead of hardcoding `manual_report`; `moderationVerdict`
       population stays dependent on `review-analyzer` actually running
       during the seed, explicitly out of scope to fake directly
-- [ ] Engineering blog (last) (GitHub issue #525)
+- [x] Engineering blog (last) (GitHub issue #525) — one post per issue
+      under `wiki/blog/phase-41-moderator-queue-priority-filters-seed-data-parity/`
