@@ -4,6 +4,7 @@ import { ModerationService } from './moderation.service';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 import { ModerationSearchQueryDto } from './dto/moderation-search-query.dto';
+import { ModerationQueueQueryDto } from './dto/moderation-queue-query.dto';
 import { AdminJwtAuthGuard } from '../admin-auth/guards/admin-jwt-auth.guard';
 import { AdminSessionPayload } from '../admin-auth/admin-auth.service';
 
@@ -19,9 +20,20 @@ import { AdminSessionPayload } from '../admin-auth/admin-auth.service';
 export class ModerationController {
   constructor(private readonly moderationService: ModerationService) {}
 
+  // GitHub issue #522 (Phase 41) — entityType/companyId/status filters
+  // apply as-given; claimState: 'mine' is resolved via the authenticated
+  // caller (req.user), same pattern claim()/release() below already use —
+  // never a client-supplied moderator id.
   @Get('queue')
-  listPending() {
-    return this.moderationService.listPending();
+  listPending(@Query() query: ModerationQueueQueryDto, @Req() req: Request) {
+    const moderator = req.user as AdminSessionPayload;
+    return this.moderationService.listPending({
+      entityType: query.entityType,
+      companyId: query.companyId,
+      claimState: query.claimState,
+      status: query.status,
+      moderatorId: query.claimState === 'mine' ? moderator.id : undefined,
+    });
   }
 
   @Get('search')

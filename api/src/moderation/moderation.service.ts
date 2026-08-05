@@ -45,6 +45,24 @@ import { getModerationSlaHours } from './moderation-sla.env';
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
 
+// GitHub issue #522 (Phase 41) — GET /moderation/queue's own filters,
+// mirroring ModerationQueueCategory's shape (defined here, imported by
+// the query DTO) rather than the other way around. claimState has no
+// client-supplied moderator id of its own — 'mine' is resolved by the
+// controller from the authenticated caller and passed through as
+// moderatorId, same pattern claim()/release() already use.
+export type ModerationQueueClaimState = 'mine' | 'unclaimed' | 'all';
+export type ModerationQueueStatus = 'pending' | 'flagged';
+
+export interface ModerationQueueFilters {
+  entityType?: ModerationEntityType;
+  companyId?: string;
+  claimState?: ModerationQueueClaimState;
+  status?: ModerationQueueStatus[];
+  // Only meaningful (and only ever read) when claimState === 'mine'.
+  moderatorId?: string;
+}
+
 // GitHub issue #440 (Phase 39, D71) — everything the verdict-consumer
 // (GitHub issue #340, D81 — this project's first event consumer) needs to
 // leave a durable trail of one auto-approval, written atomically with the
@@ -227,10 +245,42 @@ export class ModerationService {
   // moderating content doesn't require knowing who wrote it. Grouped by
   // InterviewProcess (GitHub issue #315, Phase 29) rather than returned
   // as a flat list — see ModerationQueueGroup's own comment.
-  async listPending(): Promise<ModerationQueueGroup[]> {
+  //
+  // GitHub issue #522 (Phase 41) — sorted by slaDeadline ascending (most
+  // urgent first) rather than createdAt, and narrowed by filters:
+  // entityType/claimState/status apply directly to moderation_queue's own
+  // columns, but companyId doesn't — the entity reference is polymorphic
+  // (docs/DATA_MODEL.md), so it's resolved to a concrete set of
+  // entityType/entityId pairs first via resolveEntityRefsForCompany().
+  async listPending(filters: ModerationQueueFilters = {}): Promise<ModerationQueueGroup[]> {
+    const where: Prisma.ModerationQueueEntryWhereInput = { reviewedAt: null };
+
+    if (filters.entityType) {
+      where.entityType = filters.entityType;
+    }
+
+    if (filters.claimState === 'mine') {
+      where.claimedById = filters.moderatorId;
+    } else if (filters.claimState === 'unclaimed') {
+      where.claimedById = null;
+    }
+
+    // A one-element subset narrows to that status; empty or both-elements
+    // is equivalent to no filter at all, since every unreviewed entry is
+    // already exactly one of the two (flagReason set or not).
+    if (filters.status?.length === 1) {
+      where.flagReason = filters.status[0] === 'flagged' ? { not: null } : null;
+    }
+
+    if (filters.companyId) {
+      const refs = await this.resolveEntityRefsForCompany(filters.companyId, filters.entityType);
+      if (refs.length === 0) return [];
+      where.OR = refs;
+    }
+
     const entries = await this.prisma.moderationQueueEntry.findMany({
-      where: { reviewedAt: null },
-      orderBy: { createdAt: 'asc' },
+      where,
+      orderBy: { slaDeadline: 'asc' },
       include: { claimedBy: { select: { id: true, username: true } } },
     });
     const enrichedEntries = await this.enrichEntries(entries);
@@ -255,8 +305,8 @@ export class ModerationService {
     );
 
     // Map preserves insertion order — groups naturally come out in the
-    // same createdAt-ascending order entries already had, since each
-    // group is created the moment its first (earliest) entry is seen.
+    // same slaDeadline-ascending order entries already had, since each
+    // group is created the moment its first (most urgent) entry is seen.
     // An entry whose entity failed to enrich (no processId to group by)
     // gets its own standalone group keyed by the queue entry's own id,
     // rather than being silently dropped from the response.
@@ -311,6 +361,47 @@ export class ModerationService {
         (orderIndex.get(`${a.entityType}:${a.entityId}`) ?? 0) -
         (orderIndex.get(`${b.entityType}:${b.entityId}`) ?? 0),
     );
+  }
+
+  // GitHub issue #522 (Phase 41) — listPending()'s companyId filter,
+  // resolved to concrete entityType/entityId pairs: company scoping isn't
+  // a column on moderation_queue itself, since the entity reference is
+  // polymorphic (docs/DATA_MODEL.md). round_rating/recruiter_rating/
+  // overall_review each need a join up to their process's company;
+  // company is simplest of all — its own entityId *is* the company id.
+  // Scoped to `entityType` when the caller already filtered to one
+  // specific type, so the other two types' queries aren't run for
+  // nothing (their rows could never match `where.entityType` anyway).
+  private async resolveEntityRefsForCompany(
+    companyId: string,
+    entityType?: ModerationEntityType,
+  ): Promise<Array<{ entityType: ModerationEntityType; entityId: string }>> {
+    const wantsType = (type: ModerationEntityType) => entityType === undefined || entityType === type;
+
+    const [roundRatings, recruiterRatings, overallReviews] = await Promise.all([
+      wantsType('round_rating')
+        ? this.prisma.roundRating.findMany({ where: { round: { process: { companyId } } }, select: { id: true } })
+        : Promise.resolve([]),
+      wantsType('recruiter_rating')
+        ? this.prisma.recruiterRating.findMany({
+            where: { recruiterInteraction: { process: { companyId } } },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+      wantsType('overall_review')
+        ? this.prisma.overallReview.findMany({ where: { process: { companyId } }, select: { id: true } })
+        : Promise.resolve([]),
+    ]);
+
+    const refs: Array<{ entityType: ModerationEntityType; entityId: string }> = [
+      ...roundRatings.map((r) => ({ entityType: 'round_rating' as const, entityId: r.id })),
+      ...recruiterRatings.map((r) => ({ entityType: 'recruiter_rating' as const, entityId: r.id })),
+      ...overallReviews.map((r) => ({ entityType: 'overall_review' as const, entityId: r.id })),
+    ];
+    if (wantsType('company')) {
+      refs.push({ entityType: 'company', entityId: companyId });
+    }
+    return refs;
   }
 
   // Shared by listPending() and search() alike — every field a candidate
