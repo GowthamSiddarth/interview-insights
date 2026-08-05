@@ -53,6 +53,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # D35/D43/GitHub issue #530 all trace the same failure back to disk
+      # pressure on this persistent runner, discovered previously only
+      # several steps downstream (a confusing OpenSearch
+      # cluster_block_exception during "Roll out api"). This gate moves
+      # that discovery to the first real step, with an actionable message,
+      # instead of a stack trace several minutes later (GitHub issue #531).
+      # Auto-remediation lives in infra/scripts/disk-health-check.sh
+      # (issue #532), not here — this step only fails fast.
+      - name: Pre-flight disk usage gate
+        run: |
+          USAGE=$(df -P / | awk 'NR==2 { gsub("%", "", $5); print $5 }')
+          echo "host disk usage: ${USAGE}%"
+          if [ "$USAGE" -ge 85 ]; then
+            echo "::error::Disk at ${USAGE}% (>= 85%) - prune before deploying. See wiki/deployment-guide.md section 11.4, or run infra/scripts/disk-health-check.sh run."
+            exit 1
+          fi
+
       - name: Build api image
         run: |
           docker build -t interview-insights-api:k8s -f api/Dockerfile \
@@ -216,11 +233,19 @@ jobs:
       # unrelated PR. `if: always()` so a failed deploy still gets cleaned
       # up — that's exactly the case most likely to leave extra dangling
       # layers behind.
+      #
+      # GitHub issue #530 (D85): the original `until=48h` grace window
+      # made sense at ~1 run/day building 2 images; it now builds 4
+      # (notification-service, review-analyzer added since) at a much
+      # higher merge cadence, so same-day cache growth was tripping the
+      # flood-stage watermark again before any of it aged past 48h.
+      # Shortened to `until=6h` — recent-run reuse from same-day rebuilds
+      # still applies, but growth is bounded to hours, not days.
       - name: Prune stale Docker artifacts
         if: always()
         run: |
           docker image prune -f
-          docker builder prune -f --filter until=48h
+          docker builder prune -f --filter until=6h
 
       # This host-level prune above is a *different* disk than the kind
       # node's own internal containerd store — a second real incident,

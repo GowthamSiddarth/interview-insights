@@ -1153,6 +1153,15 @@ cluster running the new code, step by step:
    up exactly one queued job then exits on its own.
 6. **The runner executes the queued job's steps, in order:**
    - `actions/checkout@v4` checks out the merged `main` commit.
+   - **Pre-flight disk usage gate** (GitHub issue #531) — `df -h /`;
+     fails the job immediately with an actionable message if usage is
+     at/above 85%, before any build starts. Three incidents (D35, D43,
+     issue #530) all cost real time discovering disk pressure only
+     several steps later, as a confusing OpenSearch
+     `cluster_block_exception` during "Roll out api" — this moves that
+     discovery to the first step. Section 11.10 below documents
+     `infra/scripts/disk-health-check.sh`, a daily launchd job that
+     auto-prunes proactively so this gate ideally never fires.
    - **Build `api` image** — `docker build -f api/Dockerfile`, tagged
      `interview-insights-api:k8s`, with the short commit SHA baked in
      via `--build-arg GIT_SHA` (surfaced later at `GET /health`).
@@ -1554,3 +1563,38 @@ Already covered in full in section 6.2 above (gather ids first,
 a-UUID-not-a-slug gotcha, and `prune-orphaned-company-search-docs.js`)
 — linked here so this playbook is a complete index of "where do I look
 when X happens."
+
+### 11.10 Daily disk health-check job (launchd, GitHub issue #532)
+
+Proactive counterpart to section 11's "Pre-flight disk usage gate"
+bullet above and to `cd.yml`'s own post-deploy prune steps (D35, D43,
+issue #530) — a macOS launchd LaunchAgent, same mechanism as
+`infra/scripts/dev-port-forwards.sh` (issue #312), that runs daily
+(08:00 local) even on days with no CD run, so pressure is caught
+between deploys instead of during one.
+
+```bash
+# Install (idempotent — safe to re-run)
+infra/scripts/disk-health-check.sh install
+
+# Run it once immediately to verify, rather than waiting for 08:00
+infra/scripts/disk-health-check.sh run
+
+# Check whether it's installed
+infra/scripts/disk-health-check.sh status
+
+# Remove it
+infra/scripts/disk-health-check.sh uninstall
+```
+
+Logic: checks `df -h /`, `docker system df`, and (best-effort —
+skipped if the port-forward from section 1 isn't running)
+`curl localhost:9200/_cat/allocation?v`. At/above 70% disk usage, it
+runs the same prune commands `cd.yml`'s own steps do
+(`docker image prune`, `docker builder prune --filter until=6h`,
+`infra/scripts/prune-kind-node-images.sh`). If usage is still at/above
+80% *after* pruning, it fires a local notification (`osascript ...
+display notification`) — a single-user dev box doesn't need an
+external alerting service, just something that surfaces before the
+next CD run hits the 85% pre-flight gate. Logs:
+`/tmp/interview-insights-disk-health/health-check.log`.

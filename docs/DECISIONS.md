@@ -4109,6 +4109,128 @@ node health from scratch) — until then, #540/#541 stay blocked and
 
 ---
 
+### D85 — CD build-cache prune window tightened from 48h to 6h (GitHub issue #530, third occurrence of D35/D43's failure mode)
+
+**Context:** the exact same failure mode D35 (#215) and D43 (#240)
+already fixed recurred a third time, 2026-08-05 — CD run 31019829357
+(`feat: moderation queue server-side filters + SLA-urgency sort (#522)
+(#527)`) failed with `cd.yml`'s "Roll out api" step timing out on an
+OpenSearch `cluster_block_exception` (flood-stage watermark). Live
+diagnosis: `docker system df` showed 20.38GB reclaimable build cache;
+manually running `docker builder prune -af`, `docker image prune -af`,
+and `infra/scripts/prune-kind-node-images.sh` brought the shared disk
+from disk-pressure back to 48% used and unblocked OpenSearch
+immediately. No code was at fault — pure disk-hygiene gap, same as
+both prior incidents.
+
+**Why D35/D43's existing fix stopped holding:** `cd.yml`'s prune step
+only ran `docker builder prune -f --filter until=48h` — cache younger
+than 48h was never touched. That grace period was sized for D35's
+original cadence (~1 CD run/day, 2 images built per run). Both inputs
+grew since: 4 images built per run now (notification-service since
+Phase 31, review-analyzer since Phase 32), and merge cadence picked up
+substantially (5 pushes to `main` in under 24h immediately preceding
+this failure — #508, #510, #512, #513, #514, #520). Same-day rapid
+iteration now generates enough cache to trip the watermark before any
+of it ages past 48h.
+
+**Decision:** shortened `docker builder prune -f --filter until=48h`
+to `--filter until=6h` in `cd.yml`'s existing "Prune stale Docker
+artifacts" step. Recent same-day-rebuild cache reuse still applies
+within a run or two, but growth is now bounded to hours instead of
+days. Deliberately kept the age-filter approach (over dropping it
+entirely in favor of "prune everything not referenced by the current
+run's own images," the other option raised on the issue) — simpler,
+one-line change, consistent with D35's original mechanism, and the
+real problem was the window being too loose, not the filtering
+strategy being wrong.
+
+**Revisit when:** disk pressure recurs a fourth time even with this
+tighter window — at that point the age-filter approach itself (not
+just its window size) is worth reconsidering, per D35's own original
+"Revisit when" note. Companion fixes issue #531 (pre-flight gate,
+D86) and issue #532 (proactive daily prune, D87) address the same
+underlying pressure from different angles — reactive cadence,
+fail-fast detection, and proactive prevention respectively.
+
+---
+
+### D86 — `cd.yml` pre-flight disk-usage gate, fail-fast before any build (GitHub issue #531)
+
+**Context:** companion to D85/#530 — the same three incidents (D35/
+#215, D43/#240, #530) were each discovered only several steps
+downstream of the real cause: `docker build` → `kind load` → `kubectl
+apply` → "Roll out api" crash-loops on an OpenSearch
+`cluster_block_exception` that's actually about host disk, not
+OpenSearch itself. Diagnosing that chain has cost real time three
+times running.
+
+**Decision:** added a "Pre-flight disk usage gate" step to `cd.yml`,
+immediately after `actions/checkout@v4` and before any image build —
+`df -P /`, fail the job with `exit 1` and an actionable `::error::`
+message (pointing at `wiki/deployment-guide.md` section 11.4 and
+`infra/scripts/disk-health-check.sh run`) if usage is at/above 85%.
+Deliberately fail-fast only, no auto-remediation here — moving the
+failure to the first step with a clear message is this issue's whole
+scope; actually pruning proactively is issue #532/D87's job. 85% was
+chosen as "clearly above normal, clearly below the level that's
+historically preceded a flood-stage trip" (D35's incident was
+discovered at 96%, D43's at 91%) rather than measured empirically —
+worth revisiting if it either fires on runs that would've been fine or
+fails to fire before a real flood-stage trip.
+
+**Revisit when:** the threshold proves miscalibrated in either
+direction, or once issue #532's daily health-check job (D87) has run
+long enough in practice to show whether this gate ever actually fires
+(the intent is that it mostly doesn't, with the daily job clearing
+pressure first).
+
+---
+
+### D87 — Daily launchd disk health-check job for the self-hosted CD runner (GitHub issue #532)
+
+**Context:** second companion to D85/#530 — three incidents (D35/#215,
+D43/#240, #530) were each caught only when a CD run actually failed;
+nothing watched disk usage trending toward the failure point between
+deploys, including on days with no CD run at all.
+
+**Decision:** `infra/scripts/disk-health-check.sh`, a macOS launchd
+LaunchAgent (same mechanism as `infra/scripts/dev-port-forwards.sh`,
+issue #312 — `install`/`uninstall`/`status`/`run` subcommands,
+`StartCalendarInterval` rather than that script's `KeepAlive`, since
+this is a scheduled one-shot check, not a persistent process), running
+daily at 08:00:
+
+- Checks `df -P /`, `docker system df`, and (best-effort — skipped if
+  the port-forward isn't running unattended) `curl
+  localhost:9200/_cat/allocation?v`.
+- **Hard threshold 70%:** auto-prunes using the exact same commands
+  `cd.yml`'s own prune steps run (`docker image prune -f`, `docker
+  builder prune -f --filter until=6h` per D85, `infra/scripts/
+  prune-kind-node-images.sh`) — proactive, not just post-deploy
+  cleanup.
+- **Warn threshold 80%, checked after pruning:** if usage is still
+  at/above this once auto-prune has already run, auto-prune alone
+  didn't clear it — fires a local `osascript ... display notification`
+  (sufficient for a single-user dev box, no external alerting needed)
+  so there's time to investigate before the next CD run hits #531/
+  D86's 85% pre-flight gate.
+- Both thresholds are deliberately below D86's 85% gate, so in the
+  common case this job clears pressure before that gate is ever
+  reached — 70%/80%/85% forms one graduated response (prevent, warn,
+  block) rather than three independent numbers.
+- Disk only for v1, per the issue's own scope note — memory/CPU
+  trend-watching (Docker Desktop VM memory via `docker stats`,
+  OpenSearch JVM heap via `_nodes/stats/jvm`) is a natural extension,
+  deliberately left out to avoid scope-creeping v1.
+
+**Revisit when:** the 70%/80% thresholds prove miscalibrated once
+there's real data from this job running daily, or when extending scope
+beyond disk (memory/CPU) actually comes up as a felt need rather than
+a hypothetical one.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
