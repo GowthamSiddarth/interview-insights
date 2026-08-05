@@ -93,4 +93,37 @@ describe('seed-demo-data (e2e)', () => {
       ).resolves.toBeUndefined();
     }
   });
+
+  // GitHub issue #524 (Phase 41) — proves the real Moderator rows and the
+  // real ModerationService.claim() path, not just the pure random-picking
+  // logic scripts/seed-demo-data.spec.ts already unit-tests. Deterministic
+  // (moderator count, claimedBy FK integrity) rather than asserting
+  // summary.claimed > 0 outright — PENDING_CLAIM_RATE (30%) applied to the
+  // ~10% of entities that land 'pending' out of this test's modest
+  // 3-company run is too thin a sample to assert on without real flakiness.
+  it('seeds real Moderator rows and claims pending entries only through ModerationService.claim()', async () => {
+    const summary = await runSeed(services, 3);
+
+    expect(summary.moderators).toBe(summary.moderatorIds.length);
+    expect(summary.moderatorIds.length).toBeGreaterThan(0);
+
+    const moderators = await services.prisma.moderator.findMany({
+      where: { id: { in: summary.moderatorIds } },
+    });
+    expect(moderators).toHaveLength(summary.moderatorIds.length);
+
+    expect(summary.claimed).toBeLessThanOrEqual(summary.pending);
+
+    if (summary.claimed > 0) {
+      const claimedEntries = await services.prisma.moderationQueueEntry.findMany({
+        where: { claimedById: { in: summary.moderatorIds } },
+      });
+      expect(claimedEntries.length).toBeGreaterThanOrEqual(summary.claimed);
+      // A claimed entry is claimed but not yet reviewed — claim() is a
+      // "someone's on it" signal, not a resolution.
+      for (const entry of claimedEntries) {
+        expect(entry.reviewedAt).toBeNull();
+      }
+    }
+  });
 });
