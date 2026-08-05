@@ -1815,3 +1815,56 @@ Infrastructure: Self-Hosted GitHub Actions Runner". Epic: GitHub issue
 - [ ] Runbook: self-hosted CI runner setup, recovery, and token
       rotation (GitHub issue #505)
 - [ ] Engineering blog (last) (GitHub issue #506)
+
+## Phase 41 — Moderator Queue Priority, Filters & Seed-Data Parity
+
+Raised while auditing which backend features actually have frontend
+consumption (2026-08-04): `GET /moderation/queue` sorts by `createdAt`
+only and has no filters beyond `search`'s free-text `q`/`category`, even
+though Phase 36 already added `slaDeadline`/`claimedById` to every entry.
+The same conversation surfaced two bigger ideas for the moderator/admin
+surface — an analytics dashboard, and a moderator ↔ candidate ↔ moderator
+communication loop closing the D79 gap (flagged submissions currently get
+no candidate-facing notification at all) — both scoped out to their own
+future phases rather than folded in here, since neither is detailed
+enough yet to plan properly. This phase is deliberately just the feed/
+filter work plus the one thing blocking it from being testable: the
+seed-data script never got extended for Phase 36 (no moderator/claim
+simulation) or the full `ModerationFlagReason` enum (hardcodes
+`manual_report` for every flagged entry), so the new filters would have
+nothing realistic to show against on the dev instance.
+
+Two decisions made during planning:
+- **Priority basis**: derived from the existing `slaDeadline` (sort by
+  urgency) rather than a new stored priority field — reuses Phase 36
+  infra as-is.
+- **Communication-loop mechanism** (for the future phase, noted here for
+  continuity): reuse the existing candidate edit flow rather than a new
+  message/thread model — editing a rating already resets it to `pending`
+  and re-enqueues (`round-ratings.service.ts`), so the loop's mechanism
+  already exists; that phase's actual gap is closing D79 (no notification
+  sent on flag) and surfacing `flagReason` to the candidate, not new
+  schema.
+
+Milestone: "Phase 41 — Moderator Queue Priority, Filters & Seed-Data
+Parity" (#39). Epic: GitHub issue #521.
+
+- [ ] Moderation queue: server-side filters + SLA-urgency sort (GitHub
+      issue #522) — `GET /moderation/queue` gains `entityType`,
+      `companyId`, `claimState` (mine/unclaimed/all, resolved via the
+      authenticated caller same as `claim`/`release`), and `status`
+      query params; sort changes from `createdAt: 'asc'` to
+      `slaDeadline: 'asc'`. No schema migration
+- [ ] Moderation UI: filter controls + urgency-ordered queue view (GitHub
+      issue #523) — filter controls on `web/src/app/moderation/page.tsx`
+      wired to the new query params; reuses the existing `SlaBadge`/
+      `formatSlaStatus()` urgency cue from Phase 36 rather than a second
+      indicator
+- [ ] seed-demo-data: simulate moderator claims and vary flagReason
+      across the full enum (GitHub issue #524) — seeds a handful of
+      `Moderator` rows, claims ~30% of generated pending entries via the
+      real `ModerationService.claim()` path, and randomizes `flagReason`
+      instead of hardcoding `manual_report`; `moderationVerdict`
+      population stays dependent on `review-analyzer` actually running
+      during the seed, explicitly out of scope to fake directly
+- [ ] Engineering blog (last) (GitHub issue #525)
