@@ -155,6 +155,20 @@ export type ModerationFlagReason = 'spam_pattern' | 'rate_limit' | 'duplicate' |
 // as its own field.
 export type ModerationQueueCategory = 'interview-review' | 'create-company';
 
+// GitHub issue #522 (Phase 41) — GET /moderation/queue's own filters (see
+// api/src/moderation/dto/moderation-queue-query.dto.ts for the backend
+// side these mirror). Distinct from ModerationQueueCategory above, which
+// is a client-derived concept for the separate /moderation/search route.
+export type ModerationQueueClaimState = 'mine' | 'unclaimed' | 'all';
+export type ModerationQueueStatus = 'pending' | 'flagged';
+
+export interface ModerationQueueFilters {
+  entityType?: ModerationEntityType;
+  companyId?: string;
+  claimState?: ModerationQueueClaimState;
+  status?: ModerationQueueStatus[];
+}
+
 // GitHub issue #487 (Phase 36) — who currently has this entry claimed, if
 // anyone; the "claimed by" badge/claim-release buttons key off this alone.
 export interface ModerationQueueClaimedBy {
@@ -644,7 +658,21 @@ export const api = {
 
   getAdminSession: () => request<AdminSession>('/auth/admin/me'),
 
-  listModerationQueue: () => request<ModerationQueueGroup[]>('/moderation/queue'),
+  // GitHub issue #522/#523 (Phase 41) — filters are all optional and
+  // combinable (e.g. claimState=unclaimed + status=flagged together);
+  // status can carry more than one value, sent as a repeated querystring
+  // param the same way the backend's own DTO already parses it. No
+  // params at all hits the bare path, same request the queue always made
+  // before these filters existed.
+  listModerationQueue: (filters: ModerationQueueFilters = {}) => {
+    const query = new URLSearchParams();
+    if (filters.entityType) query.set('entityType', filters.entityType);
+    if (filters.companyId) query.set('companyId', filters.companyId);
+    if (filters.claimState) query.set('claimState', filters.claimState);
+    for (const status of filters.status ?? []) query.append('status', status);
+    const qs = query.toString();
+    return request<ModerationQueueGroup[]>(`/moderation/queue${qs ? `?${qs}` : ''}`);
+  },
 
   // GitHub issue #371 (Phase 35) — a flat list (not grouped by
   // submission, unlike listModerationQueue), in the backend's own

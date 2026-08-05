@@ -1860,7 +1860,7 @@ Parity" (#39). Epic: GitHub issue #521.
       `company` entityType's own `entityId` already *is* the company id)
       since moderation_queue's entity reference is polymorphic, not an
       FK
-- [ ] Moderation UI: filter controls + urgency-ordered queue view (GitHub
+- [x] Moderation UI: filter controls + urgency-ordered queue view (GitHub
       issue #523) — filter controls on `web/src/app/moderation/page.tsx`
       wired to the new query params; reuses the existing `SlaBadge`/
       `formatSlaStatus()` urgency cue from Phase 36 rather than a second
