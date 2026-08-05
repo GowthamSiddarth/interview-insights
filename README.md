@@ -20,14 +20,18 @@ for what was last verified working.
     [docker.com](https://www.docker.com/products/docker-desktop/))
   - Otherwise follow the [Docker Engine install docs](https://docs.docker.com/engine/install/)
     for your OS
+- Optional: Podman instead of Docker for the "full-stack Compose"
+  alternative further down (`docs/DECISIONS.md` D83) — `kind` above
+  still needs actual Docker either way: `brew install podman &&
+  podman machine init && podman machine start`
 - Optional: a Postgres client (DBeaver, TablePlus, `psql`) for poking at the
   database directly
 
 See `wiki/deployment-guide.md` for a single, consolidated command-by-
 command reference across every environment below (native dev, full
-Docker Compose, full Kubernetes on `kind`, and the Phase 11 LocalStack
-secrets/IAM integration) — this section covers the same ground with
-more explanation, that one is just the commands in order.
+Podman/Docker Compose, full Kubernetes on `kind`, and the Phase 11
+LocalStack secrets/IAM integration) — this section covers the same
+ground with more explanation, that one is just the commands in order.
 
 ## Quick start
 
@@ -86,21 +90,31 @@ by design.
 (data persists in named volumes). Add `-v` to also wipe the data and start
 fresh next time.
 
-### Alternative: full-stack Docker Compose
+### Alternative: full-stack Compose (Podman or Docker)
 
-For prod-like local testing of the actual `api`/`web` Docker images
-(rather than the fast host-based loop above):
+For prod-like local testing of the actual `api`/`web` container images
+(rather than the fast host-based loop above). Podman is what this repo
+actually verified and adopted for this path (`docs/DECISIONS.md` D83) —
+`kind` itself stays Docker either way:
 
 ```bash
 cd infra
-docker compose --profile full up --build
+podman compose -f docker-compose.yml --profile full up -d --build
 ```
 
-This builds and runs `api` and `web` as containers alongside `postgres`.
-Migrations are applied automatically when the `api` container starts (no
-manual `prisma migrate deploy` step needed) — see `api/Dockerfile`. Same
-ports as the host-based setup: web at `http://localhost:3000`, api at
+(`docker compose --profile full up --build` still works identically if
+you'd rather use Docker Desktop here — same compose file, no functional
+difference either way.)
+
+This builds and runs `api` and `web` as containers alongside `postgres`,
+`opensearch`, `mailpit`, and `redpanda`. Migrations are applied
+automatically when the `api` container starts (no manual `prisma
+migrate deploy` step needed) — see `api/Dockerfile`. Same ports as the
+host-based setup: web at `http://localhost:3000`, api at
 `http://localhost:3001`.
+
+See `wiki/deployment-guide.md` section 2 for one-time Podman setup and
+the registry/credential gotchas hit while verifying this.
 
 ### Alternative: local Kubernetes (Phase 7)
 

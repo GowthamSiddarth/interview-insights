@@ -18,8 +18,13 @@ trust whichever was verified more recently against a real run (check
 
 ```bash
 # macOS
-brew install --cask docker   # then open Docker Desktop once so the daemon starts
+brew install --cask docker   # then open Docker Desktop once so the daemon starts --
+                              # still required for kind (section 3); kind/CI/CD stay
+                              # Docker regardless of section 2 below (docs/DECISIONS.md D83)
 brew install kind kubectl helm awscli
+brew install podman           # only for section 2's full-stack Compose path (D83) --
+                              # one-time `podman machine init && podman machine start`
+                              # needed too, see section 2
 node --version                # need 22+
 ```
 
@@ -112,17 +117,92 @@ CI (`.github/workflows/ci.yml`) is unaffected by any of this — its `api`
 job runs its own fully ephemeral Postgres, OpenSearch, and Mailpit
 service containers per run, and the prefix defaults to empty there.
 
-## 2. Full-stack Docker Compose (prod-like images, still no Kubernetes)
+## 2. Full-stack Compose (prod-like images, still no Kubernetes)
+
+Podman is what backs `infra/docker-compose.yml` now (GitHub issue #496,
+`docs/DECISIONS.md` D83) — verified directly to honor `depends_on:
+condition: service_healthy` and to build both Dockerfiles cleanly.
+Docker Desktop stays installed regardless (`kind`, section 3, still
+needs it) and `docker compose --profile full up --build` still works
+identically here too if you'd rather use it — same compose file, no
+functional difference either way; the commands below just show the
+Podman path since that's what's actually verified end to end.
+
+**One-time setup** (skip if already done):
+
+```bash
+podman machine init
+podman machine start
+```
+
+**Bring it up:**
 
 ```bash
 cd infra
-docker compose --profile full up --build
+podman compose -f docker-compose.yml --profile full up -d --build
 ```
 
 Builds and runs `api`+`web` as containers alongside `postgres`+
-`opensearch`. Migrations apply automatically on `api` container start
-(`api/scripts/entrypoint.js` → `api/Dockerfile`'s `CMD`) — no manual
-`prisma migrate deploy` step. Same ports as section 1.
+`opensearch`+`mailpit`+`redpanda`. Migrations apply automatically on
+`api` container start (`api/scripts/entrypoint.js` → `api/Dockerfile`'s
+`CMD`) — no manual `prisma migrate deploy` step. Same ports as
+section 1. Confirm `api`/`web` actually waited on `postgres`/
+`opensearch` reporting healthy (not just running) before starting:
+
+```bash
+podman compose -f docker-compose.yml ps
+```
+
+Tear down when done (add `--volumes` to also wipe Postgres/OpenSearch/
+Redpanda data):
+
+```bash
+podman compose -f docker-compose.yml --profile full down
+```
+
+**Gotcha: stop section 1's kind port-forwards first.** This compose
+file's postgres/opensearch/mailpit publish the exact same host ports
+(5432/9200/1025/8025) `infra/scripts/dev-port-forwards.sh` uses — both
+can bind at once with no error, and `localhost` becomes ambiguous about
+which backend actually answers (the same silent-wrong-target shape D24
+hit with Postgres.app, just between kind and this compose path now):
+
+```bash
+infra/scripts/dev-port-forwards.sh stop    # restart later with: ... start
+```
+
+**Gotcha: a stale Docker Hub credential can produce a misleading
+`unauthorized: incorrect username or password` pull failure** instead
+of a clean anonymous pull, if Docker Desktop's `credsStore: desktop`
+Keychain entry for `docker.io` has gone stale (e.g. after a failed
+`podman login`):
+
+```bash
+docker logout docker.io   # not `podman logout` -- different auth file, doesn't fix this
+```
+
+**Gotcha: Docker Hub's anonymous pull-rate-limit.** Hit repeatedly while
+verifying this from a fresh machine, pulling `node:22-slim`/`postgres`/
+`redpanda`. Worked around with a `mirror.gcr.io` mirror for the
+`docker.io` prefix (Google's public pull-through cache, no account
+needed) in the podman machine VM's own `registries.conf`:
+
+```bash
+podman machine ssh -- sudo tee /etc/containers/registries.conf <<'EOF'
+unqualified-search-registries = ["docker.io"]
+
+[[registry]]
+prefix = "docker.io"
+location = "mirror.gcr.io"
+EOF
+```
+
+This does **not** cover `docker.redpanda.com` (a different registry
+hostname that turned out to proxy through the same Docker Hub backing
+store and rate limit) — if redpanda's pull still fails after this,
+it's not a blocker: nothing in this compose file's `api`/`web`
+`depends_on` lists redpanda, so the rest of the stack works fine
+without it.
 
 ## 3. Full Kubernetes deployment on `kind`
 
