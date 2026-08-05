@@ -1001,13 +1001,16 @@ GitHub issue #214.
       Podman (GitHub issue #540) — **blocked** by #539/D84's finding
 - [ ] Remove Docker Desktop entirely: final re-verification + docs
       update (GitHub issue #541) — **blocked** by #539/D84's finding
-- [ ] Tighten CD's Docker/build-cache prune cadence — the existing 48h
+- [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
-      #530)
-- [ ] Add a pre-flight disk-usage gate to `cd.yml` before Docker builds
-      (GitHub issue #531)
-- [ ] Daily launchd health-check job: proactive disk monitoring +
-      auto-prune for the self-hosted CD runner (GitHub issue #532)
+      #530) — third occurrence of D35/D43's failure mode; shortened to
+      `until=6h`; see D85
+- [x] Add a pre-flight disk-usage gate to `cd.yml` before Docker builds
+      (GitHub issue #531) — fails fast at 85% disk usage before any
+      build starts; see D86
+- [x] Daily launchd health-check job: proactive disk monitoring +
+      auto-prune for the self-hosted CD runner (GitHub issue #532) —
+      `infra/scripts/disk-health-check.sh`, 70%/80% thresholds, see D87
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
