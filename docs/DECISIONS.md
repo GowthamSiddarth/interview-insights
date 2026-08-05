@@ -3960,6 +3960,94 @@ use), or Oracle's Always Free tier terms change.
 
 ---
 
+### D83 — Local dev container engine: Podman adopted for `infra/docker-compose.yml`'s reference path only; `kind`/CI/CD stay Docker (GitHub issue #496, Phase 20)
+
+**Context:** issue #496 asked to evaluate switching Docker Desktop →
+Podman for the everyday local-dev loop, scoped explicitly to
+`infra/docker-compose.yml` plus its docs — never `ci.yml`, `cd.yml`,
+the self-hosted runner, or `kind`. Worth restating what D24/D26/D29
+already established before reading this as bigger than it is:
+`infra/docker-compose.yml`'s postgres/opensearch/mailpit services are
+already "documented reference only" — the actual everyday dev loop runs
+against `kind` via `kubectl port-forward`
+(`infra/scripts/dev-port-forwards.sh`), which stays Docker-backed and
+is out of scope here. So this decision only touches the reference-
+compose path and the `--profile full` prod-like-local-testing path, not
+daily dev. No specific incident or licensing pressure prompted this
+(unlike D35/D43's Docker-Desktop-disk-fill incidents, which were on the
+CD runner/`kind` node specifically) — it was filed as a speculative
+ad-hoc evaluation, and verified clean enough to be worth adopting for
+its narrow scope even without a forcing driver.
+
+**Decision:**
+
+- **Adopt Podman** (via `podman machine` on macOS) as the engine behind
+  `infra/docker-compose.yml`, both its default profile
+  (postgres/opensearch/mailpit/redpanda) and `--profile full` (adds
+  api/web, image builds). Verified hands-on:
+  - `depends_on: condition: service_healthy` is honored correctly —
+    `api`'s container demonstrably waited for postgres+opensearch to
+    report `Healthy` before starting (confirmed directly in compose's
+    own event log, not just inferred from a successful outcome). This
+    was the single biggest risk issue #496 flagged, since the separate
+    `podman-compose` Python tool has a documented history of not
+    honoring this condition.
+  - Both `api/Dockerfile` and `web/Dockerfile` build cleanly under
+    Podman's build engine (`apt-get`, `npm ci`, `prisma generate`,
+    `nest build`, `next build` all succeeded unmodified).
+  - postgres/opensearch/mailpit plus api/web are all independently
+    reachable on their published ports once up.
+- **Caveat that shapes how this gets rolled out:** `podman compose` is
+  not itself a Compose reimplementation — since Podman v4 it's a thin
+  dispatcher that shells out to whatever Compose-spec-compatible binary
+  it finds on `PATH`. In this verification that happened to be Docker
+  Desktop's own `docker compose` v2 plugin
+  (`~/.docker/cli-plugins/docker-compose`) — genuinely faithful, since
+  it's the real Compose v2 codebase, just pointed at Podman's API
+  socket instead of dockerd's. **If Docker Desktop is later
+  uninstalled, that dispatch target disappears with it** — `podman
+  compose` would fall back to the separate `podman-compose` Python tool
+  (the one with the parity gaps issue #496 worried about) or fail
+  outright if neither is present. So: **before removing Docker
+  Desktop, install a standalone Compose v2 binary**
+  (`brew install docker-compose`, no Docker Desktop cask required) so
+  `podman compose` keeps dispatching to a real Compose v2 client. Not
+  re-verified against that standalone binary specifically (Docker
+  Desktop's own plugin was already present on the machine this was
+  tested on) — flagged as a follow-up if/when Docker Desktop actually
+  gets removed.
+- **Two rollout gotchas, worth keeping here since they'll recur for
+  anyone repeating this setup:**
+  1. A stale/invalid Docker Hub credential cached via Docker Desktop's
+     `credsStore: desktop` Keychain helper (`~/.docker/config.json`)
+     caused misleading `unauthorized: incorrect username or password`
+     pull failures instead of a clean anonymous pull. Fixed with
+     `docker logout docker.io` — **not** `podman logout`, which touches
+     a different auth file (`~/.config/containers/auth.json`) and did
+     not fix it.
+  2. Docker Hub's anonymous pull-rate-limit was hit repeatedly during
+     setup; worked around by adding a `mirror.gcr.io` mirror for the
+     `docker.io` prefix in the podman machine VM's
+     `/etc/containers/registries.conf` (Google's public pull-through
+     cache, no account needed). This does **not** cover
+     `docker.redpanda.com` (a differently-named registry host that
+     turned out to proxy through the same Docker Hub backing store and
+     rate limit) — redpanda's image pull stayed blocked by this at
+     verification time. Not a blocker for this decision: redpanda
+     isn't a dependency of api/web (`depends_on` doesn't list it), so
+     it didn't affect the `condition: service_healthy` verification
+     above.
+- **`kind`, `ci.yml`, `cd.yml` unchanged** — all stay Docker-backed, per
+  issue #496's explicit scope.
+
+**Revisit when:** Docker Desktop is actually removed from the dev
+machine (re-verify `podman compose`'s dispatch target per the caveat
+above), or the everyday `kind`-based dev loop's own container-engine
+choice comes up for its own separate evaluation (explicitly out of
+scope here).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
