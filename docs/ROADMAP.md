@@ -924,6 +924,79 @@ GitHub issue #214.
       #222/#240/#278/#312/#347/#349/#387/#389.
 - [x] Engineering blog update for issue #466 (D76, D77) — Phase 20 is
       now fully done
+- [x] Trim `CLAUDE.md`'s "Current status" section (233K chars of
+      append-only phase history) into a lean root file plus
+      `api/CLAUDE.md` and `web/CLAUDE.md` scoped files; also wrote down
+      the ad-hoc-work-under-an-epic convention itself as an explicit
+      `CLAUDE.md` bullet (previously only a narrative aside), with a
+      concrete runbook in `wiki/github-project-setup.md` (PR #414,
+      GitHub issue #413). Epic #214 reopened and re-closed the same
+      day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389/#466.
+- [x] `getAutoApprovalConfidenceThreshold()` treated an explicit
+      empty-string `AI_MODERATION_AUTO_APPROVE_THRESHOLD` (this
+      project's own "disabled" convention) as threshold `0`, not
+      "unset" (`Number('')` is `0`, not `NaN`) — every clean AI verdict
+      became auto-approve-eligible even with the kill switch on. Also
+      wired `AI_AUTO_APPROVAL_ENABLED`/the threshold into
+      `docker-compose.yml`/`05-api.yaml` (previously only documented in
+      `.env.example`, no real deploy path to set them), added
+      `api/.dockerignore` (a real local `.env` was baking into the
+      image), and extended `wiki/deployment-guide.md` section 5c into a
+      full enablement walkthrough (PR #451, GitHub issue #450). Epic
+      #214 reopened and re-closed the same day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413.
+- [x] AI moderation triage failed on every real Claude response —
+      `AiModerationService.requestVerdict()` called `JSON.parse()`
+      directly, but a real `claude-haiku-4-5` response wraps the JSON
+      verdict in a markdown code fence despite the system prompt asking
+      for none; silently swallowed by D66's existing best-effort
+      handling, leaving `moderationVerdict` pending forever. Never
+      caught by the test suite since every mock built its response via
+      `JSON.stringify()`, never fenced (PR #454, GitHub issue #453).
+      Epic #214 reopened and re-closed the same day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450.
+- [x] Native dev boot could crash on a genuinely-set `.env` var,
+      depending on module import order — `getRequiredAdminEnv(
+      'ADMIN_JWT_SECRET')` is read eagerly at `admin-auth.module.ts`
+      module-evaluation time, but nothing in `api/src` called `dotenv`
+      explicitly; `.env` only ever reached `process.env` as an
+      incidental side effect of `@prisma/client`'s own auto-loading,
+      and `app.module.ts` imports `AdminAuthModule` before
+      `PrismaModule`. `import 'dotenv/config'` as `main.ts`'s first
+      import removes the reliance on that ordering; a new smoke test
+      boots the real app from only a throwaway `.env` file (PR #455,
+      GitHub issue #452). Epic #214 reopened and re-closed the same
+      day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453.
+- [x] `web/tests/*.spec.tsx` flagged IDE/`tsc` errors (`Cannot find
+      name 'describe'/'it'/'expect'`) since `@types/jest` was never a
+      real dependency — jest's own runtime globals meant `npm test`
+      always passed regardless, masking the gap; also stopped tracking
+      `tsconfig.tsbuildinfo` (TypeScript's incremental-build cache) (PR
+      #483, GitHub issue #482). Epic #214 reopened and re-closed the
+      same day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453/#452.
+- [x] `infra/scripts/dev-port-forwards.sh` never wired up Redpanda
+      (Postgres/OpenSearch/Mailpit only), so the two e2e specs that talk
+      to a real broker only ever passed in CI, failing locally with
+      `KafkaJSConnectionError`. Redpanda's k8s `Service` only exposed
+      the in-cluster port; added a `kafka-external` (19092) port
+      matching docker-compose's own exposed port, so
+      `dev-port-forwards.sh` treats it like the other three services
+      (PR #520, GitHub issue #519). Epic #214 reopened and re-closed the
+      same day, same precedent as
+      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453/#452/
+      #482.
+- [ ] Switch local dev container engine from Docker to Podman (GitHub
+      issue #496)
+- [ ] Tighten CD's Docker/build-cache prune cadence — the existing 48h
+      filter is too loose for current merge/build volume (GitHub issue
+      #530)
+- [ ] Add a pre-flight disk-usage gate to `cd.yml` before Docker builds
+      (GitHub issue #531)
+- [ ] Daily launchd health-check job: proactive disk monitoring +
+      auto-prune for the self-hosted CD runner (GitHub issue #532)
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
