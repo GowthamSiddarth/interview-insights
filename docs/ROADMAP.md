@@ -1865,7 +1865,7 @@ Parity" (#39). Epic: GitHub issue #521.
       wired to the new query params; reuses the existing `SlaBadge`/
       `formatSlaStatus()` urgency cue from Phase 36 rather than a second
       indicator
-- [ ] seed-demo-data: simulate moderator claims and vary flagReason
+- [x] seed-demo-data: simulate moderator claims and vary flagReason
       across the full enum (GitHub issue #524) — seeds a handful of
       `Moderator` rows, claims ~30% of generated pending entries via the
       real `ModerationService.claim()` path, and randomizes `flagReason`
