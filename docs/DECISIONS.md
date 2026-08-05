@@ -4048,6 +4048,67 @@ scope here).
 
 ---
 
+### D84 — `kind` on Podman: not viable as tested; `kind`/CI/CD stay on Docker, #540/#541 blocked (GitHub issue #539, Phase 20)
+
+**Context:** issue #539 was the spike D83 deferred — check whether
+`kind` can run against Podman at all before committing to #540
+(migrate `cd.yml`/self-hosted runner off Docker) or #541 (remove Docker
+Desktop entirely). Tested via `KIND_EXPERIMENTAL_PROVIDER=podman kind
+create cluster` against this machine's existing `podman-machine-default`
+(macOS/arm64, AppleHV, **rootless** — `podman machine inspect` reports
+`rootful=false`).
+
+**Decision:** Do not proceed to #540/#541 yet. `kind`, `ci.yml`, and
+`cd.yml` stay Docker-backed. This is the issue's own built-in decision
+gate firing ("if any of the above doesn't work cleanly, stop here and
+document why... rather than proceeding into the follow-up issues") —
+two of its four verification tasks failed outright, so the remaining
+two (ingress `extraPortMappings`, api/web image parity) were never
+reached:
+
+- **Control-plane node never reached `Ready`** — still `NotReady` when
+  checked ~40s post-create, the exact rootless-Podman cgroup-delegation
+  failure mode the issue itself called out as kind's documented risk
+  for its systemd-in-container nodes.
+- **`kind load docker-image` couldn't find an image Podman had just
+  built** — `podman build` succeeded and tagged
+  `localhost/spike-test:local`, but `kind load docker-image
+  spike-test:local` immediately errored `image: "spike-test:local" not
+  present locally`, even with the provider env var set. Podman's
+  `localhost/` registry-prefix convention vs. kind's docker-style
+  bare-name lookup is the likely mismatch — not verified further since
+  the node health issue above is blocking regardless. This is the same
+  risk the issue flagged going in (`kind load docker-image` shelling
+  out to `docker save` under the hood) — confirmed real, not just
+  theoretical, and the `podman save | kind load image-archive`
+  workaround the issue proposed as the thing to verify was never
+  reached either.
+- **API server itself went unstable** once the node was unhealthy —
+  `TLS handshake timeout` and `pod does not have a host assigned`
+  errors on subsequent `kubectl` calls in the same session, consistent
+  with a node that never finished its own bring-up rather than a
+  separate bug.
+
+**Why this doesn't just mean "abandon Podman for kind outright":** the
+one machine-specific variable not yet varied is **rootful vs.
+rootless** — this project's `podman-machine-default` is rootless
+(chosen implicitly, not deliberately, when it was created for D83's
+compose-only scope). Rootless-Podman cgroup delegation is kind's
+own most-cited failure mode for exactly the symptom seen here
+(node stuck `NotReady`); a rootful machine is a materially different
+configuration, not a retry of the same failed test. Re-testing against
+one is a real follow-up, not covered by issue #539's own scope (which
+tested the machine as it already existed) — filed as its own thing
+if it's ever worth picking up, not assumed to happen automatically.
+
+**Revisit when:** someone deliberately re-runs this spike against a
+**rootful** `podman machine` (`podman machine init --rootful` or
+`podman machine set --rootful` on the existing one, then re-test kind
+node health from scratch) — until then, #540/#541 stay blocked and
+`kind`/CI/CD stay Docker-backed.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

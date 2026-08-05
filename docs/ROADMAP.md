@@ -988,14 +988,19 @@ GitHub issue #214.
       same day, same precedent as
       #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453/#452/
       #482.
-- [ ] Switch local dev container engine from Docker to Podman (GitHub
-      issue #496)
-- [ ] Spike: verify `kind` can run on Podman before further Docker
-      removal (GitHub issue #539)
+- [x] Switch local dev container engine from Docker to Podman (GitHub
+      issue #496) — `infra/docker-compose.yml` only, `kind`/CI/CD
+      explicitly out of scope; see D83 (PR #538)
+- [x] Spike: verify `kind` can run on Podman before further Docker
+      removal (GitHub issue #539) — **failed**: control-plane node
+      never reached `Ready` (rootless-Podman cgroup delegation) and
+      `kind load docker-image` couldn't find a Podman-built image;
+      issue's own decision gate fired, so #540/#541 below are blocked
+      until a rootful `podman machine` is re-tested; see D84
 - [ ] Migrate `cd.yml` and the self-hosted runner off Docker onto
-      Podman (GitHub issue #540)
+      Podman (GitHub issue #540) — **blocked** by #539/D84's finding
 - [ ] Remove Docker Desktop entirely: final re-verification + docs
-      update (GitHub issue #541)
+      update (GitHub issue #541) — **blocked** by #539/D84's finding
 - [ ] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
       #530)
