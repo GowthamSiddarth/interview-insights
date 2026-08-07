@@ -4346,6 +4346,183 @@ a genuinely different failure — in which case this reopens.
 
 ---
 
+### D90 — `cd.yml`, the self-hosted CD runner, and `bootstrap-kind.sh` migrated from Docker to Podman (GitHub issue #540, Phase 20)
+
+**Context:** D89 unblocked #540/#541. This issue's own checklist scoped
+the work to `cd.yml` and the self-hosted runner; the ROADMAP entry
+D89 left for #540 additionally called for running the real
+`bootstrap-kind.sh` + ingress-nginx flow (not just a synthetic pod, the
+way D88/D89's own spikes did) as part of this issue's implementation,
+to get real 80/443 production-parity evidence rather than filing yet
+another spike issue.
+
+**Decision:**
+
+- **`cd.yml`**: every `docker build` → `podman build` (api, web,
+  notification-service, review-analyzer); `kind load docker-image` →
+  a per-image `podman save <image> | kind load image-archive /dev/stdin`
+  loop — the workaround D88/D89 verified, since `kind load docker-image`
+  doesn't resolve a podman-built image's `localhost/`-prefixed name.
+  `KIND_EXPERIMENTAL_PROVIDER=podman` set at job level so every
+  `kind`-touching step talks to the cluster the same way D88/D89's spikes
+  did. The two prune steps (`docker image prune`/`docker builder prune`
+  → `podman image prune`/`podman system prune --filter until=` — podman
+  has no separate `builder prune` subcommand, so cache pruning folds into
+  `system prune`) and `infra/scripts/prune-kind-node-images.sh`'s/
+  `disk-health-check.sh`'s own `docker exec`/`docker system df` calls
+  ported the same way.
+- **`bootstrap-kind.sh` migrated too, even though not literally named in
+  #540's checklist** — it's what creates the `interview-insights` cluster
+  `cd.yml` deploys into, so `cd.yml` can't be Docker-free while the
+  cluster it targets is still Docker-created. `KIND_EXPERIMENTAL_PROVIDER=podman`
+  exported at the top of the script (cluster create, same experimental-
+  provider caveat as D84/#539), `docker build`/`kind load docker-image`
+  → the same `podman build`/`podman save | kind load image-archive`
+  pattern as `cd.yml`.
+- **The self-hosted CD runner machine itself (issue #88/Phase 12) needs
+  no code change** — it's a persistent macOS box that inherits whatever's
+  on its own `PATH`; `podman`/`kind`/`kubectl`/`helm` already had to be
+  present for D84/#539/#545/#547's own spikes. Its liveness check,
+  `self-hosted-smoke-test.yml`'s `mac-smoke-test` job, did need a change
+  — it hard-coded `docker info` as its "is this runner correctly
+  configured" probe, which is exactly what #540's "confirm it still
+  works with no docker on PATH" checklist item is about; swapped for
+  `podman info` plus a `kind get clusters` check. The Oracle CI runner's
+  own job in that same workflow is untouched — separate runner pool
+  (D82), no `kind`/CD involvement. Docker Desktop itself stays installed
+  on this machine until #541 (uninstalling it is explicitly that issue's
+  job, not this one's) — the rest of the live-verification (does
+  everything actually work end to end) is a live-verification step, not
+  an implementation one, see the handoff script delivered alongside this
+  decision.
+- **`wiki/deployment-guide.md`** updated everywhere it describes `kind`/
+  CD commands literally (Prerequisites, sections 3/4/7/8/9/10, 11.8,
+  disk-health-check's own writeup) to match. Section 1-2's Compose "docker
+  still works too" dual framing was deliberately left alone — that's
+  #541's "drop the dual framing, uninstall Docker Desktop" sweep, not
+  this issue's.
+- **80/443 production-parity verification** (the ROADMAP's explicit ask
+  for whichever of #540/#541 landed first) happens via the handoff
+  script's live run of the updated `bootstrap-kind.sh` against a fresh
+  rootful-podman cluster, followed by `curl --resolve` against both
+  Ingress hosts — not run by this session directly (podman/kind/kubectl
+  execution stays with the user, per this project's standing
+  execution-boundary convention). This decision's scope covers the code/
+  docs migration; the live parity result gets folded in as a follow-up
+  note once the user runs it, or a new decision if it surfaces a genuine
+  gap the way D88 did.
+
+**Revisit when:** the live `bootstrap-kind.sh` + ingress-nginx run
+either confirms 80/443 parity holds for the real Helm chart (closing out
+D89's own open caveat too) or surfaces a different failure; or when #541
+removes Docker Desktop and the Compose section's dual framing.
+
+---
+
+### D91 — Live-verifying #540 surfaced three real gaps D88/D89's own spikes never reached; all three fixed, 80/443 production parity now confirmed against the real chart (GitHub issue #540, Phase 20)
+
+**Context:** D90 unblocked #540's code migration; the ROADMAP's own note
+for #540 called for actually running `bootstrap-kind.sh` + ingress-nginx
+against a real rootful `podman machine` rather than treating the code
+change alone as done. That live run surfaced three genuine, reproducible
+problems — none of them things D84/#539, D88/#545, or D89/#547's own
+spikes exercised, since all three used either a synthetic pod or never
+ran the actual 4-image, 9-pod `infra/k8s/overlays/dev` stack end to end.
+
+**Finding 1 — `kind get clusters` is broken outright under Podman
+6.0.2 / kind v0.32.0's experimental provider.** It shells out to `podman
+ps -a --filter label=io.x-k8s.kind.cluster --format '{{index .Labels
+"io.x-k8s.kind.cluster"}}'` — a Go-template form that assumes `.Labels`
+is a map, true for `docker ps` but not for this Podman version's `ps`
+template context (`.Labels` there isn't indexable that way; the command
+errors with "cannot index slice/array with type string"). `kind get
+clusters` silently swallows the error and reports zero clusters, which
+broke `bootstrap-kind.sh`'s own "already exists, skip create" check —
+every re-run tried to create a cluster that already existed and failed
+outright. **Fix:** that check now queries `podman ps` directly
+(`--filter name=^${CLUSTER_NAME}-control-plane$ --filter status=running`)
+instead of asking kind to enumerate clusters at all — accurate, and no
+worse a coupling to Podman than this script already has everywhere else
+post-D90. Hit the exact same failure a second time, live: the initial
+version of `self-hosted-smoke-test.yml`'s own `mac-smoke-test` job used
+`kind get clusters` as its liveness check for the same reason (D90) and
+failed on a real dispatch against this branch — swapped for `kubectl get
+nodes` there too, which is what that step actually cares about anyway.
+
+**Finding 2 — the `podman save | kind load image-archive` workaround
+(D88/D89) is necessary but not sufficient for a real Deployment.**
+Podman canonicalizes any locally built, unqualified image as
+`localhost/<name>:<tag>`; that's the exact name embedded in the archive
+`podman save`/`kind load image-archive` produces. Every manifest in this
+repo references the bare name (`interview-insights-api:k8s`, no prefix)
+— containerd's own short-name resolution expands *that* to
+`docker.io/library/<name>:<tag>`, not `localhost/<name>:<tag>`, so it
+never matches the image already sitting in the node's local store, and
+kubelet attempts (and fails, 401) a real Docker Hub pull instead:
+`ImagePullBackOff`, `pull access denied, repository does not exist`.
+D88/D89's own verification never hit this because it tested against a
+synthetic pod using a pre-pulled image (`nginx:alpine`), never a locally
+podman-built image referenced by its bare name the way every real
+Deployment here does. **Fix:** `podman tag <image>
+docker.io/library/<image>` immediately before `podman save`, in
+`cd.yml`, `bootstrap-kind.sh`, and the manually-run equivalent for
+`notification-service`/`review-analyzer` (`bootstrap-kind.sh` only ever
+built `api`/`web` — pre-existing scope gap, not introduced here, not
+fixed here either since it's orthogonal to the Podman migration).
+
+**Finding 3 — the default `podman machine` sizing (2GB RAM) cannot run
+this stack.** Docker Desktop's own default allocation is substantially
+larger and had been masking this; nothing in D83/D84/D88/D89's own
+narrower spikes ran the full 9-pod stack concurrently long enough to
+surface it. Symptom chain, all traced to the same root cause: the node
+container's CPU pinned at ~107% continuously from creation; `podman
+machine ssh -- free -h` showed ~376Mi available out of 1.9Gi;
+`kube-controller-manager` and `kube-scheduler` both went
+`CrashLoopBackOff` (SIGTERM, exit 143 — resource starvation making
+liveness probes time out, not OOMKilled/137); cascading from there into
+the `ingress-nginx-admission-create` Job's pod completing but the Job
+resource itself never observing it (job-controller unavailable to
+update it) and `helm upgrade --install` timing out on that stale status.
+**Fix:** `podman machine` sized to 8GB RAM
+(`podman machine set --memory 8192`, or `--memory 8192` on a fresh
+`init`) resolved all of the above immediately on a clean cluster
+rebuild — no further control-plane instability. `wiki/deployment-guide.md`'s
+Prerequisites updated to specify this explicitly rather than relying on
+Podman's own 2GB default.
+
+**Not fixed here — filed as a separate, unrelated defect:**
+`infra/aws/seed-localstack.sh` builds `DATABASE_URL` by directly
+interpolating `$POSTGRES_PASSWORD` into a connection string
+(`postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/...`) with no
+URL-encoding. `wiki/deployment-guide.md` 5d's own documented rotation
+command (`openssl rand -base64 24`) can produce a password containing
+`/`, `+`, or `=` — exactly what happened live-verifying this issue,
+producing `P1013: invalid port number in database URL` and forcing an
+in-place `ALTER USER` rotation to a `openssl rand -hex 24` value instead
+(hex is always URL-safe) to unblock this session. This is a real,
+pre-existing latent bug independent of Docker vs. Podman — surfaced
+here by chance, not caused by this migration. Left unfixed under this
+issue's scope; worth its own ad-hoc issue under epic #214 (URL-encode
+the password when constructing `DATABASE_URL_VALUE`, or generate
+`POSTGRES_PASSWORD` from a URL-safe charset by convention).
+
+**Result: 80/443 production parity confirmed against the real
+`infra/k8s/overlays/dev` chart** — both `app.interview-insights.local`
+and `api.interview-insights.local` reachable over the real
+ingress-nginx-managed hostPorts, all four app Deployments (`api`, `web`,
+`notification-service`, `review-analyzer`) `Running` with podman-built/
+loaded images, closing D89's own open caveat for real this time (D89's
+own verification was a mechanism check on a synthetic pod, explicitly
+flagged as not full production parity).
+
+**Revisit when:** the seed-localstack.sh URL-encoding issue is
+filed/fixed, or a future Podman/kind version upgrade changes any of the
+three behaviors documented above (worth re-checking whether Finding 1's
+`podman ps --format` incompatibility is still present next time either
+tool is upgraded).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

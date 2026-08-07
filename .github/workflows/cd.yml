@@ -50,6 +50,14 @@ jobs:
     # without this, GitHub could route this job to whichever runner grabs
     # it first, and the Oracle VM has no kind cluster to deploy to.
     runs-on: [self-hosted, macOS, local-kind]
+    env:
+      # GitHub issue #540 (D89/D90) — this runner's `interview-insights`
+      # kind cluster is now created via `KIND_EXPERIMENTAL_PROVIDER=podman`
+      # (infra/scripts/bootstrap-kind.sh). `kind`'s own docs mark the
+      # podman provider experimental, not GA, same caveat D84/#539
+      # already flagged — every `kind`-touching step below needs this set
+      # to talk to that cluster correctly.
+      KIND_EXPERIMENTAL_PROVIDER: podman
     steps:
       - uses: actions/checkout@v4
 
@@ -72,33 +80,58 @@ jobs:
 
       - name: Build api image
         run: |
-          docker build -t interview-insights-api:k8s -f api/Dockerfile \
+          podman build -t interview-insights-api:k8s -f api/Dockerfile \
             --build-arg GIT_SHA=$(git rev-parse --short HEAD) api
 
       - name: Build web image
         run: |
-          docker build -t interview-insights-web:k8s -f web/Dockerfile \
+          podman build -t interview-insights-web:k8s -f web/Dockerfile \
             --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local web
 
       - name: Build notification-service image
         # Phase 31 (D53), GitHub issue #334 — first standalone microservice.
         run: |
-          docker build -t interview-insights-notification-service:k8s \
+          podman build -t interview-insights-notification-service:k8s \
             -f services/notification-service/Dockerfile \
             --build-arg GIT_SHA=$(git rev-parse --short HEAD) services/notification-service
 
       - name: Build review-analyzer image
         # Phase 32 (D53), GitHub issue #339 — second standalone microservice.
         run: |
-          docker build -t interview-insights-review-analyzer:k8s \
+          podman build -t interview-insights-review-analyzer:k8s \
             -f services/review-analyzer/Dockerfile \
             --build-arg GIT_SHA=$(git rev-parse --short HEAD) services/review-analyzer
 
       - name: Load images into kind
+        # `kind load docker-image` doesn't work against a podman-built
+        # image (fails on a `localhost/`-prefix naming mismatch, per
+        # D88/#545) even against a podman-provider cluster — `podman save
+        # | kind load image-archive` is the workaround D88/D89 verified.
+        #
+        # GitHub issue #540 (D91): that workaround alone still isn't
+        # enough for a real Deployment. Podman canonicalizes any locally
+        # built, unqualified image as `localhost/<name>:<tag>`, and
+        # `podman save`/`kind load image-archive` preserves that name
+        # verbatim inside the node's containerd store. Every manifest in
+        # this repo references the bare name (`interview-insights-api:k8s`,
+        # no prefix) — containerd's own short-name resolution expands a
+        # bare reference to `docker.io/library/<name>:<tag>`, not
+        # `localhost/<name>:<tag>`, so it never matches the loaded image
+        # and kubelet attempts a real Docker Hub pull instead (which
+        # 401s: `ImagePullBackOff`/`pull access denied`). Explicitly
+        # re-tagging under `docker.io/library/` before saving makes the
+        # embedded name match what kubelet's bare-reference resolution
+        # actually looks up, so it's found in the node's local store
+        # instead of triggering a pull. Verified end to end against the
+        # real `infra/k8s/overlays/dev` Deployments, not just a synthetic
+        # pod (D88/D89's own verification never re-created this exact
+        # bare-reference path).
         run: |
-          kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
-            interview-insights-notification-service:k8s interview-insights-review-analyzer:k8s \
-            --name interview-insights
+          for img in interview-insights-api:k8s interview-insights-web:k8s \
+            interview-insights-notification-service:k8s interview-insights-review-analyzer:k8s; do
+            podman tag "$img" "docker.io/library/$img"
+            podman save "docker.io/library/$img" | kind load image-archive /dev/stdin --name interview-insights
+          done
 
       - name: Ensure namespace exists
         run: kubectl apply -f infra/k8s/base/00-namespace.yaml
@@ -223,16 +256,16 @@ jobs:
           kubectl -n interview-insights rollout status deployment/review-analyzer --timeout=90s
 
       # Every run's "Build api/web image" step leaves the previous build's
-      # now-untagged layers behind — `kind load docker-image` re-tags the
+      # now-untagged layers behind — `kind load image-archive` re-tags the
       # new one but never removes the old. On a persistent self-hosted
       # runner (issue #88 — this box, not a fresh GitHub-hosted VM per
       # run), that's cumulative: real incident, 2026-07-24 — five days of
-      # untouched dangling images/build cache pushed the shared Docker
-      # Desktop disk to 96% full, which tripped OpenSearch's flood-stage
-      # watermark and crash-looped the next api pod on a completely
-      # unrelated PR. `if: always()` so a failed deploy still gets cleaned
-      # up — that's exactly the case most likely to leave extra dangling
-      # layers behind.
+      # untouched dangling images/build cache pushed the shared disk to
+      # 96% full, which tripped OpenSearch's flood-stage watermark and
+      # crash-looped the next api pod on a completely unrelated PR.
+      # `if: always()` so a failed deploy still gets cleaned up — that's
+      # exactly the case most likely to leave extra dangling layers
+      # behind.
       #
       # GitHub issue #530 (D85): the original `until=48h` grace window
       # made sense at ~1 run/day building 2 images; it now builds 4
@@ -241,17 +274,22 @@ jobs:
       # flood-stage watermark again before any of it aged past 48h.
       # Shortened to `until=6h` — recent-run reuse from same-day rebuilds
       # still applies, but growth is bounded to hours, not days.
-      - name: Prune stale Docker artifacts
+      #
+      # GitHub issue #540 (D90): ported straight from `docker image
+      # prune`/`docker builder prune` to their podman equivalents — podman
+      # doesn't have a separate `builder prune` subcommand, so build-cache
+      # pruning folds into `system prune`'s own `--filter until=` instead.
+      - name: Prune stale Podman artifacts
         if: always()
         run: |
-          docker image prune -f
-          docker builder prune -f --filter until=6h
+          podman image prune -f
+          podman system prune -f --filter until=6h
 
       # This host-level prune above is a *different* disk than the kind
       # node's own internal containerd store — a second real incident,
       # same day (2026-07-24): the node's own filesystem hit 91% full
-      # from repeated `kind load docker-image` calls (each one leaves an
-      # untagged, superseded image behind in the node's own store, not
+      # from repeated `kind load` calls (each one leaves an untagged,
+      # superseded image behind in the node's own store, not
       # the host's), tripping the same OpenSearch watermark again. Uses
       # infra/scripts/prune-kind-node-images.sh — deliberately not a
       # blind `crictl rmi --prune` (D35's own near-miss documented why:

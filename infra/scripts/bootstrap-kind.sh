@@ -5,14 +5,22 @@
 # overlay apply, LocalStack provision + seed. Safe to re-run against an
 # already-running cluster; every step either skips or upgrades in place.
 #
-# Requires: docker, kind, kubectl, helm, and LOCALSTACK_AUTH_TOKEN,
+# Requires: podman, kind, kubectl, helm, and LOCALSTACK_AUTH_TOKEN,
 # ADMIN_PASSWORD_HASH, ADMIN_JWT_SECRET, POSTGRES_PASSWORD set in the
 # environment (see wiki/deployment-guide.md sections 5 and 5b;
 # POSTGRES_PASSWORD added by GitHub issue #466/D77). ANTHROPIC_API_KEY is
 # optional (GitHub issue #163) — leave it unset to keep AI moderation
 # triage disabled.
+#
+# GitHub issue #540 (D89/D90): migrated off Docker onto Podman —
+# `KIND_EXPERIMENTAL_PROVIDER=podman` below (kind's own docs mark this
+# provider experimental, not GA, same caveat D84/#539 flagged) and
+# `podman save | kind load image-archive` in place of `kind load
+# docker-image`, which fails against a podman-built image on a
+# `localhost/`-prefix naming mismatch (D88/#545).
 set -euo pipefail
 
+export KIND_EXPERIMENTAL_PROVIDER=podman
 CLUSTER_NAME="interview-insights"
 NAMESPACE="interview-insights"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -46,7 +54,18 @@ if [ -z "${POSTGRES_PASSWORD:-}" ]; then
 fi
 
 echo "== 1. kind cluster =="
-if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
+# GitHub issue #540 (D91): `kind get clusters` itself is broken under
+# Podman 6.0.2/kind v0.32.0's experimental podman provider -- it shells
+# out to `podman ps --format '{{index .Labels "io.x-k8s.kind.cluster"}}'`,
+# a Go-template form that assumes .Labels is a map (true for `docker ps`,
+# not for this Podman version's ps template context, which errors with
+# "cannot index slice/array with type string"). `kind get clusters`
+# silently reports zero clusters as a result, breaking this exact
+# already-exists check. Checking the node container directly via `podman
+# ps` sidesteps kind's own broken enumeration entirely, and is at least
+# as accurate now that this script always runs under
+# KIND_EXPERIMENTAL_PROVIDER=podman anyway.
+if podman ps --filter "name=^${CLUSTER_NAME}-control-plane$" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -qx "${CLUSTER_NAME}-control-plane"; then
   echo "OK: cluster '$CLUSTER_NAME' already exists, skipping create"
 else
   KIND_CONFIG=$(mktemp)
@@ -92,11 +111,21 @@ kubectl -n kube-system wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=metrics-server --timeout=120s
 
 echo "== 4. Build and load api/web images =="
-docker build -t interview-insights-api:k8s -f "$REPO_ROOT/api/Dockerfile" "$REPO_ROOT/api"
-docker build -t interview-insights-web:k8s -f "$REPO_ROOT/web/Dockerfile" \
+podman build -t interview-insights-api:k8s -f "$REPO_ROOT/api/Dockerfile" "$REPO_ROOT/api"
+podman build -t interview-insights-web:k8s -f "$REPO_ROOT/web/Dockerfile" \
   --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local "$REPO_ROOT/web"
-kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
-  --name "$CLUSTER_NAME"
+# GitHub issue #540 (D91): re-tag under docker.io/library/ before saving --
+# Podman canonicalizes a locally built, unqualified image as
+# localhost/<name>:<tag>, but every manifest in this repo references the
+# bare name, which containerd's own short-name resolution expands to
+# docker.io/library/<name>:<tag> -- not localhost/<name>:<tag>. Without
+# this, kubelet doesn't find the loaded image locally and attempts (and
+# fails) a real Docker Hub pull instead. See cd.yml's own "Load images
+# into kind" step comment for the full writeup.
+for img in interview-insights-api:k8s interview-insights-web:k8s; do
+  podman tag "$img" "docker.io/library/$img"
+  podman save "docker.io/library/$img" | kind load image-archive /dev/stdin --name "$CLUSTER_NAME"
+done
 
 echo "== 5. Namespace =="
 kubectl apply -f "$REPO_ROOT/infra/k8s/base/00-namespace.yaml"

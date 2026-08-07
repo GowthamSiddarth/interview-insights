@@ -15,11 +15,23 @@ on:
 jobs:
   mac-smoke-test:
     runs-on: [self-hosted, macOS, local-kind]
+    env:
+      # GitHub issue #540 (D90) — this runner's `kind` cluster now runs on
+      # Podman, not Docker.
+      KIND_EXPERIMENTAL_PROVIDER: podman
     steps:
       - run: echo "macOS self-hosted runner is alive"
       - run: uname -a
-      - run: docker info --format '{{.ServerVersion}}'
+      - run: podman info --format '{{.Version.Version}}'
+      # GitHub issue #540 (D91) — `kind get clusters` itself is broken
+      # under this Podman/kind version (its `podman ps --format` template
+      # assumes `.Labels` is a map, which this Podman version's `ps`
+      # template context doesn't support), so it can't be used as a
+      # liveness check here either. `kubectl get nodes` against the
+      # existing context proves the cluster is actually reachable, which
+      # is what this step cares about anyway.
       - run: kubectl config current-context
+      - run: kubectl get nodes
 
   oracle-smoke-test:
     runs-on: [self-hosted, linux, ARM64, oracle-ci]
