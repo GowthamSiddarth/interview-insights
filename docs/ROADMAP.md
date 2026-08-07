@@ -1004,15 +1004,22 @@ GitHub issue #214.
       now fixed, but `extraPortMappings` (ingress host ports 80/443)
       newly failed, never having been reached by #539; #540/#541 stay
       blocked on that narrower gap instead; see D88
-- [ ] Diagnose/fix `extraPortMappings` under kind's (experimental)
+- [x] Diagnose/fix `extraPortMappings` under kind's (experimental)
       podman provider — the one remaining gap D88/#545 found, blocking
-      #540/#541 below (GitHub issue #547)
+      #540/#541 below (GitHub issue #547) — **root cause found: D88's
+      own spike had a pod port mismatch (declared `hostPort` not
+      matching the test image's actual listening port), not a platform
+      gap**; corrected config forwards end-to-end (node-internal and
+      full host path) repeatably; #540/#541 unblocked, pending real
+      ingress-nginx/80/443 parity verification as part of whichever is
+      picked up first; see D89
 - [ ] Migrate `cd.yml` and the self-hosted runner off Docker onto
-      Podman (GitHub issue #540) — **blocked** by D88's `extraPortMappings`
-      finding, pending #547
+      Podman (GitHub issue #540) — unblocked by D89; run the real
+      `bootstrap-kind.sh` + ingress-nginx flow as part of this issue's
+      own implementation to confirm 80/443 production parity
 - [ ] Remove Docker Desktop entirely: final re-verification + docs
-      update (GitHub issue #541) — **blocked** by D88's `extraPortMappings`
-      finding, pending #547
+      update (GitHub issue #541) — unblocked by D89, same 80/443
+      parity caveat as #540
 - [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
       #530) — third occurrence of D35/D43's failure mode; shortened to
