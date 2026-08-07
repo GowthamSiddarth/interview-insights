@@ -997,17 +997,22 @@ GitHub issue #214.
       `kind load docker-image` couldn't find a Podman-built image;
       issue's own decision gate fired, so #540/#541 below are blocked
       until a rootful `podman machine` is re-tested; see D84
-- [ ] Re-test `kind` on a **rootful** `podman machine` — retry of
+- [x] Re-test `kind` on a **rootful** `podman machine` — retry of
       #539's spike against the untested variable D84 called out
-      (rootless-Podman cgroup delegation was the failure mode; rootful
-      has real root/cgroup access like Docker's daemon) (GitHub issue
-      #545) — unblocks #540/#541 below if it passes
+      (GitHub issue #545) — **mixed**: node health and image loading
+      (via a `podman save | kind load image-archive` workaround) are
+      now fixed, but `extraPortMappings` (ingress host ports 80/443)
+      newly failed, never having been reached by #539; #540/#541 stay
+      blocked on that narrower gap instead; see D88
+- [ ] Diagnose/fix `extraPortMappings` under kind's (experimental)
+      podman provider — the one remaining gap D88/#545 found, blocking
+      #540/#541 below (GitHub issue #547)
 - [ ] Migrate `cd.yml` and the self-hosted runner off Docker onto
-      Podman (GitHub issue #540) — **blocked** by #539/D84's finding,
-      pending #545
+      Podman (GitHub issue #540) — **blocked** by D88's `extraPortMappings`
+      finding, pending #547
 - [ ] Remove Docker Desktop entirely: final re-verification + docs
-      update (GitHub issue #541) — **blocked** by #539/D84's finding,
-      pending #545
+      update (GitHub issue #541) — **blocked** by D88's `extraPortMappings`
+      finding, pending #547
 - [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
       #530) — third occurrence of D35/D43's failure mode; shortened to

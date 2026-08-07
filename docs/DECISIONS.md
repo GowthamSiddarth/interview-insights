@@ -4231,6 +4231,59 @@ a hypothetical one.
 
 ---
 
+### D88 — `kind` on **rootful** Podman: node health + image loading fixed, `extraPortMappings` newly broken; `kind`/CI/CD stay Docker, #540/#541 still blocked on a narrower gap (GitHub issue #545, Phase 20)
+
+**Context:** issue #545 was the rootful retry D84 called for but never
+ran — same `podman-machine-default` machine, switched from rootless to
+rootful (`podman machine set --rootful=true`), then re-ran #539's two
+failed checks plus the two it never reached.
+
+**Findings:**
+
+- **Control-plane node health: fixed.** Reaches `Ready` in ~15s (was
+  permanently `NotReady` under rootless) — confirms D84's rootless-
+  cgroup-delegation theory; rootful genuinely resolves it, exactly the
+  variable D84 called out as untested.
+- **`kind load docker-image`: still broken, but a workaround exists.**
+  Both the bare name and the `localhost/`-prefixed name are rejected as
+  "not present locally," same as D84 — this is inherent to `kind load
+  docker-image`'s `docker save`-shaped assumptions vs. Podman's image
+  naming, not a rootless-specific symptom, so rootful alone doesn't fix
+  it. The `podman save <image> | kind load image-archive /dev/stdin`
+  workaround D84 flagged but never reached (node health blocked it
+  first) **works cleanly** and fully resolves this one.
+- **`extraPortMappings`: new failure, not something D84 ever reached.**
+  What ingress-nginx's `controller.hostPort.enabled=true` in
+  `infra/scripts/bootstrap-kind.sh` relies on for host ports 80/443. A
+  pod with `hostPort: 8080` matching a kind-config `extraPortMappings`
+  entry reached `Ready` cleanly (`pod/spike-545-hostport condition
+  met`), but the mapped host port was unreachable from the Mac host
+  (`curl` failed against `localhost:18080`) — not a readiness/probe
+  issue, a real port-plumbing gap. Root cause not isolated in this
+  pass: plausibly kind's podman provider (explicitly experimental —
+  `kind create cluster` itself prints "enabling experimental podman
+  provider") not correctly publishing the node container's ports
+  through Podman machine's VM the way Docker Desktop's vpnkit does
+  transparently. Not diagnosed further here, same pattern as #539/D84
+  stopping at the first unresolved blocker rather than pushing through
+  everything in one pass.
+
+**Decision:** Still do not proceed to #540/#541 — `kind`, `ci.yml`, and
+`cd.yml` stay Docker-backed. The blocker moved, though: it's no longer
+"the node never comes up" (fixed) or "images can't load" (workaround
+exists), it's specifically host-port publishing for kind's podman
+provider. Both #540 (self-hosted CD runner's own smoke test hits
+`app.interview-insights.local:80`, per `wiki/deployment-guide.md`
+section 3.5) and #541 (local dev's ingress-based access) depend on
+exactly that path, so both stay blocked — pending a fix/diagnosis of
+`extraPortMappings` specifically, not pending another full re-spike of
+already-resolved node-health/image-loading questions.
+
+**Revisit when:** the `extraPortMappings` follow-up issue either fixes
+or firmly rules out host-port publishing under kind's podman provider.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
