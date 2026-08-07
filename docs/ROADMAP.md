@@ -1013,20 +1013,21 @@ GitHub issue #214.
       full host path) repeatably; #540/#541 unblocked, pending real
       ingress-nginx/80/443 parity verification as part of whichever is
       picked up first; see D89
-- [ ] Migrate `cd.yml` and the self-hosted runner off Docker onto
+- [x] Migrate `cd.yml` and the self-hosted runner off Docker onto
       Podman (GitHub issue #540) — unblocked by D89; code/docs migration
-      done (`cd.yml`, `bootstrap-kind.sh`, prune/disk-health scripts,
+      (`cd.yml`, `bootstrap-kind.sh`, prune/disk-health scripts,
       `wiki/deployment-guide.md`), see D90. Live-verified for real: the
       updated `bootstrap-kind.sh` run against a rootful `podman machine`
       surfaced three genuine gaps (broken `kind get clusters` under this
-      Podman version, the `docker.io/library/` retag requirement on top
-      of D88/D89's `image-archive` workaround, and 2GB being too little
-      `podman machine` memory for the full stack) — all three found and
-      fixed, see D91. **80/443 production parity now confirmed against
-      the real chart**, closing D89's own open caveat. Still open
-      pending: the self-hosted-runner smoke test (checklist item 3) and
-      re-running D36's golden-path smoke test against this cluster
-      (checklist item 4)
+      Podman version — hit twice, once in `bootstrap-kind.sh` and again
+      in `self-hosted-smoke-test.yml`'s own liveness check; the
+      `docker.io/library/` retag requirement on top of D88/D89's
+      `image-archive` workaround; and 2GB being too little `podman
+      machine` memory for the full stack) — all three found and fixed,
+      see D91. **80/443 production parity confirmed against the real
+      chart**, closing D89's own open caveat; golden-path check (D36)
+      and the self-hosted-runner smoke test both green against the
+      redeployed cluster. PR #550
 - [ ] Remove Docker Desktop entirely: final re-verification + docs
       update (GitHub issue #541) — unblocked by D89, same 80/443
       parity caveat as #540
