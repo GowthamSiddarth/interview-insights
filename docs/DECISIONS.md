@@ -4284,6 +4284,68 @@ or firmly rules out host-port publishing under kind's podman provider.
 
 ---
 
+### D89 — `extraPortMappings` root cause: D88's spike had a pod port mismatch, not a platform gap; kind's podman provider forwards correctly, #540/#541 unblocked (GitHub issue #547, Phase 20)
+
+**Context:** issue #547 was filed to isolate D88's `extraPortMappings`
+failure — specifically whether it was a Podman-machine VM-level
+port-forwarding gap or a bug in kind's own (experimental) podman
+provider. Same machine as #545 (`podman-machine-default`, rootful,
+AppleHV, unchanged since — Podman 6.0.2, kind v0.32.0).
+
+**Findings:**
+
+- **Plain `podman run -p 18081:80`, independent of kind: works cleanly**
+  (`curl` → `HTTP 200`). VM-level port forwarding itself is fine —
+  rules out a blanket Podman-machine/gvproxy gap.
+- **kind's podman provider does publish `extraPortMappings` correctly.**
+  `podman inspect` on the node container showed the declared mapping
+  (`8080/tcp -> 0.0.0.0:18080`) present and correct — kind's provider is
+  not silently dropping the publish step.
+- **Reproduced D88's "unreachable" symptom — then found the actual
+  cause.** A pod declaring `hostPort: 8080` with an image that doesn't
+  actually listen on 8080 (`nginx:alpine`, which listens on 80)
+  reproduced the exact "`Ready` but unreachable from the host" symptom
+  D88 documented, using the same `hostPort: 8080`-style config D88's
+  own writeup described. This strongly suggests D88's original spike
+  made the identical mistake — declaring a `hostPort`/`containerPort`
+  without verifying it matched the container image's real listening
+  port — and attributed the resulting connection reset to a platform
+  gap rather than a test config bug.
+- **Corrected config works end-to-end, repeatably.** Recreating the pod
+  with `containerPort: 80` (matching `nginx:alpine`'s real listener)
+  and `hostPort: 8080` (matching the node-level `extraPortMappings`
+  entry) returned `HTTP 200` both from *inside* the node container
+  (isolating node→pod hostPort DNAT) and from the Mac host (the full
+  host→VM→node→pod path) — confirmed twice, including after a fresh
+  pod delete/recreate to rule out a fluke.
+
+**Caveat — not a full production-parity test.** This validated the
+`extraPortMappings` + hostPort-DNAT *mechanism*, the same one
+ingress-nginx's `controller.hostPort.enabled=true` relies on, but did
+not run the actual `infra/scripts/bootstrap-kind.sh` + ingress-nginx
+Helm flow on ports 80/443 — those are currently bound by the existing
+Docker-backed `interview-insights` kind cluster on this machine, and
+stopping that felt out of scope for a diagnostic issue. Real
+production-parity verification of ports 80/443 through the actual
+ingress-nginx chart is still open.
+
+**Decision:** `extraPortMappings` is not proven broken — the evidence
+points at D88's own spike methodology as the cause, not kind's podman
+provider or Podman-machine's VM networking. #540/#541 are **unblocked**,
+with the recommendation that whichever one is picked up first runs the
+real `bootstrap-kind.sh` + ingress-nginx flow against the podman
+provider as part of its own implementation work — that exercises the
+80/443 production-parity path this diagnostic pass didn't cover, rather
+than filing yet another spike issue first. The `kind load docker-image`
+naming mismatch and its `podman save | kind load image-archive`
+workaround (D88) are unaffected and still apply.
+
+**Revisit when:** #540 or #541's real ingress-nginx flow either
+confirms this holds at 80/443 under the actual Helm chart, or surfaces
+a genuinely different failure — in which case this reopens.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
