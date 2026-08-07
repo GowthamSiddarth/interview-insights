@@ -997,10 +997,17 @@ GitHub issue #214.
       `kind load docker-image` couldn't find a Podman-built image;
       issue's own decision gate fired, so #540/#541 below are blocked
       until a rootful `podman machine` is re-tested; see D84
+- [ ] Re-test `kind` on a **rootful** `podman machine` — retry of
+      #539's spike against the untested variable D84 called out
+      (rootless-Podman cgroup delegation was the failure mode; rootful
+      has real root/cgroup access like Docker's daemon) (GitHub issue
+      #545) — unblocks #540/#541 below if it passes
 - [ ] Migrate `cd.yml` and the self-hosted runner off Docker onto
-      Podman (GitHub issue #540) — **blocked** by #539/D84's finding
+      Podman (GitHub issue #540) — **blocked** by #539/D84's finding,
+      pending #545
 - [ ] Remove Docker Desktop entirely: final re-verification + docs
-      update (GitHub issue #541) — **blocked** by #539/D84's finding
+      update (GitHub issue #541) — **blocked** by #539/D84's finding,
+      pending #545
 - [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
       #530) — third occurrence of D35/D43's failure mode; shortened to
