@@ -4443,7 +4443,11 @@ outright. **Fix:** that check now queries `podman ps` directly
 (`--filter name=^${CLUSTER_NAME}-control-plane$ --filter status=running`)
 instead of asking kind to enumerate clusters at all — accurate, and no
 worse a coupling to Podman than this script already has everywhere else
-post-D90.
+post-D90. Hit the exact same failure a second time, live: the initial
+version of `self-hosted-smoke-test.yml`'s own `mac-smoke-test` job used
+`kind get clusters` as its liveness check for the same reason (D90) and
+failed on a real dispatch against this branch — swapped for `kubectl get
+nodes` there too, which is what that step actually cares about anyway.
 
 **Finding 2 — the `podman save | kind load image-archive` workaround
 (D88/D89) is necessary but not sufficient for a real Deployment.**
