@@ -15,10 +15,15 @@ on:
 jobs:
   mac-smoke-test:
     runs-on: [self-hosted, macOS, local-kind]
+    env:
+      # GitHub issue #540 (D90) — this runner's `kind` cluster now runs on
+      # Podman, not Docker.
+      KIND_EXPERIMENTAL_PROVIDER: podman
     steps:
       - run: echo "macOS self-hosted runner is alive"
       - run: uname -a
-      - run: docker info --format '{{.ServerVersion}}'
+      - run: podman info --format '{{.Version.Version}}'
+      - run: kind get clusters
       - run: kubectl config current-context
 
   oracle-smoke-test:

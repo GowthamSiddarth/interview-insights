@@ -3,9 +3,10 @@ set -euo pipefail
 
 # Safely prunes orphaned images from the kind node's own containerd store
 # (GitHub issue TBD, D43) — a different location entirely from the host
-# Docker Desktop cache cd.yml's "Prune stale Docker artifacts" step
-# already cleans (D35). `kind load docker-image` copies the built image
-# into the node's own internal containerd content/snapshot store and
+# Podman cache cd.yml's "Prune stale Podman artifacts" step already
+# cleans (D35; podman since GitHub issue #540/D90). `kind load
+# image-archive` copies the built image into the node's own internal
+# containerd content/snapshot store and
 # retags forward, but never removes the layers the previous build left
 # behind there — accumulating unboundedly on this project's persistent,
 # on-demand self-hosted runner (issue #88). Real incident, 2026-07-24: the
@@ -34,7 +35,11 @@ trap 'rm -f "$KEEP_DIGESTS_FILE" "$NODE_IMAGES_FILE" "$REMOVE_IDS_FILE"' EXIT
 kubectl get pods -A -o jsonpath='{range .items[*]}{.status.containerStatuses[*].imageID}{"\n"}{end}' \
   | grep -oE 'sha256:[a-f0-9]+' | sort -u > "$KEEP_DIGESTS_FILE"
 
-docker exec "$NODE" crictl images -o json > "$NODE_IMAGES_FILE"
+# GitHub issue #540 (D90): `docker exec` -> `podman exec` -- the node
+# container itself is now created by podman
+# (`KIND_EXPERIMENTAL_PROVIDER=podman`, set by whatever created this
+# cluster), same crictl-inside-the-node mechanics either way.
+podman exec "$NODE" crictl images -o json > "$NODE_IMAGES_FILE"
 
 python3 - "$KEEP_DIGESTS_FILE" "$NODE_IMAGES_FILE" > "$REMOVE_IDS_FILE" <<'PYEOF'
 import json
@@ -63,7 +68,7 @@ fi
 
 echo "Removing $(wc -l < "$REMOVE_IDS_FILE" | tr -d ' ') orphaned node-side image(s)..."
 while read -r id; do
-  docker exec "$NODE" crictl rmi "$id" || true
+  podman exec "$NODE" crictl rmi "$id" || true
 done < "$REMOVE_IDS_FILE"
 
 # Deletions alone don't always trigger immediate disk reclaim (confirmed
@@ -71,6 +76,6 @@ done < "$REMOVE_IDS_FILE"
 # garbage collection pass. Already-running containers survive this; it
 # restarts only the management daemon, not the containers themselves.
 echo "Restarting containerd to reclaim disk..."
-docker exec "$NODE" systemctl restart containerd
+podman exec "$NODE" systemctl restart containerd
 sleep 5
-docker exec "$NODE" df -h /
+podman exec "$NODE" df -h /

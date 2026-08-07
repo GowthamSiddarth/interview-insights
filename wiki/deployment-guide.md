@@ -18,15 +18,32 @@ trust whichever was verified more recently against a real run (check
 
 ```bash
 # macOS
-brew install --cask docker   # then open Docker Desktop once so the daemon starts --
-                              # still required for kind (section 3); kind/CI/CD stay
-                              # Docker regardless of section 2 below (docs/DECISIONS.md D83)
-brew install kind kubectl helm awscli
-brew install podman           # only for section 2's full-stack Compose path (D83) --
-                              # one-time `podman machine init && podman machine start`
-                              # needed too, see section 2
-node --version                # need 22+
+brew install podman kind kubectl helm awscli
+# Fresh machine, nothing set up yet:
+podman machine init --rootful --memory 8192   # rootful, not rootless -- rootless kind
+podman machine start                          # nodes never reach Ready (D84); one-time,
+                                               # see section 3. 8GB, not podman's own 2GB
+                                               # default (D91) -- the full kind stack
+                                               # (control plane + ingress-nginx +
+                                               # Postgres/OpenSearch/Redpanda/LocalStack/
+                                               # api/web/notification-service/
+                                               # review-analyzer) pegs a 2GB machine's CPU
+                                               # near 100% continuously, which cascades
+                                               # into kube-controller-manager/kube-scheduler
+                                               # CrashLoopBackOff -- not a Podman bug, a
+                                               # genuine sizing requirement.
+# Already have a rootless `podman-machine-default` from before (D83), or
+# one sized below 8GB?
+#   podman machine stop && podman machine set --rootful --memory 8192 && podman machine start
+node --version                  # need 22+
 ```
+
+Docker Desktop is no longer required for anything in this guide (GitHub
+issue #540, D89/D90 superseded D83's "kind/CI/CD stay Docker" carve-out —
+`kind` now runs against the same `podman machine` section 2's Compose
+path already uses, via `KIND_EXPERIMENTAL_PROVIDER=podman`). GitHub issue
+#541 tracks actually uninstalling it from this machine; until that lands
+it's harmless to leave installed, just unused.
 
 ## 1. Native dev loop (fastest — no containers for api/web)
 
@@ -121,19 +138,12 @@ service containers per run, and the prefix defaults to empty there.
 
 Podman is what backs `infra/docker-compose.yml` now (GitHub issue #496,
 `docs/DECISIONS.md` D83) — verified directly to honor `depends_on:
-condition: service_healthy` and to build both Dockerfiles cleanly.
-Docker Desktop stays installed regardless (`kind`, section 3, still
-needs it) and `docker compose --profile full up --build` still works
-identically here too if you'd rather use it — same compose file, no
-functional difference either way; the commands below just show the
-Podman path since that's what's actually verified end to end.
+condition: service_healthy` and to build both Dockerfiles cleanly. As of
+GitHub issue #540/D90, `kind` (section 3) runs on this same `podman
+machine` too, rootful (D84/D88) — see the Prerequisites section above.
 
-**One-time setup** (skip if already done):
-
-```bash
-podman machine init
-podman machine start
-```
+**One-time setup**: see Prerequisites above — the same `podman machine`
+backs this section and section 3, so there's only one to set up.
 
 **Bring it up:**
 
@@ -250,7 +260,7 @@ running fine for a while. Root cause: LocalStack's Deployment
 (`infra/k8s/base/localstack/08-localstack.yaml`) deliberately has no PVC
 — it's a practice/prototype tool, not a source of truth, so its Secrets
 Manager/IAM state is `emptyDir`-backed and disappears whenever the
-container itself restarts for *any* reason (OOM, node hiccup, `docker
+container itself restarts for *any* reason (OOM, node hiccup, `podman
 system prune`, etc.), independent of any deploy or `kubectl apply`.
 
 This used to require noticing and re-seeding by hand. It no longer does:
@@ -284,7 +294,11 @@ of manual; it doesn't make LocalStack's state durable.
 ### 3.1 Create an Ingress-ready cluster
 
 A plain `kind create cluster` doesn't route external traffic in — the
-Ingress needs `extraPortMappings` + a node label:
+Ingress needs `extraPortMappings` + a node label. `KIND_EXPERIMENTAL_PROVIDER=podman`
+(GitHub issue #540, D89/D90) runs this against the `podman machine` from
+Prerequisites instead of Docker Desktop — `kind`'s own docs mark this
+provider experimental, not GA, and it needs the machine to be **rootful**
+(D84/D88) or the control-plane node never reaches `Ready`:
 
 ```bash
 cat <<'EOF' > /tmp/kind-config.yaml
@@ -304,6 +318,7 @@ nodes:
       - containerPort: 443
         hostPort: 443
 EOF
+export KIND_EXPERIMENTAL_PROVIDER=podman
 kind create cluster --name interview-insights --config /tmp/kind-config.yaml
 ```
 
@@ -331,11 +346,20 @@ client bundle), not a runtime env var — it must be a `--build-arg`
 matching the Ingress host below:
 
 ```bash
-docker build -t interview-insights-api:k8s -f api/Dockerfile api
-docker build -t interview-insights-web:k8s -f web/Dockerfile \
+podman build -t interview-insights-api:k8s -f api/Dockerfile api
+podman build -t interview-insights-web:k8s -f web/Dockerfile \
   --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local web
-kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
-  --name interview-insights
+# `kind load docker-image` doesn't work against a podman-built image
+# (`localhost/`-prefix naming mismatch, D88/#545) -- `podman save | kind
+# load image-archive` gets the bytes onto the node, but a bare manifest
+# reference (what every Deployment here uses) still won't resolve to a
+# `localhost/`-tagged image -- containerd expands it to
+# `docker.io/library/<name>` instead. Re-tag under that prefix first, or
+# kubelet just fails an ImagePullBackOff against real Docker Hub (D91):
+for img in interview-insights-api:k8s interview-insights-web:k8s; do
+  podman tag "$img" "docker.io/library/$img"
+  podman save "docker.io/library/$img" | kind load image-archive /dev/stdin --name interview-insights
+done
 ```
 
 ### 3.4 Apply the `dev` overlay
@@ -426,8 +450,9 @@ replaces the cached one), then force a rollout — `kind`'s node won't
 notice a same-tagged image changed on its own:
 
 ```bash
-docker build -t interview-insights-api:k8s -f api/Dockerfile api
-kind load docker-image interview-insights-api:k8s --name interview-insights
+podman build -t interview-insights-api:k8s -f api/Dockerfile api
+podman tag interview-insights-api:k8s docker.io/library/interview-insights-api:k8s
+podman save docker.io/library/interview-insights-api:k8s | kind load image-archive /dev/stdin --name interview-insights
 kubectl -n interview-insights rollout restart deployment/api
 kubectl -n interview-insights rollout status deployment/api --timeout=90s
 ```
@@ -513,7 +538,7 @@ issue-79-secrets-boot-wiring/README.md` for the original worked example
 applies, the LocalStack-fetch behavior does).
 
 **Gotcha: `api`/`notification-service` crash-loop with
-`ResourceNotFoundException` after a `docker stop`/`docker start` of the
+`ResourceNotFoundException` after a `podman stop`/`podman start` of the
 `kind` node, outside of a CD run.** LocalStack's Deployment has no PVC
 by design (it's a practice tool, not a source of truth, see
 `infra/k8s/base/localstack/08-localstack.yaml`'s own comment) — its
@@ -1162,20 +1187,31 @@ cluster running the new code, step by step:
      discovery to the first step. Section 11.10 below documents
      `infra/scripts/disk-health-check.sh`, a daily launchd job that
      auto-prunes proactively so this gate ideally never fires.
-   - **Build `api` image** — `docker build -f api/Dockerfile`, tagged
+   - **Build `api` image** — `podman build -f api/Dockerfile`, tagged
      `interview-insights-api:k8s`, with the short commit SHA baked in
      via `--build-arg GIT_SHA` (surfaced later at `GET /health`).
-   - **Build `web` image** — `docker build -f web/Dockerfile`, tagged
+   - **Build `web` image** — `podman build -f web/Dockerfile`, tagged
      `interview-insights-web:k8s`, with `NEXT_PUBLIC_API_URL` passed as
      a build arg — it has to be set at build time, not runtime, per the
      Next.js inlining bug fixed in Phase 7 issue #28.
-   - **Build `notification-service` image** — `docker build -f
+   - **Build `notification-service` image** — `podman build -f
      services/notification-service/Dockerfile`, tagged
      `interview-insights-notification-service:k8s`, same `--build-arg
      GIT_SHA` pattern as `api` (Phase 31, GitHub issue #334).
-   - **Load images into kind** — `kind load docker-image ... --name
-     interview-insights` pushes all three images straight into the
-     cluster's node containers, no registry involved.
+   - **Build `review-analyzer` image** — `podman build -f
+     services/review-analyzer/Dockerfile`, tagged
+     `interview-insights-review-analyzer:k8s`, same `--build-arg GIT_SHA`
+     pattern (Phase 32, GitHub issue #339).
+   - **Load images into kind** — each image is first `podman tag`ged
+     under `docker.io/library/` (D91 — otherwise kubelet's bare-reference
+     resolution never matches the `localhost/`-tagged image podman
+     actually loaded, and fails an `ImagePullBackOff` against real Docker
+     Hub instead), then `podman save <docker.io/library/image> | kind
+     load image-archive /dev/stdin --name interview-insights`, one image
+     at a time, straight into the cluster's node containers, no registry
+     involved. Podman since GitHub issue #540 (D89/D90) — `kind load
+     docker-image` doesn't work against a podman-built image
+     (`localhost/`-prefix naming mismatch, D88/#545) either.
    - **Ensure the namespace exists** — `kubectl apply -f
      infra/k8s/base/00-namespace.yaml`, idempotent, mostly relevant to a
      truly fresh cluster.
@@ -1227,15 +1263,15 @@ cluster running the new code, step by step:
 ## 9. Tearing down
 
 ```bash
-# Docker Compose (sections 1-2)
-cd infra && docker compose down          # add -v to also wipe volumes
+# Compose (sections 1-2)
+cd infra && podman compose -f docker-compose.yml --profile full down   # add --volumes to also wipe volumes
 
 # kind cluster (section 3) — stop without losing state, resume later:
-docker stop interview-insights-control-plane
-docker start interview-insights-control-plane   # resumes exactly where it left off
+podman stop interview-insights-control-plane
+podman start interview-insights-control-plane   # resumes exactly where it left off
 
 # kind cluster — fully destroy (irreversible, loses all in-cluster data):
-kind delete cluster --name interview-insights
+KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name interview-insights
 
 # self-hosted runner (section 7) — nothing to stop if using --once (it
 # already exited); Ctrl+C if run without --once
@@ -1246,8 +1282,8 @@ kind delete cluster --name interview-insights
 Everything in this repo is designed to be rebuilt from nothing (Phase 13
 issue #108 proved it), which makes a machine migration mostly a matter of
 following that same discipline rather than trying to carry over live
-state. **Don't try to preserve the running `kind` cluster or Docker
-Desktop's state across a migration** — both are notoriously fragile
+state. **Don't try to preserve the running `kind` cluster or the `podman
+machine`'s state across a migration** — both are notoriously fragile
 across a fresh install, and this repo has a one-shot script built for
 exactly this situation.
 
@@ -1266,12 +1302,11 @@ reads, and LocalStack's own secrets/IAM state (ephemeral by design, D25
    grep LOCALSTACK_AUTH_TOKEN ~/.zshenv ~/.zshrc   # confirm the line came over (don't print the value)
    ```
 
-2. **Reinstall tooling fresh** — don't trust a migrated Docker Desktop
-   install:
+2. **Reinstall tooling fresh** — don't trust a migrated `podman machine`:
 
    ```bash
-   brew install --cask docker   # open once to init the daemon
-   brew install kind kubectl helm awscli gh k9s
+   brew install podman kind kubectl helm awscli gh k9s
+   podman machine init --rootful && podman machine start   # rootful -- D84/D88
    node --version                # need 22+; brew install node if missing
    ```
 
@@ -1345,7 +1380,7 @@ decommissioning, then restore into the new cluster's `postgres-0` after
 step 4. Not documented step-by-step here since it's never actually been
 needed yet — revisit if that changes.
 
-## 11. Self-triage playbook — common `gh`/`kubectl`/`docker` commands
+## 11. Self-triage playbook — common `gh`/`kubectl`/`podman` commands
 
 Every command below has actually been run, more than once, across this
 project's AI-assisted sessions — this section exists so a human
@@ -1537,23 +1572,24 @@ npm run build
 npm run lint
 ```
 
-### 11.8 Build and inspect a Docker image directly (diagnosing a bad build, e.g. D63)
+### 11.8 Build and inspect an image directly (diagnosing a bad build, e.g. D63)
 
 Useful when a container crash-loops with a `MODULE_NOT_FOUND` or
 similarly path-shaped error — confirm what's actually inside the image
-rather than guessing from the build log:
+rather than guessing from the build log. Podman since GitHub issue #540
+(D90):
 
 ```bash
 cd /path/to/interview-insights
-docker build -t interview-insights-api:debug -f api/Dockerfile \
+podman build -t interview-insights-api:debug -f api/Dockerfile \
   --build-arg GIT_SHA=debug api
 
 # Inspect the built image's filesystem directly
-docker run --rm interview-insights-api:debug sh -c "ls /app/dist | head -20"
-docker run --rm interview-insights-api:debug sh -c "ls /app/dist/main.js"
+podman run --rm interview-insights-api:debug sh -c "ls /app/dist | head -20"
+podman run --rm interview-insights-api:debug sh -c "ls /app/dist/main.js"
 
 # Clean up the debug tag when done
-docker rmi interview-insights-api:debug
+podman rmi interview-insights-api:debug
 ```
 
 ### 11.9 Manual live-verification data cleanup checklist
@@ -1587,12 +1623,13 @@ infra/scripts/disk-health-check.sh status
 infra/scripts/disk-health-check.sh uninstall
 ```
 
-Logic: checks `df -h /`, `docker system df`, and (best-effort —
+Logic: checks `df -h /`, `podman system df`, and (best-effort —
 skipped if the port-forward from section 1 isn't running)
 `curl localhost:9200/_cat/allocation?v`. At/above 70% disk usage, it
-runs the same prune commands `cd.yml`'s own steps do
-(`docker image prune`, `docker builder prune --filter until=6h`,
-`infra/scripts/prune-kind-node-images.sh`). If usage is still at/above
+runs the same prune commands `cd.yml`'s own steps do — podman since
+GitHub issue #540/D90 (`podman image prune`, `podman system prune
+--filter until=6h`, `infra/scripts/prune-kind-node-images.sh`). If usage
+is still at/above
 80% *after* pruning, it fires a local notification (`osascript ...
 display notification`) — a single-user dev box doesn't need an
 external alerting service, just something that surfaces before the

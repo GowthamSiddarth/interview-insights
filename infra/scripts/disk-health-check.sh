@@ -16,8 +16,9 @@ set -euo pipefail
 # #531, fails a deploy at 85%) so this job clears pressure before that
 # gate is ever hit:
 #   - HARD (auto-prune trigger): disk usage at/above this runs the same
-#     prune commands cd.yml's "Prune stale Docker artifacts"/"Prune
-#     orphaned kind-node images" steps run.
+#     prune commands cd.yml's "Prune stale Podman artifacts"/"Prune
+#     orphaned kind-node images" steps run (podman since GitHub issue
+#     #540/D90).
 #   - WARN (notify): checked *after* pruning — if usage is still at/above
 #     this, auto-prune alone didn't clear it, so a local notification
 #     fires (there's time to investigate before the next CD run, not an
@@ -107,7 +108,8 @@ run_check() {
   local pct
   pct="$(disk_pct)"
   echo "host disk usage: ${pct}%"
-  docker system df 2>/dev/null || echo "docker system df unavailable"
+  # GitHub issue #540 (D90): docker -> podman.
+  podman system df 2>/dev/null || echo "podman system df unavailable"
 
   # Best-effort — the OpenSearch port-forward (infra/scripts/dev-port-
   # forwards.sh) may not be running when this fires unattended; that's
@@ -117,8 +119,8 @@ run_check() {
 
   if [ "$pct" -ge "$HARD_THRESHOLD" ]; then
     echo "disk usage ${pct}% >= hard threshold ${HARD_THRESHOLD}% -- auto-pruning (same commands cd.yml's own prune steps run)"
-    docker image prune -f
-    docker builder prune -f --filter until=6h
+    podman image prune -f
+    podman system prune -f --filter until=6h
     "$REPO_ROOT/infra/scripts/prune-kind-node-images.sh" "$CLUSTER_NAME" || echo "prune-kind-node-images.sh failed or cluster not running -- continuing"
     pct="$(disk_pct)"
     echo "post-prune disk usage: ${pct}%"
