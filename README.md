@@ -13,17 +13,25 @@ for what was last verified working.
 ## Prerequisites
 
 - Node.js 22+
-- Docker — used for Postgres and OpenSearch locally. `api` and `web` run
-  directly on the host with npm. If you don't have Docker yet:
-  - macOS: `brew install --cask docker`, then open the Docker app once so
-    its daemon starts (or install Docker Desktop from
-    [docker.com](https://www.docker.com/products/docker-desktop/))
-  - Otherwise follow the [Docker Engine install docs](https://docs.docker.com/engine/install/)
+- Podman — runs the local `kind` Kubernetes cluster, which is where
+  Postgres, OpenSearch, Mailpit, Redpanda, and every service actually
+  live (`docs/DECISIONS.md` D24/D26/D29/D83/D89/D90). `api`/`web` still
+  run directly on the host with npm for the fast dev loop.
+  - macOS: `brew install podman && podman machine init --rootful
+    --memory 8192 && podman machine start` (rootful, not rootless — the
+    control-plane node never reaches `Ready` otherwise, D84; 8GB, not
+    Podman's 2GB default — the full stack pegs a 2GB machine's CPU near
+    100% continuously, D91)
+  - Otherwise follow [Podman's install docs](https://podman.io/docs/installation)
     for your OS
-- Optional: Podman instead of Docker for the "full-stack Compose"
-  alternative further down (`docs/DECISIONS.md` D83) — `kind` above
-  still needs actual Docker either way: `brew install podman &&
-  podman machine init && podman machine start`
+- Docker Desktop is no longer required for anything in this repo — `kind`
+  itself now runs against the same `podman machine` above
+  (`KIND_EXPERIMENTAL_PROVIDER=podman`, GitHub issue #540/D89/D90,
+  superseding D83's original "kind/CI/CD stay Docker" carve-out). It
+  still works as a drop-in alternative to Podman for the optional
+  full-stack Compose path further down if you already have it — no
+  reason to install it fresh. GitHub issue #541 tracks its full removal
+  from this project's own docs/tooling.
 - Optional: a Postgres client (DBeaver, TablePlus, `psql`) for poking at the
   database directly
 
