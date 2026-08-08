@@ -43,7 +43,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # practice flow (README's "Alternative: LocalStack for IAM/Secrets
 # Manager practice", GitHub issue #66) where $POSTGRES_PASSWORD is never
 # set and this value is never actually dialed.
-DATABASE_URL_VALUE="${SEED_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/interview_insights?schema=public}"
+#
+# The password must be percent-encoded before it goes into the connection
+# string (GitHub issue #551, found live while verifying #540/D91):
+# wiki/deployment-guide.md 5d's own rotation command
+# (`openssl rand -base64 24`) can produce `/`, `+`, or `=`, any of which
+# breaks postgresql:// URL parsing (Prisma: "P1013: invalid port number
+# in database URL") if embedded raw.
+urlencode() {
+  python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+POSTGRES_PASSWORD_URLENCODED="$(urlencode "${POSTGRES_PASSWORD:-postgres}")"
+DATABASE_URL_VALUE="${SEED_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD_URLENCODED}@postgres:5432/interview_insights?schema=public}"
 EMAIL_HASH_SECRET_VALUE="${SEED_EMAIL_HASH_SECRET:-localstack-seeded-secret-change-me}"
 # GitHub issue #466 (D76) — the last two secrets api/notification-service
 # still carried as committed plaintext k8s-Secret fallbacks. Must be a

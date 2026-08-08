@@ -1041,6 +1041,13 @@ GitHub issue #214.
 - [x] Daily launchd health-check job: proactive disk monitoring +
       auto-prune for the self-hosted CD runner (GitHub issue #532) —
       `infra/scripts/disk-health-check.sh`, 70%/80% thresholds, see D87
+- [x] `infra/aws/seed-localstack.sh` didn't URL-encode `$POSTGRES_PASSWORD`
+      when building `DATABASE_URL` (GitHub issue #551) — found live while
+      verifying #540 (D91): `wiki/deployment-guide.md` 5d's own rotation
+      command (`openssl rand -base64 24`) can produce `/`, `+`, or `=`,
+      breaking `postgresql://` URL parsing (`P1013: invalid port number
+      in database URL`). Fixed by percent-encoding the password before
+      interpolating it into `DATABASE_URL_VALUE`; see D92
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
