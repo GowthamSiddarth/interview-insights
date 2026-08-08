@@ -41,9 +41,11 @@ node --version                  # need 22+
 Docker Desktop is no longer required for anything in this guide (GitHub
 issue #540, D89/D90 superseded D83's "kind/CI/CD stay Docker" carve-out —
 `kind` now runs against the same `podman machine` section 2's Compose
-path already uses, via `KIND_EXPERIMENTAL_PROVIDER=podman`). GitHub issue
-#541 tracks actually uninstalling it from this machine; until that lands
-it's harmless to leave installed, just unused.
+path already uses, via `KIND_EXPERIMENTAL_PROVIDER=podman`), and has been
+uninstalled from this machine (GitHub issue #541, D93) — live-verified
+first: full stack (nodes, all 9 pods, ingress 80/443, and the golden-path
+smoke test, 15/15) confirmed healthy with Docker Desktop quit before it
+was removed.
 
 ## 1. Native dev loop (fastest — no containers for api/web)
 
