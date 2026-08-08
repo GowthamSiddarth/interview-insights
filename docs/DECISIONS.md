@@ -4523,10 +4523,41 @@ tool is upgraded).
 
 ---
 
-### D93 — Docker Desktop uninstalled for real, after live re-verification with it off (GitHub issue #541, Phase 20)
+### D92 — `seed-localstack.sh` percent-encodes `POSTGRES_PASSWORD` before building `DATABASE_URL` (GitHub issue #551)
 
-*(D92 is `infra/aws/seed-localstack.sh`'s URL-encoding fix, GitHub issue
-#551 — landing on its own branch/PR in parallel with this one.)*
+**Context:** the exact latent bug D91 flagged as "not fixed here — filed
+as a separate, unrelated defect." `infra/aws/seed-localstack.sh` built
+`DATABASE_URL_VALUE` by interpolating `$POSTGRES_PASSWORD` directly into
+a `postgresql://` connection string with no encoding. Any password
+containing a URL-significant character — `/`, `+`, `=` from
+`wiki/deployment-guide.md` 5d's own documented `openssl rand -base64 24`
+rotation command, or `@`, `:`, `#`, `%`, `?` from a hand-chosen one —
+corrupts the resulting URL. D91 hit this live as Prisma's `P1013:
+invalid port number in database URL`.
+
+**Decision:** percent-encode the password at the point `DATABASE_URL_VALUE`
+is assembled, not by constraining how `POSTGRES_PASSWORD` is generated.
+Added a small `urlencode()` helper (`python3 -c
+'urllib.parse.quote(sys.argv[1], safe="")'`) — `python3` is already a
+hard dependency of this script (used below to parse `assume-role` JSON
+output) — and route `${POSTGRES_PASSWORD:-postgres}` through it before
+interpolation. Chosen over D91's other option (generate
+`POSTGRES_PASSWORD` from a URL-safe charset by convention) because
+encoding at the usage site is correct regardless of how the password was
+generated — it doesn't depend on every future rotation, whether via the
+documented `openssl rand -base64 24` or a hand-picked value, remembering
+to stay URL-safe. `infra/k8s/base/localstack/init/seed.sh` was not
+touched — it hardcodes the literal password `postgres` for its dev-only
+flow (see its own comment), never the real `$POSTGRES_PASSWORD`, so it
+was never exposed to this bug.
+
+**Revisit when:** never, unless `seed-localstack.sh`'s `DATABASE_URL`
+construction changes shape entirely (e.g. moves to a real URL-building
+library instead of hand-assembled interpolation).
+
+---
+
+### D93 — Docker Desktop uninstalled for real, after live re-verification with it off (GitHub issue #541, Phase 20)
 
 **Context:** #540/D89/D90/D91 already made Docker Desktop unnecessary
 for `cd.yml`, the self-hosted runner, and `bootstrap-kind.sh` — but
