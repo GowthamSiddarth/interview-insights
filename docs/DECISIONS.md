@@ -4557,6 +4557,64 @@ library instead of hand-assembled interpolation).
 
 ---
 
+### D93 — Docker Desktop uninstalled for real, after live re-verification with it off (GitHub issue #541, Phase 20)
+
+**Context:** #540/D89/D90/D91 already made Docker Desktop unnecessary
+for `cd.yml`, the self-hosted runner, and `bootstrap-kind.sh` — but
+never actually removed it from this machine, and D91's own 80/443
+parity confirmation ran with Docker Desktop *present* (just unused), not
+absent. #541 closes that gap: prove the whole stack survives with it
+gone, then remove it.
+
+**Live re-verification, in order:** confirmed the existing
+`interview-insights` kind cluster (rootful `podman-machine-default`,
+8GiB/5 CPU per D91) already healthy — all 9 pods `Running`. Ran the
+golden-path smoke test (`api/test/golden-path.smoke-spec.ts`,
+`npm run smoke:e2e`) as a baseline with Docker Desktop already not
+running — it failed, but on `P1001: Can't reach database server`, then
+after fixing the port-forwards (below) on `P1003: Database
+interview_insights_test does not exist`. Neither had anything to do with
+Docker Desktop:
+
+- **Gap 1:** `infra/scripts/dev-port-forwards.sh start` was never run
+  for this session, so nothing was listening on `localhost:5432`/`9200`/
+  etc. Not a regression — the verification script driving this just
+  skipped a documented prerequisite (README/deployment-guide §1). Fixed
+  by running it (idempotent, safe to always call before the smoke test).
+- **Gap 2:** `interview_insights_test` had never actually been created
+  on this specific cluster's Postgres — `deployment-guide.md` §7.2
+  already documents `kubectl exec postgres-0 -- psql -U postgres -c
+  "CREATE DATABASE interview_insights_test;"` + `prisma migrate deploy`
+  as a one-time step per cluster; this cluster just hadn't had it run.
+  Fixed by running both.
+
+With both real (pre-existing, Docker-Desktop-unrelated) gaps closed:
+`quit app "Docker"` confirmed not running → `kubectl get nodes`/`get
+pods` still all healthy → `curl http://app.interview-insights.local/`
+and `http://api.interview-insights.local/health` both reachable
+(80/443 parity, this time with Docker Desktop actually absent, not just
+unused as in D91) → golden-path smoke test **15/15 passing**.
+
+**Decision:** with that green, uninstalled Docker Desktop:
+`brew uninstall --cask docker`. First pass left two root-owned leftovers
+(`/Applications/Docker.app`, `/Library/PrivilegedHelperTools/
+com.docker.socket`) because `brew`'s `sudo` needs an interactive
+password prompt a non-interactive session can't supply — the launchd
+services (`com.docker.helper`/`com.docker.socket`/`com.docker.vmnetd`)
+were removed automatically; finishing the two file removals needed the
+user to re-run the same command themselves once, interactively.
+
+**Result:** Docker Desktop no longer required *or* installed for
+anything in this repo. `wiki/deployment-guide.md`'s Prerequisites and
+`README.md`'s Prerequisites both updated to lead with Podman; the
+"until #541 lands" language removed now that it has.
+
+**Revisit when:** never, unless a future contributor's machine needs
+Docker Desktop reinstalled for an unrelated reason — nothing in this
+project depends on it anymore.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

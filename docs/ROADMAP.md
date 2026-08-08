@@ -1028,9 +1028,13 @@ GitHub issue #214.
       chart**, closing D89's own open caveat; golden-path check (D36)
       and the self-hosted-runner smoke test both green against the
       redeployed cluster. PR #550
-- [ ] Remove Docker Desktop entirely: final re-verification + docs
-      update (GitHub issue #541) — unblocked by D89, same 80/443
-      parity caveat as #540
+- [x] Remove Docker Desktop entirely: final re-verification + docs
+      update (GitHub issue #541) — live-verified with Docker Desktop
+      quit: cluster/pods/podman-machine healthy, ingress 80/443
+      reachable, golden-path smoke test 15/15; found and fixed an
+      unrelated gap along the way (`interview_insights_test` database
+      had never been created on this cluster); uninstalled via `brew
+      uninstall --cask docker`; see D93
 - [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
       filter is too loose for current merge/build volume (GitHub issue
       #530) — third occurrence of D35/D43's failure mode; shortened to
