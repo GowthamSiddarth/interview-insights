@@ -762,20 +762,32 @@ bullet below and the issues themselves for the full reasoning.
       point (GitHub issue #164, D62)
 - [x] Engineering blog (last) (GitHub issue #165)
 
-## Phase 20 — Operational Hardening & Live-Verification Findings
+## Phase 20 — Operational Hardening & Live-Verification Findings (retired, split into 20a–20e)
 
 Filed retroactively, 2026-07-24, per a new standing convention: every
 ad-hoc dev/test/structural task — not just planned `docs/ROADMAP.md`
 feature work — gets tracked under an Epic, even when the work itself
-already happened before the issue existed. Four cross-cutting items
-surfaced this way, none discovered through planned feature work: a CD
-disk-pressure incident found while verifying the Phase 17 golden-path
-smoke test, the smoke test itself (built to make live verification
-repeatable and safe), a real Prisma race the smoke test's own
-stress-testing surfaced, and two product-review findings (login-page
-copy, an open anonymous-write gap on company creation). Milestone:
-"Phase 20 — Operational Hardening & Live-Verification Findings". Epic:
-GitHub issue #214.
+already happened before the issue existed. Reused as that catch-all
+repeatedly for over two weeks (2026-07-24 through 2026-08-09) until it
+had grown to ~32 unrelated issues under one epic (#214) and one
+milestone. Split 2026-08-09 into five narrower, thematically coherent
+phases (20a–20e below) so the epic/milestone/blog structure actually
+tracks what each item is about, rather than "everything ad-hoc that
+happened during this stretch." Epic #214 and the original "Phase 20"
+milestone stay closed as the historical record of this phase before
+the split — see `wiki/blog/phase-20-operational-hardening/README.md`
+for the same pointer on the blog side. Every bullet below kept its
+original GitHub issue number, PR, and D-number; only the phase/epic/
+milestone grouping changed.
+
+### Phase 20a — CD/Infra Disk & Build Hygiene
+
+Docker/Podman disk-fills-up-and-crash-loops incidents and their fixes —
+the same failure mode (`api` crash-looping on OpenSearch's flood-stage
+watermark once local disk fills) recurring three times over the phase
+before finally getting a proactive gate + monitoring instead of a
+reactive prune each time. Milestone: "Phase 20a — CD/Infra Disk & Build
+Hygiene". Epic: GitHub issue #556.
 
 - [x] Prune stale Docker artifacts after every CD deploy — five days of
       CD runs had filled the shared Docker Desktop disk to 96%,
@@ -784,210 +796,40 @@ GitHub issue #214.
       cleanup step; a near-miss with node-internal `crictl rmi --prune`
       documented as the reason host-level Docker cleanup is used
       instead (PR #210, GitHub issue #215, D35)
-- [x] Full golden-path smoke test, opt-in and DB-safety-guarded — one
-      continuous test walking the entire feature set built so far,
-      safe to rerun on demand against the isolated test database
-      (`assertUsingTestDatabase()` refuses anything else), deliberately
-      excluded from CI (PR #211, GitHub issue #216, D36)
-- [x] `GET /moderation/queue` isolates each entity type's enrichment —
-      the smoke test's own stress-testing surfaced a transient Prisma
-      required-relation race (a concurrent GDPR erasure/Update-Delete
-      committing mid-query), confirmed via the live schema that no
-      durable orphaned row is possible; the real bug was `Promise.all`
-      letting one entity type's failure crash the whole endpoint for
-      every caller (PR #213, GitHub issue #212, D37)
-- [x] Honest login-page copy + lock down `POST /companies` — the login
-      form already always upserts a candidate but its copy read as
-      login-only; `POST /companies` had neither a session requirement
-      nor rate limiting, an anonymous-write gap predating Phase 16
-      entirely since `Company` has no `candidateId` (PR #219, GitHub
-      issue #217, D38)
-- [x] Engineering blog (last) (GitHub issue #218) — Phase 20 declared
-      fully done, then reopened the same day: a user-reported bug ("nav
-      bar shows log in even after login") traced to session cookies
-      being host-only, invisible to `web`'s JS on any deployed
-      environment where `web`/`api` don't share a hostname (issue #222,
-      D39). Epic #214 and milestone #17 reopened, same precedent
-      Phase 18 already set.
-- [x] Session cookies gain an explicit shared `Domain` (`COOKIE_DOMAIN`)
-      so `web`'s NavBar/wizard session checks actually see a real login
-      on any deployed environment — verified via `Set-Cookie` through
-      the real Ingress and a live headless-browser run confirming
-      "Log out" renders correctly (GitHub issue #222, D39)
-- [x] Engineering blog update for issue #222 (D39) — Phase 20 declared
-      fully done, then reopened a second time the same night: a CD
-      deploy failed with the exact D35 crash signature (OpenSearch's
-      flood-stage watermark) but from a disk D35's fix never covered —
-      the kind node's own internal containerd store, filled by
-      repeated `kind load docker-image` calls across a single heavy day
-      (GitHub issue #240, D43). Epic #214 and milestone #17 reopened
-      again, same precedent already set twice this phase.
 - [x] `infra/scripts/prune-kind-node-images.sh` safely prunes the kind
       node's own orphaned images — cross-references every pod's actual
       running image digest cluster-wide before removing anything
       (never a blind `crictl rmi --prune`, per D35's own near-miss),
       wired into `cd.yml` as a second prune step; verified live against
       the real incident, freeing the node's disk from 91% to 45% and
-      unblocking the stuck deploy (GitHub issue #240, D43)
-- [x] Engineering blog update for issue #240 (D43) — Phase 20 is now
-      fully done
-- [x] `api/scripts/prune-orphaned-company-search-docs.js` diffs the
-      `companies` OpenSearch index against Postgres and bulk-deletes
-      anything with no matching row — a live sweep found 415 such
-      orphans (420 documents against 5 real rows), all accumulated from
-      test-cleanup sessions that only ever deleted the Postgres row
-      (D44's existing pattern) and never re-synced the index; deleted
-      the 415 confirmed orphans directly and added the script so this
-      doesn't require trusting a purely manual checklist step going
-      forward (GitHub issue #278, D51). Epic #214 reopened and
-      re-closed the same day, same precedent as #222/#240.
-- [x] Engineering blog update for issue #278 (D51) — Phase 20 is now
-      fully done
-- [x] `infra/scripts/dev-port-forwards.sh` wires the local Postgres/
-      OpenSearch/Mailpit port-forwards into macOS launchd LaunchAgents
-      instead of plain backgrounded `kubectl port-forward` jobs, which
-      only survive as long as the shell that started them — unreliable
-      across separate AI-assisted tool-call shells, confirmed dying
-      repeatedly during Phase 28's live verification. `KeepAlive`
-      auto-restarts a forward if it ever exits; verified persistence
-      directly by `exec`-ing into a fresh shell and confirming the
-      forwards were still listening (GitHub issue #312). Epic #214
-      reopened and re-closed the same day, same precedent as #222/
-      #240/#278.
-- [x] Engineering blog update for issue #312 — Phase 20 is now fully
-      done
-- [x] Public company Reviews section groups approved round ratings by
-      their submission (`InterviewProcess`), not raw row count — a
-      user report found a 3-round submission plus 1 separate one
-      showing as "4 reviews" instead of the real 2; the same flat-list
-      problem Phase 29 issue #315 already fixed for the moderation
-      queue. Pagination moves with the grouping (submissions, not raw
-      rows, so one submission's rounds are never split across a page
-      boundary) (GitHub issue #347, D54). Epic #214 reopened and
-      re-closed the same day, same precedent as #222/#240/#278/#312.
-- [x] Engineering blog update for issue #347 (D54) — Phase 20 is now
-      fully done
-- [x] `/me`'s process card labels its own outcome distinctly from
-      moderation status — a bare "Rejected" (the process's own
-      self-reported outcome) read as a sixth moderation verdict
-      alongside five real ones, especially confusing when it was the
-      opposite of what every actual status said. Now `Outcome:
-      Rejected`, copy-only (GitHub issue #349, D55). Epic #214
-      reopened and re-closed the same day, same precedent as
-      #222/#240/#278/#312/#347.
-- [x] Engineering blog update for issue #349 (D55) — Phase 20 is now
-      fully done
-- [x] `/me`'s process cards collapse by default and expand on click —
-      direct user request to match the moderation queue's own
-      collapsed-by-default / expand-on-click pattern (GitHub issue
-      #385). Epic #214 reopened and re-closed the same day, same
-      precedent as #222/#240/#278/#312/#347/#349.
-- [x] Fix: "View details" and "View company profile" (issue #385's own
-      layout) rendered on visibly separate lines on narrower viewports
-      — `flex-1`'s zero flex-basis never triggered a wrap, so a long
-      title just shrank the toggle button instead of wrapping,
-      stranding "View details" far from the profile link. Grouped both
-      labels into one flex sub-container that can't split apart, with
-      the title stacking full-width above them below the `sm`
-      breakpoint (GitHub issue #387). Epic #214 reopened and re-closed
-      the same day, same precedent as #222/#240/#278/#312/#347/#349.
-- [x] "View details" is now the actual clickable toggle (a hyperlink-
-      styled button), not the whole title row — direct user follow-up
-      request; the title block is now plain static text (GitHub issue
-      #389). Epic #214 reopened and re-closed the same day, same
-      precedent as #222/#240/#278/#312/#347/#349/#387.
-- [x] Fix: `api/scripts/*.ts` files were being pulled into `nest
-      build` (`tsconfig.build.json` had no exclusion for `scripts`),
-      shifting every compiled `dist/` output path and crash-looping the
-      deployed pod on the very next CD run — `tsconfig.build.json` now
-      excludes `scripts` explicitly (GitHub issue #393, D63). Epic #214
-      reopened and re-closed the same day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389.
-- [x] No plaintext secrets anywhere in git — extended the LocalStack
-      Secrets Manager pattern already proven for `DATABASE_URL`/
-      `EMAIL_HASH_SECRET` (issue #78/#79) to `EMAIL_ENCRYPTION_KEY`/
-      `CANDIDATE_JWT_SECRET`, built the equivalent for
-      notification-service (own bootstrap, own IAM role, D73/D75's
-      duplicate-rather-than-share precedent) — a direct user request
-      following issue #335's `EMAIL_ENCRYPTION_KEY` addition, not a
-      live-verified incident like this phase's earlier items. Also the
-      origin of CLAUDE.md hard constraint #6 (no secret ever committed
-      as plaintext, not even a placeholder). Both open design questions
-      the issue flagged, resolved and documented rather than silently:
-      the once-separate `dev-localstack` overlay is folded into `dev`
-      itself, which now requires LocalStack unconditionally — no more
-      plaintext-Secret escape hatch to opt out into (D76); and
-      `postgres-credentials` — needed before any app code exists to
-      fetch a secret for it — is provisioned imperatively, same pattern
-      as `admin-credentials` (D77) (GitHub issue #466). Epic #214
-      reopened, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389.
-- [x] Engineering blog update for issue #466 (D76, D77) — Phase 20 is
-      now fully done
-- [x] Trim `CLAUDE.md`'s "Current status" section (233K chars of
-      append-only phase history) into a lean root file plus
-      `api/CLAUDE.md` and `web/CLAUDE.md` scoped files; also wrote down
-      the ad-hoc-work-under-an-epic convention itself as an explicit
-      `CLAUDE.md` bullet (previously only a narrative aside), with a
-      concrete runbook in `wiki/github-project-setup.md` (PR #414,
-      GitHub issue #413). Epic #214 reopened and re-closed the same
-      day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389/#466.
-- [x] `getAutoApprovalConfidenceThreshold()` treated an explicit
-      empty-string `AI_MODERATION_AUTO_APPROVE_THRESHOLD` (this
-      project's own "disabled" convention) as threshold `0`, not
-      "unset" (`Number('')` is `0`, not `NaN`) — every clean AI verdict
-      became auto-approve-eligible even with the kill switch on. Also
-      wired `AI_AUTO_APPROVAL_ENABLED`/the threshold into
-      `docker-compose.yml`/`05-api.yaml` (previously only documented in
-      `.env.example`, no real deploy path to set them), added
-      `api/.dockerignore` (a real local `.env` was baking into the
-      image), and extended `wiki/deployment-guide.md` section 5c into a
-      full enablement walkthrough (PR #451, GitHub issue #450). Epic
-      #214 reopened and re-closed the same day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413.
-- [x] AI moderation triage failed on every real Claude response —
-      `AiModerationService.requestVerdict()` called `JSON.parse()`
-      directly, but a real `claude-haiku-4-5` response wraps the JSON
-      verdict in a markdown code fence despite the system prompt asking
-      for none; silently swallowed by D66's existing best-effort
-      handling, leaving `moderationVerdict` pending forever. Never
-      caught by the test suite since every mock built its response via
-      `JSON.stringify()`, never fenced (PR #454, GitHub issue #453).
-      Epic #214 reopened and re-closed the same day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450.
-- [x] Native dev boot could crash on a genuinely-set `.env` var,
-      depending on module import order — `getRequiredAdminEnv(
-      'ADMIN_JWT_SECRET')` is read eagerly at `admin-auth.module.ts`
-      module-evaluation time, but nothing in `api/src` called `dotenv`
-      explicitly; `.env` only ever reached `process.env` as an
-      incidental side effect of `@prisma/client`'s own auto-loading,
-      and `app.module.ts` imports `AdminAuthModule` before
-      `PrismaModule`. `import 'dotenv/config'` as `main.ts`'s first
-      import removes the reliance on that ordering; a new smoke test
-      boots the real app from only a throwaway `.env` file (PR #455,
-      GitHub issue #452). Epic #214 reopened and re-closed the same
-      day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453.
-- [x] `web/tests/*.spec.tsx` flagged IDE/`tsc` errors (`Cannot find
-      name 'describe'/'it'/'expect'`) since `@types/jest` was never a
-      real dependency — jest's own runtime globals meant `npm test`
-      always passed regardless, masking the gap; also stopped tracking
-      `tsconfig.tsbuildinfo` (TypeScript's incremental-build cache) (PR
-      #483, GitHub issue #482). Epic #214 reopened and re-closed the
-      same day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453/#452.
-- [x] `infra/scripts/dev-port-forwards.sh` never wired up Redpanda
-      (Postgres/OpenSearch/Mailpit only), so the two e2e specs that talk
-      to a real broker only ever passed in CI, failing locally with
-      `KafkaJSConnectionError`. Redpanda's k8s `Service` only exposed
-      the in-cluster port; added a `kafka-external` (19092) port
-      matching docker-compose's own exposed port, so
-      `dev-port-forwards.sh` treats it like the other three services
-      (PR #520, GitHub issue #519). Epic #214 reopened and re-closed the
-      same day, same precedent as
-      #222/#240/#278/#312/#347/#349/#387/#389/#466/#413/#450/#453/#452/
-      #482.
+      unblocking the stuck deploy (GitHub issue #240, D43) — the exact
+      same crash signature came back from a disk D35's fix never
+      covered: the kind node's own internal containerd store, filled by
+      repeated `kind load docker-image` calls across a single heavy day
+- [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
+      filter is too loose for current merge/build volume (GitHub issue
+      #530) — third occurrence of D35/D43's failure mode; shortened to
+      `until=6h`; see D85
+- [x] Add a pre-flight disk-usage gate to `cd.yml` before Docker builds
+      (GitHub issue #531) — fails fast at 85% disk usage before any
+      build starts; see D86
+- [x] Daily launchd health-check job: proactive disk monitoring +
+      auto-prune for the self-hosted CD runner (GitHub issue #532) —
+      `infra/scripts/disk-health-check.sh`, 70%/80% thresholds, see D87
+- [x] Engineering blog: existing posts for #215 (D35) and #240 (D43)
+      carried over from the original Phase 20 blog; #530/#531/#532
+      never got individual posts (no new design decision beyond
+      D85-D87's own writeup in `docs/DECISIONS.md`), same "not every
+      reopen gets its own post" precedent the original Phase 20 set
+
+### Phase 20b — Docker → Podman Migration
+
+A clean, self-contained project arc: replace Docker/Docker Desktop with
+Podman across local dev, `kind`, and CD, one layer at a time with an
+explicit decision gate at each step (D83-D93). The newest of the five
+groups — finished with #553/#554 just before this split. Milestone:
+"Phase 20b — Docker → Podman Migration". Epic: GitHub issue #557.
+
 - [x] Switch local dev container engine from Docker to Podman (GitHub
       issue #496) — `infra/docker-compose.yml` only, `kind`/CI/CD
       explicitly out of scope; see D83 (PR #538)
@@ -1035,16 +877,58 @@ GitHub issue #214.
       unrelated gap along the way (`interview_insights_test` database
       had never been created on this cluster); uninstalled via `brew
       uninstall --cask docker`; see D93
-- [x] Tighten CD's Docker/build-cache prune cadence — the existing 48h
-      filter is too loose for current merge/build volume (GitHub issue
-      #530) — third occurrence of D35/D43's failure mode; shortened to
-      `until=6h`; see D85
-- [x] Add a pre-flight disk-usage gate to `cd.yml` before Docker builds
-      (GitHub issue #531) — fails fast at 85% disk usage before any
-      build starts; see D86
-- [x] Daily launchd health-check job: proactive disk monitoring +
-      auto-prune for the self-hosted CD runner (GitHub issue #532) —
-      `infra/scripts/disk-health-check.sh`, 70%/80% thresholds, see D87
+- [ ] Engineering blog for Phase 20b — no post exists yet for any of
+      D83-D93 (unlike 20a/20c/20d/20e, this arc was never blogged
+      individually); needs real writing, not just a doc reorg — file as
+      its own issue once the GitHub reorg script below runs
+
+### Phase 20c — Live-Verification Tooling & Data Hygiene
+
+Infra/scripts that make live verification itself safe and repeatable,
+plus the bugs that live verification (the golden-path smoke test's own
+stress-testing, a port-forward reliability gap, an OpenSearch/Postgres
+drift check) surfaced along the way. Milestone: "Phase 20c —
+Live-Verification Tooling & Data Hygiene". Epic: GitHub issue
+#558.
+
+- [x] Full golden-path smoke test, opt-in and DB-safety-guarded — one
+      continuous test walking the entire feature set built so far,
+      safe to rerun on demand against the isolated test database
+      (`assertUsingTestDatabase()` refuses anything else), deliberately
+      excluded from CI (PR #211, GitHub issue #216, D36)
+- [x] `GET /moderation/queue` isolates each entity type's enrichment —
+      the smoke test's own stress-testing surfaced a transient Prisma
+      required-relation race (a concurrent GDPR erasure/Update-Delete
+      committing mid-query), confirmed via the live schema that no
+      durable orphaned row is possible; the real bug was `Promise.all`
+      letting one entity type's failure crash the whole endpoint for
+      every caller (PR #213, GitHub issue #212, D37)
+- [x] `api/scripts/prune-orphaned-company-search-docs.js` diffs the
+      `companies` OpenSearch index against Postgres and bulk-deletes
+      anything with no matching row — a live sweep found 415 such
+      orphans (420 documents against 5 real rows), all accumulated from
+      test-cleanup sessions that only ever deleted the Postgres row
+      (D44's existing pattern) and never re-synced the index; deleted
+      the 415 confirmed orphans directly and added the script so this
+      doesn't require trusting a purely manual checklist step going
+      forward (GitHub issue #278, D51)
+- [x] `infra/scripts/dev-port-forwards.sh` wires the local Postgres/
+      OpenSearch/Mailpit port-forwards into macOS launchd LaunchAgents
+      instead of plain backgrounded `kubectl port-forward` jobs, which
+      only survive as long as the shell that started them — unreliable
+      across separate AI-assisted tool-call shells, confirmed dying
+      repeatedly during Phase 28's live verification. `KeepAlive`
+      auto-restarts a forward if it ever exits; verified persistence
+      directly by `exec`-ing into a fresh shell and confirming the
+      forwards were still listening (GitHub issue #312)
+- [x] `infra/scripts/dev-port-forwards.sh` never wired up Redpanda
+      (Postgres/OpenSearch/Mailpit only), so the two e2e specs that talk
+      to a real broker only ever passed in CI, failing locally with
+      `KafkaJSConnectionError`. Redpanda's k8s `Service` only exposed
+      the in-cluster port; added a `kafka-external` (19092) port
+      matching docker-compose's own exposed port, so
+      `dev-port-forwards.sh` treats it like the other three services
+      (PR #520, GitHub issue #519)
 - [x] `infra/aws/seed-localstack.sh` didn't URL-encode `$POSTGRES_PASSWORD`
       when building `DATABASE_URL` (GitHub issue #551) — found live while
       verifying #540 (D91): `wiki/deployment-guide.md` 5d's own rotation
@@ -1052,6 +936,147 @@ GitHub issue #214.
       breaking `postgresql://` URL parsing (`P1013: invalid port number
       in database URL`). Fixed by percent-encoding the password before
       interpolating it into `DATABASE_URL_VALUE`; see D92
+- [x] Engineering blog: existing posts for #216 (D36), #212 (D37), #278
+      (D51), and #312 carried over from the original Phase 20 blog;
+      #519/#551 never got individual posts, same "not every reopen
+      gets its own post" precedent
+
+### Phase 20d — Product/UX Polish from Live Verification
+
+User-facing findings from actually using the product (not infra) — a
+mix of live-verification catches and direct user follow-up requests on
+the same `/me`/company-profile UI. Milestone: "Phase 20d — Product/UX
+Polish from Live Verification". Epic: GitHub issue #559.
+
+- [x] Honest login-page copy + lock down `POST /companies` — the login
+      form already always upserts a candidate but its copy read as
+      login-only; `POST /companies` had neither a session requirement
+      nor rate limiting, an anonymous-write gap predating Phase 16
+      entirely since `Company` has no `candidateId` (PR #219, GitHub
+      issue #217, D38)
+- [x] Session cookies gain an explicit shared `Domain` (`COOKIE_DOMAIN`)
+      so `web`'s NavBar/wizard session checks actually see a real login
+      on any deployed environment — a user-reported bug ("nav bar shows
+      log in even after login") traced to session cookies being
+      host-only, invisible to `web`'s JS on any deployed environment
+      where `web`/`api` don't share a hostname; verified via
+      `Set-Cookie` through the real Ingress and a live headless-browser
+      run confirming "Log out" renders correctly (GitHub issue #222,
+      D39)
+- [x] Public company Reviews section groups approved round ratings by
+      their submission (`InterviewProcess`), not raw row count — a
+      user report found a 3-round submission plus 1 separate one
+      showing as "4 reviews" instead of the real 2; the same flat-list
+      problem Phase 29 issue #315 already fixed for the moderation
+      queue. Pagination moves with the grouping (submissions, not raw
+      rows, so one submission's rounds are never split across a page
+      boundary) (GitHub issue #347, D54)
+- [x] `/me`'s process card labels its own outcome distinctly from
+      moderation status — a bare "Rejected" (the process's own
+      self-reported outcome) read as a sixth moderation verdict
+      alongside five real ones, especially confusing when it was the
+      opposite of what every actual status said. Now `Outcome:
+      Rejected`, copy-only (GitHub issue #349, D55)
+- [x] `/me`'s process cards collapse by default and expand on click —
+      direct user request to match the moderation queue's own
+      collapsed-by-default / expand-on-click pattern (GitHub issue
+      #385)
+- [x] Fix: "View details" and "View company profile" (issue #385's own
+      layout) rendered on visibly separate lines on narrower viewports
+      — `flex-1`'s zero flex-basis never triggered a wrap, so a long
+      title just shrank the toggle button instead of wrapping,
+      stranding "View details" far from the profile link. Grouped both
+      labels into one flex sub-container that can't split apart, with
+      the title stacking full-width above them below the `sm`
+      breakpoint (GitHub issue #387)
+- [x] "View details" is now the actual clickable toggle (a hyperlink-
+      styled button), not the whole title row — direct user follow-up
+      request; the title block is now plain static text (GitHub issue
+      #389)
+- [x] Engineering blog: existing posts for #217 (D38), #222 (D39), #347
+      (D54), and #349 (D55) carried over from the original Phase 20
+      blog; #385/#387/#389 never got individual posts (copy/layout-only
+      follow-ups, no new design decision), same "not every reopen gets
+      its own post" precedent
+
+### Phase 20e — Config, Secrets & Build Correctness Bugs
+
+Grab-bag of real correctness bugs found in config/build/secrets
+plumbing — each one a case where something silently did the wrong
+thing (a threshold parsed as `0` instead of "unset", a JSON parse that
+silently swallowed a markdown fence, module-import-order-dependent env
+loading) rather than failing loudly. Milestone: "Phase 20e — Config,
+Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
+
+- [x] No plaintext secrets anywhere in git — extended the LocalStack
+      Secrets Manager pattern already proven for `DATABASE_URL`/
+      `EMAIL_HASH_SECRET` (issue #78/#79) to `EMAIL_ENCRYPTION_KEY`/
+      `CANDIDATE_JWT_SECRET`, built the equivalent for
+      notification-service (own bootstrap, own IAM role, D73/D75's
+      duplicate-rather-than-share precedent) — a direct user request
+      following issue #335's `EMAIL_ENCRYPTION_KEY` addition, not a
+      live-verified incident like this phase's earlier items. Also the
+      origin of CLAUDE.md hard constraint #6 (no secret ever committed
+      as plaintext, not even a placeholder). Both open design questions
+      the issue flagged, resolved and documented rather than silently:
+      the once-separate `dev-localstack` overlay is folded into `dev`
+      itself, which now requires LocalStack unconditionally — no more
+      plaintext-Secret escape hatch to opt out into (D76); and
+      `postgres-credentials` — needed before any app code exists to
+      fetch a secret for it — is provisioned imperatively, same pattern
+      as `admin-credentials` (D77) (GitHub issue #466)
+- [x] Fix: `api/scripts/*.ts` files were being pulled into `nest
+      build` (`tsconfig.build.json` had no exclusion for `scripts`),
+      shifting every compiled `dist/` output path and crash-looping the
+      deployed pod on the very next CD run — `tsconfig.build.json` now
+      excludes `scripts` explicitly (GitHub issue #393, D63)
+- [x] Trim `CLAUDE.md`'s "Current status" section (233K chars of
+      append-only phase history) into a lean root file plus
+      `api/CLAUDE.md` and `web/CLAUDE.md` scoped files; also wrote down
+      the ad-hoc-work-under-an-epic convention itself as an explicit
+      `CLAUDE.md` bullet (previously only a narrative aside), with a
+      concrete runbook in `wiki/github-project-setup.md` (PR #414,
+      GitHub issue #413)
+- [x] `getAutoApprovalConfidenceThreshold()` treated an explicit
+      empty-string `AI_MODERATION_AUTO_APPROVE_THRESHOLD` (this
+      project's own "disabled" convention) as threshold `0`, not
+      "unset" (`Number('')` is `0`, not `NaN`) — every clean AI verdict
+      became auto-approve-eligible even with the kill switch on. Also
+      wired `AI_AUTO_APPROVAL_ENABLED`/the threshold into
+      `docker-compose.yml`/`05-api.yaml` (previously only documented in
+      `.env.example`, no real deploy path to set them), added
+      `api/.dockerignore` (a real local `.env` was baking into the
+      image), and extended `wiki/deployment-guide.md` section 5c into a
+      full enablement walkthrough (PR #451, GitHub issue #450)
+- [x] AI moderation triage failed on every real Claude response —
+      `AiModerationService.requestVerdict()` called `JSON.parse()`
+      directly, but a real `claude-haiku-4-5` response wraps the JSON
+      verdict in a markdown code fence despite the system prompt asking
+      for none; silently swallowed by D66's existing best-effort
+      handling, leaving `moderationVerdict` pending forever. Never
+      caught by the test suite since every mock built its response via
+      `JSON.stringify()`, never fenced (PR #454, GitHub issue #453)
+- [x] Native dev boot could crash on a genuinely-set `.env` var,
+      depending on module import order — `getRequiredAdminEnv(
+      'ADMIN_JWT_SECRET')` is read eagerly at `admin-auth.module.ts`
+      module-evaluation time, but nothing in `api/src` called `dotenv`
+      explicitly; `.env` only ever reached `process.env` as an
+      incidental side effect of `@prisma/client`'s own auto-loading,
+      and `app.module.ts` imports `AdminAuthModule` before
+      `PrismaModule`. `import 'dotenv/config'` as `main.ts`'s first
+      import removes the reliance on that ordering; a new smoke test
+      boots the real app from only a throwaway `.env` file (PR #455,
+      GitHub issue #452)
+- [x] `web/tests/*.spec.tsx` flagged IDE/`tsc` errors (`Cannot find
+      name 'describe'/'it'/'expect'`) since `@types/jest` was never a
+      real dependency — jest's own runtime globals meant `npm test`
+      always passed regardless, masking the gap; also stopped tracking
+      `tsconfig.tsbuildinfo` (TypeScript's incremental-build cache) (PR
+      #483, GitHub issue #482)
+- [x] Engineering blog: existing post for #466 (D76, D77) carried over
+      from the original Phase 20 blog; #393/#413/#450/#453/#452/#482
+      never got individual posts, same "not every reopen gets its own
+      post" precedent
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

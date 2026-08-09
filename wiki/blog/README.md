@@ -185,26 +185,54 @@ issues are now done — this phase's blog is complete.
 2. [Issue #163 — LLM-assisted moderation triage (D66)](phase-19-content-quality-synthetic-data/issue-163-llm-moderation-triage/README.md)
 3. [Issue #164 — Synthetic data generator (D62)](phase-19-content-quality-synthetic-data/issue-164-synthetic-data-generator/README.md)
 
-## Phase 20 — Operational Hardening & Live-Verification Findings
+## Phase 20 — Operational Hardening & Live-Verification Findings (retired, split into 20a–20e)
 
-See `docs/ROADMAP.md` Phase 20. Filed retroactively — cross-cutting
-fixes and tooling discovered via live verification, stress-testing, and
-product review rather than planned feature work. Declared fully done,
-then reopened repeatedly since — the same non-linear precedent
-Phase 6/8/18 already set. Not every reopen gets its own post below;
+See `docs/ROADMAP.md`'s Phase 20 stub — this grew into a ~32-issue
+catch-all under one epic and was split 2026-08-09 into five narrower
+phases below, each keeping its original issue numbers/D-numbers. See
+[`phase-20-operational-hardening/README.md`](phase-20-operational-hardening/README.md)
+for the same pointer.
+
+### Phase 20a — CD/Infra Disk & Build Hygiene
+
+See `docs/ROADMAP.md` Phase 20a. Not every reopen got its own post;
 only ones introducing a real design decision (a new D-number) do.
 
-1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20-operational-hardening/issue-215-cd-artifact-pruning/README.md)
-2. [Issue #216 — Full golden-path smoke test (D36)](phase-20-operational-hardening/issue-216-golden-path-smoke-test/README.md)
-3. [Issue #212 — `GET /moderation/queue` isolates each entity type's enrichment (D37)](phase-20-operational-hardening/issue-212-moderation-queue-race-fix/README.md)
-4. [Issue #217 — Honest login-page copy + lock down `POST /companies` (D38)](phase-20-operational-hardening/issue-217-login-copy-company-lockdown/README.md)
-5. [Issue #222 — Session cookies need a shared `Domain`, or `web` never sees a real login (D39)](phase-20-operational-hardening/issue-222-session-cookie-domain/README.md)
-6. [Issue #240 — D35's fix cleaned the wrong disk: pruning the kind node's own containerd store (D43)](phase-20-operational-hardening/issue-240-kind-node-image-pruning/README.md)
-7. [Issue #278 — 415 ghosts in the search index: pruning orphaned OpenSearch company documents (D51)](phase-20-operational-hardening/issue-278-orphaned-search-docs/README.md)
-8. [Issue #312 — Port-forwards that outlive the shell that started them](phase-20-operational-hardening/issue-312-launchd-port-forwards/README.md)
-9. [Issue #347 — Company reviews, grouped by submission (D54)](phase-20-operational-hardening/issue-347-company-reviews-grouping/README.md)
-10. [Issue #349 — Labeling `/me`'s process outcome distinctly from moderation status (D55)](phase-20-operational-hardening/issue-349-me-outcome-label/README.md)
-11. [Issue #466 — Closing out the last plaintext secrets (D76, D77)](phase-20-operational-hardening/issue-466-secrets-manager-completion/README.md)
+1. [Issue #215 — Prune stale Docker artifacts after every CD deploy (D35)](phase-20a-cd-infra-disk-build-hygiene/issue-215-cd-artifact-pruning/README.md)
+2. [Issue #240 — D35's fix cleaned the wrong disk: pruning the kind node's own containerd store (D43)](phase-20a-cd-infra-disk-build-hygiene/issue-240-kind-node-image-pruning/README.md)
+
+### Phase 20b — Docker → Podman Migration
+
+See `docs/ROADMAP.md` Phase 20b. No post exists yet for this arc
+(D83-D93) — the newest of the five groups; a blog issue still needs to
+be filed and written.
+
+### Phase 20c — Live-Verification Tooling & Data Hygiene
+
+See `docs/ROADMAP.md` Phase 20c. Not every reopen got its own post;
+only ones introducing a real design decision (a new D-number) do.
+
+1. [Issue #216 — Full golden-path smoke test (D36)](phase-20c-live-verification-tooling-data-hygiene/issue-216-golden-path-smoke-test/README.md)
+2. [Issue #212 — `GET /moderation/queue` isolates each entity type's enrichment (D37)](phase-20c-live-verification-tooling-data-hygiene/issue-212-moderation-queue-race-fix/README.md)
+3. [Issue #278 — 415 ghosts in the search index: pruning orphaned OpenSearch company documents (D51)](phase-20c-live-verification-tooling-data-hygiene/issue-278-orphaned-search-docs/README.md)
+4. [Issue #312 — Port-forwards that outlive the shell that started them](phase-20c-live-verification-tooling-data-hygiene/issue-312-launchd-port-forwards/README.md)
+
+### Phase 20d — Product/UX Polish from Live Verification
+
+See `docs/ROADMAP.md` Phase 20d. Not every reopen got its own post;
+only ones introducing a real design decision (a new D-number) do.
+
+1. [Issue #217 — Honest login-page copy + lock down `POST /companies` (D38)](phase-20d-product-ux-polish-from-live-verification/issue-217-login-copy-company-lockdown/README.md)
+2. [Issue #222 — Session cookies need a shared `Domain`, or `web` never sees a real login (D39)](phase-20d-product-ux-polish-from-live-verification/issue-222-session-cookie-domain/README.md)
+3. [Issue #347 — Company reviews, grouped by submission (D54)](phase-20d-product-ux-polish-from-live-verification/issue-347-company-reviews-grouping/README.md)
+4. [Issue #349 — Labeling `/me`'s process outcome distinctly from moderation status (D55)](phase-20d-product-ux-polish-from-live-verification/issue-349-me-outcome-label/README.md)
+
+### Phase 20e — Config, Secrets & Build Correctness Bugs
+
+See `docs/ROADMAP.md` Phase 20e. Not every reopen got its own post;
+only ones introducing a real design decision (a new D-number) do.
+
+1. [Issue #466 — Closing out the last plaintext secrets (D76, D77)](phase-20e-config-secrets-build-correctness-bugs/issue-466-secrets-manager-completion/README.md)
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

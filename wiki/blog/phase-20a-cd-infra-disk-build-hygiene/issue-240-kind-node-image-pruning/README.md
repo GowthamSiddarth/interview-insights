@@ -1,8 +1,10 @@
 # Phase 20, Issue #240 — D35's Fix Cleaned the Wrong Disk
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
+*Part of Phase 20a — CD/Infra Disk & Build Hygiene (originally filed under
+Phase 20 — Operational Hardening & Live-Verification Findings, epic #214,
+split out 2026-08-09 — see `docs/ROADMAP.md`'s Phase 20 retired stub).
 Phase 20 was declared fully done, then reopened a second time the same
-night this surfaced. See `docs/ROADMAP.md` Phase 20 and
+night this surfaced. See `docs/ROADMAP.md` Phase 20a and
 `docs/DECISIONS.md` D43.*
 
 ## Why the exact same crash came back

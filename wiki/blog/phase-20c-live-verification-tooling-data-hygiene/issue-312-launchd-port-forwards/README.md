@@ -1,8 +1,10 @@
 # Phase 20, Issue #312 — Port-Forwards That Outlive the Shell That Started Them
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Epic #214 reopened and re-closed the same day, same precedent as
-#222/#240/#278. See `docs/ROADMAP.md` Phase 20.*
+*Part of Phase 20c — Live-Verification Tooling & Data Hygiene (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Epic #214 reopened and re-closed the same day,
+same precedent as #222/#240/#278. See `docs/ROADMAP.md` Phase 20c.*
 
 ## The symptom looked like one flaky service, but wasn't
 

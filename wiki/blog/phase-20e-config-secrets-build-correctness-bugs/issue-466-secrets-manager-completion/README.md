@@ -1,9 +1,11 @@
 # Phase 20, Issue #466 — Closing Out the Last Plaintext Secrets
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Epic #214 reopened, same precedent as
-#222/#240/#278/#312/#347/#349/#387/#389. See `docs/ROADMAP.md` Phase 20
-and `docs/DECISIONS.md` D76/D77.*
+*Part of Phase 20e — Config, Secrets & Build Correctness Bugs (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Epic #214 reopened, same precedent as
+#222/#240/#278/#312/#347/#349/#387/#389. See `docs/ROADMAP.md`
+Phase 20e and `docs/DECISIONS.md` D76/D77.*
 
 ## The last four plaintext holdouts
 

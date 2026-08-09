@@ -1,8 +1,11 @@
 # Phase 20, Issue #222 — Session Cookies Need a Shared `Domain`, Or `web` Never Sees a Real Login
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Phase 20 was declared fully done, then reopened the same day this
-surfaced. See `docs/ROADMAP.md` Phase 20 and `docs/DECISIONS.md` D39.*
+*Part of Phase 20d — Product/UX Polish from Live Verification (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Phase 20 was declared fully done, then reopened
+the same day this surfaced. See `docs/ROADMAP.md` Phase 20d and
+`docs/DECISIONS.md` D39.*
 
 ## Why this is a genuinely interesting bug, not a NavBar typo
 
