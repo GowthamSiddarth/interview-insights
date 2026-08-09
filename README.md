@@ -24,14 +24,12 @@ for what was last verified working.
     100% continuously, D91)
   - Otherwise follow [Podman's install docs](https://podman.io/docs/installation)
     for your OS
-- Docker Desktop is no longer required for anything in this repo — `kind`
-  itself now runs against the same `podman machine` above
+- Docker Desktop is not required, and isn't installed on the reference dev
+  machine anymore — `kind` runs against the same `podman machine` above
   (`KIND_EXPERIMENTAL_PROVIDER=podman`, GitHub issue #540/D89/D90,
-  superseding D83's original "kind/CI/CD stay Docker" carve-out). It
-  still works as a drop-in alternative to Podman for the optional
-  full-stack Compose path further down if you already have it — no
-  reason to install it fresh. GitHub issue #541 tracks its full removal
-  from this project's own docs/tooling.
+  superseding D83's original "kind/CI/CD stay Docker" carve-out), and it
+  was fully removed after live-verifying the whole stack without it
+  (GitHub issue #541/D93). Nothing in this repo depends on it.
 - Optional: a Postgres client (DBeaver, TablePlus, `psql`) for poking at the
   database directly
 
@@ -94,9 +92,12 @@ before it's public (see `docs/DECISIONS.md` D3), and there's no
 moderation worker yet (Phase 3), so the public ratings count stays at `0`
 by design.
 
-**Stopping/resetting:** `docker compose down` stops Postgres and OpenSearch
-(data persists in named volumes). Add `-v` to also wipe the data and start
-fresh next time.
+**Stopping/resetting:** kill the `kubectl port-forward` jobs above (`kill %1
+%2 %3`, or `fg` + Ctrl-C each). To pause the `kind` cluster itself without
+losing data, `podman stop interview-insights-control-plane` (`podman start`
+resumes it); to fully wipe it, `KIND_EXPERIMENTAL_PROVIDER=podman kind
+delete cluster --name interview-insights` — see `wiki/deployment-guide.md`
+section 9.
 
 ### Alternative: full-stack Compose (Podman or Docker)
 
@@ -157,6 +158,7 @@ nodes:
       - containerPort: 443
         hostPort: 443
 EOF
+export KIND_EXPERIMENTAL_PROVIDER=podman
 kind create cluster --name interview-insights --config /tmp/kind-config.yaml
 
 # ingress-nginx installed via Helm, not raw upstream YAML — it's
@@ -181,11 +183,17 @@ Ingress host below — not as a runtime env var (that was a latent bug in
 the Docker Compose full profile, fixed alongside this):
 
 ```bash
-docker build -t interview-insights-api:k8s -f api/Dockerfile api
-docker build -t interview-insights-web:k8s -f web/Dockerfile \
+podman build -t interview-insights-api:k8s -f api/Dockerfile api
+podman build -t interview-insights-web:k8s -f web/Dockerfile \
   --build-arg NEXT_PUBLIC_API_URL=http://api.interview-insights.local web
-kind load docker-image interview-insights-api:k8s interview-insights-web:k8s \
-  --name interview-insights
+# `kind load docker-image` doesn't work against a podman-built image
+# (`localhost/`-prefix naming mismatch, D88/#545) -- re-tag under
+# docker.io/library/ first or kubelet fails an ImagePullBackOff against
+# real Docker Hub instead (D91) -- see wiki/deployment-guide.md section 3.3.
+for img in interview-insights-api:k8s interview-insights-web:k8s; do
+  podman tag "$img" "docker.io/library/$img"
+  podman save "docker.io/library/$img" | kind load image-archive /dev/stdin --name interview-insights
+done
 ```
 
 **3. Provision Postgres's credentials.** Never committed to a manifest
@@ -237,7 +245,7 @@ kubectl -n interview-insights port-forward svc/opensearch 9200:9200
 kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025
 ```
 
-Tear down with `kind delete cluster --name interview-insights`.
+Tear down with `KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name interview-insights`.
 
 ### Alternative: LocalStack for IAM/Secrets Manager practice (Phase 10)
 
@@ -260,7 +268,7 @@ source ~/.zshenv
 
 ```bash
 cd infra
-docker compose --profile localstack up -d localstack
+podman compose --profile localstack up -d localstack
 ```
 
 **3. Validate the IAM policy** — `infra/aws/api-secrets-access-policy.json`

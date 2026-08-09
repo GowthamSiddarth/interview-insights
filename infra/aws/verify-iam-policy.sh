@@ -18,7 +18,7 @@
 # one read-only action, no overly-broad resource) that policy simulation
 # would otherwise be the natural tool for.
 #
-# Requires: LocalStack running (`docker compose --profile localstack up`)
+# Requires: LocalStack running (`podman compose --profile localstack up`)
 # and LOCALSTACK_AUTH_TOKEN set (see README.md).
 set -euo pipefail
 

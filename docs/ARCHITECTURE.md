@@ -193,9 +193,9 @@ because the original diagram said so.
   run start:dev`, against kind's Postgres and OpenSearch (both via
   port-forward — D24/D26, not Docker Compose's containers) — no
   containers for the app code itself. See `wiki/deployment-guide.md` §1.
-- **Local dev, full Docker Compose:** `docker compose --profile full up
+- **Local dev, full Compose (Podman):** `podman compose --profile full up
   --build` — Postgres, OpenSearch, LocalStack, `api`, `web`, all
-  containerized. §2.
+  containerized (`docs/DECISIONS.md` D83). §2.
 - **Local dev, full Kubernetes (`kind`):** the closest thing to a real
   deployment this project has. `ingress-nginx` + `metrics-server` via
   Helm; `api`/`web`/`notification-service`/`review-analyzer`/`postgres`/

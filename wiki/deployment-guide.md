@@ -93,10 +93,10 @@ matching every other script in `infra/scripts/`.
 
 **Gotcha:** if `infra/docker-compose.yml`'s OpenSearch, Mailpit, or
 Redpanda containers happen to also be running, both it (`0.0.0.0` via
-Docker) and the port-forward (`127.0.0.1`) can coexist on the same port
+Podman) and the port-forward (`127.0.0.1`) can coexist on the same port
 and `localhost` becomes ambiguous — the exact silent-wrong-target
 problem D24 hit with Postgres.app. Stop the compose container(s)
-(`docker stop interview-insights-opensearch-1 interview-insights-mailpit-1 interview-insights-redpanda-1`)
+(`podman stop interview-insights-opensearch-1 interview-insights-mailpit-1 interview-insights-redpanda-1`)
 before port-forwarding.
 
 ### Running `api`'s tests locally
@@ -691,7 +691,7 @@ absent entirely, never present-and-empty. `ANTHROPIC_MODEL` is not a
 secret — it lives in the plain `review-analyzer-config` ConfigMap.
 
 **Native local dev** (section 1): `review-analyzer` isn't part of the
-default `docker compose up` loop or the host-run api/web pair — run it
+default `podman compose up` loop or the host-run api/web pair — run it
 directly via `cd services/review-analyzer && npm run start:dev`, reading
 its own `.env` (copy `services/review-analyzer/.env.example`):
 ```bash
