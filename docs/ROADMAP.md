@@ -1086,14 +1086,18 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       surfacing; fixed by wiring the real `postgres-credentials` Secret
       into LocalStack's pod, same pattern D78 already used for
       admin/anthropic secrets; see D94
-- [ ] `postgres-credentials`'s `POSTGRES_PASSWORD` key found empty (0
+- [x] `postgres-credentials`'s `POSTGRES_PASSWORD` key found empty (0
       bytes) in the live cluster, a distinct failure mode from #563's
-      stale-value reseed — crash-looped `api` again the same day #563/
-      #565 merged (GitHub issue #568); live-fixed by rotating the
-      password via local trust auth and resyncing both
-      `postgres-credentials` and LocalStack's `database-url` secret,
-      but root cause of the empty write and a provisioning-side
-      hard-fail-on-empty guard are still open
+      stale-value reseed — crash-looped `api` twice the same day #563/
+      #565 merged (GitHub issue #568). Root cause confirmed on the
+      second occurrence: a race between CD's "Provision Postgres
+      credentials secret" step resolving `${{ secrets.POSTGRES_PASSWORD
+      }}` and a concurrent `gh secret set POSTGRES_PASSWORD` landed
+      mid-write, resolving empty. Live-fixed both times by rotating the
+      password via local trust auth and resyncing `postgres-
+      credentials`, LocalStack's `database-url` secret, and (second
+      time) the GitHub repo secret together; CD now hard-fails on an
+      empty resolved value instead of applying it — see D95
 - [x] Engineering blog: existing post for #466 (D76, D77) carried over
       from the original Phase 20 blog; #393/#413/#450/#453/#452/#482
       never got individual posts, same "not every reopen gets its own

@@ -208,6 +208,28 @@ which service's IAM role reads `anthropic-api-key` back out of Secrets
 Manager (`review-analyzer` now, not `api`) — the repo secret and the k8s
 Secret it provisions are unaffected.
 
+### Hazard: rotating a repo secret while CD may be in flight
+
+GitHub issue #568: `postgres-credentials`'s `POSTGRES_PASSWORD` key was
+found empty (0 bytes) twice in one day. Root cause was a race, not a
+one-off — CD's "Provision Postgres credentials secret" step resolves
+`${{ secrets.POSTGRES_PASSWORD }}` when *that step* runs, not when the
+job was queued (this repo's self-hosted runner can sit on a queued job
+for hours, per the intro comment above). A `gh secret set
+POSTGRES_PASSWORD` landing while that expression is being resolved can
+observe an empty value instead of either the old or new one — CD then
+happily writes that empty value into the live `postgres-credentials`
+Secret, silently breaking Postgres auth for every consumer
+(`api`/`notification-service`/`review-analyzer`) until something forces
+those pods to reconnect.
+
+The provisioning step now hard-fails instead of applying an empty
+value (see `cd.yml`'s "Provision Postgres credentials secret" step) —
+but the underlying race is still real. Before hand-rotating
+`POSTGRES_PASSWORD` (or any Pattern B repo secret) via `gh secret set`,
+check for an in-flight or queued CD run first
+(`gh run list --workflow CD`) and avoid rotating while one exists.
+
 ## Verification tools
 
 | Script | Checks | Requires |

@@ -4664,6 +4664,52 @@ template to reuse rather than re-deriving it.
 
 ---
 
+### D95 — CD's Postgres-credentials step hard-fails on an empty resolved `POSTGRES_PASSWORD` instead of applying it (GitHub issue #568, Phase 20e)
+
+**Context:** the same day D94 merged, `postgres-credentials`'s
+`POSTGRES_PASSWORD` key went empty (0 bytes, not just stale) twice —
+first cause unconfirmed, but the second occurrence was directly
+observed: a CD run that had been queued for hours (this project's
+self-hosted runner only executes queued jobs once manually started,
+per Phase 40) finally ran its "Provision Postgres credentials secret"
+step at the same moment a `gh secret set POSTGRES_PASSWORD` (rotating
+the repo secret to match a live password fix) was propagating.
+`${{ secrets.POSTGRES_PASSWORD }}` is resolved when the step actually
+executes, not when the job was queued — the in-flight read landed
+mid-write and resolved to an empty string, which `kubectl create
+secret --from-literal=POSTGRES_PASSWORD=""` then happily wrote over the
+live Secret, breaking Postgres auth for `api`/`notification-service`/
+`review-analyzer` until manually caught.
+
+**Decision:** the step now checks `$POSTGRES_PASSWORD` for emptiness
+before calling `kubectl create secret`, hard-failing with an
+`::error::` annotation pointing at this issue instead of silently
+deploying a broken credential — turns a delayed, confusing downstream
+crash-loop into an immediate, legible CD failure. `docs/SECRETS.md`
+gained a matching "Hazard: rotating a repo secret while CD may be in
+flight" note: check `gh run list --workflow CD` for an in-progress or
+queued run before hand-rotating `POSTGRES_PASSWORD` (or any Pattern B
+repo secret) via `gh secret set`.
+
+**Trade-off accepted:** this only prevents the *empty-value* symptom,
+not the underlying race — a rotation that lands between two different
+non-empty reads (e.g. old value in the k8s Secret, new value in
+LocalStack's reseed, or vice versa) would still desync silently.
+Judged acceptable for now since the empty-value case was the one that
+actually reproduced and is unambiguously always wrong to apply, whereas
+detecting "resolved to some non-empty but stale value" isn't
+mechanically distinguishable from a legitimate rotation without an
+independent source of truth to compare against.
+
+**Revisit when:** if a same-shape but non-empty-value desync ever
+reproduces, worth either serializing repo-secret rotation against CD
+runs for real (e.g. a `gh run list` check baked into a rotation script
+rather than left as a documented manual step), or asking GitHub support
+whether mid-write secret resolution returning empty is expected,
+documented platform behavior.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
