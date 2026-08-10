@@ -4797,6 +4797,66 @@ holds nothing but the operator's own synthetic data.
 
 ---
 
+### D97 — `infra/docker-compose.yml` retired entirely; `kind` is the only local Postgres/OpenSearch/Mailpit/Redpanda/LocalStack instance, full stop
+
+**Context:** D24/D26 already consolidated Postgres and OpenSearch onto
+`kind`'s instances, but deliberately kept `infra/docker-compose.yml`'s own
+`postgres`/`opensearch` service definitions in place as an inert,
+documented reference path — explicitly "not something anyone should
+actually point `api` at day to day." D83 then built on top of that same
+file, adopting Podman for it and adding a `--profile full` mode
+(containerized `api`/`web` alongside `postgres`/`opensearch`/`mailpit`/
+`redpanda`) as a legitimate, supported alternative local-dev path (README
+"Alternative: full-stack Compose," `wiki/deployment-guide.md` section 2).
+
+That coexistence stopped being harmless today: `npx prisma migrate
+deploy`, run with no `DATABASE_URL` override, applied all 20 migrations
+to a database called `interview_insights_test` at `localhost:5432` —
+the exact ambiguous-target failure mode D24 was originally written to
+eliminate, just with the compose profile's containerized Postgres
+standing in for D24's old Postgres.app. Tracing it back: `kind`'s own
+`postgres-0` never had that database (confirmed live — `kubectl exec
+... psql` returned `database "interview_insights_test" does not
+exist`), while the compose-profile Postgres container that must have
+served the request had since been torn down entirely (`podman compose
+down`, container and volume both gone — confirmed via `podman ps -a`
+and `podman volume ls` showing nothing postgres-related). Every other
+service compose's full profile provides is already redundant with
+`kind`'s own manifests too — `08-mailpit.yaml`, `09-redpanda.yaml` (and
+`opensearch`/`localstack`) all exist under `infra/k8s/base/` already.
+
+**Decision:** delete `infra/docker-compose.yml` outright, not just stop
+using it. Keeping a fully runnable-but-"deliberately unused" file is
+itself the hazard — D24 tried the honor-system version of this
+("kept, deliberately unused") and it still got run, twice, years apart,
+each time reintroducing the identical port-5432 ambiguity it was meant
+to prevent. `kind` (`interview-insights` namespace) is now the sole
+local environment for every backing service (Postgres, OpenSearch,
+Mailpit, Redpanda, LocalStack) and, via its own full-stack overlay, for
+`api`/`web` too — see `docs/ARCHITECTURE.md`'s "Local dev, native" and
+"Local dev, full Kubernetes" modes, both already `kind`-only. The
+Compose "full-stack" mode and Podman-compose's `--profile full`/
+`--profile localstack` invocations are removed from README.md and
+`wiki/deployment-guide.md` section 2 (left in place as a numbered
+section documenting the retirement itself, not renumbered away — same
+treatment `docs/ROADMAP.md` gives a retired phase).
+
+**Not touched:** CI's ephemeral per-job Postgres/OpenSearch service
+containers (`.github/workflows/ci.yml`) are a different mechanism
+entirely (torn down after every run, never persistent, never on a host
+port anything local could collide with) — unaffected. D83's Podman
+adoption itself isn't reversed, since `kind`'s own image build/load
+path (`podman build`/`podman save`/`kind load image-archive`) still
+depends on it — only the Compose file it was originally adopted for is
+gone.
+
+**Revisit when:** never expected to, absent a concrete new reason a
+second, disposable local environment is worth the collision risk again
+— unlike D96's "revisit when real staging/prod infra exists," there's
+no future trigger this decision is waiting on.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

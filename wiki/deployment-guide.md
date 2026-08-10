@@ -50,11 +50,10 @@ was removed.
 ## 1. Native dev loop (fastest — no containers for api/web)
 
 `api`/`web` run directly on the host. **Postgres, OpenSearch, Mailpit,
-and Redpanda all live in kind only** (D24/D26/D29/D53 in
-`docs/DECISIONS.md`) — reached via port-forward, not
-`infra/docker-compose.yml`'s containers (those service definitions stay
-in the file as inert reference only). This requires the `kind` cluster
-from section 3 to already be up.
+and Redpanda all live in kind only** (D24/D26/D29/D53/D97 in
+`docs/DECISIONS.md`) — reached via port-forward; `infra/docker-compose.yml`
+is deleted, so there's no second set of containers to reach instead.
+This requires the `kind` cluster from section 3 to already be up.
 
 ```bash
 # 1. kind cluster must already exist (section 3) — all four live there
@@ -91,13 +90,12 @@ one; logs land in `/tmp/interview-insights-port-forwards/`. Written for
 bash 3.2 (macOS's actual default `/bin/bash`, no associative arrays),
 matching every other script in `infra/scripts/`.
 
-**Gotcha:** if `infra/docker-compose.yml`'s OpenSearch, Mailpit, or
-Redpanda containers happen to also be running, both it (`0.0.0.0` via
-Podman) and the port-forward (`127.0.0.1`) can coexist on the same port
-and `localhost` becomes ambiguous — the exact silent-wrong-target
-problem D24 hit with Postgres.app. Stop the compose container(s)
-(`podman stop interview-insights-opensearch-1 interview-insights-mailpit-1 interview-insights-redpanda-1`)
-before port-forwarding.
+**Historical gotcha, no longer applicable (D97):** this section used to
+warn that `infra/docker-compose.yml`'s OpenSearch/Mailpit/Redpanda
+containers, if also running, could coexist with these port-forwards on
+the same port and make `localhost` ambiguous — the exact
+silent-wrong-target problem D24 hit with Postgres.app. That file is
+deleted now, so there's no second container to collide with.
 
 ### Running `api`'s tests locally
 
@@ -132,85 +130,19 @@ CI (`.github/workflows/ci.yml`) is unaffected by any of this — its `api`
 job runs its own fully ephemeral Postgres, OpenSearch, and Mailpit
 service containers per run, and the prefix defaults to empty there.
 
-## 2. Full-stack Compose (prod-like images, still no Kubernetes)
+## 2. Full-stack Compose — retired (`docs/DECISIONS.md` D97)
 
-Podman is what backs `infra/docker-compose.yml` now (GitHub issue #496,
-`docs/DECISIONS.md` D83) — verified directly to honor `depends_on:
-condition: service_healthy` and to build both Dockerfiles cleanly. As of
-GitHub issue #540/D90, `kind` (section 3) runs on this same `podman
-machine` too, rootful (D84/D88) — see the Prerequisites section above.
-
-**One-time setup**: see Prerequisites above — the same `podman machine`
-backs this section and section 3, so there's only one to set up.
-
-**Bring it up:**
-
-```bash
-cd infra
-podman compose -f docker-compose.yml --profile full up -d --build
-```
-
-Builds and runs `api`+`web` as containers alongside `postgres`+
-`opensearch`+`mailpit`+`redpanda`. Migrations apply automatically on
-`api` container start (`api/scripts/entrypoint.js` → `api/Dockerfile`'s
-`CMD`) — no manual `prisma migrate deploy` step. Same ports as
-section 1. Confirm `api`/`web` actually waited on `postgres`/
-`opensearch` reporting healthy (not just running) before starting:
-
-```bash
-podman compose -f docker-compose.yml ps
-```
-
-Tear down when done (add `--volumes` to also wipe Postgres/OpenSearch/
-Redpanda data):
-
-```bash
-podman compose -f docker-compose.yml --profile full down
-```
-
-**Gotcha: stop section 1's kind port-forwards first.** This compose
-file's postgres/opensearch/mailpit publish the exact same host ports
-(5432/9200/1025/8025) `infra/scripts/dev-port-forwards.sh` uses — both
-can bind at once with no error, and `localhost` becomes ambiguous about
-which backend actually answers (the same silent-wrong-target shape D24
-hit with Postgres.app, just between kind and this compose path now):
-
-```bash
-infra/scripts/dev-port-forwards.sh stop    # restart later with: ... start
-```
-
-**Gotcha: a stale Docker Hub credential can produce a misleading
-`unauthorized: incorrect username or password` pull failure** instead
-of a clean anonymous pull, if Docker Desktop's `credsStore: desktop`
-Keychain entry for `docker.io` has gone stale (e.g. after a failed
-`podman login`):
-
-```bash
-docker logout docker.io   # not `podman logout` -- different auth file, doesn't fix this
-```
-
-**Gotcha: Docker Hub's anonymous pull-rate-limit.** Hit repeatedly while
-verifying this from a fresh machine, pulling `node:22-slim`/`postgres`/
-`redpanda`. Worked around with a `mirror.gcr.io` mirror for the
-`docker.io` prefix (Google's public pull-through cache, no account
-needed) in the podman machine VM's own `registries.conf`:
-
-```bash
-podman machine ssh -- sudo tee /etc/containers/registries.conf <<'EOF'
-unqualified-search-registries = ["docker.io"]
-
-[[registry]]
-prefix = "docker.io"
-location = "mirror.gcr.io"
-EOF
-```
-
-This does **not** cover `docker.redpanda.com` (a different registry
-hostname that turned out to proxy through the same Docker Hub backing
-store and rate limit) — if redpanda's pull still fails after this,
-it's not a blocker: nothing in this compose file's `api`/`web`
-`depends_on` lists redpanda, so the rest of the stack works fine
-without it.
+`infra/docker-compose.yml` and its `podman compose --profile full`/
+`--profile localstack` modes are deleted. The gotcha this section used
+to document — its Postgres/OpenSearch/Mailpit binding the exact same
+host ports as `kind`'s port-forwards, `localhost` becoming ambiguous
+about which instance actually answers — stopped being a documented risk
+to route around and became the reason to remove the second instance
+outright: a `prisma migrate deploy` run landed on a stray compose
+Postgres instead of `kind`'s, same silent-wrong-target shape D24 first
+hit with Postgres.app, years apart. `kind` (section 3) is now the only
+local instance of every backing service; see section 1 for the native
+dev loop against it.
 
 ## 3. Full Kubernetes deployment on `kind`
 
@@ -687,9 +619,9 @@ absent entirely, never present-and-empty. `ANTHROPIC_MODEL` is not a
 secret — it lives in the plain `review-analyzer-config` ConfigMap.
 
 **Native local dev** (section 1): `review-analyzer` isn't part of the
-default `podman compose up` loop or the host-run api/web pair — run it
-directly via `cd services/review-analyzer && npm run start:dev`, reading
-its own `.env` (copy `services/review-analyzer/.env.example`):
+host-run api/web pair — run it directly via `cd services/review-analyzer
+&& npm run start:dev`, reading its own `.env` (copy
+`services/review-analyzer/.env.example`):
 ```bash
 # services/review-analyzer/.env
 ANTHROPIC_API_KEY="sk-ant-..."
@@ -1235,10 +1167,8 @@ cluster running the new code, step by step:
 ## 9. Tearing down
 
 ```bash
-# Compose (sections 1-2)
-cd infra && podman compose -f docker-compose.yml --profile full down   # add --volumes to also wipe volumes
-
-# kind cluster (section 3) — stop without losing state, resume later:
+# kind cluster (sections 1-3, the only local environment now — D97) —
+# stop without losing state, resume later:
 podman stop interview-insights-control-plane
 podman start interview-insights-control-plane   # resumes exactly where it left off
 

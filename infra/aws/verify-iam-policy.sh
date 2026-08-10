@@ -18,8 +18,9 @@
 # one read-only action, no overly-broad resource) that policy simulation
 # would otherwise be the natural tool for.
 #
-# Requires: LocalStack running (`podman compose --profile localstack up`)
-# and LOCALSTACK_AUTH_TOKEN set (see README.md).
+# Requires: LocalStack running (`kubectl apply -k infra/k8s/base/localstack/`
+# — D97 retired the podman-compose path) and LOCALSTACK_AUTH_TOKEN set
+# (see README.md).
 set -euo pipefail
 
 ENDPOINT="http://localhost:4566"
