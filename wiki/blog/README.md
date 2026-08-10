@@ -203,9 +203,16 @@ only ones introducing a real design decision (a new D-number) do.
 
 ### Phase 20b — Docker → Podman Migration
 
-See `docs/ROADMAP.md` Phase 20b. No post exists yet for this arc
-(D83-D93) — the newest of the five groups; a blog issue still needs to
-be filed and written.
+See `docs/ROADMAP.md` Phase 20b. Unlike 20a/20c/20d/20e, every issue in
+this arc got its own post — a clean, self-contained six-issue arc
+(D83-D93) with an explicit decision gate at each step.
+
+1. [Issue #496 — Podman for `infra/docker-compose.yml`, scoped deliberately narrow (D83)](phase-20b-docker-podman-migration/issue-496-podman-compose-adoption/README.md)
+2. [Issue #539 — The `kind`-on-Podman spike that failed, and why that's not the end of the story (D84)](phase-20b-docker-podman-migration/issue-539-kind-podman-spike-rootless/README.md)
+3. [Issue #545 — Rootful fixes two of three, then finds a new gap (D88)](phase-20b-docker-podman-migration/issue-545-kind-podman-rootful-retest/README.md)
+4. [Issue #547 — The "platform gap" that was actually a config bug (D89)](phase-20b-docker-podman-migration/issue-547-extraportmappings-root-cause/README.md)
+5. [Issue #540 — Migrating `cd.yml` to Podman, then finding three things no spike ever reached (D90, D91)](phase-20b-docker-podman-migration/issue-540-cd-runner-podman-migration/README.md)
+6. [Issue #541 — Proving it works absent, then actually removing it (D93)](phase-20b-docker-podman-migration/issue-541-docker-desktop-removal/README.md)
 
 ### Phase 20c — Live-Verification Tooling & Data Hygiene
 

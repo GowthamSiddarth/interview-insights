@@ -883,10 +883,10 @@ groups — finished with #553/#554 just before this split. Milestone:
       (not Podman port-forwarding, not kind, not the app); fixed by a
       `podman machine` restart. Documented as
       `wiki/deployment-guide.md` §11.11
-- [ ] Engineering blog for Phase 20b — no post exists yet for any of
-      D83-D93 (unlike 20a/20c/20d/20e, this arc was never blogged
-      individually); needs real writing, not just a doc reorg — file as
-      its own issue once the GitHub reorg script below runs
+- [x] Engineering blog for Phase 20b (GitHub issue #561) — six posts, one
+      per issue (D83, D84, D88, D89, D90/D91, D93), unlike 20a/20c/20d/
+      20e's "not every reopen gets its own post" precedent — every issue
+      in this arc introduced a real design decision
 
 ### Phase 20c — Live-Verification Tooling & Data Hygiene
 
