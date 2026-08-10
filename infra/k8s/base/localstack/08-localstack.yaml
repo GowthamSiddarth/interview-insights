@@ -33,6 +33,18 @@
 # entries were removed from api's own Deployment (05-api.yaml) once api
 # started fetching these from Secrets Manager instead; LocalStack's pod
 # is now the only consumer of them as k8s Secrets.
+#
+# POSTGRES_PASSWORD (GitHub issue #563, D94) joined this list for the
+# same reason, replacing init/seed.sh's old hardcoded default-password
+# assumption: a live incident found that any LocalStack restart on a
+# cluster whose Postgres password had been rotated (wiki/deployment-
+# guide.md 5d) silently reseeded `interview-insights/database-url` with
+# the stale default, P1000-crash-looping api/notification-service/
+# review-analyzer until someone noticed and reran
+# infra/aws/seed-localstack.sh by hand. Wiring the real, live
+# postgres-credentials value in here the same way D78 already did for
+# the admin/anthropic secrets closes that gap the same way D78 closed
+# it for those.
 apiVersion: v1
 kind: Service
 metadata:
@@ -88,6 +100,11 @@ spec:
                 secretKeyRef:
                   name: anthropic-credentials
                   key: ANTHROPIC_API_KEY
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
           # No PVC — this is a practice/prototype tool, not a source of
           # truth (unlike postgres/opensearch's StatefulSets); losing its
           # state on pod restart is expected. The init-hook mount below

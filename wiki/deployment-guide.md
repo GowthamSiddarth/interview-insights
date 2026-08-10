@@ -1637,3 +1637,67 @@ display notification`) — a single-user dev box doesn't need an
 external alerting service, just something that surfaces before the
 next CD run hits the 85% pre-flight gate. Logs:
 `/tmp/interview-insights-disk-health/health-check.log`.
+
+### 11.11 `app.interview-insights.local` intermittently unreachable, but `kubectl get pods` looks fine (GitHub issue #564)
+
+A real incident (2026-08-10): the app was intermittently unreachable in
+the browser — some requests fine, some hung for a full timeout with zero
+bytes back — while every pod showed `Running`/`1/1` and rollout status
+reported success. Not a Kubernetes-level problem at all. Diagnose by
+bisecting the path one hop at a time rather than guessing:
+
+```bash
+# 1. Repeat the same request several times from the Mac host -- a single
+#    curl proves nothing; look for an alternating fast-success/full-hang
+#    pattern, not a consistent failure:
+for i in 1 2 3 4 5; do
+  curl -sS --max-time 3 --resolve app.interview-insights.local:80:127.0.0.1 \
+    http://app.interview-insights.local/ -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n"
+done
+
+# 2. From INSIDE the podman machine VM, to its own real interface IP (NOT
+#    127.0.0.1 -- loopback hits Linux hairpin-NAT, which is often broken
+#    for container-published ports independent of the real bug, a false
+#    negative hit live while diagnosing this):
+podman machine ssh -- 'ip -4 -o addr show | grep -v " lo "'
+podman machine ssh -- 'curl -sS --max-time 2 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" http://<that-ip>/'
+
+# 3. From INSIDE the kind node container, straight to the ingress-nginx
+#    pod's own IP (skips every NAT/port-forwarding layer entirely):
+kubectl -n ingress-nginx get pods -o wide   # get the pod IP
+podman exec interview-insights-control-plane sh -c \
+  'curl -sS --max-time 2 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" http://<pod-ip>/'
+```
+
+If the same alternating fast/hang pattern reproduces at *every* layer,
+including step 3 (pure intra-VM pod networking, zero Podman/gvproxy
+involvement), it isn't Podman's port-forwarding, kind, or the app — it's
+`podman-machine-default`'s own Linux kernel network stack in a degraded
+state (observed after ~1+ day of VM uptime; CPU/memory/conntrack were all
+normal, ruling out resource exhaustion). Fix:
+
+```bash
+podman machine stop && podman machine start
+podman start interview-insights-control-plane   # doesn't auto-start
+kubectl -n interview-insights get pods -w        # wait for everything Ready again
+```
+
+**This restart itself cascades into a second bug** if this cluster's
+`POSTGRES_PASSWORD` was ever rotated (section 5d): LocalStack has no PVC
+by design, so restarting it reseeds `interview-insights/database-url`
+from a Secret now sourced live off `postgres-credentials` (D94, fixed by
+GitHub issue #563 — previously a hardcoded stale default). If you're on
+a version of this cluster from before that fix, or if any *other*
+service's LocalStack-seeded secret ever drifts from its real source the
+same way, expect `api`/`notification-service`/`review-analyzer` to
+crash-loop with a Prisma `P1000` auth error right after — force them to
+re-fetch once LocalStack is healthy again:
+
+```bash
+kubectl -n interview-insights delete pod -l app=api
+kubectl -n interview-insights delete pod -l app=notification-service
+kubectl -n interview-insights delete pod -l app=review-analyzer
+```
+
+Verify the real fix, not a lucky single request — repeat step 1 above
+5-10x and confirm every attempt is fast, not just the first.

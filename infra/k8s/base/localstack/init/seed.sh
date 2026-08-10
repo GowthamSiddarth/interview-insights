@@ -27,17 +27,23 @@
 # (D81) added review-analyzer's own role, and moved anthropic-api-key
 # access from api's role to it.
 #
-# POSTGRES_PASSWORD isn't available inside this container the way it is
-# for infra/aws/seed-localstack.sh's own DATABASE_URL_VALUE (GitHub issue
-# #466, D77) -- LocalStack's own pod has no reason to receive Postgres's
-# credential. This seeded value intentionally matches only the
-# password Postgres was `initdb`'d with on a genuinely fresh cluster
-# (docs/DECISIONS.md D77's own "keep it postgres unless you've actually
-# rotated" default); an existing cluster that rotated POSTGRES_PASSWORD
-# to something else needs a human rerun of infra/aws/seed-localstack.sh
-# (with $POSTGRES_PASSWORD set) after any LocalStack restart, same as
-# this hook already can't help with anything infra/aws/seed-localstack.sh
-# takes as a SEED_* override.
+# POSTGRES_PASSWORD now comes from the real postgres-credentials Secret
+# (../08-localstack.yaml's env.valueFrom.secretKeyRef, GitHub issue #563,
+# D94) instead of a hardcoded "postgres" default. A live incident found
+# that the old hardcoded default silently reseeded a stale password on
+# every LocalStack restart on any cluster whose POSTGRES_PASSWORD had
+# been rotated (wiki/deployment-guide.md 5d) -- api/notification-service/
+# review-analyzer crash-looped with Prisma P1000 auth failures, masked
+# for days until something forced those pods to re-fetch their secret
+# and reconnect. Same fix pattern D78 already used for
+# ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET/ANTHROPIC_API_KEY above. Falls
+# back to the literal "postgres" only if the env var is somehow unset,
+# matching infra/aws/seed-localstack.sh's own default for its
+# no-real-Postgres-involved LocalStack practice flow.
+#
+# Percent-encoded before use (GitHub issue #551, D92): a rotated password
+# from `openssl rand -base64 24` can contain `/`, `+`, or `=`, any of
+# which breaks postgresql:// URL parsing if embedded raw.
 #
 # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET/ANTHROPIC_API_KEY (GitHub issue
 # #466's own follow-up, D78) are different from every value above: they
@@ -52,7 +58,11 @@
 # real value, not a placeholder api would reject anyway.
 set -euo pipefail
 
-DATABASE_URL_VALUE="postgresql://postgres:postgres@postgres:5432/interview_insights?schema=public"
+urlencode() {
+  python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+POSTGRES_PASSWORD_URLENCODED="$(urlencode "${POSTGRES_PASSWORD:-postgres}")"
+DATABASE_URL_VALUE="postgresql://postgres:${POSTGRES_PASSWORD_URLENCODED}@postgres:5432/interview_insights?schema=public"
 EMAIL_HASH_SECRET_VALUE="localstack-seeded-secret-change-me"
 EMAIL_ENCRYPTION_KEY_VALUE="1111111111111111111111111111111111111111111111111111111111111111"
 CANDIDATE_JWT_SECRET_VALUE="localstack-seeded-candidate-jwt-secret-change-me"
