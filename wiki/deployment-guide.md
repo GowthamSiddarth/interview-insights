@@ -105,18 +105,15 @@ before port-forwarding.
 # unit tests — no DB needed
 npm test
 
-# e2e tests — needs the same port-forwards above, with two isolation
-# knobs so test runs never litter the real data the deployed app serves:
-# - a separate interview_insights_test database on kind's Postgres
-#   (created once via `kubectl -n interview-insights exec postgres-0 --
-#   psql -U postgres -c "CREATE DATABASE interview_insights_test;"`,
-#   kept current via `prisma migrate deploy` against it) — D24
-# - OPENSEARCH_INDEX_PREFIX, since OpenSearch has no database concept:
-#   test documents land in e2etest-companies/e2etest-reviews instead of
-#   the real companies/reviews indices — D26. The e2etest-* indices are
-#   disposable; delete anytime with
-#   `curl -X DELETE http://localhost:9200/e2etest-*`.
-# Mailpit needs no such knob (GitHub issue #144) — mail.e2e-spec.ts
+# e2e tests — needs the same port-forwards above. D96 retired the
+# separate interview_insights_test database and OPENSEARCH_INDEX_PREFIX
+# isolation knobs (D24/D26/D61/D65) — there's only one local Postgres/
+# OpenSearch environment (dev) until real staging/prod infra exists
+# (Phase 8b), so e2e tests now run directly against it. Every
+# `npm run test:e2e` invocation truncates and repopulates the dev
+# database first (test/support/truncate-database.ts) — expect it to be
+# empty of anything you were looking at afterward.
+# Mailpit needs no isolation knob (GitHub issue #144) — mail.e2e-spec.ts
 # sends a uniquely-marked test message per run instead, since there's no
 # database/index concept to isolate against; messages just accumulate in
 # Mailpit's inbox and can be cleared anytime with
@@ -127,8 +124,7 @@ npm test
 # domain-events.e2e-spec.ts and verdict-consumer.e2e-spec.ts (the only
 # two files that talk to a real broker) fail with KafkaJSConnectionError
 # — every other e2e file is unaffected either way.
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" \
 npm run test:e2e
 ```
 
@@ -880,8 +876,7 @@ does the same thing without copying IDs by hand:
 
 ```bash
 cd api
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" \
 MAIL_HTTP_URL="http://localhost:8025" \
 npm run smoke:e2e
 ```
@@ -890,17 +885,17 @@ npm run smoke:e2e
 magic-link auth, all three moderated content types, moderation approve/
 reject, search, analytics (clearing the shrinkage floor for a real
 score), my-reviews, update/delete, and GDPR erasure in one continuous
-pass. It refuses to run unless `DATABASE_URL` points at
-`interview_insights_test` (`assertUsingTestDatabase()`,
-docs/DECISIONS.md D36) — safe to rerun on demand, deliberately **not**
-wired into `npm run test:e2e` or CI, since the per-feature e2e specs
-already own regression coverage; this is a manual sanity check.
+pass. Runs against the dev database directly (docs/DECISIONS.md D96
+retired the separate `interview_insights_test`/D36 isolation) — safe to
+rerun on demand, deliberately **not** wired into `npm run test:e2e` or
+CI, since the per-feature e2e specs already own regression coverage;
+this is a manual sanity check. Its own update/delete/GDPR-erasure steps
+clean up most of what it creates, but it's not a guarantee — see 6.2
+below if you need to verify or clean up residue by hand.
 
 ### 6.2 Cleaning up manual, ad hoc verification data safely
 
-The smoke test above (6.1) cleans up after itself — it targets the
-isolated test database and its own `e2etest-` OpenSearch prefix. Manual
-one-off verification against the real dev cluster (e.g. seeding a
+Manual one-off verification against the real dev cluster (e.g. seeding a
 company through the real API to check a specific UI behavior live, the
 way Phase 21's soft-gate verification did) has no such isolation, and
 naive cleanup leaves real residue (docs/DECISIONS.md D44, a real
@@ -1006,21 +1001,18 @@ OpenSearch indexing.
 
 ```bash
 cd api
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" \
 npm run seed:demo-data -- --companies=8
 ```
 
-Refuses to run unless `DATABASE_URL` names `interview_insights_test` —
-same class of guard as `assertUsingTestDatabase()` (D36), directly
-motivated by this same week's D61 incident (an unguarded e2e run
-silently contaminated the dev database). Unlike that guard, an explicit
-override is allowed, since seeding a real dev/demo/staging database on
-purpose is this script's whole point:
-
-```bash
-DATABASE_URL="<a real dev/staging database>" \
-npm run seed:demo-data -- --companies=8 --i-know-this-seeds-fake-data
-```
+Targets whatever `DATABASE_URL` points at — the dev database, in every
+environment this project runs in today. D96 retired the earlier
+`interview_insights_test`-only guard (`assertSeedTargetConfirmed()`,
+originally motivated by the same week's D61 incident, an unguarded e2e
+run that silently contaminated the dev database): there's only one
+local Postgres environment until real staging/prod infra exists (Phase
+8b), so seeding dev on purpose is now the default, not an opt-in
+override.
 
 Generated data is deliberately uneven on two axes: review-count per
 company (some land under the `n=3` shrinkage floor, some well above it
@@ -1046,36 +1038,14 @@ manifest back and reverses the run: same FK-safe deletion order
 whole run, plus best-effort OpenSearch cleanup and a materialized-view
 refresh.
 
-**Against the test database:**
-
-```bash
-cd api
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
-npm run seed:demo-data -- --companies=2
-
-npm run seed:demo-data:undo -- --list   # no DB/env needed, just reads local manifests
-
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
-npm run seed:demo-data:undo -- --run-id=<run-id>   # from the seed output or --list
-
-npm run seed:demo-data:undo -- --list   # confirms "No seed runs recorded."
-```
-
-**Against a real dev/staging database** (whatever `DATABASE_URL` your
-`.env` points at) — the same `--i-know-this-seeds-fake-data` override
-`assertSeedTargetConfirmed()` already requires for seeding applies
-identically to undoing:
-
 ```bash
 cd api
 set -a && source .env && set +a
 
-npm run seed:demo-data -- --companies=2 --i-know-this-seeds-fake-data
-npm run seed:demo-data:undo -- --list
-npm run seed:demo-data:undo -- --run-id=<run-id> --i-know-this-seeds-fake-data
-npm run seed:demo-data:undo -- --list
+npm run seed:demo-data -- --companies=2
+npm run seed:demo-data:undo -- --list   # no DB/env needed, just reads local manifests
+npm run seed:demo-data:undo -- --run-id=<run-id>   # from the seed output or --list
+npm run seed:demo-data:undo -- --list   # confirms "No seed runs recorded."
 ```
 
 `--list` never touches Postgres, OpenSearch, or any admin/JWT
@@ -1364,13 +1334,8 @@ reads, and LocalStack's own secrets/IAM state (ephemeral by design, D25
    cd api && npm install && npm run build && npm test
    cd ../web && npm install && npm run build && npm test
 
-   # one-time: the isolated e2e test database (D24)
-   kubectl -n interview-insights exec postgres-0 -- psql -U postgres -c "CREATE DATABASE interview_insights_test;"
-   cd ../api && DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" npx prisma migrate deploy
-
    infra/scripts/dev-port-forwards.sh start
-   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-   OPENSEARCH_INDEX_PREFIX="e2etest-" npm run test:e2e
+   cd ../api && DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" npm run test:e2e
 
    curl --resolve app.interview-insights.local:80:127.0.0.1 http://app.interview-insights.local/
    ```
@@ -1499,10 +1464,11 @@ exactly this way.
 
 ### 11.5 Ad hoc SQL/OpenSearch queries against the live cluster
 
-**Always double-check which database first** — `interview_insights`
-(real dev data, 7 companies as of Phase 35) vs. `interview_insights_test`
-(disposable, routinely truncated, D24). Running anything destructive
-against the wrong one is exactly what D61 documents.
+There's one database now — `interview_insights` — since D96 retired the
+separate `interview_insights_test`/D24 split. It doubles as the e2e
+target, so treat any real dev data you're relying on for manual
+verification as ephemeral: the next `npm run test:e2e` run truncates it
+(11.6 below).
 
 ```bash
 # Postgres — ad hoc query
@@ -1513,37 +1479,23 @@ curl -s "http://localhost:9200/companies/_count"
 curl -s "http://localhost:9200/companies/_search?q=name:SomeCompany"
 ```
 
-### 11.6 Clean up the test database when it's overdue for truncation (D24, D61)
+### 11.6 The dev database gets truncated by every e2e run (D96, formerly D24/D61 on the now-retired test DB)
 
-`interview_insights_test` accumulates rows from every e2e/smoke run
-that doesn't clean up after itself — it's disposable by design, but
-"disposable" isn't the same as "self-cleaning." A live check found
-3,435 stale companies once (D61); if `npm run test:e2e` starts feeling
-oddly slow or a test that reasons about "any RoundType with zero data"
-starts failing for no obvious reason, it's usually this.
+`test/support/truncate-database.ts` runs automatically before every
+`npm run test:e2e`/`npm run smoke:e2e` invocation (Jest's `globalSetup`)
+and does a full `DELETE FROM` across every candidate/company-generated
+table — this now targets whatever `DATABASE_URL` points at, which is
+`interview_insights` in every environment this project runs in today.
+There's no separate disposable database left to run this against
+instead; it's a real, deliberate side effect of running e2e/smoke tests
+locally, not a bug. If you have manual verification data in dev you
+care about, capture what you need from it *before* running the suite —
+running e2e tests wipes it, every time, with no confirmation prompt.
 
-```bash
-kubectl -n interview-insights exec postgres-0 -- psql -U postgres -d interview_insights_test -c "
-TRUNCATE TABLE
-  moderation_queue,
-  round_ratings,
-  recruiter_ratings,
-  overall_reviews,
-  rounds,
-  recruiter_interactions,
-  recruiters,
-  interview_processes,
-  candidate_verification_tokens,
-  candidates,
-  companies
-CASCADE;
-"
-# NEVER truncate round_type_field_options — that's seeded admin/reference
-# data (Phase 24/27), not disposable test output.
-
-# Matching OpenSearch cleanup (D26 — these indices are safe to delete anytime):
-curl -s -X DELETE "http://localhost:9200/e2etest-*"
-```
+Manual, ad hoc verification data (section 6.2) is not touched by this
+truncation — it's created outside the app's own moderation/erasure
+flows and needs the three-step manual cleanup in 6.2 if you want it
+gone before the next real e2e run does it for you anyway.
 
 ### 11.7 Full regression check before merging (the real gate during the CI billing gap)
 
@@ -1553,18 +1505,14 @@ npm test                                    # unit
 npm run build
 npm run lint
 
-# e2e — BOTH env vars required or you risk contaminating the dev
-# database/real OpenSearch indices (this exact mistake happened once,
-# D61) — a jest globalSetup now refuses to run without them, but don't
-# rely on that alone:
+# e2e — targets the dev database directly (D96) and truncates it first
+# (11.6) — capture anything you need from dev before running this:
 set -a && source .env && set +a
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" \
 npm run test:e2e
 
 # smoke test (opt-in, full golden path in one pass — section 6.1)
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" \
 MAIL_HTTP_URL="http://localhost:8025" \
 npm run smoke:e2e
 

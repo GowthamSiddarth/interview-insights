@@ -17,7 +17,6 @@
 //
 // Usage:
 //   DATABASE_URL=... npm run seed:demo-data -- --companies=8
-//   DATABASE_URL=<not interview_insights_test> npm run seed:demo-data -- --companies=8 --i-know-this-seeds-fake-data
 import { randomUUID } from 'crypto';
 import { NestFactory } from '@nestjs/core';
 import { faker } from '@faker-js/faker';
@@ -52,13 +51,8 @@ const SEEDER_LABEL = 'seed-demo-data';
 // for why). Re-exported here so existing imports of these from
 // './seed-demo-data' (e.g. scripts/seed-demo-data.spec.ts) keep working
 // unchanged.
-export {
-  assertSeedTargetConfirmed,
-  parseIntArg,
-  parseStringArg,
-  refreshMaterializedViews,
-} from './seed-cli-utils';
-import { assertSeedTargetConfirmed, parseIntArg, refreshMaterializedViews } from './seed-cli-utils';
+export { parseIntArg, parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
+import { parseIntArg, refreshMaterializedViews } from './seed-cli-utils';
 
 export interface Summary {
   companies: number;
@@ -408,7 +402,6 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
 }
 
 async function main(): Promise<void> {
-  assertSeedTargetConfirmed();
   const companyCount = parseIntArg('--companies', 8);
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });

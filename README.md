@@ -363,15 +363,14 @@ With the port-forward from "Quick start" step 1 running (Postgres lives in
 # api — unit tests (no DB needed)
 cd api && npm test
 
-# api — integration/e2e tests: needs all three port-forwards above, with
-# two isolation knobs so test runs never litter the real data (a separate
-# interview_insights_test Postgres database, and an OpenSearch index
-# prefix — see docs/DECISIONS.md D24/D26 and wiki/deployment-guide.md
-# section 1). Mailpit needs no such knob — mail.e2e-spec.ts uses a unique
-# marker per run instead, since there's no database/index concept to
-# isolate against:
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" \
-OPENSEARCH_INDEX_PREFIX="e2etest-" \
+# api — integration/e2e tests: needs all three port-forwards above.
+# Runs directly against the dev database (docs/DECISIONS.md D96 retired
+# the separate interview_insights_test isolation, D24/D26/D61/D65) and
+# truncates it first — see wiki/deployment-guide.md section 1/11.6.
+# Mailpit needs no isolation knob either way — mail.e2e-spec.ts uses a
+# unique marker per run instead, since there's no database/index concept
+# to isolate against:
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights?schema=public" \
 npm run test:e2e
 
 # web — unit tests

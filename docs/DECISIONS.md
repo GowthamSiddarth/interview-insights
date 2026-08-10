@@ -1269,6 +1269,11 @@ a recurring pain point worth a checked-in Playwright script — at that
 point, treat it as the deferred follow-up this entry already names, not
 a retrofit onto this test.
 
+**Superseded by D96:** `assertUsingTestDatabase()` is deleted along with
+the separate `interview_insights_test` database it guarded — this test
+now runs against the dev database directly, on purpose. Everything else
+in this entry (the test's own scope/design) is unchanged.
+
 ---
 
 ### D37 — `GET /moderation/queue` isolates each entity type's enrichment (`Promise.allSettled`, not `Promise.all`); a transient Prisma required-relation race, not a data-integrity bug (GitHub issue #212)
@@ -2680,6 +2685,14 @@ dedicated script rather than a one-off), consider promoting the
 point — not needed yet, since this was a one-time, fully-diagnosed
 incident, not an ongoing drift pattern like D51's.
 
+**Superseded by D96 (the isolation half only):** the separate
+`interview_insights_test` database and `OPENSEARCH_INDEX_PREFIX` knob
+this incident motivated are retired — e2e/smoke/seed all target the dev
+database directly now, a deliberate reopening of the exact risk this
+entry describes, judged acceptable while the dev database holds nothing
+but synthetic/seed data. The `moderation_queue` self-heal fix and
+contamination remediation earlier in this entry are unaffected.
+
 ---
 
 ### D62 — Synthetic data generator: in-process real services, not raw SQL/HTTP; `@faker-js/faker` pinned to a CJS build (GitHub issue #164, Phase 19)
@@ -2739,6 +2752,12 @@ e2e spec in this codebase already follows via unique slugs/emails.
 build again, or if this project's Jest config ever gains genuine ESM
 support for other reasons, reconsider upgrading — not urgent, since
 8.4.1 has every generator API this script uses.
+
+**Superseded by D96 (the `assertSeedTargetConfirmed()` guard only):**
+removed along with the separate `interview_insights_test`
+database/`--i-know-this-seeds-fake-data` override it required — seeding
+now targets `DATABASE_URL` unconditionally. The in-process real-services
+design and the `runSeed()`/`main()` split are unaffected.
 
 ---
 
@@ -2921,6 +2940,14 @@ or the D312 script detecting/restarting a degraded tunnel
 automatically) — reducing `maxWorkers` to 4 was tried during this
 investigation and did **not** eliminate the flakiness on its own, so
 this needs real investigation, not a quick parallelism tweak.
+
+**Superseded by D96 (target only, not the truncation mechanism):**
+`truncateTestDatabase()` → `truncateDatabase()`
+(`api/test/support/truncate-database.ts`), same `DELETE FROM`/`REFRESH
+MATERIALIZED VIEW` behavior, now applied to whatever `DATABASE_URL`
+points at — the dev database — instead of a dedicated
+`interview_insights_test`. Every e2e/smoke run still starts from a
+genuinely empty database; that database is now the real dev one.
 
 ---
 
@@ -4707,6 +4734,66 @@ runs for real (e.g. a `gh run list` check baked into a rotation script
 rather than left as a documented manual step), or asking GitHub support
 whether mid-write secret resolution returning empty is expected,
 documented platform behavior.
+
+---
+
+### D96 — Local test-DB isolation retired; e2e/seed/smoke all target the dev database directly until real staging/prod infra exists (GitHub issue #TBD)
+
+**Context:** D24/D26 introduced a dedicated `interview_insights_test`
+Postgres database plus an `OPENSEARCH_INDEX_PREFIX` knob so local e2e
+runs, the golden-path smoke test (D36), and `seed-demo-data`'s synthetic
+generator (D62) could never write to the same dev database/OpenSearch
+indices the deployed app serves. That isolation existed entirely because
+of a real incident (D61): an unguarded `npm run test:e2e` run once
+silently wrote/deleted real rows in the dev database, undetected for
+days. Every layer this project has today — one `kind` cluster, one
+Postgres instance, one OpenSearch instance, no staging or production
+environment yet (Phase 8b, not started) — means "dev" is also the only
+database that exists to develop or verify anything against locally.
+Maintaining a second, permanently-empty database purely to protect a
+database that currently holds nothing but the operator's own synthetic/
+seed data was judged not worth the ongoing complexity (a guard file, a
+truncation gate, a `--i-know-this-seeds-fake-data` override flag,
+~20 lines of usage-instruction duplication across README/wiki/
+deployment-guide.md) for the risk it protects against today.
+
+**Decision:** retire the separate database entirely. Concretely:
+- `api/test/support/assert-test-database.ts` (`assertUsingTestDatabase()`/
+  `assertLocalE2eIsolation()`/`assertOpenSearchIndicesIsolated()`) is
+  deleted. `api/test/support/truncate-test-database.ts` is renamed to
+  `truncate-database.ts` (`truncateTestDatabase()` → `truncateDatabase()`)
+  and drops its internal isolation-gate call, but **keeps** its
+  `DELETE FROM`-then-`REFRESH MATERIALIZED VIEW` behavior — every
+  `npm run test:e2e`/`npm run smoke:e2e` run still truncates whatever
+  `DATABASE_URL` points at first (Jest's `globalSetup`,
+  `jest-e2e-global-setup.ts`), which is now the dev database. This is a
+  deliberate, informed tradeoff, not an oversight: local e2e/smoke runs
+  wipe real dev data every time, by design, going forward.
+- `api/scripts/seed-cli-utils.ts`'s `assertSeedTargetConfirmed()` and
+  every `--i-know-this-seeds-fake-data` call site (`seed-demo-data.ts`,
+  `seed-demo-data-undo.ts`, and their specs) are removed — seeding now
+  targets `DATABASE_URL` with no confirmation flag required, since
+  there's no longer a "wrong" database to protect against.
+  `OPENSEARCH_INDEX_PREFIX` isolation is dropped the same way; the
+  underlying `search-index-name.util.ts` prefixing mechanism itself is
+  left in place (harmless, unused unless the env var is set again).
+- CI (`.github/workflows/ci.yml`) is unaffected either way — its e2e job
+  already runs against a fully ephemeral Postgres/OpenSearch service
+  container per job, torn down after, never touching the dev database.
+  Its `interview_insights_test` database name is just a label for that
+  throwaway container and was left as-is rather than renamed for its own
+  sake.
+- Docs updated to match: README.md, `wiki/deployment-guide.md` (sections
+  1, 6.1, 6.3, 6.4, 8, 11.5–11.7), and the affected api/test|scripts
+  comments no longer instruct a `DATABASE_URL` override or the removed
+  flag.
+
+**Revisit when:** real staging/prod infrastructure exists (Phase 8b) —
+at that point, reintroduce a dedicated, disposable database (or a real
+staging environment entirely) for automated test runs to target instead
+of a database anything real depends on, the same class of protection
+D24/D61/D65 built for a dev database that, at the time of this reversal,
+holds nothing but the operator's own synthetic data.
 
 ---
 

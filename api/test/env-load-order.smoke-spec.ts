@@ -2,7 +2,6 @@ import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { assertLocalE2eIsolation } from './support/assert-test-database';
 
 // GitHub issue #452 — regression test for the dotenv load-order bug:
 // getRequiredAdminEnv() (called eagerly from admin-auth.module.ts, at
@@ -35,8 +34,6 @@ describe('main.ts env load order (e2e smoke test)', () => {
   });
 
   it('boots successfully with only a .env file on disk — nothing pre-exported', async () => {
-    assertLocalE2eIsolation('npm run smoke:e2e');
-
     const port = 3199;
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ii-env-load-order-'));
     const envPath = path.join(tmpDir, '.env');

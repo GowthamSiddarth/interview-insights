@@ -1103,6 +1103,40 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       never got individual posts, same "not every reopen gets its own
       post" precedent
 
+### Phase 20f — Retire Local Test-Database Isolation
+
+Raised 2026-08-10: with only one local Postgres/OpenSearch environment
+(`kind`'s, no staging/prod yet — Phase 8b) and the dev database holding
+nothing but the operator's own synthetic/seed data, the separate
+`interview_insights_test` database (D24/D61/D65) and its guard
+machinery were judged not worth the ongoing complexity relative to the
+risk they protect against today. Explicitly not filed under this
+phase's own new epic per the ad-hoc-work convention exception this
+project already carries for genuinely small items — this one *is* its
+own themed unit of work (isolation-guard removal + doc rewrite across
+~15 files), same reasoning Phase 20's original split into 20a-20e used.
+Milestone: "Phase 20f — Retire Local Test-Database Isolation". Epic:
+GitHub issue #TBD (see D96 in `docs/DECISIONS.md` for the full decision
+record).
+
+- [ ] Remove `assertUsingTestDatabase()`/`assertLocalE2eIsolation()`/
+      `assertOpenSearchIndicesIsolated()` (`api/test/support/
+      assert-test-database.ts`, deleted); rename `truncateTestDatabase()`
+      → `truncateDatabase()` (`truncate-database.ts`), keeping its
+      `DELETE FROM`/`REFRESH MATERIALIZED VIEW` behavior but now against
+      whatever `DATABASE_URL` points at (the dev database); remove
+      `assertSeedTargetConfirmed()` and every
+      `--i-know-this-seeds-fake-data` call site
+      (`seed-cli-utils.ts`/`seed-demo-data.ts`/`seed-demo-data-undo.ts`
+      and their specs); update `golden-path.smoke-spec.ts`/
+      `env-load-order.smoke-spec.ts` accordingly. See D96.
+- [ ] Update README.md and `wiki/deployment-guide.md` (sections 1, 6.1,
+      6.3, 6.4, 8, 11.5–11.7) to match — no more
+      `interview_insights_test`/`OPENSEARCH_INDEX_PREFIX`/
+      `--i-know-this-seeds-fake-data` instructions; document that e2e/
+      smoke runs now truncate the dev database directly, every time.
+- [ ] Engineering blog (last) (GitHub issue #TBD)
+
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
 Filed 2026-07-24 after a UI/UX brainstorm surfaced a deliberate product

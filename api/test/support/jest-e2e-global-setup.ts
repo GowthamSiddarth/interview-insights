@@ -1,22 +1,14 @@
-// GitHub issue #383 / docs/DECISIONS.md D61 — runs once, before any
-// e2e spec in the suite, and fails the whole run immediately if either
-// local-isolation knob (D24's DATABASE_URL, D26's OPENSEARCH_INDEX_PREFIX)
-// is missing. Before this existed, running `npm run test:e2e` without both
-// overrides silently wrote/deleted real rows in the dev database and real
-// OpenSearch indices instead of erroring — see assert-test-database.ts's
-// own comment for the incident this closes.
-//
-// Also truncates interview_insights_test itself (docs/DECISIONS.md D65) —
-// only once assertLocalE2eIsolation has confirmed DATABASE_URL genuinely
-// points at the test database, and truncateTestDatabase re-checks that
-// itself too before touching anything (defense in depth, given the
-// severity of getting this wrong).
-import { assertLocalE2eIsolation } from './assert-test-database';
-import { truncateTestDatabase } from './truncate-test-database';
+// docs/DECISIONS.md D96 — runs once, before any e2e spec in the suite.
+// Used to also assert DATABASE_URL/OPENSEARCH_INDEX_PREFIX pointed at a
+// separate interview_insights_test database (D61/D65), after an unguarded
+// run once silently wrote/deleted real rows in the dev database (GitHub
+// issue #383). D96 retired that separate test database — there's only one
+// local Postgres/OpenSearch environment until real staging/prod infra
+// exists (Phase 8b) — so every e2e run now truncates and repopulates the
+// dev database directly. This is deliberate, not an oversight: revisit
+// once a real non-dev environment exists to seed/test against instead.
+import { truncateDatabase } from './truncate-database';
 
 export default async function globalSetup(): Promise<void> {
-  assertLocalE2eIsolation(
-    'DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interview_insights_test?schema=public" OPENSEARCH_INDEX_PREFIX="e2etest-" npm run test:e2e',
-  );
-  await truncateTestDatabase();
+  await truncateDatabase();
 }
