@@ -877,7 +877,7 @@ groups — finished with #553/#554 just before this split. Milestone:
       unrelated gap along the way (`interview_insights_test` database
       had never been created on this cluster); uninstalled via `brew
       uninstall --cask docker`; see D93
-- [ ] Runbook: `app.interview-insights.local` intermittently unreachable
+- [x] Runbook: `app.interview-insights.local` intermittently unreachable
       despite healthy pods (GitHub issue #564) — live incident, bisected
       to `podman-machine-default`'s own kernel network stack degrading
       (not Podman port-forwarding, not kind, not the app); fixed by a
@@ -1079,7 +1079,7 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       always passed regardless, masking the gap; also stopped tracking
       `tsconfig.tsbuildinfo` (TypeScript's incremental-build cache) (PR
       #483, GitHub issue #482)
-- [ ] LocalStack's init hook reseeded a stale default Postgres password
+- [x] LocalStack's init hook reseeded a stale default Postgres password
       on every restart instead of the real (possibly rotated) one
       (GitHub issue #563) — live incident, silently P1000-crash-looped
       api/notification-service/review-analyzer for days before
