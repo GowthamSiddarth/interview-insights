@@ -1,6 +1,5 @@
 import { ModerationFlagReason } from '@prisma/client';
 import {
-  assertSeedTargetConfirmed,
   buildTypeMetadata,
   parseIntArg,
   parseStringArg,
@@ -13,33 +12,11 @@ import {
 import { RoundTypeSchemaWithOptions } from '../src/round-type-registry/round-type-field-options.service';
 
 describe('seed-demo-data', () => {
-  const originalEnv = process.env.DATABASE_URL;
   const originalArgv = process.argv;
 
   afterEach(() => {
-    process.env.DATABASE_URL = originalEnv;
     process.argv = originalArgv;
     jest.restoreAllMocks();
-  });
-
-  describe('assertSeedTargetConfirmed', () => {
-    it('allows a DATABASE_URL naming interview_insights_test', () => {
-      process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/interview_insights_test';
-      process.argv = ['node', 'seed-demo-data.ts'];
-      expect(() => assertSeedTargetConfirmed()).not.toThrow();
-    });
-
-    it('refuses a different database without the override flag', () => {
-      process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/interview_insights';
-      process.argv = ['node', 'seed-demo-data.ts'];
-      expect(() => assertSeedTargetConfirmed()).toThrow(/Refusing to seed/);
-    });
-
-    it('allows a different database when --i-know-this-seeds-fake-data is passed', () => {
-      process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/interview_insights';
-      process.argv = ['node', 'seed-demo-data.ts', '--i-know-this-seeds-fake-data'];
-      expect(() => assertSeedTargetConfirmed()).not.toThrow();
-    });
   });
 
   describe('parseIntArg', () => {

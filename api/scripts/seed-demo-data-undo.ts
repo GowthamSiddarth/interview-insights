@@ -4,10 +4,9 @@
 // single candidate — batched here over a whole run's companies/candidates
 // instead of one, plus the company-side cleanup a candidate erasure never
 // needs (a candidate never deletes the shared Company/Recruiter rows it
-// touched). Reuses seed-cli-utils.ts's assertSeedTargetConfirmed()
-// (undoing is exactly as destructive as seeding against the wrong
-// database) and refreshMaterializedViews() (an undo leaves the same three
-// views stale the same way an unrefreshed seed run would).
+// touched). Reuses seed-cli-utils.ts's refreshMaterializedViews() (an undo
+// leaves the same three views stale the same way an unrefreshed seed run
+// would).
 //
 // AppModule is imported dynamically inside main(), not statically at the
 // top of this file — AppModule's own decorator evaluation eagerly
@@ -20,14 +19,13 @@
 // Usage:
 //   DATABASE_URL=... npm run seed:demo-data:undo -- --list
 //   DATABASE_URL=... npm run seed:demo-data:undo -- --run-id=<uuid>
-//   DATABASE_URL=<not interview_insights_test> npm run seed:demo-data:undo -- --run-id=<uuid> --i-know-this-seeds-fake-data
 import { NestFactory } from '@nestjs/core';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ModerationService } from '../src/moderation/moderation.service';
 import { CompanySearchService } from '../src/search/company-search.service';
 import { ReviewSearchService } from '../src/search/review-search.service';
-import { assertSeedTargetConfirmed, parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
+import { parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
 import { SeedManifest, deleteManifest, listManifests, readManifest } from './seed-manifest';
 
 type PrismaTransaction = Prisma.TransactionClient;
@@ -193,8 +191,6 @@ async function main(): Promise<void> {
       'Usage: npm run seed:demo-data:undo -- --run-id=<uuid>  (or --list to see available runs)',
     );
   }
-
-  assertSeedTargetConfirmed();
 
   let manifest: SeedManifest;
   try {

@@ -37,7 +37,7 @@ const SECOND_MODERATOR_PASSWORD = 'dev-only-second-moderator-password';
 // bypass-the-app-layer pattern moderation.e2e-spec.ts's own rawPrisma
 // already uses to simulate state the app itself would never produce
 // through a real endpoint. Upserted under a fixed username rather than a
-// fresh one per call: `moderators` isn't one of truncate-test-database.ts's
+// fresh one per call: `moderators` isn't one of truncate-database.ts's
 // wiped tables (moderator identities, like the env-seeded admin one,
 // persist across test runs same as production would), so a fresh
 // timestamped username every call would just accumulate rows forever

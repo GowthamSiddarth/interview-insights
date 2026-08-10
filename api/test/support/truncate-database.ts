@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import { assertUsingTestDatabase } from './assert-test-database';
 
 // Every table holding candidate/company-generated data, in FK-safe
 // (children-before-parents) delete order — deliberately excludes
@@ -54,9 +53,14 @@ const MATERIALIZED_VIEWS_TO_REFRESH = [
 // genuinely empty database, materialized views included (refreshing them
 // against the now-empty base tables, since nothing else does this
 // automatically — see D15).
-export async function truncateTestDatabase(): Promise<void> {
-  assertUsingTestDatabase('npm run test:e2e');
-
+//
+// Formerly gated on assertUsingTestDatabase() confirming DATABASE_URL
+// pointed at a dedicated interview_insights_test database (D65) — D96
+// retired that separate database, so this now runs, and wipes, whatever
+// DATABASE_URL actually points at (the dev database, in every environment
+// this project runs in today). Deliberate: revisit once a real non-dev
+// environment exists to seed/test against instead.
+export async function truncateDatabase(): Promise<void> {
   const prisma = new PrismaClient();
   try {
     for (const table of TABLES_TO_DELETE_IN_ORDER) {

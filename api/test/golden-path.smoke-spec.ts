@@ -5,7 +5,6 @@ import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
-import { assertLocalE2eIsolation } from './support/assert-test-database';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
 
@@ -68,9 +67,10 @@ interface MySubmissionsEntry {
 // Opt-in only (`npm run smoke:e2e`) — deliberately never part of
 // `npm run test:e2e`/CI. The 105+ per-feature e2e specs already own
 // regression coverage; this is a manual "did I break the golden path"
-// sanity check, safe to rerun on demand because assertUsingTestDatabase()
-// refuses to run against anything but interview_insights_test — see
-// docs/DECISIONS.md D36 for why this exists.
+// sanity check. Runs against the dev database directly (docs/DECISIONS.md
+// D96 superseded D36/D61's separate-test-database isolation — there's
+// only one local Postgres environment until real staging/prod infra
+// exists).
 //
 // Deliberately ONE shared app instance for the whole file, unlike every
 // other e2e spec's fresh-app-per-test pattern: this describes a single
@@ -95,8 +95,6 @@ describe('Full golden path (e2e smoke test)', () => {
   const sharedRecruiterIdentifier = `recruiter-${unique()}@example.com`;
 
   beforeAll(async () => {
-    assertLocalE2eIsolation('npm run smoke:e2e');
-
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
