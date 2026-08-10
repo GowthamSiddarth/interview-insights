@@ -1,9 +1,11 @@
 # Phase 20, Issue #347 — Company Reviews, Grouped by Submission
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Epic #214 reopened and re-closed the same day, same precedent as
-#222/#240/#278/#312. See `docs/ROADMAP.md` Phase 20 and
-`docs/DECISIONS.md` D54.*
+*Part of Phase 20d — Product/UX Polish from Live Verification (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Epic #214 reopened and re-closed the same day,
+same precedent as #222/#240/#278/#312. See `docs/ROADMAP.md` Phase 20d
+and `docs/DECISIONS.md` D54.*
 
 ## The same bug, found twice, on two different pages
 

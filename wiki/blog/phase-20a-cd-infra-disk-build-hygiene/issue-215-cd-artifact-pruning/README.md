@@ -1,8 +1,10 @@
 # Phase 20, Issue #215 — Prune Stale Docker Artifacts After Every CD Deploy
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
+*Part of Phase 20a — CD/Infra Disk & Build Hygiene (originally filed under
+Phase 20 — Operational Hardening & Live-Verification Findings, epic #214,
+split out 2026-08-09 — see `docs/ROADMAP.md`'s Phase 20 retired stub).
 Filed retroactively after the fact — the incident and fix both happened
-before the issue existed. See `docs/ROADMAP.md` Phase 20 and
+before the issue existed. See `docs/ROADMAP.md` Phase 20a and
 `docs/DECISIONS.md` D35.*
 
 ## Why this matters: an incident on a completely unrelated PR

@@ -1,8 +1,10 @@
 # Phase 20, Issue #216 — Full Golden-Path Smoke Test
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Filed retroactively after the fact. See `docs/ROADMAP.md` Phase 20 and
-`docs/DECISIONS.md` D36.*
+*Part of Phase 20c — Live-Verification Tooling & Data Hygiene (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Filed retroactively after the fact. See
+`docs/ROADMAP.md` Phase 20c and `docs/DECISIONS.md` D36.*
 
 ## Why this exists: the dev-DB cleanup that prompted the question
 

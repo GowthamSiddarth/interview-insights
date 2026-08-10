@@ -1,9 +1,11 @@
 # Phase 20, Issue #349 — Labeling `/me`'s Process Outcome Distinctly From Moderation Status
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Epic #214 reopened and re-closed the same day, same precedent as
-#222/#240/#278/#312/#347. See `docs/ROADMAP.md` Phase 20 and
-`docs/DECISIONS.md` D55.*
+*Part of Phase 20d — Product/UX Polish from Live Verification (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Epic #214 reopened and re-closed the same day,
+same precedent as #222/#240/#278/#312/#347. See `docs/ROADMAP.md`
+Phase 20d and `docs/DECISIONS.md` D55.*
 
 ## A negative result led somewhere useful
 

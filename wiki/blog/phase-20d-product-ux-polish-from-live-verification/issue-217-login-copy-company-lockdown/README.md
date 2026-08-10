@@ -1,8 +1,11 @@
 # Phase 20, Issue #217 — Honest Login-Page Copy + Lock Down `POST /companies`
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Two product-review findings, unrelated to each other except in how they
-surfaced. See `docs/ROADMAP.md` Phase 20 and `docs/DECISIONS.md` D38.*
+*Part of Phase 20d — Product/UX Polish from Live Verification (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Two product-review findings, unrelated to each
+other except in how they surfaced. See `docs/ROADMAP.md` Phase 20d and
+`docs/DECISIONS.md` D38.*
 
 ## Why this is two findings in one issue, not two issues
 

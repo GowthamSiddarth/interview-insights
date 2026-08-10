@@ -1,8 +1,11 @@
 # Phase 20, Issue #212 — `GET /moderation/queue` Isolates Each Entity Type's Enrichment
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Surfaced while stress-testing issue #216's golden-path smoke test. See
-`docs/ROADMAP.md` Phase 20 and `docs/DECISIONS.md` D37.*
+*Part of Phase 20c — Live-Verification Tooling & Data Hygiene (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Surfaced while stress-testing issue #216's
+golden-path smoke test. See `docs/ROADMAP.md` Phase 20c and
+`docs/DECISIONS.md` D37.*
 
 ## Why this is a genuinely interesting bug, not just a flaky test
 

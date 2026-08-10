@@ -1,9 +1,12 @@
 # Phase 20, Issue #278 — 415 Ghosts in the Search Index
 
-*Part of Phase 20 — Operational Hardening & Live-Verification Findings.
-Epic #214 and milestone #17 reopened and re-closed the same day, same
-precedent already set twice this phase (#222, #240). See
-`docs/ROADMAP.md` Phase 20 and `docs/DECISIONS.md` D51.*
+*Part of Phase 20c — Live-Verification Tooling & Data Hygiene (originally
+filed under Phase 20 — Operational Hardening & Live-Verification
+Findings, epic #214, split out 2026-08-09 — see `docs/ROADMAP.md`'s
+Phase 20 retired stub). Epic #214 and milestone #17 reopened and
+re-closed the same day, same precedent already set twice this phase
+(#222, #240). See `docs/ROADMAP.md` Phase 20c and `docs/DECISIONS.md`
+D51.*
 
 ## Why this is the same bug class as D35/D43, just in a different store
 
