@@ -4615,6 +4615,55 @@ project depends on it anymore.
 
 ---
 
+### D94 — LocalStack's init hook reads the real `POSTGRES_PASSWORD` instead of a hardcoded default (GitHub issue #563, Phase 20e)
+
+**Context:** a live incident (2026-08-10) found `api`/`notification-
+service`/`review-analyzer` crash-looping with Prisma `P1000` auth
+failures right after an unrelated `podman machine` restart. Root cause:
+`infra/k8s/base/localstack/init/seed.sh` (LocalStack's init hook, which
+reruns on every start including an unplanned restart — LocalStack has no
+PVC by design, issue #78) hardcoded `DATABASE_URL`'s password to the
+literal fresh-cluster default (`postgres`). This cluster's real Postgres
+password had been rotated (§5d) to a 48-char generated value; the restart
+reseeded the stale 8-char default, silently breaking every service that
+fetches `DATABASE_URL` from Secrets Manager at boot. Latent for 2+ days
+beforehand — the affected pods hadn't restarted since the rotation and
+were reusing an already-established DB connection, so the drift never
+surfaced until something forced a fresh boot.
+
+The script's own comments already predicted this exact failure and
+pointed at a manual `infra/aws/seed-localstack.sh` rerun (with
+`$POSTGRES_PASSWORD` set) as the fix — this was a known, accepted gap
+(D77's original reasoning: "LocalStack's own pod has no reason to
+receive Postgres's credential"), not an oversight.
+
+**Decision:** extend D78's own precedent (`ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET`/`ANTHROPIC_API_KEY` already flow into LocalStack's pod
+via `secretKeyRef` for exactly this "survive an unplanned restart"
+reason) to `POSTGRES_PASSWORD` too. `08-localstack.yaml` now sources it
+from the same `postgres-credentials` Secret Postgres itself was
+`initdb`'d with; `init/seed.sh` percent-encodes it (matching D92's fix
+for the same class of bug in `infra/aws/seed-localstack.sh`) before
+building `DATABASE_URL_VALUE`, falling back to the literal `postgres`
+default only if the env var is somehow unset.
+
+**Trade-off accepted:** this is a narrower version of the same
+least-privilege carve-out D77 originally avoided — LocalStack's pod can
+now read one more real credential. Judged acceptable because the
+alternative (silent, multi-day-latent auth breakage on every
+unplanned restart) is worse than the risk of a local-dev-only container
+holding a read reference to its own cluster's DB password, and this
+project's own `postgres-credentials` is already the one deliberately
+plaintext-adjacent exception (see root `CLAUDE.md` hard constraint #6).
+
+**Revisit when:** if a future secret ever needs the same "must survive
+an unplanned LocalStack restart with its *real* current value" property
+but rotates on a schedule LocalStack can't observe (e.g. short-lived
+credentials), this same `secretKeyRef`-into-the-seed-hook pattern is the
+template to reuse rather than re-deriving it.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
