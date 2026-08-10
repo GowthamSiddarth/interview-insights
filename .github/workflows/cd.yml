@@ -164,6 +164,16 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
+          # GitHub issue #568 — a `gh secret set POSTGRES_PASSWORD` that
+          # lands while this step's ${{ secrets.POSTGRES_PASSWORD }}
+          # expression is being resolved can observe an empty value
+          # instead of either the old or new one. Overwriting the live
+          # secret with that empty value silently broke Postgres auth
+          # for every consumer; refuse instead of applying it.
+          if [ -z "$POSTGRES_PASSWORD" ]; then
+            echo "::error::POSTGRES_PASSWORD resolved empty - refusing to overwrite postgres-credentials (GitHub issue #568). If POSTGRES_PASSWORD was just rotated via 'gh secret set' while this run was queued/in-flight, re-run this job."
+            exit 1
+          fi
           kubectl create secret generic postgres-credentials \
             --namespace interview-insights \
             --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
