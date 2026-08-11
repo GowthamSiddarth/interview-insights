@@ -780,6 +780,19 @@ for the same pointer on the blog side. Every bullet below kept its
 original GitHub issue number, PR, and D-number; only the phase/epic/
 milestone grouping changed.
 
+- [x] Retire local `podman-compose` full-stack path — `infra/
+      docker-compose.yml`'s Postgres kept colliding with `kind`'s on
+      port 5432 (D24's silent-wrong-target failure recurring years
+      later), most recently 2026-08-10 when a bare `npx prisma migrate
+      deploy` landed on the stray compose instance instead of `kind`'s.
+      `kind` is now the sole local Postgres/OpenSearch/Mailpit/
+      Redpanda/LocalStack instance; the file is deleted outright rather
+      than re-documented as unused again. Filed and merged against this
+      original epic (#214) rather than one of 20a-20f below — landed
+      2026-08-10, after the 20a-20e split above, an exception to this
+      epic/milestone's own "stays closed as historical record" note
+      (GitHub issue #578, D97)
+
 ### Phase 20a — CD/Infra Disk & Build Hygiene
 
 Docker/Podman disk-fills-up-and-crash-loops incidents and their fixes —
@@ -1102,6 +1115,14 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       from the original Phase 20 blog; #393/#413/#450/#453/#452/#482
       never got individual posts, same "not every reopen gets its own
       post" precedent
+- [ ] `api/.env.example`'s `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`
+      still carry a real-looking bcrypt hash and a "dev-only-change-me"
+      fallback, violating D78/hard-constraint-6 — D78 (issue #466)
+      migrated both vars to LocalStack Secrets Manager specifically so
+      `.env.example` would carry no placeholder for them, but PR #476
+      never touched the file. Found during Phase 20f's admin-env audit,
+      filed separately under this epic per the ad-hoc-work convention
+      (GitHub issue #576)
 
 ### Phase 20f — Retire Local Test-Database Isolation
 
@@ -1116,10 +1137,10 @@ project already carries for genuinely small items — this one *is* its
 own themed unit of work (isolation-guard removal + doc rewrite across
 ~15 files), same reasoning Phase 20's original split into 20a-20e used.
 Milestone: "Phase 20f — Retire Local Test-Database Isolation". Epic:
-GitHub issue #TBD (see D96 in `docs/DECISIONS.md` for the full decision
+GitHub issue #571 (see D96 in `docs/DECISIONS.md` for the full decision
 record).
 
-- [ ] Remove `assertUsingTestDatabase()`/`assertLocalE2eIsolation()`/
+- [x] Remove `assertUsingTestDatabase()`/`assertLocalE2eIsolation()`/
       `assertOpenSearchIndicesIsolated()` (`api/test/support/
       assert-test-database.ts`, deleted); rename `truncateTestDatabase()`
       → `truncateDatabase()` (`truncate-database.ts`), keeping its
@@ -1129,13 +1150,15 @@ record).
       `--i-know-this-seeds-fake-data` call site
       (`seed-cli-utils.ts`/`seed-demo-data.ts`/`seed-demo-data-undo.ts`
       and their specs); update `golden-path.smoke-spec.ts`/
-      `env-load-order.smoke-spec.ts` accordingly. See D96.
-- [ ] Update README.md and `wiki/deployment-guide.md` (sections 1, 6.1,
+      `env-load-order.smoke-spec.ts` accordingly. See D96 (GitHub issue
+      #572)
+- [x] Update README.md and `wiki/deployment-guide.md` (sections 1, 6.1,
       6.3, 6.4, 8, 11.5–11.7) to match — no more
       `interview_insights_test`/`OPENSEARCH_INDEX_PREFIX`/
       `--i-know-this-seeds-fake-data` instructions; document that e2e/
-      smoke runs now truncate the dev database directly, every time.
-- [ ] Engineering blog (last) (GitHub issue #TBD)
+      smoke runs now truncate the dev database directly, every time
+      (GitHub issue #573)
+- [ ] Engineering blog (last) (GitHub issue #574)
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
