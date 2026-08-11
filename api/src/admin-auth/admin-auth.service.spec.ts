@@ -1,13 +1,18 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminAuthService } from './admin-auth.service';
+import { StaffAuditLogService } from './staff-audit-log.service';
 
 describe('AdminAuthService', () => {
   let service: AdminAuthService;
   let jwtService: { sign: jest.Mock };
-  let prisma: { moderator: { findUnique: jest.Mock; upsert: jest.Mock } };
+  let prisma: {
+    moderator: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock; upsert: jest.Mock; update: jest.Mock };
+  };
+  let staffAuditLog: { record: jest.Mock };
   const originalEnv = { ...process.env };
   let passwordHash: string;
 
@@ -21,13 +26,22 @@ describe('AdminAuthService', () => {
     process.env.ADMIN_EMAIL = 'admin@interview-insights.local';
 
     jwtService = { sign: jest.fn().mockReturnValue('signed.jwt.token') };
-    prisma = { moderator: { findUnique: jest.fn(), upsert: jest.fn() } };
+    prisma = {
+      moderator: {
+        findUnique: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    staffAuditLog = { record: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminAuthService,
         { provide: JwtService, useValue: jwtService },
         { provide: PrismaService, useValue: prisma },
+        { provide: StaffAuditLogService, useValue: staffAuditLog },
       ],
     }).compile();
 
@@ -141,5 +155,37 @@ describe('AdminAuthService', () => {
     const token = service.issueToken({ id: 'mod-1', username: 'admin', role: 'admin' });
     expect(token).toBe('signed.jwt.token');
     expect(jwtService.sign).toHaveBeenCalledWith({ id: 'mod-1', username: 'admin', role: 'admin' });
+  });
+
+  describe('changeOwnPassword', () => {
+    it('updates the password hash and records a self-service audit row when the current password matches', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ id: 'mod-1', passwordHash });
+
+      await service.changeOwnPassword('mod-1', 'correct-horse-battery-staple', 'a-new-strong-password');
+
+      expect(prisma.moderator.update).toHaveBeenCalledWith({
+        where: { id: 'mod-1' },
+        data: { passwordHash: expect.any(String) as string },
+      });
+      const [[updateCall]] = prisma.moderator.update.mock.calls as [[{ data: { passwordHash: string } }]];
+      await expect(bcrypt.compare('a-new-strong-password', updateCall.data.passwordHash)).resolves.toBe(
+        true,
+      );
+      expect(staffAuditLog.record).toHaveBeenCalledWith({
+        actorId: 'mod-1',
+        targetId: 'mod-1',
+        action: 'password_reset',
+      });
+    });
+
+    it('rejects with UnauthorizedException when the current password is wrong, without updating anything', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ id: 'mod-1', passwordHash });
+
+      await expect(
+        service.changeOwnPassword('mod-1', 'wrong-current-password', 'a-new-strong-password'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(prisma.moderator.update).not.toHaveBeenCalled();
+      expect(staffAuditLog.record).not.toHaveBeenCalled();
+    });
   });
 });

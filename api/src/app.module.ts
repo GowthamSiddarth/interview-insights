@@ -20,6 +20,7 @@ import { SearchModule } from './search/search.module';
 import { MeModule } from './me/me.module';
 import { BulkProcessSubmissionModule } from './bulk-process-submission/bulk-process-submission.module';
 import { VerdictConsumerModule } from './verdict-consumer/verdict-consumer.module';
+import { StaffAccountsModule } from './staff-accounts/staff-accounts.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { VerdictConsumerModule } from './verdict-consumer/verdict-consumer.modul
     MeModule,
     BulkProcessSubmissionModule,
     VerdictConsumerModule,
+    StaffAccountsModule,
   ],
 })
 export class AppModule {}

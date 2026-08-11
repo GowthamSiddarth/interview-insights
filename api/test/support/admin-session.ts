@@ -26,7 +26,7 @@ export async function loginAsAdmin(app: INestApplication): Promise<string> {
   return Array.isArray(cookies) ? cookies[0] : cookies;
 }
 
-const SECOND_MODERATOR_USERNAME = 'second-moderator';
+export const SECOND_MODERATOR_USERNAME = 'second-moderator';
 const SECOND_MODERATOR_PASSWORD = 'dev-only-second-moderator-password';
 
 // GitHub issue #487 (Phase 36) — claim/release is the first thing in this
