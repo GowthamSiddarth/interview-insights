@@ -165,9 +165,9 @@ post per phase — this file no longer inlines that running history.
   wait-for-CI-green discipline before merging, not the temporary
   merge-without-CI exception this line used to describe. Phase 42
   (Staff Role Hierarchy & Admin/Moderator Tooling) is planned as of
-  2026-08-11 (epic #584, issues #585-#593) but not yet started —
-  implementation begins on issue #585 once Phase 40 work isn't actively
-  in flight.
+  2026-08-11 (epic #584, issues #585-#593) and underway: #585 (kickoff
+  decision record) is done, written up as D99 in `docs/DECISIONS.md`.
+  Next up is #586 (the `StaffRole`/`staff_audit_log` Prisma migration).
 
 ## Open decisions still to make
 

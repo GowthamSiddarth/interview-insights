@@ -2190,8 +2190,9 @@ Kickoff brainstorm resolved 2026-08-11 (issue #585):
 Milestone: "Phase 42 — Staff Role Hierarchy & Admin/Moderator Tooling".
 Epic: GitHub issue #584.
 
-- [ ] Phase 42 kickoff: `StaffRole` hierarchy, permission-set model,
-      credential-retirement plan — decision record (GitHub issue #585)
+- [x] Phase 42 kickoff: `StaffRole` hierarchy, permission-set model,
+      credential-retirement plan — decision record (GitHub issue #585,
+      written up as D99 in `docs/DECISIONS.md`)
 - [ ] Prisma migration: `StaffRole` enum, `role`/`isActive`/
       `createdById` on `moderators`, `staff_audit_log` table (GitHub
       issue #586)
