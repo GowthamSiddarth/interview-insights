@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { PageContainer } from '@/components/PageContainer';
@@ -13,7 +12,6 @@ function errorMessage(err: unknown): string {
 }
 
 export default function ModerationLoginPage() {
-  const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +23,13 @@ export default function ModerationLoginPage() {
     setSubmitting(true);
     try {
       await api.adminLogin(username, password);
-      router.push('/moderation');
+      // GitHub issue #591 (Phase 42) — a hard navigation, not router.push():
+      // NavBar/moderation page's own session-state UI only checks session
+      // at mount, same reasoning as web/CLAUDE.md's rule for every other
+      // session-changing action (login/logout/magic-link verify).
+      window.location.href = '/moderation';
     } catch (err) {
       setError(errorMessage(err));
-    } finally {
       setSubmitting(false);
     }
   }

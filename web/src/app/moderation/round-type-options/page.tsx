@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ApiError, Round, RoundTypeFieldOptionRow, RoundTypeFieldOptions } from '@/lib/api';
+import { api, ApiError, Round, RoundTypeFieldOptionRow, RoundTypeFieldOptions, StaffRole } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
@@ -27,12 +27,21 @@ interface FieldSectionProps {
   roundType: Round['roundType'];
   fieldKey: string;
   rows: RoundTypeFieldOptionRow[];
+  readOnly: boolean;
   onChanged: () => void;
   setError: (msg: string | null) => void;
   onSessionExpired: () => void;
 }
 
-function FieldSection({ roundType, fieldKey, rows, onChanged, setError, onSessionExpired }: FieldSectionProps) {
+function FieldSection({
+  roundType,
+  fieldKey,
+  rows,
+  readOnly,
+  onChanged,
+  setError,
+  onSessionExpired,
+}: FieldSectionProps) {
   const [newValue, setNewValue] = useState('');
   const [edits, setEdits] = useState<Record<string, { value: string; sortOrder: string }>>({});
 
@@ -103,6 +112,8 @@ function FieldSection({ roundType, fieldKey, rows, onChanged, setError, onSessio
               }
               className={inputClass}
               aria-label={`Value for ${row.id}`}
+              readOnly={readOnly}
+              disabled={readOnly}
             />
             <label className="flex items-center gap-1 text-xs text-gray-500">
               sort
@@ -114,35 +125,43 @@ function FieldSection({ roundType, fieldKey, rows, onChanged, setError, onSessio
                 }
                 className={`${inputClass} w-16`}
                 aria-label={`Sort order for ${row.id}`}
+                readOnly={readOnly}
+                disabled={readOnly}
               />
             </label>
-            <Button type="button" onClick={() => void handleSave(row)}>
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant={row.isActive ? 'danger' : 'neutral'}
-              onClick={() => void handleToggleActive(row)}
-            >
-              {row.isActive ? 'Retire' : 'Reactivate'}
-            </Button>
+            {!readOnly && (
+              <>
+                <Button type="button" onClick={() => void handleSave(row)}>
+                  Save
+                </Button>
+                <Button
+                  type="button"
+                  variant={row.isActive ? 'danger' : 'neutral'}
+                  onClick={() => void handleToggleActive(row)}
+                >
+                  {row.isActive ? 'Retire' : 'Reactivate'}
+                </Button>
+              </>
+            )}
             {!row.isActive && <span className="text-xs text-gray-500">retired</span>}
           </div>
         );
       })}
 
-      <div className="flex items-center gap-2">
-        <input
-          value={newValue}
-          onChange={(e) => setNewValue(e.target.value)}
-          placeholder="New value"
-          className={inputClass}
-          aria-label={`New value for ${fieldKey}`}
-        />
-        <Button type="button" onClick={() => void handleAdd()} disabled={!newValue.trim()}>
-          Add value
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <input
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            placeholder="New value"
+            className={inputClass}
+            aria-label={`New value for ${fieldKey}`}
+          />
+          <Button type="button" onClick={() => void handleAdd()} disabled={!newValue.trim()}>
+            Add value
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -150,6 +169,7 @@ function FieldSection({ roundType, fieldKey, rows, onChanged, setError, onSessio
 export default function RoundTypeOptionsPage() {
   const router = useRouter();
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [role, setRole] = useState<StaffRole | null>(null);
   const [schema, setSchema] = useState<RoundTypeFieldOptions | null>(null);
   const [roundType, setRoundType] = useState<Round['roundType'] | ''>('');
   const [rows, setRows] = useState<RoundTypeFieldOptionRow[] | null>(null);
@@ -158,7 +178,10 @@ export default function RoundTypeOptionsPage() {
   useEffect(() => {
     api
       .getAdminSession()
-      .then(() => setSessionChecked(true))
+      .then((session) => {
+        setRole(session.role);
+        setSessionChecked(true);
+      })
       .catch(() => router.push('/moderation/login'));
   }, [router]);
 
@@ -196,9 +219,15 @@ export default function RoundTypeOptionsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Round-type field options</h1>
           <p className="text-sm text-gray-500">
-            Manage the controlled-vocabulary values behind each round type&apos;s
-            structured fields. Retiring a value hides it from new submissions
-            without invalidating anything that already used it.
+            {role === 'staff' ? (
+              <>The controlled-vocabulary values behind each round type&apos;s structured fields — read-only for your role.</>
+            ) : (
+              <>
+                Manage the controlled-vocabulary values behind each round type&apos;s
+                structured fields. Retiring a value hides it from new submissions
+                without invalidating anything that already used it.
+              </>
+            )}
           </p>
         </div>
         <Link href="/moderation" className="text-sm text-indigo-600 underline dark:text-indigo-400">
@@ -251,6 +280,7 @@ export default function RoundTypeOptionsPage() {
             roundType={roundType}
             fieldKey={field.key}
             rows={rows.filter((r) => r.fieldKey === field.key)}
+            readOnly={role === 'staff'}
             onChanged={() => loadRows(roundType)}
             setError={setError}
             onSessionExpired={() => router.push('/moderation/login')}

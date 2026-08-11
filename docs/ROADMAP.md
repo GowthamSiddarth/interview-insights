@@ -2207,7 +2207,7 @@ Epic: GitHub issue #584.
 - [x] Retire shared admin credential for the general case; narrow
       `rotate-admin-credentials.sh` to root-admin break-glass recovery
       (GitHub issue #590)
-- [ ] Frontend: role-aware admin panel (nav/action gating by
+- [x] Frontend: role-aware admin panel (nav/action gating by
       permission) + staff account management UI (GitHub issue #591)
 - [ ] seed-demo-data: seed `STAFF`/`MODERATOR`/`ADMIN` accounts with
       varied roles (GitHub issue #592)

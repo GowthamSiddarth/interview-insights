@@ -183,8 +183,12 @@ post per phase — this file no longer inlines that running history.
   credentials.sh`, `wiki/deployment-guide.md` section 5b, and the
   `/moderation/login` page copy all now scoped to root-admin
   break-glass recovery only, everyday accounts go through #589's tools)
-  is done too. Next up is #591 (frontend: role-aware admin panel +
-  staff account management UI).
+  is done too. #591 (frontend: `staff` role hides moderation queue
+  actions and gets a read-only round-type-options view; new
+  `/moderation/staff` admin-only staff account management page and
+  `/moderation/change-password` self-service page) is done too. Next up
+  is #592 (seed-demo-data: seed `STAFF`/`MODERATOR`/`ADMIN` accounts
+  with varied roles).
 
 ## Open decisions still to make
 

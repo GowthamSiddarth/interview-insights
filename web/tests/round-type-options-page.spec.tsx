@@ -50,7 +50,7 @@ function mockFetch(rows = codingRows) {
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url.endsWith('/auth/admin/me') && method === 'GET') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ username: 'admin' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
     }
     if (url.endsWith('/round-types/field-options') && method === 'GET') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(schema) });

@@ -3,11 +3,6 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ModerationLoginPage from '../src/app/moderation/login/page';
 
-const push = jest.fn();
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
-}));
-
 function mockLogin(status: number) {
   global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input);
@@ -26,8 +21,23 @@ function mockLogin(status: number) {
 }
 
 describe('ModerationLoginPage (Phase 18 issue #160)', () => {
+  let originalLocation: Location;
+
   beforeEach(() => {
-    push.mockClear();
+    originalLocation = window.location;
+    // GitHub issue #591 (Phase 42) — login now hard-navigates
+    // (window.location.href), not router.push() — jsdom doesn't
+    // implement real navigation, so replace window.location with a stub
+    // whose href setter tests can assert on, same pattern
+    // my-reviews-page.spec.tsx/verify-page.spec.tsx already use.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 
   it('submits credentials and redirects to the moderation queue on success', async () => {
@@ -49,7 +59,7 @@ describe('ModerationLoginPage (Phase 18 issue #160)', () => {
       username: 'admin',
       password: 'correct-password',
     });
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/moderation'));
+    await waitFor(() => expect(window.location.href).toBe('/moderation'));
   });
 
   it('shows an error and does not redirect on incorrect credentials', async () => {
@@ -62,7 +72,7 @@ describe('ModerationLoginPage (Phase 18 issue #160)', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }));
 
     expect(await screen.findByText('Incorrect username or password.')).toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
+    expect(window.location.href).toBe('');
   });
 
   it('shows a rate-limit-specific error on 429', async () => {
@@ -75,6 +85,6 @@ describe('ModerationLoginPage (Phase 18 issue #160)', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }));
 
     expect(await screen.findByText('Too many attempts. Try again later.')).toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
+    expect(window.location.href).toBe('');
   });
 });

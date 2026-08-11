@@ -16,6 +16,7 @@ import {
   ModerationQueueEntry,
   ModerationQueueGroup,
   ModerationQueueStatus,
+  StaffRole,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -271,6 +272,7 @@ function EntryActions({
   entry,
   flagReason,
   currentModeratorId,
+  role,
   onFlagReasonChange,
   onAct,
   onClaim,
@@ -279,39 +281,49 @@ function EntryActions({
   entry: ModerationQueueEntry;
   flagReason: ModerationFlagReason;
   currentModeratorId: string | null;
+  role: StaffRole | null;
   onFlagReasonChange: (reason: ModerationFlagReason) => void;
   onAct: (action: 'approve' | 'reject' | 'flag') => void;
   onClaim: () => void;
   onRelease: () => void;
 }) {
   const isMine = entry.claimedBy !== null && entry.claimedBy.id === currentModeratorId;
+  // GitHub issue #591 (Phase 42, D99) — staff has moderation:queue:read
+  // only, no claim/approve/reject/flag/release permission of any kind.
+  // The claim badge still renders (it's informational, not an action) so
+  // a staff account can see who's working an entry.
+  const canAct = role !== 'staff';
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" onClick={() => onAct('approve')}>
-        Approve
-      </Button>
-      <Button type="button" onClick={() => onAct('reject')} variant="danger">
-        Reject
-      </Button>
-      <Button type="button" onClick={() => onAct('flag')} variant="warning">
-        Flag
-      </Button>
-      <label className="flex items-center gap-1 text-xs text-gray-500">
-        flag reason
-        <select
-          aria-label={`Flag reason for ${entry.id}`}
-          value={flagReason}
-          onChange={(e) => onFlagReasonChange(e.target.value as ModerationFlagReason)}
-          className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-        >
-          {FLAG_REASONS.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      </label>
-      {entry.claimedBy === null && (
+      {canAct && (
+        <>
+          <Button type="button" onClick={() => onAct('approve')}>
+            Approve
+          </Button>
+          <Button type="button" onClick={() => onAct('reject')} variant="danger">
+            Reject
+          </Button>
+          <Button type="button" onClick={() => onAct('flag')} variant="warning">
+            Flag
+          </Button>
+          <label className="flex items-center gap-1 text-xs text-gray-500">
+            flag reason
+            <select
+              aria-label={`Flag reason for ${entry.id}`}
+              value={flagReason}
+              onChange={(e) => onFlagReasonChange(e.target.value as ModerationFlagReason)}
+              className="rounded-md border border-gray-300 px-1 py-0.5 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+            >
+              {FLAG_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
+      {entry.claimedBy === null && canAct && (
         <Button type="button" onClick={onClaim} variant="neutral">
           Claim
         </Button>
@@ -319,7 +331,7 @@ function EntryActions({
       {entry.claimedBy !== null && (
         <>
           <ClaimBadge claimedBy={entry.claimedBy} isMine={isMine} />
-          {isMine && (
+          {isMine && canAct && (
             <Button type="button" onClick={onRelease} variant="neutral">
               Release
             </Button>
@@ -340,6 +352,8 @@ export default function ModerationPage() {
   // needed to tell "claimed by you" (offers a Release button) apart from
   // "claimed by someone else" (badge only) in EntryActions.
   const [currentModeratorId, setCurrentModeratorId] = useState<string | null>(null);
+  // GitHub issue #591 (Phase 42, D99) — drives nav/action gating below.
+  const [role, setRole] = useState<StaffRole | null>(null);
   const [groups, setGroups] = useState<ModerationQueueGroup[] | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [reviewedBy, setReviewedBy] = useState('');
@@ -371,6 +385,7 @@ export default function ModerationPage() {
       .getAdminSession()
       .then((session) => {
         setCurrentModeratorId(session.id);
+        setRole(session.role);
         setSessionChecked(true);
       })
       .catch(() => router.push('/moderation/login'));
@@ -515,7 +530,19 @@ export default function ModerationPage() {
         </div>
         <div className="flex items-center gap-4">
           <Link href="/moderation/round-type-options" className="text-sm text-indigo-600 underline dark:text-indigo-400">
-            Manage round-type field options
+            {/* staff has admin:round_types:read only — link stays, page
+                itself renders read-only for that role (GitHub issue #591) */}
+            {role === 'staff' ? 'View round-type field options' : 'Manage round-type field options'}
+          </Link>
+          {/* GitHub issue #591 (Phase 42, D99) — admin:staff:manage is
+              admin-tier only. */}
+          {role === 'admin' && (
+            <Link href="/moderation/staff" className="text-sm text-indigo-600 underline dark:text-indigo-400">
+              Staff accounts
+            </Link>
+          )}
+          <Link href="/moderation/change-password" className="text-sm text-indigo-600 underline dark:text-indigo-400">
+            Change password
           </Link>
           <Button type="button" onClick={() => void logout()} variant="neutral">
             Log out
@@ -664,6 +691,7 @@ export default function ModerationPage() {
                     entry={entry}
                     flagReason={flagReasonById[entry.id] ?? 'manual_report'}
                     currentModeratorId={currentModeratorId}
+                    role={role}
                     onFlagReasonChange={(reason) =>
                       setFlagReasonById((prev) => ({ ...prev, [entry.id]: reason }))
                     }
@@ -724,6 +752,7 @@ export default function ModerationPage() {
                           entry={entry}
                           flagReason={flagReasonById[entry.id] ?? 'manual_report'}
                           currentModeratorId={currentModeratorId}
+                          role={role}
                           onFlagReasonChange={(reason) =>
                             setFlagReasonById((prev) => ({ ...prev, [entry.id]: reason }))
                           }
