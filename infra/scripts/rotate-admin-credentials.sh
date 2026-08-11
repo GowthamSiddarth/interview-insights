@@ -82,6 +82,16 @@ kubectl create secret generic admin-credentials \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "== 4. Re-seed LocalStack Secrets Manager from the new values =="
+# GitHub issue #604 — seed-localstack.sh defaults POSTGRES_PASSWORD to the
+# literal string "postgres" when unset. Read the real value from the
+# postgres-credentials Secret instead of leaving it as an implicit
+# precondition on the caller's shell: on any cluster where the actual
+# Postgres password was ever rotated away from that default, silently
+# omitting this reseeds `database-url` with the wrong password and
+# crash-loops api/notification-service/review-analyzer on their next
+# restart with a Prisma P1000 auth error. Never echoed/printed — assigned
+# straight into the env-prefixed command below.
+POSTGRES_PASSWORD_VALUE="$(kubectl -n "$NAMESPACE" get secret postgres-credentials -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)"
 kubectl -n "$NAMESPACE" port-forward svc/localstack 4566:4566 &
 PF_PID=$!
 trap 'kill $PF_PID 2>/dev/null || true' EXIT
@@ -89,7 +99,7 @@ for i in $(seq 1 15); do
   curl -sf http://localhost:4566/_localstack/health > /dev/null && break
   sleep 2
 done
-ADMIN_PASSWORD_HASH="$NEW_HASH" ADMIN_JWT_SECRET="$NEW_JWT_SECRET" "$REPO_ROOT/infra/aws/seed-localstack.sh"
+POSTGRES_PASSWORD="$POSTGRES_PASSWORD_VALUE" ADMIN_PASSWORD_HASH="$NEW_HASH" ADMIN_JWT_SECRET="$NEW_JWT_SECRET" "$REPO_ROOT/infra/aws/seed-localstack.sh"
 kill $PF_PID 2>/dev/null || true
 trap - EXIT
 
