@@ -84,8 +84,19 @@ describe('AdminAuthService', () => {
 
       expect(prisma.moderator.upsert).toHaveBeenCalledWith({
         where: { username: 'admin' },
-        create: { username: 'admin', passwordHash, email: 'admin@interview-insights.local' },
-        update: { passwordHash, email: 'admin@interview-insights.local' },
+        create: {
+          username: 'admin',
+          passwordHash,
+          email: 'admin@interview-insights.local',
+          role: 'admin',
+          isActive: true,
+        },
+        update: {
+          passwordHash,
+          email: 'admin@interview-insights.local',
+          role: 'admin',
+          isActive: true,
+        },
       });
     });
 
