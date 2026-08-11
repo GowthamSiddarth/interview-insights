@@ -141,43 +141,64 @@ describe('Admin auth (e2e)', () => {
   // second-moderator's password is self-healing anyway (loginAsSecondModerator
   // re-upserts it on every call), but there's no reason to depend on that
   // here too.
+  //
+  // Its own isolated app instance, same reasoning as the dedicated
+  // rate-limit test below: this block alone makes 5 real login attempts
+  // across its three tests (LoginThrottleService's IpThrottle is keyed by
+  // IP, not username, with a limit of 5 per 15-minute window) — on the
+  // shared `app` above, that would land on top of the 3 attempts the
+  // earlier tests in this file already make and start tripping 429s
+  // partway through, exactly the trap this file's own top-level comment
+  // already documents for the rate-limit test.
   describe('POST /auth/admin/change-password', () => {
-    it('changes the password when the current password is correct, and the new one logs in', async () => {
-      const { cookie } = await loginAsSecondModerator(app);
+    let changePasswordApp: INestApplication;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
+    const changePasswordServer = () => request(changePasswordApp.getHttpServer());
 
-      await server()
+    beforeAll(async () => {
+      changePasswordApp = await bootApp();
+    });
+
+    afterAll(async () => {
+      await changePasswordApp.close();
+    });
+
+    it('changes the password when the current password is correct, and the new one logs in', async () => {
+      const { cookie } = await loginAsSecondModerator(changePasswordApp);
+
+      await changePasswordServer()
         .post('/auth/admin/change-password')
         .set('Cookie', cookie)
         .send({ currentPassword: 'dev-only-second-moderator-password', newPassword: 'a-new-strong-password' })
         .expect(200);
 
-      await server()
+      await changePasswordServer()
         .post('/auth/admin/login')
         .send({ username: SECOND_MODERATOR_USERNAME, password: 'a-new-strong-password' })
         .expect(200);
-      await server()
+      await changePasswordServer()
         .post('/auth/admin/login')
         .send({ username: SECOND_MODERATOR_USERNAME, password: 'dev-only-second-moderator-password' })
         .expect(401);
     });
 
     it('rejects a wrong current password with 401, without changing anything', async () => {
-      const { cookie } = await loginAsSecondModerator(app);
+      const { cookie } = await loginAsSecondModerator(changePasswordApp);
 
-      await server()
+      await changePasswordServer()
         .post('/auth/admin/change-password')
         .set('Cookie', cookie)
         .send({ currentPassword: 'not-the-real-password', newPassword: 'a-new-strong-password' })
         .expect(401);
 
-      await server()
+      await changePasswordServer()
         .post('/auth/admin/login')
         .send({ username: SECOND_MODERATOR_USERNAME, password: 'dev-only-second-moderator-password' })
         .expect(200);
     });
 
     it('rejects an unauthenticated request with 401', async () => {
-      await server()
+      await changePasswordServer()
         .post('/auth/admin/change-password')
         .send({ currentPassword: 'x', newPassword: 'a-new-strong-password' })
         .expect(401);
