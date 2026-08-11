@@ -27,6 +27,7 @@ import {
   ModerationFlagReason,
   ProcessOutcome,
   RoundType,
+  StaffRole,
 } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -134,18 +135,30 @@ export function pickFlagReason(): ModerationFlagReason {
 // indexing, no domain events) for a service to protect against bypassing.
 export const SEED_MODERATOR_COUNT = 4;
 
+// GitHub issue #592 (Phase 42, D99) — cycled by index rather than a fixed
+// per-count split, so a demo environment always has at least one of each
+// tier to exercise permission gating with (staff read-only, moderator
+// full queue actions, admin the staff-management screens too) no matter
+// what SEED_MODERATOR_COUNT is set to.
+const SEED_ROLE_CYCLE: StaffRole[] = ['staff', 'moderator', 'admin'];
+
 export async function seedModerators(
   prisma: PrismaService,
   count: number = SEED_MODERATOR_COUNT,
 ): Promise<string[]> {
   const moderatorIds: string[] = [];
   for (let i = 0; i < count; i++) {
+    const role = SEED_ROLE_CYCLE[i % SEED_ROLE_CYCLE.length];
     const passwordHash = await bcrypt.hash(faker.internet.password(), 10);
     const moderator = await prisma.moderator.create({
       data: {
-        username: `seed-moderator-${faker.string.alphanumeric(8).toLowerCase()}`,
+        // Role in the username (GitHub issue #592) so a demo environment's
+        // account list is self-explanatory at a glance, not just varied
+        // under the hood.
+        username: `seed-${role}-${faker.string.alphanumeric(8).toLowerCase()}`,
         email: faker.internet.email(),
         passwordHash,
+        role,
       },
     });
     moderatorIds.push(moderator.id);

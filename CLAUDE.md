@@ -186,9 +186,10 @@ post per phase — this file no longer inlines that running history.
   is done too. #591 (frontend: `staff` role hides moderation queue
   actions and gets a read-only round-type-options view; new
   `/moderation/staff` admin-only staff account management page and
-  `/moderation/change-password` self-service page) is done too. Next up
-  is #592 (seed-demo-data: seed `STAFF`/`MODERATOR`/`ADMIN` accounts
-  with varied roles).
+  `/moderation/change-password` self-service page) is done too. #592
+  (seed-demo-data: `seedModerators` cycles staff/moderator/admin by
+  index, username embeds the role) is done too. Next up is #593 (the
+  Phase 42 engineering blog, last).
 
 ## Open decisions still to make
 
