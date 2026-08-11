@@ -1140,6 +1140,18 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       lost or needs rotating, rather than re-deriving the sequence by
       hand each time. Filed separately under this epic per the
       ad-hoc-work convention (GitHub issue #582)
+- [x] `rotate-admin-credentials.sh` never exported `POSTGRES_PASSWORD`
+      before calling `seed-localstack.sh` (which defaults it to the
+      literal `postgres` when unset) — same root-cause class as #563's
+      stale-password reseed (D94), but a separate code path D94 never
+      touched. Live incident during Phase 42's final deployment
+      verification: running the script exactly as documented
+      crash-looped `api` with a Prisma P1000 error right after its own
+      "successfully rolled out" message. Fixed the same way D94 fixed
+      `seed.sh` — read `POSTGRES_PASSWORD` from `postgres-credentials`
+      itself inside the script, never rely on the caller's shell. Filed
+      separately under this epic per the ad-hoc-work convention (GitHub
+      issue #604)
 
 ### Phase 20f — Retire Local Test-Database Isolation
 
