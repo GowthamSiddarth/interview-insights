@@ -2201,7 +2201,7 @@ Epic: GitHub issue #584.
 - [x] Migrate `ModerationController` and
       `AdminRoundTypeFieldOptionsController` to permission-based guards
       (GitHub issue #588)
-- [ ] Staff account management endpoints: create/list/update-role/
+- [x] Staff account management endpoints: create/list/update-role/
       deactivate/reactivate, self-service password change, audit
       logging (GitHub issue #589)
 - [ ] Retire shared admin credential for the general case; narrow

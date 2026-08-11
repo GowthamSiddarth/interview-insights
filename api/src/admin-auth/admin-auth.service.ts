@@ -1,9 +1,12 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { StaffRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRequiredAdminEnv } from './admin-auth.env';
+import { StaffAuditLogService } from './staff-audit-log.service';
+
+const BCRYPT_COST = 10;
 
 export interface AdminSessionPayload {
   id: string;
@@ -16,6 +19,7 @@ export class AdminAuthService implements OnModuleInit {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly staffAuditLog: StaffAuditLogService,
   ) {}
 
   // GitHub issue #485 (Phase 36): replaces the single shared
@@ -77,5 +81,27 @@ export class AdminAuthService implements OnModuleInit {
 
   issueToken(payload: AdminSessionPayload): string {
     return this.jwtService.sign(payload);
+  }
+
+  // GitHub issue #589 (Phase 42, D99) — self-service password change,
+  // available to every role (no @RequirePermission() gate: this only ever
+  // acts on the caller's own account, identified by their session, never a
+  // client-supplied id). Requires the current password so a hijacked but
+  // still-live session can't be used to silently lock the real owner out.
+  async changeOwnPassword(staffId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const moderator = await this.prisma.moderator.findUniqueOrThrow({ where: { id: staffId } });
+
+    const matches = await bcrypt.compare(currentPassword, moderator.passwordHash);
+    if (!matches) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST);
+    await this.prisma.moderator.update({ where: { id: staffId }, data: { passwordHash } });
+    await this.staffAuditLog.record({
+      actorId: staffId,
+      targetId: staffId,
+      action: 'password_reset',
+    });
   }
 }

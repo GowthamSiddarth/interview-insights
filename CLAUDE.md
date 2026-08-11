@@ -174,9 +174,13 @@ post per phase — this file no longer inlines that running history.
   deactivation/role-change effect) is done. #588 (migrating
   `ModerationController`/`AdminRoundTypeFieldOptionsController` to the
   new permission-based guards, plus e2e coverage proving a `staff`
-  account can read but not write) is done too. Next up is #589 (staff
-  account management endpoints — create/list/update-role/deactivate/
-  reactivate, self-service password change, audit logging).
+  account can read but not write) is done too. #589 (staff account
+  management endpoints — new `StaffAccountsModule`/`admin/staff` routes
+  for create/list/update-role/deactivate/reactivate/admin-reset-password,
+  self-service `POST /auth/admin/change-password`, every action durably
+  audited via `StaffAuditLogService`) is done too. Next up is #590
+  (retiring the shared admin credential for the general case, narrowing
+  `rotate-admin-credentials.sh` to root-admin break-glass recovery).
 
 ## Open decisions still to make
 

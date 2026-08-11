@@ -4,7 +4,12 @@ import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
-import { ADMIN_TEST_PASSWORD, ADMIN_TEST_USERNAME } from './support/admin-session';
+import {
+  ADMIN_TEST_PASSWORD,
+  ADMIN_TEST_USERNAME,
+  loginAsSecondModerator,
+  SECOND_MODERATOR_USERNAME,
+} from './support/admin-session';
 
 function body<T>(res: request.Response): T {
   return res.body as T;
@@ -126,6 +131,57 @@ describe('Admin auth (e2e)', () => {
     // Re-attaching the now-cleared cookie value (an empty string) must
     // still 401 — proves logout doesn't just look like it worked client-side.
     await server().get('/moderation/queue').set('Cookie', clearedCookie ?? '').expect(401);
+  });
+
+  // GitHub issue #589 (Phase 42, D99) — self-service password change,
+  // available to every role, gated only on the caller's own current
+  // password. Uses the second-moderator identity (not the shared
+  // adminCookie) so it doesn't disturb ADMIN_TEST_PASSWORD, which every
+  // other e2e spec's loginAsAdmin() relies on staying correct — the
+  // second-moderator's password is self-healing anyway (loginAsSecondModerator
+  // re-upserts it on every call), but there's no reason to depend on that
+  // here too.
+  describe('POST /auth/admin/change-password', () => {
+    it('changes the password when the current password is correct, and the new one logs in', async () => {
+      const { cookie } = await loginAsSecondModerator(app);
+
+      await server()
+        .post('/auth/admin/change-password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'dev-only-second-moderator-password', newPassword: 'a-new-strong-password' })
+        .expect(200);
+
+      await server()
+        .post('/auth/admin/login')
+        .send({ username: SECOND_MODERATOR_USERNAME, password: 'a-new-strong-password' })
+        .expect(200);
+      await server()
+        .post('/auth/admin/login')
+        .send({ username: SECOND_MODERATOR_USERNAME, password: 'dev-only-second-moderator-password' })
+        .expect(401);
+    });
+
+    it('rejects a wrong current password with 401, without changing anything', async () => {
+      const { cookie } = await loginAsSecondModerator(app);
+
+      await server()
+        .post('/auth/admin/change-password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'not-the-real-password', newPassword: 'a-new-strong-password' })
+        .expect(401);
+
+      await server()
+        .post('/auth/admin/login')
+        .send({ username: SECOND_MODERATOR_USERNAME, password: 'dev-only-second-moderator-password' })
+        .expect(200);
+    });
+
+    it('rejects an unauthenticated request with 401', async () => {
+      await server()
+        .post('/auth/admin/change-password')
+        .send({ currentPassword: 'x', newPassword: 'a-new-strong-password' })
+        .expect(401);
+    });
   });
 
   // Isolated in its own app instance so this test's LoginThrottleService

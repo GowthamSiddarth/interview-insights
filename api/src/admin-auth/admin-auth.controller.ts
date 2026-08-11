@@ -1,7 +1,8 @@
-import { Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { getSessionCookieOptions } from '../common/session-cookie-options.util';
 import { AdminAuthService, AdminSessionPayload } from './admin-auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
 import { AdminLocalAuthGuard } from './guards/admin-local-auth.guard';
 import { LoginThrottleGuard } from './login-throttle.guard';
@@ -52,5 +53,19 @@ export class AdminAuthController {
   @UseGuards(AdminJwtAuthGuard)
   me(@Req() req: Request): AdminSessionPayload {
     return req.user as AdminSessionPayload;
+  }
+
+  // GitHub issue #589 (Phase 42, D99) — self-service password change,
+  // available to every role. No PermissionsGuard: this only ever acts on
+  // the caller's own account (req.user.id), never a client-supplied id, so
+  // there's no permission tier to gate — every authenticated staff member
+  // can already change their own password.
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtAuthGuard)
+  async changePassword(@Body() dto: ChangePasswordDto, @Req() req: Request) {
+    const staff = req.user as AdminSessionPayload;
+    await this.adminAuthService.changeOwnPassword(staff.id, dto.currentPassword, dto.newPassword);
+    return { status: 'ok' };
   }
 }
