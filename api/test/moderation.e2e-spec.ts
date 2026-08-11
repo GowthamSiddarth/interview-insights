@@ -5,7 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
-import { ADMIN_TEST_USERNAME, loginAsAdmin, loginAsSecondModerator } from './support/admin-session';
+import { ADMIN_TEST_USERNAME, loginAsAdmin, loginAsSecondModerator, loginAsStaff } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
 import { createApprovedCompany, createPendingCompany } from './support/companies';
 
@@ -344,6 +344,38 @@ describe('Moderation (e2e)', () => {
     it('rejects unauthenticated claim/release requests with 401', async () => {
       await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/claim').expect(401);
       await server().post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/release').expect(401);
+    });
+  });
+
+  // GitHub issue #588 (Phase 42, D99) — a `staff` account gets the same
+  // read access as `admin`/`moderator` (queue list + search) but no
+  // moderation-action permission at all: every write route 403s.
+  describe('permission boundaries (staff role)', () => {
+    it('lets a staff account read the queue and search, but 403s every moderation action', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+      const staffCookie = (await loginAsStaff(app)).cookie;
+
+      await server().get('/moderation/queue').set('Cookie', staffCookie).expect(200);
+      await server().get('/moderation/search').query({ q: 'test' }).set('Cookie', staffCookie).expect(200);
+
+      await server()
+        .post(`/moderation/queue/${entry.id}/approve`)
+        .set('Cookie', staffCookie)
+        .send({})
+        .expect(403);
+      await server()
+        .post(`/moderation/queue/${entry.id}/reject`)
+        .set('Cookie', staffCookie)
+        .send({ reviewedBy: 'staff-account' })
+        .expect(403);
+      await server()
+        .post(`/moderation/queue/${entry.id}/flag`)
+        .set('Cookie', staffCookie)
+        .send({ flagReason: 'manual_report' })
+        .expect(403);
+      await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', staffCookie).expect(403);
+      await server().post(`/moderation/queue/${entry.id}/release`).set('Cookie', staffCookie).expect(403);
     });
   });
 

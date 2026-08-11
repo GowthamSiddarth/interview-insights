@@ -171,9 +171,12 @@ post per phase — this file no longer inlines that running history.
   applied and verified live against the kind cluster's Postgres. #587
   (permission-set authorization: `RequirePermission`/`PermissionsGuard`,
   role claim on the staff JWT, re-checked live per request for immediate
-  deactivation/role-change effect) is done. Next up is #588 (migrate
+  deactivation/role-change effect) is done. #588 (migrating
   `ModerationController`/`AdminRoundTypeFieldOptionsController` to the
-  new permission-based guards).
+  new permission-based guards, plus e2e coverage proving a `staff`
+  account can read but not write) is done too. Next up is #589 (staff
+  account management endpoints — create/list/update-role/deactivate/
+  reactivate, self-service password change, audit logging).
 
 ## Open decisions still to make
 

@@ -2198,7 +2198,7 @@ Epic: GitHub issue #584.
       issue #586)
 - [x] Permission-set authorization: `RequirePermission` decorator,
       `PermissionsGuard`, role claim on the staff JWT (GitHub issue #587)
-- [ ] Migrate `ModerationController` and
+- [x] Migrate `ModerationController` and
       `AdminRoundTypeFieldOptionsController` to permission-based guards
       (GitHub issue #588)
 - [ ] Staff account management endpoints: create/list/update-role/
