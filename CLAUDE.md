@@ -163,7 +163,11 @@ post per phase — this file no longer inlines that running history.
   VM) is next, in progress as of 2026-08-04. The GitHub Actions billing
   gate that prompted Phase 40 was refreshed 2026-08-03 — back to normal
   wait-for-CI-green discipline before merging, not the temporary
-  merge-without-CI exception this line used to describe.
+  merge-without-CI exception this line used to describe. Phase 42
+  (Staff Role Hierarchy & Admin/Moderator Tooling) is planned as of
+  2026-08-11 (epic #584, issues #585-#593) but not yet started —
+  implementation begins on issue #585 once Phase 40 work isn't actively
+  in flight.
 
 ## Open decisions still to make
 

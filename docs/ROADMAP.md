@@ -2129,3 +2129,85 @@ Parity" (#39). Epic: GitHub issue #521.
       during the seed, explicitly out of scope to fake directly
 - [x] Engineering blog (last) (GitHub issue #525) — one post per issue
       under `wiki/blog/phase-41-moderator-queue-priority-filters-seed-data-parity/`
+
+## Phase 42 — Staff Role Hierarchy & Admin/Moderator Tooling
+
+Raised 2026-08-11 from a direct request to build a real admin > moderator
+> user role hierarchy plus admin/moderator tools, planned before any of it
+was coded per this project's own planning-first convention. Grounded in an
+audit of the actual current state: `admin-auth` and `ModerationController`/
+`AdminRoundTypeFieldOptionsController` are all gated by one `Moderator`
+row backed by a single shared credential (`ADMIN_USERNAME`/
+`ADMIN_PASSWORD_HASH`, Phase 36 #485) — "admin" and "moderator" are the
+same undifferentiated actor today, not two tiers. D53 already considered
+and explicitly declined extracting a `moderator-service` ("no concrete
+scaling/deployment trigger has fired") — this phase revisits that same
+services-vs-monolith question for the new hierarchy and reaches the same
+answer, for the same reason.
+
+Kickoff brainstorm resolved 2026-08-11 (issue #585):
+
+- **Role set**: `StaffRole` enum — `ADMIN` > `MODERATOR` > `STAFF`.
+  `STAFF` (deliberately not `USER` — that name already means `Candidate`
+  in this codebase) is a real, shipped tier, not a placeholder: read-only
+  access to the moderation queue, search, round-type registry, and
+  moderator/SLA analytics dashboards, with no claim/approve/reject/flag/
+  write permissions. Concrete job: support/onboarding/spot-check access
+  without moderation authority, and a foothold for Phase 41's
+  parked candidate-communication-loop idea.
+- **Authorization shape**: a permission-set model (`moderation:queue:
+  approve`, `admin:staff:manage`, etc.), each role a superset of the one
+  below, behind one `@RequirePermission()` decorator/`PermissionsGuard` —
+  not three hardcoded flat role checks scattered per controller. Chosen
+  so a future nuance (e.g. a moderator without PII visibility) composes
+  from existing permissions instead of forcing a new role/rewrite.
+- **Schema shape**: `role`/`isActive`/`createdById` added directly to the
+  existing `moderators` table rather than a renamed/new accounts model —
+  renaming would ripple into `notification-service`'s own minimal mirror
+  model (D75) and every existing FK/comment referencing `Moderator` for
+  no functional gain. Deactivate, never delete, same precedent
+  `ModerationQueueEntry.claimedById` already set by never being cleared.
+  New `staff_audit_log` table for every admin action (account created,
+  role changed, deactivated/reactivated, password reset) — durable,
+  never best-effort, same precedent as `AiAutoApprovalAudit` (D71).
+- **Credential model**: retire the single shared credential for the
+  general case. Exactly one root `ADMIN` stays imperatively seeded at
+  boot (same secrets pattern, hard constraint #6); every other account is
+  created through admin tools by an existing `ADMIN`, password shown
+  once at creation (same UX `rotate-admin-credentials.sh` already uses),
+  changed via self-service after. `rotate-admin-credentials.sh` narrows
+  to root-admin break-glass recovery rather than being deleted.
+- **Services**: stays inside `api/` as clean, extractable NestJS modules.
+  Same "no concrete trigger yet" call D53 already made for
+  `moderator-service` — splitting now would add cross-service auth
+  verification, a duplicated Prisma client, and another Dockerfile/
+  manifest/CI job for a feature that is fundamentally a role column and
+  some guards. Revisit if a genuine trigger fires later — either a real
+  independent-scaling/deployment need (D53's own bar), or a distinct
+  security/network-isolation boundary a future admin capability might
+  need (a different kind of trigger than D53 was addressing).
+
+Milestone: "Phase 42 — Staff Role Hierarchy & Admin/Moderator Tooling".
+Epic: GitHub issue #584.
+
+- [ ] Phase 42 kickoff: `StaffRole` hierarchy, permission-set model,
+      credential-retirement plan — decision record (GitHub issue #585)
+- [ ] Prisma migration: `StaffRole` enum, `role`/`isActive`/
+      `createdById` on `moderators`, `staff_audit_log` table (GitHub
+      issue #586)
+- [ ] Permission-set authorization: `RequirePermission` decorator,
+      `PermissionsGuard`, role claim on the staff JWT (GitHub issue #587)
+- [ ] Migrate `ModerationController` and
+      `AdminRoundTypeFieldOptionsController` to permission-based guards
+      (GitHub issue #588)
+- [ ] Staff account management endpoints: create/list/update-role/
+      deactivate/reactivate, self-service password change, audit
+      logging (GitHub issue #589)
+- [ ] Retire shared admin credential for the general case; narrow
+      `rotate-admin-credentials.sh` to root-admin break-glass recovery
+      (GitHub issue #590)
+- [ ] Frontend: role-aware admin panel (nav/action gating by
+      permission) + staff account management UI (GitHub issue #591)
+- [ ] seed-demo-data: seed `STAFF`/`MODERATOR`/`ADMIN` accounts with
+      varied roles (GitHub issue #592)
+- [ ] Engineering blog (last) (GitHub issue #593)
