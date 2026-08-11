@@ -45,10 +45,12 @@ describe('AdminAuthService', () => {
         username: 'admin',
         passwordHash,
         email: 'admin@interview-insights.local',
+        role: 'admin',
+        isActive: true,
       });
 
       const result = await service.validateAdmin('admin', 'correct-horse-battery-staple');
-      expect(result).toEqual({ id: 'mod-1', username: 'admin' });
+      expect(result).toEqual({ id: 'mod-1', username: 'admin', role: 'admin' });
       expect(prisma.moderator.findUnique).toHaveBeenCalledWith({ where: { username: 'admin' } });
     });
 
@@ -58,6 +60,8 @@ describe('AdminAuthService', () => {
         username: 'admin',
         passwordHash,
         email: 'admin@interview-insights.local',
+        role: 'admin',
+        isActive: true,
       });
 
       const result = await service.validateAdmin('admin', 'wrong-password');
@@ -68,6 +72,20 @@ describe('AdminAuthService', () => {
       prisma.moderator.findUnique.mockResolvedValue(null);
 
       const result = await service.validateAdmin('someone-else', 'correct-horse-battery-staple');
+      expect(result).toBeNull();
+    });
+
+    it('rejects a deactivated account even with the correct password', async () => {
+      prisma.moderator.findUnique.mockResolvedValue({
+        id: 'mod-2',
+        username: 'second-moderator',
+        passwordHash,
+        email: 'second-moderator@interview-insights.local',
+        role: 'moderator',
+        isActive: false,
+      });
+
+      const result = await service.validateAdmin('second-moderator', 'correct-horse-battery-staple');
       expect(result).toBeNull();
     });
 
@@ -120,8 +138,8 @@ describe('AdminAuthService', () => {
   });
 
   it('signs a JWT with the session payload', () => {
-    const token = service.issueToken({ id: 'mod-1', username: 'admin' });
+    const token = service.issueToken({ id: 'mod-1', username: 'admin', role: 'admin' });
     expect(token).toBe('signed.jwt.token');
-    expect(jwtService.sign).toHaveBeenCalledWith({ id: 'mod-1', username: 'admin' });
+    expect(jwtService.sign).toHaveBeenCalledWith({ id: 'mod-1', username: 'admin', role: 'admin' });
   });
 });

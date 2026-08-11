@@ -2196,7 +2196,7 @@ Epic: GitHub issue #584.
 - [x] Prisma migration: `StaffRole` enum, `role`/`isActive`/
       `createdById` on `moderators`, `staff_audit_log` table (GitHub
       issue #586)
-- [ ] Permission-set authorization: `RequirePermission` decorator,
+- [x] Permission-set authorization: `RequirePermission` decorator,
       `PermissionsGuard`, role claim on the staff JWT (GitHub issue #587)
 - [ ] Migrate `ModerationController` and
       `AdminRoundTypeFieldOptionsController` to permission-based guards
