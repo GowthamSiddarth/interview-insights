@@ -5,6 +5,7 @@ import { AdminAuthController } from './admin-auth.controller';
 import { getRequiredAdminEnv } from './admin-auth.env';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 import { LoginThrottleGuard } from './login-throttle.guard';
 import { LoginThrottleService } from './login-throttle.service';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy';
@@ -29,10 +30,12 @@ import { AdminLocalStrategy } from './strategies/admin-local.strategy';
     LoginThrottleService,
     LoginThrottleGuard,
     AdminJwtAuthGuard,
+    PermissionsGuard,
   ],
-  // AdminJwtAuthGuard is exported so ModerationModule can import this
-  // module and reference the guard class directly in
-  // ModerationController's @UseGuards().
-  exports: [AdminJwtAuthGuard],
+  // AdminJwtAuthGuard/PermissionsGuard are exported so ModerationModule and
+  // round-type-registry's module can import this module and reference both
+  // guard classes directly in their controllers' @UseGuards() (GitHub issue
+  // #588 applies PermissionsGuard to those routes).
+  exports: [AdminJwtAuthGuard, PermissionsGuard],
 })
 export class AdminAuthModule {}

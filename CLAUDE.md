@@ -168,9 +168,12 @@ post per phase — this file no longer inlines that running history.
   2026-08-11 (epic #584, issues #585-#593) and underway: #585 (kickoff
   decision record) is done, written up as D99 in `docs/DECISIONS.md`.
   #586 (the `StaffRole`/`staff_audit_log` Prisma migration) is done too —
-  applied and verified live against the kind cluster's Postgres. Next up
-  is #587 (permission-set authorization: `RequirePermission`/
-  `PermissionsGuard`, role claim on the staff JWT).
+  applied and verified live against the kind cluster's Postgres. #587
+  (permission-set authorization: `RequirePermission`/`PermissionsGuard`,
+  role claim on the staff JWT, re-checked live per request for immediate
+  deactivation/role-change effect) is done. Next up is #588 (migrate
+  `ModerationController`/`AdminRoundTypeFieldOptionsController` to the
+  new permission-based guards).
 
 ## Open decisions still to make
 

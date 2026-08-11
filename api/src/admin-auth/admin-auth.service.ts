@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { StaffRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRequiredAdminEnv } from './admin-auth.env';
@@ -7,6 +8,7 @@ import { getRequiredAdminEnv } from './admin-auth.env';
 export interface AdminSessionPayload {
   id: string;
   username: string;
+  role: StaffRole;
 }
 
 @Injectable()
@@ -61,7 +63,16 @@ export class AdminAuthService implements OnModuleInit {
     if (!moderator) return null;
 
     const matches = await bcrypt.compare(password, moderator.passwordHash);
-    return matches ? { id: moderator.id, username: moderator.username } : null;
+    if (!matches) return null;
+
+    // GitHub issue #587 (Phase 42, D99): a deactivated account can never
+    // log in, regardless of password correctness — checked after the
+    // bcrypt.compare() above (not before) so this never becomes a timing
+    // side-channel revealing whether a given username is deactivated vs.
+    // simply having the wrong password.
+    if (!moderator.isActive) return null;
+
+    return { id: moderator.id, username: moderator.username, role: moderator.role };
   }
 
   issueToken(payload: AdminSessionPayload): string {

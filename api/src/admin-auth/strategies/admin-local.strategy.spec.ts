@@ -5,13 +5,14 @@ import { AdminAuthService } from '../admin-auth.service';
 describe('AdminLocalStrategy', () => {
   it('returns the session payload on valid credentials', async () => {
     const adminAuthService = {
-      validateAdmin: jest.fn().mockResolvedValue({ id: 'mod-1', username: 'admin' }),
+      validateAdmin: jest.fn().mockResolvedValue({ id: 'mod-1', username: 'admin', role: 'admin' }),
     };
     const strategy = new AdminLocalStrategy(adminAuthService as unknown as AdminAuthService);
 
     await expect(strategy.validate('admin', 'correct-password')).resolves.toEqual({
       id: 'mod-1',
       username: 'admin',
+      role: 'admin',
     });
   });
 
