@@ -6,7 +6,10 @@ import { ModerationFlagDto } from './dto/moderation-flag.dto';
 import { ModerationSearchQueryDto } from './dto/moderation-search-query.dto';
 import { ModerationQueueQueryDto } from './dto/moderation-queue-query.dto';
 import { AdminJwtAuthGuard } from '../admin-auth/guards/admin-jwt-auth.guard';
+import { PermissionsGuard } from '../admin-auth/guards/permissions.guard';
 import { AdminSessionPayload } from '../admin-auth/admin-auth.service';
+import { PERMISSIONS } from '../admin-auth/permissions';
+import { RequirePermission } from '../admin-auth/require-permission.decorator';
 
 // Internal/admin surface — gated on a valid admin_session cookie (GitHub
 // issue #159, Phase 18). Every route 401s without one. Base path is
@@ -15,7 +18,13 @@ import { AdminSessionPayload } from '../admin-auth/admin-auth.service';
 // /moderation/queue rather than nested under it — every existing route's
 // own URL is unchanged, since each one's own path now carries the
 // 'queue' segment directly.
-@UseGuards(AdminJwtAuthGuard)
+//
+// GitHub issue #588 (Phase 42, D99): PermissionsGuard added alongside
+// AdminJwtAuthGuard — read routes require only the *_READ permission
+// (staff and up), every actual moderation action requires the matching
+// moderator-and-up permission. See api/src/admin-auth/permissions.ts for
+// the full staff/moderator/admin permission-set map.
+@UseGuards(AdminJwtAuthGuard, PermissionsGuard)
 @Controller('moderation')
 export class ModerationController {
   constructor(private readonly moderationService: ModerationService) {}
@@ -25,6 +34,7 @@ export class ModerationController {
   // caller (req.user), same pattern claim()/release() below already use —
   // never a client-supplied moderator id.
   @Get('queue')
+  @RequirePermission(PERMISSIONS.MODERATION_QUEUE_READ)
   listPending(@Query() query: ModerationQueueQueryDto, @Req() req: Request) {
     const moderator = req.user as AdminSessionPayload;
     return this.moderationService.listPending({
@@ -37,21 +47,25 @@ export class ModerationController {
   }
 
   @Get('search')
+  @RequirePermission(PERMISSIONS.MODERATION_SEARCH_READ)
   search(@Query() query: ModerationSearchQueryDto) {
     return this.moderationService.search(query.q, query.category);
   }
 
   @Post('queue/:id/approve')
+  @RequirePermission(PERMISSIONS.MODERATION_QUEUE_APPROVE)
   approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerationActionDto) {
     return this.moderationService.approve(id, dto);
   }
 
   @Post('queue/:id/reject')
+  @RequirePermission(PERMISSIONS.MODERATION_QUEUE_REJECT)
   reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerationActionDto) {
     return this.moderationService.reject(id, dto);
   }
 
   @Post('queue/:id/flag')
+  @RequirePermission(PERMISSIONS.MODERATION_QUEUE_FLAG)
   flag(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerationFlagDto) {
     return this.moderationService.flag(id, dto);
   }
@@ -61,12 +75,14 @@ export class ModerationController {
   // client-supplied id, so a moderator can only ever claim/release on
   // their own behalf.
   @Post('queue/:id/claim')
+  @RequirePermission(PERMISSIONS.MODERATION_QUEUE_CLAIM)
   claim(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     const moderator = req.user as AdminSessionPayload;
     return this.moderationService.claim(id, moderator.id);
   }
 
   @Post('queue/:id/release')
+  @RequirePermission(PERMISSIONS.MODERATION_QUEUE_RELEASE)
   release(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     const moderator = req.user as AdminSessionPayload;
     return this.moderationService.release(id, moderator.id);

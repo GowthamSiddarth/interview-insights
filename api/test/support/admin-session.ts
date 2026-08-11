@@ -72,3 +72,43 @@ export async function loginAsSecondModerator(
   }
   return { id: moderatorId, cookie: Array.isArray(cookies) ? cookies[0] : cookies };
 }
+
+const STAFF_USERNAME = 'staff-account';
+const STAFF_PASSWORD = 'dev-only-staff-password';
+
+// GitHub issue #588 (Phase 42, D99) — the first thing in this project that
+// needs a `staff`-role identity in a test: proving that tier's read-only
+// permission set actually blocks every moderation/round-type write route.
+// Same bypass-the-app-layer + fixed-username-reused pattern
+// loginAsSecondModerator above already uses, for the same reasons.
+export async function loginAsStaff(app: INestApplication): Promise<{ id: string; cookie: string }> {
+  const prisma = new PrismaClient();
+  let staffId: string;
+  try {
+    const passwordHash = await bcrypt.hash(STAFF_PASSWORD, 10);
+    const staff = await prisma.moderator.upsert({
+      where: { username: STAFF_USERNAME },
+      create: {
+        username: STAFF_USERNAME,
+        passwordHash,
+        email: 'staff-account@example.com',
+        role: 'staff',
+      },
+      update: { passwordHash, role: 'staff', isActive: true },
+    });
+    staffId = staff.id;
+  } finally {
+    await prisma.$disconnect();
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
+  const res = await request(app.getHttpServer())
+    .post('/auth/admin/login')
+    .send({ username: STAFF_USERNAME, password: STAFF_PASSWORD })
+    .expect(200);
+  const cookies = res.headers['set-cookie'] as unknown as string[] | string | undefined;
+  if (!cookies || (Array.isArray(cookies) && cookies.length === 0)) {
+    throw new Error('Staff login did not set a session cookie.');
+  }
+  return { id: staffId, cookie: Array.isArray(cookies) ? cookies[0] : cookies };
+}

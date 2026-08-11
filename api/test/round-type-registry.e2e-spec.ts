@@ -5,7 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsCandidate } from './support/candidate-session';
-import { loginAsAdmin } from './support/admin-session';
+import { loginAsAdmin, loginAsStaff } from './support/admin-session';
 import { createApprovedCompany } from './support/companies';
 
 interface ProcessBody {
@@ -377,6 +377,31 @@ describe('Round-type registry (e2e)', () => {
         .set('Cookie', adminCookie)
         .send({ isActive: false })
         .expect(404);
+    });
+
+    // GitHub issue #588 (Phase 42, D99) — a `staff` account can read the
+    // registry (D99's "round-type registry" read grant) but has no write
+    // permission of any kind, unlike `moderator`/`admin` which both share
+    // admin:round_types:write.
+    it('lets a staff account list field-options but 403s create/update', async () => {
+      const staffCookie = (await loginAsStaff(app)).cookie;
+
+      await server()
+        .get('/admin/round-types/coding/field-options')
+        .set('Cookie', staffCookie)
+        .expect(200);
+
+      await server()
+        .post('/admin/round-types/coding/field-options')
+        .set('Cookie', staffCookie)
+        .send({ fieldKey: 'problemAlgorithms', value: `Staff Attempt ${unique2()}` })
+        .expect(403);
+
+      await server()
+        .patch('/admin/round-types/field-options/123e4567-e89b-12d3-a456-426614174000')
+        .set('Cookie', staffCookie)
+        .send({ isActive: false })
+        .expect(403);
     });
   });
 });
