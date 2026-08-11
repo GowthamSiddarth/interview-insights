@@ -2211,4 +2211,5 @@ Epic: GitHub issue #584.
       permission) + staff account management UI (GitHub issue #591)
 - [x] seed-demo-data: seed `STAFF`/`MODERATOR`/`ADMIN` accounts with
       varied roles (GitHub issue #592)
-- [ ] Engineering blog (last) (GitHub issue #593)
+- [x] Engineering blog (last) (GitHub issue #593) — one post per issue
+      under `wiki/blog/phase-42-staff-role-hierarchy-admin-moderator-tooling/`

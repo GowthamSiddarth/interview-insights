@@ -158,38 +158,18 @@ post per phase — this file no longer inlines that running history.
   Notifications) is fully done too, blog included (issues #485-#492,
   epic #484 closed). Phase 41 (Moderator Queue Priority, Filters &
   Seed-Data Parity) is fully done too, blog included (issues #522-#525,
-  epic #521 closed). Phase 40 (CI Infrastructure: Self-Hosted GitHub
-  Actions Runner) is the current frontier — #501 (provision the runner
-  VM) is next, in progress as of 2026-08-04. The GitHub Actions billing
-  gate that prompted Phase 40 was refreshed 2026-08-03 — back to normal
-  wait-for-CI-green discipline before merging, not the temporary
-  merge-without-CI exception this line used to describe. Phase 42
-  (Staff Role Hierarchy & Admin/Moderator Tooling) is planned as of
-  2026-08-11 (epic #584, issues #585-#593) and underway: #585 (kickoff
-  decision record) is done, written up as D99 in `docs/DECISIONS.md`.
-  #586 (the `StaffRole`/`staff_audit_log` Prisma migration) is done too —
-  applied and verified live against the kind cluster's Postgres. #587
-  (permission-set authorization: `RequirePermission`/`PermissionsGuard`,
-  role claim on the staff JWT, re-checked live per request for immediate
-  deactivation/role-change effect) is done. #588 (migrating
-  `ModerationController`/`AdminRoundTypeFieldOptionsController` to the
-  new permission-based guards, plus e2e coverage proving a `staff`
-  account can read but not write) is done too. #589 (staff account
-  management endpoints — new `StaffAccountsModule`/`admin/staff` routes
-  for create/list/update-role/deactivate/reactivate/admin-reset-password,
-  self-service `POST /auth/admin/change-password`, every action durably
-  audited via `StaffAuditLogService`) is done too. #590 (retiring the
-  shared admin credential for the general case — `rotate-admin-
-  credentials.sh`, `wiki/deployment-guide.md` section 5b, and the
-  `/moderation/login` page copy all now scoped to root-admin
-  break-glass recovery only, everyday accounts go through #589's tools)
-  is done too. #591 (frontend: `staff` role hides moderation queue
-  actions and gets a read-only round-type-options view; new
-  `/moderation/staff` admin-only staff account management page and
-  `/moderation/change-password` self-service page) is done too. #592
-  (seed-demo-data: `seedModerators` cycles staff/moderator/admin by
-  index, username embeds the role) is done too. Next up is #593 (the
-  Phase 42 engineering blog, last).
+  epic #521 closed). Phase 42 (Staff Role Hierarchy & Admin/Moderator
+  Tooling) is fully done too, blog included (issues #585-#593, epic
+  #584 closed) — real `admin`/`moderator`/`staff` accounts via
+  `StaffAccountsModule`, permission-set authorization
+  (`RequirePermission`/`PermissionsGuard`), root credential narrowed to
+  break-glass recovery only, role-aware frontend. Phase 40 (CI
+  Infrastructure: Self-Hosted GitHub Actions Runner) is the current
+  frontier — #501 (provision the runner VM) is next, in progress as of
+  2026-08-04. The GitHub Actions billing gate that prompted Phase 40 was
+  refreshed 2026-08-03 — back to normal wait-for-CI-green discipline
+  before merging, not the temporary merge-without-CI exception this line
+  used to describe.
 
 ## Open decisions still to make
 

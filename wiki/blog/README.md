@@ -538,3 +538,25 @@ are done — this phase's blog is complete.
 1. [Issue #522 — Moderation queue: server-side filters + SLA-urgency sort](phase-41-moderator-queue-priority-filters-seed-data-parity/issue-522-server-side-filters-sla-sort/README.md)
 2. [Issue #523 — Moderation UI: filter controls + urgency-ordered queue view](phase-41-moderator-queue-priority-filters-seed-data-parity/issue-523-moderation-ui-filter-controls/README.md)
 3. [Issue #524 — seed-demo-data: simulate moderator claims and vary flagReason across the full enum](phase-41-moderator-queue-priority-filters-seed-data-parity/issue-524-seed-data-moderator-claims-flag-reasons/README.md)
+
+## Phase 42 — Staff Role Hierarchy & Admin/Moderator Tooling
+
+See `docs/ROADMAP.md` Phase 42 and `docs/DECISIONS.md` D99. Raised from
+a direct request to build a real admin > moderator > staff role
+hierarchy plus admin/moderator tools — an audit of the actual current
+state found `admin-auth`/`ModerationController`/
+`AdminRoundTypeFieldOptionsController` all gated by one shared
+credential (Phase 36, issue #485), with "admin" and "moderator" the same
+undifferentiated actor. D53's "no `moderator-service` extraction" call
+was revisited on purpose and reaffirmed for the same reason: this phase
+is a role column and some guards, not a service boundary. All eight
+issues are done — this phase's blog is complete.
+
+1. [Issue #585 — Kickoff brainstorm: a real role hierarchy instead of one shared credential](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-585-kickoff-decision-record/README.md)
+2. [Issue #586 — Prisma migration: StaffRole, role/isActive/createdById, staff_audit_log](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-586-staffrole-migration/README.md)
+3. [Issue #587 — Permission-set authorization: RequirePermission, PermissionsGuard, role on the staff JWT](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-587-permission-set-authorization/README.md)
+4. [Issue #588 — Migrating ModerationController and AdminRoundTypeFieldOptionsController to permission-based guards](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-588-migrate-controllers-permission-guards/README.md)
+5. [Issue #589 — Staff account management endpoints, self-service password change, audit logging](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-589-staff-account-management-endpoints/README.md)
+6. [Issue #590 — Retiring the shared admin credential for the general case](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-590-retire-shared-admin-credential/README.md)
+7. [Issue #591 — Frontend: role-aware admin panel + staff account management UI](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-591-frontend-role-aware-admin-panel/README.md)
+8. [Issue #592 — seed-demo-data: vary staff/moderator/admin roles across seeded moderators](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-592-seed-demo-data-varied-roles/README.md)
