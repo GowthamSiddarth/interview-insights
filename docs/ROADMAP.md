@@ -127,13 +127,18 @@ not mapping 1:1 to a single milestone, see wiki/github-project-setup.md).
       apply automatically on container start; `docker compose --profile
       full up --build` for prod-like local testing, default `docker
       compose up` still just Postgres for the fast dev loop
-- [ ] Branch protection on `main` requiring CI checks (GitHub issue #18) —
-      **blocked**: both classic branch protection and repository rulesets
-      require GitHub Pro (or a public repo) for private repos on the free
-      plan; revisit if/when either changes
+- [x] Branch protection on `main` requiring CI checks (GitHub issue #18) —
+      originally found blocked on this private repo's free plan; that
+      read was too broad — reworked 2026-08-10 into a config that
+      actually fits a solo owner (PR required, all 6 `ci.yml` job
+      contexts required green, 0 required approvals, no admin-bypass
+      click needed). See D98
 - [x] Engineering blog (`wiki/blog/phase-6-cicd-containerization/`, PR #38,
-      GitHub issue #52) — covers both #17 and #18 (a blocked issue still
-      gets documented)
+      GitHub issue #52) — originally covered #17 and #18 while #18 was
+      still blocked; #18's later 2026-08-10 resolution didn't get its own
+      post (no PR/commit trail — a repo-settings-only change, not a code
+      change — and no new D-number), consistent with this project's
+      "not every reopen gets its own post" precedent
 
 ## Phase 7 — Kubernetes
 
@@ -1115,14 +1120,18 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       from the original Phase 20 blog; #393/#413/#450/#453/#452/#482
       never got individual posts, same "not every reopen gets its own
       post" precedent
-- [ ] `api/.env.example`'s `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`
+- [x] `api/.env.example`'s `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET`
       still carry a real-looking bcrypt hash and a "dev-only-change-me"
       fallback, violating D78/hard-constraint-6 — D78 (issue #466)
       migrated both vars to LocalStack Secrets Manager specifically so
       `.env.example` would carry no placeholder for them, but PR #476
       never touched the file. Found during Phase 20f's admin-env audit,
       filed separately under this epic per the ad-hoc-work convention
-      (GitHub issue #576)
+      (GitHub issue #576). Both vars now ship as `""` in `.env.example`
+      with no committed placeholder at all, matching D78's original
+      intent — a real dev-only value still lives in
+      `wiki/deployment-guide.md` §5b for developers to copy into their
+      own untracked `api/.env`
 
 ### Phase 20f — Retire Local Test-Database Isolation
 
@@ -1158,7 +1167,10 @@ record).
       `--i-know-this-seeds-fake-data` instructions; document that e2e/
       smoke runs now truncate the dev database directly, every time
       (GitHub issue #573)
-- [ ] Engineering blog (last) (GitHub issue #574)
+- [x] Engineering blog (last) (GitHub issue #574) —
+      `wiki/blog/phase-20f-retire-local-test-database-isolation/`; only
+      #572 (D96) got its own post, #573 (docs update) didn't, same
+      "not every reopen gets its own post" precedent as 20a/20c/20d/20e
 
 ## Phase 21 — Anonymous Visitor Soft-Gating
 

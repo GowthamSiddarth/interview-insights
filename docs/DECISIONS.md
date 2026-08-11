@@ -4857,6 +4857,60 @@ no future trigger this decision is waiting on.
 
 ---
 
+### D98 — Branch protection on `main` reworked for a solo owner (GitHub issue #18, Phase 6)
+
+**Context:** #18 (Phase 6) originally found branch protection blocked
+outright on this private repo's free plan: both classic branch
+protection and repository rulesets appeared to require GitHub Pro (or a
+public repo). Revisited 2026-08-10 — that read turned out to be too
+broad. `required_pull_request_reviews`/`required_status_checks` are not
+Pro-gated; only `bypass_pull_request_allowances` and branch
+`restrictions` (push restrictions) are genuinely org-plan-only features.
+Attempting `bypass_pull_request_allowances` on this personal `User`-owned
+repo returns an HTTP 500 with an empty body (surfaces in `gh api` as a
+confusing "unexpected end of JSON input" — that's Go's `encoding/json`
+parsing zero bytes, not a client bug); a non-null `restrictions` 422s
+with "Only organization repositories can have users and team
+restrictions," even round-tripping the empty object GET itself returns.
+
+**Decision:** enable branch protection without either org-only feature.
+Final config: PR required to merge (`required_pull_request_reviews`
+non-null, never `DELETE`d — that removes the whole "require a PR"
+requirement, not just the approval count);
+`required_approving_review_count: 0` (a PR is still required, but no
+second-reviewer approval blocks a solo owner); `required_status_checks.
+contexts` set to all 6 `ci.yml` job ids (`api`, `web`, `workers`,
+`notification-service`, `review-analyzer`, `infra`), `strict: false`;
+`restrictions: null` explicit; `enforce_admins: false`;
+`allow_force_pushes`/`allow_deletions: false`. Branch+PR is still
+required to merge, CI must go green, but no admin-bypass click is needed
+on every PR.
+
+**API gotchas worth not repeating:** `PATCH .../required_status_checks`
+only updates an already-enabled config — it 404s if the branch never had
+one; enabling it the first time needs a full `PUT
+.../branches/{branch}/protection` with all 4 top-level fields in one
+shot. Fields on sub-objects not otherwise being changed (`lock_branch`,
+`allow_force_pushes`, etc.) appear to survive a PUT that omits them, but
+that's unconfirmed by GitHub's docs — pass anything actually being
+changed explicitly rather than relying on omission-preserves-value.
+
+**Not resolved by this decision:** `lock_branch: true` was found set on
+`main` mid-session with no reference anywhere in this repo and no memory
+of either the human or an assistant session setting it. GitHub's
+personal-account audit-log API doesn't exist to check history. Turned
+off (explicit `lock_branch: false` on the same PUT) since it wasn't
+blocking recent merges and had no documented purpose — its origin is
+still unexplained. If it reappears, treat that as suspicious (compromised
+token/session?) rather than assuming a fat-fingered checkbox again.
+
+**Revisit when:** this repo ever moves to an organization account or
+goes public — at that point `bypass_pull_request_allowances` becomes
+available and is worth reconsidering over `required_approving_review_
+count: 0` if a second reviewer ever exists to bypass.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

@@ -241,6 +241,15 @@ only ones introducing a real design decision (a new D-number) do.
 
 1. [Issue #466 — Closing out the last plaintext secrets (D76, D77)](phase-20e-config-secrets-build-correctness-bugs/issue-466-secrets-manager-completion/README.md)
 
+### Phase 20f — Retire Local Test-Database Isolation
+
+See `docs/ROADMAP.md` Phase 20f. Not every reopen got its own post; only
+ones introducing a real design decision (a new D-number) do — #573
+(README/deployment-guide doc updates) shipped in the same PR as #572 but
+isn't listed separately below.
+
+1. [Issue #572 — Retiring local test-DB isolation (D96)](phase-20f-retire-local-test-database-isolation/issue-572-remove-test-db-isolation-guards/README.md)
+
 ## Phase 21 — Anonymous Visitor Soft-Gating
 
 See `docs/ROADMAP.md` Phase 21. A deliberate product pivot toward
