@@ -193,9 +193,11 @@ because the original diagram said so.
   run start:dev`, against kind's Postgres and OpenSearch (both via
   port-forward — D24/D26, not Docker Compose's containers) — no
   containers for the app code itself. See `wiki/deployment-guide.md` §1.
-- **Local dev, full Compose (Podman):** `podman compose --profile full up
-  --build` — Postgres, OpenSearch, LocalStack, `api`, `web`, all
-  containerized (`docs/DECISIONS.md` D83). §2.
+- **Local dev, full Compose (Podman) — retired (`docs/DECISIONS.md`
+  D97):** `infra/docker-compose.yml` is deleted; `kind` is now the only
+  local instance of every backing service (Postgres, OpenSearch,
+  Mailpit, Redpanda, LocalStack). §2 (kept as a retirement note, not
+  renumbered away).
 - **Local dev, full Kubernetes (`kind`):** the closest thing to a real
   deployment this project has. `ingress-nginx` + `metrics-server` via
   Helm; `api`/`web`/`notification-service`/`review-analyzer`/`postgres`/
@@ -249,7 +251,6 @@ interview-insights/
 │       ├── src/health/
 │       └── Dockerfile
 ├── infra/
-│   ├── docker-compose.yml      # inert reference only (D24/D26 — kind runs both stores) / --profile full / --profile localstack
 │   ├── aws/                    # seed-localstack.sh, one IAM policy JSON per service
 │   ├── k8s/
 │   │   ├── base/                # numbered manifests (incl. 10-notification-service.yaml, 11-review-analyzer.yaml) + localstack/ subdir

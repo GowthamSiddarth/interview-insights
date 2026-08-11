@@ -53,17 +53,15 @@ kubectl -n interview-insights port-forward svc/opensearch 9200:9200 &
 kubectl -n interview-insights port-forward svc/mailpit 1025:1025 8025:8025 &
 ```
 
-`infra/docker-compose.yml`'s service definitions stay in the repo as
-documented reference only — nothing should point at them day to day
-(and don't run its OpenSearch/Mailpit alongside the port-forwards: both
-can bind the same ports at once and `localhost` becomes ambiguous about
-which instance you're talking to).
+`infra/docker-compose.yml` is gone entirely (`docs/DECISIONS.md` D97) —
+`kind` is the only Postgres/OpenSearch/Mailpit instance now, so there's
+no second set of containers left to collide with these port-forwards.
 
 **2. Set up and run the API**
 
 ```bash
 cd api
-cp .env.example .env        # defaults already match the compose Postgres above
+cp .env.example .env        # defaults already match kind's Postgres above
 npm install
 npx prisma migrate deploy   # applies api/prisma/migrations against the DB
 npm run start:dev           # http://localhost:3001, watches for changes
@@ -99,31 +97,16 @@ resumes it); to fully wipe it, `KIND_EXPERIMENTAL_PROVIDER=podman kind
 delete cluster --name interview-insights` — see `wiki/deployment-guide.md`
 section 9.
 
-### Alternative: full-stack Compose (Podman or Docker)
+### Alternative: full-stack Compose — retired
 
-For prod-like local testing of the actual `api`/`web` container images
-(rather than the fast host-based loop above). Podman is what this repo
-actually verified and adopted for this path (`docs/DECISIONS.md` D83) —
-`kind` itself stays Docker either way:
-
-```bash
-cd infra
-podman compose -f docker-compose.yml --profile full up -d --build
-```
-
-(`docker compose --profile full up --build` still works identically if
-you'd rather use Docker Desktop here — same compose file, no functional
-difference either way.)
-
-This builds and runs `api` and `web` as containers alongside `postgres`,
-`opensearch`, `mailpit`, and `redpanda`. Migrations are applied
-automatically when the `api` container starts (no manual `prisma
-migrate deploy` step needed) — see `api/Dockerfile`. Same ports as the
-host-based setup: web at `http://localhost:3000`, api at
-`http://localhost:3001`.
-
-See `wiki/deployment-guide.md` section 2 for one-time Podman setup and
-the registry/credential gotchas hit while verifying this.
+`infra/docker-compose.yml` and its Podman `--profile full`/
+`--profile localstack` modes are gone (`docs/DECISIONS.md` D97) — a
+runnable-but-"deliberately unused" Postgres/OpenSearch on the same ports
+as `kind`'s own kept causing silent wrong-target collisions, most
+recently a `prisma migrate deploy` run landing on a stray compose
+Postgres instead of `kind`'s. `kind` is now the only local instance of
+every backing service; see the two remaining local-dev modes above and
+below.
 
 ### Alternative: local Kubernetes (Phase 7)
 
@@ -264,11 +247,15 @@ echo 'export LOCALSTACK_AUTH_TOKEN="your_token_here"' >> ~/.zshenv
 source ~/.zshenv
 ```
 
-**2. Start LocalStack** (only the two services this phase needs):
+**2. Start LocalStack** — `infra/docker-compose.yml`'s `--profile
+localstack` mode is retired (`docs/DECISIONS.md` D97); apply just its
+`kind` manifests instead (needs the `kind` cluster + namespace from
+`wiki/deployment-guide.md` section 3 first):
 
 ```bash
-cd infra
-podman compose --profile localstack up -d localstack
+kubectl apply -k infra/k8s/base/localstack/
+kubectl -n interview-insights wait --for=condition=ready pod \
+  --selector=app=localstack --timeout=120s
 ```
 
 **3. Validate the IAM policy** — `infra/aws/api-secrets-access-policy.json`
@@ -423,9 +410,8 @@ unaffected by D24.
 api/       NestJS API (Prisma schema + migrations live here)
 web/       Next.js + Tailwind frontend
 workers/   Background workers (moderation, aggregation) — placeholder, Phase 3+
-infra/     docker-compose.yml (Postgres by default, full-stack behind the
-           `full` profile — see above), k8s manifests (Phase 7), terraform
-           (future)
+infra/     k8s manifests (Phase 7) — the only local backing-service
+           environment now (D97), terraform (future)
 docs/      Architecture, data model, decisions log, roadmap
 ```
 
