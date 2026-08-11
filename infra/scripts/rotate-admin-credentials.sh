@@ -1,15 +1,31 @@
 #!/usr/bin/env bash
-# Self-service admin credential rotation for the moderation admin login
-# (GitHub issue #192, Phase 18; sourcing via LocalStack Secrets Manager
-# per D78, GitHub issue #466's follow-up) — consolidates the manual
-# multi-step "one-time setup"/"to rotate again later" commands from
-# wiki/deployment-guide.md section 5b into one script, for whenever the
-# deployed kind cluster's admin password is lost or needs replacing.
-# Deliberately not a UI/API "forgot password" flow: ADMIN_PASSWORD_HASH/
-# ADMIN_JWT_SECRET are provisioned imperatively and never touch a
-# database migration or committed manifest (hard constraint #6), so
-# rotation stays an out-of-band operator action, same as every other
-# imperatively-provisioned secret this project has.
+# Root-admin credential rotation — break-glass recovery ONLY (GitHub
+# issue #590, Phase 42, D99, narrowing the scope this script had under
+# #192, Phase 18). ADMIN_USERNAME/ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET
+# are the one root ADMIN identity, imperatively boot-seeded outside the
+# staff-account system entirely (hard constraint #6) — this script is
+# for when THAT specific account's credential is lost, not for everyday
+# staff/moderator/admin account management. For every other case, use
+# the tools #589 built instead:
+#   - New staff account (any role): an existing ADMIN, via
+#     POST /admin/staff (or the "Add staff" UI, #591) — never this
+#     script, and never by sharing the root credential.
+#   - Forgot your own password (any role): self-service
+#     POST /auth/admin/change-password, or ask an existing ADMIN to
+#     POST /admin/staff/:id/reset-password for you.
+#   - Locked out entirely and no ADMIN is reachable to help: THAT is
+#     what this script is for — it's the one account that can always
+#     recover access and re-provision everyone else.
+#
+# Consolidates the manual multi-step "one-time setup"/"to rotate again
+# later" commands from wiki/deployment-guide.md section 5b into one
+# script (sourcing via LocalStack Secrets Manager per D78, GitHub issue
+# #466's follow-up). Deliberately not a UI/API "forgot password" flow:
+# ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET are provisioned imperatively and
+# never touch a database migration or committed manifest (hard
+# constraint #6), so root-admin rotation stays an out-of-band operator
+# action, same as every other imperatively-provisioned secret this
+# project has.
 #
 # What it does: generates a fresh password + JWT secret, updates the
 # ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET GitHub repo secrets, upserts the

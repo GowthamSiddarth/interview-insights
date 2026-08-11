@@ -178,9 +178,13 @@ post per phase — this file no longer inlines that running history.
   management endpoints — new `StaffAccountsModule`/`admin/staff` routes
   for create/list/update-role/deactivate/reactivate/admin-reset-password,
   self-service `POST /auth/admin/change-password`, every action durably
-  audited via `StaffAuditLogService`) is done too. Next up is #590
-  (retiring the shared admin credential for the general case, narrowing
-  `rotate-admin-credentials.sh` to root-admin break-glass recovery).
+  audited via `StaffAuditLogService`) is done too. #590 (retiring the
+  shared admin credential for the general case — `rotate-admin-
+  credentials.sh`, `wiki/deployment-guide.md` section 5b, and the
+  `/moderation/login` page copy all now scoped to root-admin
+  break-glass recovery only, everyday accounts go through #589's tools)
+  is done too. Next up is #591 (frontend: role-aware admin panel +
+  staff account management UI).
 
 ## Open decisions still to make
 

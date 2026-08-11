@@ -478,7 +478,21 @@ unconditionally); if you need it fixed before the next push, re-run
 step 3 by hand against the restarted LocalStack pod, then
 `rollout restart deployment/api deployment/notification-service` again.
 
-## 5b. Admin credential rotation (GitHub issue #192, Phase 18; sourcing changed by #466's follow-up, D78)
+## 5b. Root-admin credential rotation — break-glass recovery only (GitHub issue #192, Phase 18; sourcing changed by #466's follow-up, D78; scope narrowed by #590, Phase 42, D99)
+
+**Scope, as of Phase 42:** everything in this section is about the one
+root `ADMIN` identity (`ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH`/
+`ADMIN_JWT_SECRET`, imperatively boot-seeded, hard constraint #6) — not
+staff accounts in general. As of #589, every other account (any of
+`admin`/`moderator`/`staff`) is created and managed through the app
+itself: `POST /admin/staff` to create one, `POST /auth/admin/
+change-password` for a self-service password change, `POST /admin/
+staff/:id/reset-password` for an existing `ADMIN` to reset someone
+else's. Reach for `rotate-admin-credentials.sh` only when the root
+`ADMIN` account's own credential is lost — it's this project's one
+account that can always recover access and re-provision everyone else,
+which is exactly why it stays on the imperative-secret path instead of
+living in the `moderators` table's normal password-reset flow.
 
 `ADMIN_PASSWORD_HASH` and `ADMIN_JWT_SECRET` are deliberately **not** in
 any git-tracked manifest — `infra/k8s/base/05-api.yaml` has carried no
@@ -562,8 +576,11 @@ kubectl -n interview-insights rollout status deployment/api --timeout=90s
 ```
 
 The *old* password stops working the moment `api`'s restart completes —
-there's no overlap window, matching this project's single-admin,
-single-credential scope (`docs/ROADMAP.md` Phase 18).
+there's no overlap window. This is specific to the one root `ADMIN`
+identity this section covers (`docs/ROADMAP.md` Phase 18, narrowed by
+Phase 42/D99 — see this section's intro); it says nothing about every
+other staff account, which is a `moderators` row like any other and
+unaffected by a root-credential rotation.
 
 ## 5c. AI moderation triage & auto-approval (GitHub issues #163, #439, #441, #340, Phase 19/32/39)
 
