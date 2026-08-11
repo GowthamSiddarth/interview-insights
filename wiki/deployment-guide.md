@@ -491,6 +491,16 @@ keys still live in a separate `admin-credentials` Secret, provisioned
 imperatively exactly as before — same pattern as `localstack-credentials`/
 `LOCALSTACK_AUTH_TOKEN` above (`docs/DECISIONS.md` D23).
 
+**Fastest path — self-service script:** `infra/scripts/
+rotate-admin-credentials.sh` runs every step below in one shot
+(generates a fresh password/JWT secret, updates both GitHub repo
+secrets, upserts `admin-credentials`, re-seeds LocalStack, restarts
+`api`) and prints the new plaintext password once at the end — the
+one thing to actually save. Requires `gh`/`kubectl` pointed at this
+project's kind cluster. The manual steps below are the mechanism it
+automates; read them if you want to understand or troubleshoot what
+the script does, or need to run a piece of it by hand.
+
 **What changed (D78):** `api` no longer reads `admin-credentials`
 directly. It fetches `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` from
 LocalStack Secrets Manager at boot, same as every other secret it reads

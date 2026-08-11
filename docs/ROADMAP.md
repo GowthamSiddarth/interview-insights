@@ -1132,6 +1132,14 @@ Secrets & Build Correctness Bugs". Epic: GitHub issue #560.
       intent — a real dev-only value still lives in
       `wiki/deployment-guide.md` §5b for developers to copy into their
       own untracked `api/.env`
+- [x] Self-service admin-credential rotation script
+      (`infra/scripts/rotate-admin-credentials.sh`) — consolidates §5b's
+      manual `gh secret set`/`kubectl create secret`/
+      `seed-localstack.sh`/`rollout restart` sequence into one
+      idempotent script for whenever the deployed admin password is
+      lost or needs rotating, rather than re-deriving the sequence by
+      hand each time. Filed separately under this epic per the
+      ad-hoc-work convention (GitHub issue #582)
 
 ### Phase 20f — Retire Local Test-Database Isolation
 
