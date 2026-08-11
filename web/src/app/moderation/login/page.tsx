@@ -37,7 +37,7 @@ export default function ModerationLoginPage() {
     <PageContainer>
       <header>
         <h1 className="text-2xl font-semibold">Admin login</h1>
-        <p className="text-sm text-gray-500">Moderation queue access — single shared admin credential.</p>
+        <p className="text-sm text-gray-500">Staff login — admin, moderator, and staff accounts.</p>
       </header>
 
       {error && (

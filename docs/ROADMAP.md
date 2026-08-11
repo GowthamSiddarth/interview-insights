@@ -2204,7 +2204,7 @@ Epic: GitHub issue #584.
 - [x] Staff account management endpoints: create/list/update-role/
       deactivate/reactivate, self-service password change, audit
       logging (GitHub issue #589)
-- [ ] Retire shared admin credential for the general case; narrow
+- [x] Retire shared admin credential for the general case; narrow
       `rotate-admin-credentials.sh` to root-admin break-glass recovery
       (GitHub issue #590)
 - [ ] Frontend: role-aware admin panel (nav/action gating by
