@@ -120,7 +120,7 @@ describe('seed-demo-data', () => {
   // claim()/release() to have something to claim against.
   describe('seedModerators', () => {
     interface CreateArgs {
-      data: { username: string; email: string; passwordHash: string };
+      data: { username: string; email: string; passwordHash: string; role: string };
     }
 
     it('creates SEED_MODERATOR_COUNT moderators via prisma.moderator.create by default', async () => {
@@ -147,6 +147,24 @@ describe('seed-demo-data', () => {
 
       expect(create).toHaveBeenCalledTimes(2);
       expect(ids).toEqual(['moderator-0', 'moderator-1']);
+    });
+
+    // GitHub issue #592 (Phase 42, D99) — a demo environment needs at
+    // least one of each role to exercise permission gating with.
+    it('cycles through staff/moderator/admin roles across seeded accounts', async () => {
+      let nextId = 0;
+      const create = jest.fn((_args: CreateArgs) => Promise.resolve({ id: `moderator-${nextId++}` }));
+      const prisma = { moderator: { create } } as unknown as Parameters<typeof seedModerators>[0];
+
+      await seedModerators(prisma, 5);
+
+      const roles = create.mock.calls.map((call) => call[0].data.role);
+      expect(roles).toEqual(['staff', 'moderator', 'admin', 'staff', 'moderator']);
+      // The username itself embeds the role, so a demo environment's
+      // account list is self-explanatory without a second lookup.
+      const usernames = create.mock.calls.map((call) => call[0].data.username);
+      expect(usernames.every((u, i) => u.startsWith(`seed-${roles[i]}-`))).toBe(true);
+      expect(roles).toEqual(expect.arrayContaining(['staff', 'moderator', 'admin']));
     });
   });
 
