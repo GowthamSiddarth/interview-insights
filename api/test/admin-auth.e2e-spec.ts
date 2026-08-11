@@ -106,9 +106,13 @@ describe('Admin auth (e2e)', () => {
     const res = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
     // id is a real Moderator UUID as of GitHub issue #485 (Phase 36) —
     // seeded fresh by AdminAuthService.onModuleInit, not a fixed value.
-    expect(body<{ id: string; username: string }>(res)).toEqual({
+    // role is 'admin' as of GitHub issue #586/#587 (Phase 42, D99) —
+    // AdminAuthService.onModuleInit always promotes the boot-seeded root
+    // identity to 'admin' regardless of the column's own schema default.
+    expect(body<{ id: string; username: string; role: string }>(res)).toEqual({
       id: expect.any(String) as string,
       username: ADMIN_TEST_USERNAME,
+      role: 'admin',
     });
   });
 
