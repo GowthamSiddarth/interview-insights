@@ -167,7 +167,10 @@ post per phase — this file no longer inlines that running history.
   (Staff Role Hierarchy & Admin/Moderator Tooling) is planned as of
   2026-08-11 (epic #584, issues #585-#593) and underway: #585 (kickoff
   decision record) is done, written up as D99 in `docs/DECISIONS.md`.
-  Next up is #586 (the `StaffRole`/`staff_audit_log` Prisma migration).
+  #586 (the `StaffRole`/`staff_audit_log` Prisma migration) is done too —
+  applied and verified live against the kind cluster's Postgres. Next up
+  is #587 (permission-set authorization: `RequirePermission`/
+  `PermissionsGuard`, role claim on the staff JWT).
 
 ## Open decisions still to make
 

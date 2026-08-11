@@ -2193,7 +2193,7 @@ Epic: GitHub issue #584.
 - [x] Phase 42 kickoff: `StaffRole` hierarchy, permission-set model,
       credential-retirement plan — decision record (GitHub issue #585,
       written up as D99 in `docs/DECISIONS.md`)
-- [ ] Prisma migration: `StaffRole` enum, `role`/`isActive`/
+- [x] Prisma migration: `StaffRole` enum, `role`/`isActive`/
       `createdById` on `moderators`, `staff_audit_log` table (GitHub
       issue #586)
 - [ ] Permission-set authorization: `RequirePermission` decorator,

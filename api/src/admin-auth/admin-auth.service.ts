@@ -27,6 +27,17 @@ export class AdminAuthService implements OnModuleInit {
   // for ADMIN_JWT_SECRET, rather than the lazy-throw-on-use pattern
   // getRequiredAdminEnv was originally built for — there's no per-request
   // read of these three left to defer the check to.
+  //
+  // GitHub issue #586 (Phase 42, D99): role: 'admin' is set explicitly on
+  // both create and update so this boot-seeded identity is always the one
+  // root ADMIN, regardless of what the `role` column's schema default
+  // happens to be (it defaults to 'moderator' so pre-existing rows created
+  // before this column existed stay valid without a data backfill). Also
+  // always reactivates (isActive: true) — the root account is recovered via
+  // credential rotation (infra/scripts/rotate-admin-credentials.sh), not
+  // deactivate/reactivate tooling, so a stray deactivation should never be
+  // able to permanently lock out the one account everything else bootstraps
+  // from.
   async onModuleInit() {
     const username = getRequiredAdminEnv('ADMIN_USERNAME');
     const passwordHash = getRequiredAdminEnv('ADMIN_PASSWORD_HASH');
@@ -34,8 +45,8 @@ export class AdminAuthService implements OnModuleInit {
 
     await this.prisma.moderator.upsert({
       where: { username },
-      create: { username, passwordHash, email },
-      update: { passwordHash, email },
+      create: { username, passwordHash, email, role: 'admin', isActive: true },
+      update: { passwordHash, email, role: 'admin', isActive: true },
     });
   }
 

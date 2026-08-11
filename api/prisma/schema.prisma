@@ -362,21 +362,76 @@ model OverallReview {
 // ---------------------------------------------------------------------------
 
 // Replaces the single shared ADMIN_USERNAME/ADMIN_PASSWORD_HASH credential
-// (Phase 18) with a real identity per moderator. Still just one row today
-// (env-seeded on boot, see AdminAuthService.onModuleInit) — this table
-// exists to give claim/reviewedBy a real FK to point at once a second
-// moderator exists (Phase 36 issues #486/#487), not because multi-user
-// admin is implemented yet.
+// (Phase 18) with a real identity per moderator. Originally just one row
+// (env-seeded on boot, see AdminAuthService.onModuleInit) so claim/
+// reviewedBy could FK to something real (Phase 36 issues #486/#487).
+// GitHub issue #586 (Phase 42, D99) adds the real role hierarchy on top:
+// role/isActive/createdById. Deactivate, never delete — same precedent
+// claimedById already set by never being cleared once set.
 model Moderator {
-  id           String   @id @default(uuid()) @db.Uuid
-  username     String   @unique
-  passwordHash String   @map("password_hash")
+  id           String    @id @default(uuid()) @db.Uuid
+  username     String    @unique
+  passwordHash String    @map("password_hash")
   email        String
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  role         StaffRole @default(moderator)
+  isActive     Boolean   @default(true) @map("is_active")
+  // Null for the one root ADMIN (imperatively boot-seeded, D99) — every
+  // other account is created through admin tools by an existing ADMIN
+  // (GitHub issue #589) and always has a creator.
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  createdBy    Moderator?      @relation("StaffCreatedBy", fields: [createdById], references: [id])
+  createdStaff Moderator[]     @relation("StaffCreatedBy")
 
   claimedQueueEntries ModerationQueueEntry[]
+  auditLogActions     StaffAuditLog[]        @relation("StaffAuditActor")
+  auditLogTargeted    StaffAuditLog[]        @relation("StaffAuditTarget")
 
   @@map("moderators")
+}
+
+enum StaffRole {
+  staff
+  moderator
+  admin
+}
+
+// ---------------------------------------------------------------------------
+// 8c. staff_audit_log — GitHub issue #586 (Phase 42, D99)
+// ---------------------------------------------------------------------------
+// Durable record of every admin action against a staff account (account
+// created, role changed, deactivated/reactivated, password reset) — never
+// best-effort, same precedent AiAutoApprovalAudit (D71) below sets for
+// system-attributed decisions. actorId/targetId are equal for a
+// self-service password change, distinct for everything an ADMIN does to
+// another account — no separate "self vs admin-initiated" column needed,
+// that distinction is exactly what actorId vs targetId already encodes.
+model StaffAuditLog {
+  id        String           @id @default(uuid()) @db.Uuid
+  actorId   String           @map("actor_id") @db.Uuid
+  targetId  String           @map("target_id") @db.Uuid
+  action    StaffAuditAction
+  // Optional structured detail, e.g. { "oldRole": "staff", "newRole":
+  // "moderator" } for a role_changed row. Not relied on for anything the
+  // typed columns above already capture.
+  detail    Json?
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  actor  Moderator @relation("StaffAuditActor", fields: [actorId], references: [id])
+  target Moderator @relation("StaffAuditTarget", fields: [targetId], references: [id])
+
+  @@index([targetId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("staff_audit_log")
+}
+
+enum StaffAuditAction {
+  account_created
+  role_changed
+  deactivated
+  reactivated
+  password_reset
 }
 
 // ---------------------------------------------------------------------------

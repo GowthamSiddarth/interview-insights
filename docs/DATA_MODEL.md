@@ -245,12 +245,15 @@ One per interview process — the summary review.
 | created_at | timestamptz | |
 
 ### `moderators`
-One row per moderator identity (GitHub issue #485, Phase 36) — replaces
-the single shared `ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH` credential
-(Phase 18). Still just one row in practice today, env-seeded on every
-boot (`AdminAuthService.onModuleInit`) — this table exists so
-`claimed_by`/`reviewed_by` can gain real FKs, not because multi-
-moderator admin is fully built out yet (see `docs/DECISIONS.md` D80).
+One row per staff identity (GitHub issue #485, Phase 36) — replaces the
+single shared `ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH` credential
+(Phase 18). `role`/`is_active`/`created_by_id` (GitHub issue #586, Phase
+42, D99) turn this from a single env-seeded identity into a real
+`admin` > `moderator` > `staff` hierarchy: exactly one root `admin` stays
+imperatively boot-seeded (`AdminAuthService.onModuleInit`), every other
+row is created through admin tools by an existing `admin` (GitHub issue
+#589). Deactivated, never deleted — same precedent `claimed_by` already
+set by never being cleared.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -258,6 +261,26 @@ moderator admin is fully built out yet (see `docs/DECISIONS.md` D80).
 | username | text | unique |
 | password_hash | text | bcrypt |
 | email | text | breach-notification recipient (GitHub issue #489, Phase 36) |
+| role | text | `staff` \| `moderator` \| `admin` — defaults to `moderator` for pre-#586 rows |
+| is_active | boolean | default `true`; deactivate rather than delete |
+| created_by_id | uuid FK → moderators, nullable | null for the one root `admin`; always set for tool-created accounts |
+| created_at | timestamptz | |
+
+### `staff_audit_log`
+Durable record of every admin action against a staff account — account
+created, role changed, deactivated/reactivated, password reset (GitHub
+issue #586, Phase 42, D99). Never best-effort, same precedent
+`ai_auto_approval_audit` sets for system-attributed decisions below.
+`actor_id` and `target_id` are equal for a self-service password change,
+distinct for anything an `admin` does to another account.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| actor_id | uuid FK → moderators | who performed the action |
+| target_id | uuid FK → moderators | account acted upon |
+| action | text | `account_created` \| `role_changed` \| `deactivated` \| `reactivated` \| `password_reset` |
+| detail | jsonb | nullable structured detail, e.g. `{"oldRole": "staff", "newRole": "moderator"}` |
 | created_at | timestamptz | |
 
 ### `moderation_queue`
