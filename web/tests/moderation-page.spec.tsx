@@ -163,7 +163,7 @@ function mockFetch() {
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url.endsWith('/auth/admin/me') && method === 'GET') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
     }
     if (url.endsWith('/auth/admin/logout') && method === 'POST') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) });
@@ -225,7 +225,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.endsWith('/auth/admin/me') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
       }
       if (url.endsWith('/moderation/queue') && method === 'GET') {
         return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
@@ -246,7 +246,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.endsWith('/auth/admin/me') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
       }
       if (url.endsWith('/moderation/queue') && method === 'GET') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
@@ -324,7 +324,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.endsWith('/auth/admin/me') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin' }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
       }
       if (url.endsWith('/moderation/queue') && method === 'GET') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(futureGroups) });
@@ -752,6 +752,49 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
         ).toBe(true),
       );
       await waitFor(() => expect(screen.queryByText('Interview Review')).not.toBeInTheDocument());
+    });
+  });
+
+  // GitHub issue #591 (Phase 42, D99) — staff has moderation:queue:read
+  // only, no claim/approve/reject/flag/release permission at all.
+  describe('role gating (staff)', () => {
+    function mockFetchAsStaff() {
+      global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url.endsWith('/auth/admin/me') && method === 'GET') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ id: 'mod-staff', username: 'staff-account', role: 'staff' }),
+          });
+        }
+        if (url.endsWith('/companies') && method === 'GET') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(companiesMock) });
+        }
+        if (url.includes('/moderation/queue') && !url.includes('/moderation/queue/') && method === 'GET') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
+        }
+        throw new Error(`Unmocked fetch: ${method} ${url}`);
+      }) as jest.Mock;
+    }
+
+    it('hides approve/reject/flag/claim/release but still shows the claim badge, and hides the Staff accounts link', async () => {
+      mockFetchAsStaff();
+      render(<ModerationPage />);
+
+      await screen.findByText('Acme Corp · Engineer');
+      await userEvent.setup().click(screen.getByRole('button', { name: /Acme Corp · Engineer/ }));
+
+      expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Flag' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Claim' })).not.toBeInTheDocument();
+      // The other entry in this group is pre-claimed by 'other-mod' — the
+      // badge is informational, not an action, so it still renders.
+      expect(screen.getByText('Claimed by other-mod')).toBeInTheDocument();
+
+      expect(screen.queryByRole('link', { name: 'Staff accounts' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'View round-type field options' })).toBeInTheDocument();
     });
   });
 });

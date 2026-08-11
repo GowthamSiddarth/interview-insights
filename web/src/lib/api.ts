@@ -369,9 +369,32 @@ export interface CreateBulkProcessInput {
   overallReview?: { overallExperience: number; wouldRecommend: boolean; reviewText?: string };
 }
 
+// Phase 42 (D99) — admin > moderator > staff. staff is read-only: queue/
+// search/round-type-registry, no claim/approve/reject/flag/write.
+export type StaffRole = 'admin' | 'moderator' | 'staff';
+
 export interface AdminSession {
   id: string;
   username: string;
+  role: StaffRole;
+}
+
+// GitHub issue #589 (Phase 42, D99) — one row per staff account
+// (admin/moderator/staff), managed via /admin/staff, admin:staff:manage
+// only. Never carries a password/passwordHash — see StaffAccountCreated
+// below for the one-time-password shape create()/resetPassword() return.
+export interface StaffAccount {
+  id: string;
+  username: string;
+  email: string;
+  role: StaffRole;
+  isActive: boolean;
+  createdById: string | null;
+  createdAt: string;
+}
+
+export interface StaffAccountCreated extends StaffAccount {
+  password: string;
 }
 
 export interface CandidateSession {
@@ -761,4 +784,39 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  // GitHub issue #589 (Phase 42, D99) — self-service password change,
+  // available to every role (no permission gate on the backend either:
+  // it only ever acts on the caller's own session).
+  changeAdminPassword: (currentPassword: string, newPassword: string) =>
+    request<{ status: string }>('/auth/admin/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  // Staff account management (GitHub issue #589, Phase 42, D99) —
+  // admin:staff:manage only; every call here 403s for a moderator/staff
+  // session, same as the backend guard.
+  listStaffAccounts: () => request<StaffAccount[]>('/admin/staff'),
+
+  createStaffAccount: (input: { username: string; email: string; role: StaffRole }) =>
+    request<StaffAccountCreated>('/admin/staff', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  updateStaffRole: (id: string, role: StaffRole) =>
+    request<StaffAccount>(`/admin/staff/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+
+  deactivateStaffAccount: (id: string) =>
+    request<StaffAccount>(`/admin/staff/${id}/deactivate`, { method: 'POST' }),
+
+  reactivateStaffAccount: (id: string) =>
+    request<StaffAccount>(`/admin/staff/${id}/reactivate`, { method: 'POST' }),
+
+  resetStaffPassword: (id: string) =>
+    request<{ password: string }>(`/admin/staff/${id}/reset-password`, { method: 'POST' }),
 };
