@@ -24,3 +24,40 @@ export function themeInitScript(): string {
     '}catch(e){}})();'
   );
 }
+
+// GitHub issue #613 — the real toggle. 'system' is represented by the
+// *absence* of a stored key (never a literal `'system'` value) so this
+// stays the single source of truth themeInitScript() above also reads:
+// no key means "resolve from the OS preference," on every code path.
+export function getStoredThemePreference(): ThemePreference {
+  if (typeof window === 'undefined') return 'system';
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' ? stored : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+// Persists the choice (or clears it, for 'system') and applies the
+// resulting `dark` class immediately — same class the bootstrap script
+// sets before hydration, so there's no separate "apply" mechanism to
+// keep in sync.
+export function applyThemePreference(preference: ThemePreference): void {
+  try {
+    if (preference === 'system') {
+      window.localStorage.removeItem(THEME_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+    }
+  } catch {
+    // localStorage unavailable (e.g. locked-down browser) — theme still
+    // applies for this page view via the classList toggle below, it
+    // just won't persist across visits.
+  }
+
+  const isDark =
+    preference === 'dark' ||
+    (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.classList.toggle('dark', isDark);
+}
