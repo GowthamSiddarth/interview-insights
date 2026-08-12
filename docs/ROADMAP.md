@@ -2231,3 +2231,66 @@ Epic: GitHub issue #584.
       deactivating/demoting the last remaining active non-root admin.
       Found live using #591's UI; filed as a follow-up sub-issue of this
       same epic rather than a separate phase (GitHub issue #607)
+
+## Phase 43 — Design System Refresh & Theming
+
+Requested 2026-08-12: the app reads as a working scaffold, not a
+finished product — stock Tailwind `gray-*`/`indigo-600` with no token
+layer, and "dark mode" is really just Tailwind's default `media`
+strategy duplicated per component rather than something a visitor can
+actually choose. Brainstormed as a Frontend SME/architect pass (design
+brief artifact from the planning conversation covers the full
+reasoning, token values, component gallery, and page mockups) before
+any issue was filed, same "plan before implementing" discipline as
+every other phase.
+
+Direction: a "structured evaluation" visual identity — not a generic
+SaaS reskin, and deliberately not a levels.fyi layout clone — built
+around this product's own shape (per-round difficulty, three named
+interviewer traits, shrinkage-adjusted aggregates that can legitimately
+be "not enough data yet") rather than borrowing a comp-transparency
+tool's table-first layout wholesale. IBM Plex Serif/Sans/Mono across
+display/body/data roles, a teal accent, a reserved four-color status
+vocabulary (pending/approved/rejected/flagged), and single-hue
+magnitude charts — chart and status colors validated with the
+`dataviz` skill's checker, not eyeballed. Scope: the shared token/theme
+foundation plus the four screens carrying the most trust load
+(landing/search, company profile, analytics dashboard, moderation
+status vocabulary). The wizard (Phase 26) and moderation queue (Phases
+36/41) keep their current information architecture — this phase only
+carries the new token system through, not a restructure. Milestone:
+"Phase 43 — Design System Refresh & Theming". Epic: GitHub issue #611.
+
+- [ ] Design tokens & Tailwind foundation — color/space/radius/
+      elevation as CSS custom properties, `darkMode: 'class'` in
+      `tailwind.config.ts`, slate-leaning neutral scale replacing bare
+      `gray-*` (GitHub issue #612)
+- [ ] Light / dark / system theme toggle — `ThemeProvider`, FOUC-safe
+      inline blocking script in `layout.tsx`'s head, `localStorage`
+      persistence, three-way switch in `NavBar` (GitHub issue #613)
+- [ ] Icon system: adopt `lucide-react` (GitHub issue #614)
+- [ ] Accessible primitives: adopt Radix UI for Dialog/Tooltip/Tabs/
+      DropdownMenu; migrate `ConfirmationModal` and `HelpTooltip` onto
+      them (GitHub issue #615)
+- [ ] `NavBar` redesign — responsive/mobile menu (the current nav has
+      no small-viewport handling at all), theme toggle, refined brand
+      mark (GitHub issue #616)
+- [ ] Landing page redesign — hero search, trending-company card grid
+      with score chips, stats strip; keeps Phase 33's search-first
+      information architecture (GitHub issue #617)
+- [ ] Company profile redesign — tabbed layout (Overview / Round
+      ratings / Recruiter experience / All reviews), hero score ring,
+      redesigned review cards (GitHub issue #618)
+- [ ] Analytics dashboard redesign — stat-tile row + single-hue
+      magnitude bar chart, replacing the current `dl` grid of
+      `ScoreDisplay` pairs (GitHub issue #619)
+- [ ] Status vocabulary rollout — moderation queue & `/admin/staff`;
+      Phases 36/41/42's layout and interaction model stay as-is
+      (GitHub issue #620)
+- [ ] Wizard visual pass — stepper/progress indicator across the
+      flashcard steps, round-entry cards redrawn on the new tokens
+      (GitHub issue #621)
+- [ ] Accessibility & responsive audit across the phase (GitHub issue
+      #622)
+- [ ] Engineering blog (last) (GitHub issue #623) — one post per issue
+      under `wiki/blog/phase-43-design-system-refresh-theming/`
