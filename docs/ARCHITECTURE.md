@@ -287,3 +287,12 @@ interview-insights/
 - **Cold start** — no candidate rates a company with zero existing
   reviews. Likely needs seed data before organic growth kicks in. Not an
   infrastructure concern, but affects launch sequencing.
+- **No candidate-facing abuse report or moderation-decision appeal
+  path.** Candidates can edit/delete their own pending or approved
+  submissions (Phase 17) but cannot flag someone else's review as
+  abusive, nor dispute a `rejected` rating/review of their own — there's
+  no endpoint or UI for either. `ModerationFlag.flag_reason =
+  'manual_report'` is staff-initiated, not candidate-initiated. D99
+  (Phase 42) names this as a possible future use of the `STAFF` role
+  ("a foothold for Phase 41's parked candidate-communication-loop
+  idea") but it isn't scoped, filed, or planned yet.
