@@ -92,7 +92,35 @@ describe('CompanyAnalyticsPage anonymous visitor soft-gating (GitHub issue #226,
     render(<CompanyAnalyticsPage />);
 
     expect(await screen.findByText('4.20')).toBeInTheDocument();
-    expect(screen.getByText('3.50')).toBeInTheDocument();
+    // GitHub issue #619 — round-type difficulty moved into the
+    // DifficultyBar magnitude chart, which formats to 1 decimal (a
+    // chart label), not ScoreDisplay/StatTile's 2 (a dense grid).
+    expect(screen.getByText('3.5')).toBeInTheDocument();
     expect(screen.queryByText(/Log in to see/)).not.toBeInTheDocument();
+  });
+
+  // GitHub issue #619 — a round type having enough samples overall
+  // doesn't guarantee every individual metric (here: difficulty
+  // itself) clears the shrinkage floor on its own. Caught by `tsc`
+  // during this issue's own build (RoundTypeAnalytics.scores.difficulty
+  // is `number | null`) before it could ship as a runtime crash.
+  it('renders an empty difficulty bar (never a zero-width one) when a round type has no difficulty score yet', async () => {
+    setLoggedInCookie(true);
+    mockFetchWith({
+      ...populatedAnalytics,
+      roundTypes: [
+        {
+          roundType: 'coding',
+          sampleSize: 5,
+          scores: { difficulty: null, fluency: 4.0, clarity: 4.1, focus: 3.9 },
+        },
+      ],
+    });
+    render(<CompanyAnalyticsPage />);
+
+    // "Coding" legitimately appears twice (the bar's own label and the
+    // per-round-type heading below it) — findAllByText, not findByText.
+    expect(await screen.findAllByText('Coding')).toHaveLength(2);
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });
