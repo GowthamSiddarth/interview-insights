@@ -90,7 +90,10 @@ describe('CompanyProfilePage (Phase 15 issue #141)', () => {
 
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument();
     expect(screen.getByText(/Fintech/)).toBeInTheDocument();
-    expect(screen.getByText('4.20')).toBeInTheDocument(); // overall experience
+    // GitHub issue #618 — ScoreRing formats to 1 decimal (a hero
+    // number), not ScoreDisplay's 2 (a dense grid); this page moved to
+    // ScoreRing for its header scores.
+    expect(screen.getByText('4.2')).toBeInTheDocument(); // overall experience
     expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
     // Round detail (including freeText) is collapsed by default (issue #347).
     expect(screen.queryByText('Solid, well-run round.', { exact: false })).not.toBeInTheDocument();

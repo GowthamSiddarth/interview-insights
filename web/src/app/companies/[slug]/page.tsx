@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
 import {
   api,
   ApiError,
@@ -14,13 +15,15 @@ import {
   ReviewSearchResult,
   Round,
 } from '@/lib/api';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { ScoreRing } from '@/components/ScoreRing';
+import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { GatedSection } from '@/components/GatedSection';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
 import { formatRoundLabel } from '@/lib/format-round-label';
+import { avatarColorFor } from '@/lib/avatar-color';
 
 const PAGE_SIZE = 10;
 
@@ -44,11 +47,11 @@ function errorMessage(err: unknown): string {
 
 function ReviewItem({ review }: { review: CompanyReviewItem }) {
   return (
-    <article className="flex flex-col gap-1 text-sm">
-      <p className="font-medium">
-        {formatRoundLabel(roundTypeLabel(review.roundType), review.roundTitle)}
-      </p>
-      <p className="text-gray-600 dark:text-gray-400">
+    <article className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip>{formatRoundLabel(roundTypeLabel(review.roundType), review.roundTitle)}</Chip>
+      </div>
+      <p className="font-mono text-xs tabular-nums text-gray-600 dark:text-gray-400">
         difficulty {review.difficulty} · fluency {review.fluency} · clarity{' '}
         {review.clarity} · focus {review.focus}
       </p>
@@ -84,7 +87,13 @@ function ReviewGroupItem({ group, divider = true }: { group: CompanyReviewGroup;
             {group.entries.length} round{group.entries.length === 1 ? '' : 's'} rated
           </p>
         </div>
-        <span className="text-gray-500">{expanded ? 'Hide details' : 'View details'}</span>
+        <span className="flex items-center gap-1 text-gray-500">
+          {expanded ? 'Hide details' : 'View details'}
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </span>
       </button>
       {expanded && (
         <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
@@ -217,25 +226,37 @@ export default function CompanyProfilePage() {
 
   return (
     <PageContainer size="wide">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">{company.name}</h1>
-        <p className="text-sm text-gray-500">
-          {[company.industry, sizeBucketLabel(company.sizeBucket)].filter(Boolean).join(' · ')}
-        </p>
-        <span className="flex flex-wrap gap-3">
+      {/* GitHub issue #618 — a real hero band instead of a plain h1/p
+          stack: avatar (same deterministic color CompanyCard's grid
+          uses, so a company reads consistently everywhere), and "Write
+          a review" promoted to a primary button since it's this page's
+          main call to action. */}
+      <header className="flex flex-wrap items-center gap-4">
+        <span
+          aria-hidden="true"
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-xl font-semibold text-white ${avatarColorFor(company.name)}`}
+        >
+          {company.name.charAt(0).toUpperCase()}
+        </span>
+        <div className="flex flex-1 flex-col gap-1">
+          <h1 className="text-2xl font-semibold">{company.name}</h1>
+          <p className="text-sm text-gray-500">
+            {[company.industry, sizeBucketLabel(company.sizeBucket)].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
           <Link
             href={`/companies/${company.slug}/analytics`}
             className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             Full analytics breakdown
           </Link>
-          <Link
+          <Button
             href={`/write-review?companyId=${company.id}&companySlug=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
-            className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             Write a review
-          </Link>
-        </span>
+          </Button>
+        </div>
       </header>
 
       <Card as="section" className="flex flex-col gap-3">
@@ -243,19 +264,20 @@ export default function CompanyProfilePage() {
         {!analytics ? (
           <p className="text-sm text-gray-500">Loading…</p>
         ) : analytics.overall ? (
-          <dl className="grid grid-cols-2 gap-4">
-            <ScoreDisplay
+          <div className="flex flex-wrap gap-8">
+            <ScoreRing
               label="Overall experience"
               value={analytics.overall.scores.overallExperience}
               sampleSize={analytics.overall.sampleSize}
             />
-            <ScoreDisplay
+            <ScoreRing
               label="Would recommend"
               value={analytics.overall.scores.wouldRecommendPct}
               sampleSize={analytics.overall.sampleSize}
+              max={100}
               suffix="%"
             />
-          </dl>
+          </div>
         ) : (
           <EmptyState message="Not enough reviews yet" />
         )}

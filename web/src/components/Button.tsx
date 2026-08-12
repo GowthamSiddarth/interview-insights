@@ -1,4 +1,5 @@
-import { ButtonHTMLAttributes } from 'react';
+import { AnchorHTMLAttributes, ButtonHTMLAttributes } from 'react';
+import Link from 'next/link';
 
 export type ButtonVariant = 'primary' | 'danger' | 'neutral' | 'warning';
 
@@ -15,18 +16,33 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   warning: 'bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-500',
 };
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonAsButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
+  href?: undefined;
 }
+
+interface ButtonAsLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
+  variant?: ButtonVariant;
+  href: string;
+}
+
+type ButtonProps = ButtonAsButtonProps | ButtonAsLinkProps;
 
 // One consistent action style across every form in the app (GitHub
 // issue #60) — previously every page repeated its own bg-black/dark:bg-white
 // classes independently.
-export function Button({ className = '', variant = 'primary', ...props }: ButtonProps) {
-  return (
-    <button
-      {...props}
-      className={`rounded-md px-3 py-1 text-sm text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${VARIANT_CLASSES[variant]} ${className}`}
-    />
-  );
+//
+// GitHub issue #618 — an `href` renders a real <Link> instead of a
+// <button>, same visual classes, for actions that are genuinely
+// navigation (e.g. a profile page's "Write a review" CTA). A
+// <button onClick={() => router.push(...)}> loses right-click/open-
+// in-new-tab/status-bar-preview — real regressions for a primary
+// navigation action, not just a semantic nitpick.
+export function Button({ className = '', variant = 'primary', href, ...props }: ButtonProps) {
+  const classes = `rounded-md px-3 py-1 text-sm text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${VARIANT_CLASSES[variant]} ${className}`;
+
+  if (href) {
+    return <Link href={href} className={classes} {...(props as AnchorHTMLAttributes<HTMLAnchorElement>)} />;
+  }
+  return <button {...(props as ButtonHTMLAttributes<HTMLButtonElement>)} className={classes} />;
 }
