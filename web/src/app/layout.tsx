@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { NavBar } from '@/components/NavBar';
+import { themeInitScript } from '@/lib/theme';
 
 // Self-hosted at build time (next/font/google fetches once during `next
 // build`, then serves from the app's own origin) — no runtime request to
@@ -19,7 +20,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    // suppressHydrationWarning on <html>: the bootstrap script below adds
+    // the `dark` class before React hydrates (Phase 43 #612), which would
+    // otherwise mismatch the server-rendered markup.
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Blocking, not next/script — must run before first paint to
+            avoid a flash of the wrong theme. See src/lib/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript() }} />
+      </head>
       <body
         suppressHydrationWarning
         className="bg-gray-50 font-sans text-gray-900 dark:bg-gray-950 dark:text-gray-100"
