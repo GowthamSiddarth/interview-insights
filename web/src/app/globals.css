@@ -1,3 +1,49 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Phase 43 (#612) — CSS custom properties for what Tailwind's static
+   palette can't express as reusable classes: semantic status colors
+   (with a text-safe `-ink` variant per the dataviz skill's contrast
+   findings — the raw hues read at 1.79-3.27:1 on a light surface),
+   a single-hue sequential ramp for magnitude charts, and elevation
+   shadows. Unused until #619/#620 wire them up (docs/DECISIONS.md
+   D100) — defined now so those issues aren't also blocked on
+   inventing this palette. Switches on the same `.dark` class
+   Tailwind's `dark:` variant now uses (darkMode: 'class'), not a
+   separate mechanism. */
+:root {
+  --status-good: #0ca30c;
+  --status-good-ink: #0d7a0d;
+  --status-warning: #fab219;
+  --status-warning-ink: #8a5a0a;
+  --status-serious: #ec835a;
+  --status-serious-ink: #a1472a;
+  --status-critical: #d03b3b;
+  --status-critical-ink: #b23030;
+  --chart-seq-1: #cdeded;
+  --chart-seq-2: #96d9d2;
+  --chart-seq-3: #5cc0b8;
+  --chart-seq-4: #2a9990;
+  --chart-seq-5: #0e7075;
+  --shadow-card: 0 1px 2px rgba(20, 24, 38, 0.04), 0 8px 20px -12px rgba(20, 24, 38, 0.14);
+  --shadow-raised: 0 4px 10px rgba(20, 24, 38, 0.06), 0 20px 40px -20px rgba(20, 24, 38, 0.22);
+}
+
+.dark {
+  --status-good: #24b524;
+  --status-good-ink: #24b524;
+  --status-warning: #fab219;
+  --status-warning-ink: #fab219;
+  --status-serious: #ec835a;
+  --status-serious-ink: #ec835a;
+  --status-critical: #e2564f;
+  --status-critical-ink: #e2564f;
+  --chart-seq-1: #123634;
+  --chart-seq-2: #1b5450;
+  --chart-seq-3: #2a8a82;
+  --chart-seq-4: #45bdb4;
+  --chart-seq-5: #7be0d8;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-raised: 0 4px 14px rgba(0, 0, 0, 0.35), 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+}

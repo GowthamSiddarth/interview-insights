@@ -5023,6 +5023,70 @@ against the composability this model was chosen for.
 
 ---
 
+### D100 — Design token strategy: remap Tailwind's palette, don't rewrite components (GitHub issue #612, Phase 43)
+
+**Context:** Phase 43 (design brief from the planning conversation, epic
+#611) calls for a slate-leaning neutral scale and a teal brand accent
+replacing stock Tailwind `gray`/`indigo`, plus a working light/dark/
+system theme switch. Every component in `web/src` already references
+colors exclusively by Tailwind palette name (`bg-indigo-600`,
+`text-gray-500`, etc.) — confirmed by grepping `web/src` for every
+`(gray|indigo|red|amber)-[0-9]+` token in use before writing any config,
+never an arbitrary hex value.
+
+**Decision:**
+
+- **Remap the palette in `tailwind.config.ts`, don't touch component
+  files.** Because nothing uses arbitrary hex, overriding
+  `theme.extend.colors.gray`/`.indigo` with new hex values for only the
+  shades this app actually references (Tailwind's `extend` deep-merges
+  per family, so any untouched shade — e.g. `indigo-100`, never used
+  here — silently keeps its stock value) changes every component's
+  rendered color with a single-file diff. Chosen over a component-by-
+  component rewrite (11 shades × 2 families × N call sites, for zero
+  behavioral difference) and over introducing CSS custom properties for
+  brand/neutral colors at this stage (would need every component
+  touched to switch from Tailwind classes to `var(--...)`, the exact
+  cost this approach avoids). `red`/`amber` are untouched — Tailwind's
+  stock scales there are already contrast-tested and this phase doesn't
+  propose changing the error/warning hues, only the brand accent and
+  neutrals.
+- **`red`/`amber` excluded deliberately**, not an oversight — no design
+  brief rationale called for changing them, and Tailwind's defaults
+  already clear the same contrast bar the new teal/slate scales were
+  hand-checked against.
+- **New teal shades chosen to preserve every existing interaction
+  pattern** the old indigo scale had wired up (hover darkens a shade in
+  light mode, hover lightens a shade in dark mode, a `-50`/`-950` tint
+  background pairs with a `-700`/`-300` ink for badges) — same shade
+  *numbers* carry the same *role*, only the hue changed.
+- **`darkMode: 'class'` instead of the default `'media'` strategy** — a
+  visitor's own choice (Phase 43's actual goal) can't be expressed by a
+  strategy that only ever reads the OS preference. Shipped in the same
+  PR as a FOUC-safe inline bootstrap script (`web/src/lib/theme.ts`,
+  wired into `layout.tsx`'s `<head>`) that applies the `dark` class
+  before hydration, defaulting to the OS preference when nothing is
+  stored yet — so this PR alone doesn't regress existing OS-driven dark
+  mode while the real three-way toggle UI (#613) hasn't shipped.
+- **CSS custom properties added in `globals.css` for what Tailwind's
+  static palette can't express** — status colors (good/warning/serious/
+  critical, each with a text-safe `-ink` variant per the `dataviz`
+  skill's contrast findings), a single-hue sequential ramp for
+  magnitude charts, and elevation shadows. Unused until #619/#620 wire
+  them up; defined now so those issues aren't also blocked on inventing
+  the palette.
+
+**Alternatives considered:**
+
+- *A full component rewrite onto semantic custom-property-backed
+  Tailwind color names (`bg-accent`, `text-status-good`, …) in this same
+  issue.* Rejected for #612 specifically — bigger diff, more review
+  surface, no functional gain over the palette remap for colors that
+  are purely presentational today. Revisit per-component as each
+  screen's own redesign issue (#616-#620) touches it anyway.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
