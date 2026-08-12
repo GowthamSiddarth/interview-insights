@@ -2,9 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
+import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin, loginAsSecondModerator, loginAsStaff } from './support/admin-session';
+
+// GitHub issue #607 — a raw connection, bypassing the app's own guarded
+// endpoints, same pattern moderation.e2e-spec.ts's own rawPrisma already
+// uses: `moderators` isn't one of truncate-database.ts's wiped tables (see
+// admin-session.ts's own comment), so admin-role rows created by earlier
+// test runs — including this file's own "allows deactivating..." test,
+// which deliberately leaves a second admin active — persist and would
+// otherwise make the last-admin guard tests' "this is the only active
+// non-root admin" precondition false.
+const rawPrisma = new PrismaClient();
 
 interface StaffAccountBody {
   id: string;
@@ -47,8 +58,23 @@ describe('Staff accounts (e2e)', () => {
     await app.close();
   });
 
+  afterAll(async () => {
+    await rawPrisma.$disconnect();
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
   const server = () => request(app.getHttpServer());
+
+  // GitHub issue #607 — bypasses the guarded /deactivate endpoint (which
+  // would itself refuse to deactivate a last-remaining admin) to force a
+  // clean "exactly one active non-root admin" precondition regardless of
+  // what earlier tests/runs left behind.
+  async function deactivateEveryOtherActiveAdmin(exceptId: string): Promise<void> {
+    await rawPrisma.moderator.updateMany({
+      where: { role: 'admin', isActive: true, createdById: { not: null }, id: { not: exceptId } },
+      data: { isActive: false },
+    });
+  }
   const uniqueUsername = () => `staff-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
   it('rejects unauthenticated requests with 401', async () => {
@@ -225,6 +251,7 @@ describe('Staff accounts (e2e)', () => {
         .send({ username, email: `${username}@example.com`, role: 'admin' })
         .expect(201);
       const { id } = body<StaffAccountBody>(createRes);
+      await deactivateEveryOtherActiveAdmin(id);
 
       await server().post(`/admin/staff/${id}/deactivate`).set('Cookie', adminCookie).expect(409);
     });
@@ -237,6 +264,7 @@ describe('Staff accounts (e2e)', () => {
         .send({ username, email: `${username}@example.com`, role: 'admin' })
         .expect(201);
       const { id } = body<StaffAccountBody>(createRes);
+      await deactivateEveryOtherActiveAdmin(id);
 
       await server()
         .patch(`/admin/staff/${id}/role`)
@@ -255,13 +283,21 @@ describe('Staff accounts (e2e)', () => {
       const { id: idA } = body<StaffAccountBody>(createResA);
 
       const usernameB = uniqueUsername();
-      await server()
+      const createResB = await server()
         .post('/admin/staff')
         .set('Cookie', adminCookie)
         .send({ username: usernameB, email: `${usernameB}@example.com`, role: 'admin' })
         .expect(201);
+      const { id: idB } = body<StaffAccountBody>(createResB);
 
       await server().post(`/admin/staff/${idA}/deactivate`).set('Cookie', adminCookie).expect(201);
+
+      // Cleanup: idB would otherwise stay active forever (moderators isn't
+      // truncated between test runs) and keep satisfying every future
+      // "last admin" test's precondition-clearing helper above trivially —
+      // deactivateEveryOtherActiveAdmin() already handles that case, but
+      // there's no reason to let unique-per-run rows accumulate unbounded.
+      await rawPrisma.moderator.update({ where: { id: idB }, data: { isActive: false } });
     });
   });
 });
