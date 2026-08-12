@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import './globals.css';
 import { NavBar } from '@/components/NavBar';
 import { themeInitScript } from '@/lib/theme';
@@ -33,8 +34,14 @@ export default function RootLayout({
         suppressHydrationWarning
         className="bg-gray-50 font-sans text-gray-900 dark:bg-gray-950 dark:text-gray-100"
       >
-        <NavBar />
-        {children}
+        {/* One shared Tooltip.Provider (GitHub issue #615) so every
+            HelpTooltip on a page coordinates hover timing/skip-delay
+            with the others, instead of each instance being its own
+            isolated tooltip. */}
+        <Tooltip.Provider>
+          <NavBar />
+          {children}
+        </Tooltip.Provider>
       </body>
     </html>
   );
