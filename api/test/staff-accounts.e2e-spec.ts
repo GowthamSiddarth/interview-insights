@@ -183,4 +183,85 @@ describe('Staff accounts (e2e)', () => {
       .set('Cookie', adminCookie)
       .expect(404);
   });
+
+  // GitHub issue #607 — the root admin (createdById: null) is never
+  // listed or actionable through this API; it's managed by
+  // infra/scripts/rotate-admin-credentials.sh only.
+  describe('root admin exclusion', () => {
+    it('never appears in the list', async () => {
+      const meRes = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
+      const { id: rootId } = body<{ id: string }>(meRes);
+
+      const listRes = await server().get('/admin/staff').set('Cookie', adminCookie).expect(200);
+      const ids = body<StaffAccountBody[]>(listRes).map((a) => a.id);
+      expect(ids).not.toContain(rootId);
+    });
+
+    it('403s every mutating action targeted at the root admin id', async () => {
+      const meRes = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
+      const { id: rootId } = body<{ id: string }>(meRes);
+
+      await server()
+        .patch(`/admin/staff/${rootId}/role`)
+        .set('Cookie', adminCookie)
+        .send({ role: 'staff' })
+        .expect(403);
+      await server().post(`/admin/staff/${rootId}/deactivate`).set('Cookie', adminCookie).expect(403);
+      await server().post(`/admin/staff/${rootId}/reactivate`).set('Cookie', adminCookie).expect(403);
+      await server().post(`/admin/staff/${rootId}/reset-password`).set('Cookie', adminCookie).expect(403);
+    });
+  });
+
+  // GitHub issue #607 — deactivating or demoting the last remaining
+  // active non-root admin would leave the staff-management UI with no
+  // manageable admin at all (root doesn't count — see the service's own
+  // comment on why counting it would make this guard meaningless).
+  describe('last-admin guard', () => {
+    it('rejects deactivating the last remaining active non-root admin', async () => {
+      const username = uniqueUsername();
+      const createRes = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username, email: `${username}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id } = body<StaffAccountBody>(createRes);
+
+      await server().post(`/admin/staff/${id}/deactivate`).set('Cookie', adminCookie).expect(409);
+    });
+
+    it('rejects demoting the last remaining active non-root admin', async () => {
+      const username = uniqueUsername();
+      const createRes = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username, email: `${username}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id } = body<StaffAccountBody>(createRes);
+
+      await server()
+        .patch(`/admin/staff/${id}/role`)
+        .set('Cookie', adminCookie)
+        .send({ role: 'moderator' })
+        .expect(409);
+    });
+
+    it('allows deactivating an admin once a second active non-root admin exists', async () => {
+      const usernameA = uniqueUsername();
+      const createResA = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username: usernameA, email: `${usernameA}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id: idA } = body<StaffAccountBody>(createResA);
+
+      const usernameB = uniqueUsername();
+      await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username: usernameB, email: `${usernameB}@example.com`, role: 'admin' })
+        .expect(201);
+
+      await server().post(`/admin/staff/${idA}/deactivate`).set('Cookie', adminCookie).expect(201);
+    });
+  });
 });
