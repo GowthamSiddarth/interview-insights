@@ -23,6 +23,7 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
+import { StatusPill } from '@/components/StatusPill';
 import { formatRoundLabel } from '@/lib/format-round-label';
 import { formatSlaStatus } from '@/lib/format-sla-status';
 import { ROUND_TYPE_LABELS } from '../wizard/round-type-labels';
@@ -250,7 +251,8 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
       )}
       {text && <blockquote className="border-l-2 border-gray-300 pl-2 italic">{text}</blockquote>}
       {entry.flagReason && (
-        <p className="text-amber-700 dark:text-amber-400">
+        <p className="flex flex-wrap items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <StatusPill tone="serious">Flagged</StatusPill>
           Auto-flagged: {entry.flagReason} (fraud checks) — review with extra care.
         </p>
       )}

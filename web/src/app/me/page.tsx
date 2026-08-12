@@ -14,19 +14,14 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
+import { StatusPill } from '@/components/StatusPill';
 import { formatRoundLabel } from '@/lib/format-round-label';
+import { ENTITY_STATUS_TONE } from '@/lib/status';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 
-const STATUS_CLASS: Record<string, string> = {
-  pending: 'text-amber-700 dark:text-amber-400',
-  approved: 'text-green-700 dark:text-green-400',
-  rejected: 'text-red-700 dark:text-red-400',
-  flagged: 'text-amber-700 dark:text-amber-400',
-};
-
-function statusLabel(status: string): string {
+function statusLabel(status: keyof typeof ENTITY_STATUS_TONE): string {
   return status[0].toUpperCase() + status.slice(1);
 }
 
@@ -156,7 +151,7 @@ function RoundRatingItem({
     <article className={itemClass}>
       <p>
         <strong>{formatRoundLabel(roundTypeLabel(rating.roundType), rating.roundTitle)}</strong> —{' '}
-        <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
+        <StatusPill tone={ENTITY_STATUS_TONE[rating.status]}>{statusLabel(rating.status)}</StatusPill>
       </p>
       <p className="text-gray-600 dark:text-gray-400">
         difficulty {rating.difficulty} · fluency {rating.fluency} · clarity{' '}
@@ -300,7 +295,7 @@ function RecruiterRatingItem({
   return (
     <article className={itemClass}>
       <p>
-        Recruiter experience — <span className={STATUS_CLASS[rating.status]}>{statusLabel(rating.status)}</span>
+        Recruiter experience — <StatusPill tone={ENTITY_STATUS_TONE[rating.status]}>{statusLabel(rating.status)}</StatusPill>
       </p>
       <p className="text-gray-600 dark:text-gray-400">
         reachability {rating.reachability} · responsiveness {rating.responsiveness} · guidelines
@@ -435,7 +430,7 @@ function OverallReviewItem({
     <article className={itemClass}>
       <p>
         Overall review —{' '}
-        <span className={STATUS_CLASS[review.status]}>{statusLabel(review.status)}</span>
+        <StatusPill tone={ENTITY_STATUS_TONE[review.status]}>{statusLabel(review.status)}</StatusPill>
       </p>
       <p className="text-gray-600 dark:text-gray-400">
         overall experience {review.overallExperience} · would recommend{' '}
