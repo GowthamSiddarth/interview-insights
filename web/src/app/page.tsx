@@ -1,8 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Search } from 'lucide-react';
 import { api, ApiError, Company, CompanySearchResult } from '@/lib/api';
+import { CompanyCard } from '@/components/CompanyCard';
 import { CompanyResultRow } from '@/components/CompanyResultRow';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import { EmptyState } from '@/components/EmptyState';
@@ -112,9 +113,14 @@ export default function SearchPage() {
 
   return (
     <PageContainer size="wide">
-      <header>
-        <h1 className="text-2xl font-semibold">Interview Insights</h1>
-        <p className="text-sm text-gray-500">
+      {/* Hero (GitHub issue #617) — same copy/heading text as before
+          (tests assert "Interview Insights" is present), restyled as
+          the page's opening thesis rather than a plain h1/p pair.
+          Keeps Phase 33's search-first information architecture —
+          this is a visual pass, not another product pivot. */}
+      <header className="flex flex-col items-center gap-3 py-4 text-center">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Interview Insights</h1>
+        <p className="max-w-md text-sm text-gray-500 dark:text-gray-400">
           Find a company to view its profile, browse its approved reviews, or write one.
         </p>
       </header>
@@ -125,30 +131,30 @@ export default function SearchPage() {
         </p>
       )}
 
-      <Card as="section" className="flex flex-col gap-3">
+      <Card as="section" className="flex flex-col gap-4">
         <h2 className="font-medium">Find a company</h2>
         <form onSubmit={handleCompanySearch} className="flex gap-2">
-          <input
-            name="q"
-            required
-            placeholder="Company name"
-            className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-          />
+          <div className="relative flex-1">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              name="q"
+              required
+              placeholder="Company name"
+              className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+            />
+          </div>
           <Button type="submit">Search</Button>
         </form>
 
         {companies.length > 0 && (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-gray-500">Or pick one directly:</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {companies.map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/companies/${c.slug}`}
-                  className="rounded-md border border-gray-300 px-3 py-1 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
-                >
-                  {c.name}
-                </Link>
+                <CompanyCard key={c.id} company={c} />
               ))}
             </div>
           </div>
