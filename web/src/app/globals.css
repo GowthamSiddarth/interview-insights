@@ -38,7 +38,13 @@
   --status-serious: #ec835a;
   --status-serious-ink: #ec835a;
   --status-critical: #e2564f;
-  --status-critical-ink: #e2564f;
+  /* GitHub issue #622 — the raw hue only measured 3.62:1 against the
+     StatusPill's actual composited background (real browser
+     color-mix() output, not a hand-derived estimate): passes AA-large
+     but fails AA-normal-text at the pill's real 12px size. Lightened
+     for text specifically; --status-critical itself (fills/icons)
+     stays the original hue. */
+  --status-critical-ink: #f0837c;
   --chart-seq-1: #123634;
   --chart-seq-2: #1b5450;
   --chart-seq-3: #2a8a82;

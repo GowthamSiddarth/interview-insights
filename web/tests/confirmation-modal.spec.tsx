@@ -34,4 +34,38 @@ describe('ConfirmationModal', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // GitHub issue #622 — the #615 migration to Radix Dialog claimed a
+  // real focus trap and ESC-to-close as its whole justification over
+  // the hand-rolled version; neither had a test until this audit
+  // caught the gap.
+  it('calls onClose on Escape', async () => {
+    const onClose = jest.fn();
+    const user = userEvent.setup();
+    render(<ConfirmationModal title="Request submitted" message="All done." onClose={onClose} />);
+
+    await user.keyboard('{Escape}');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves focus inside the dialog on open, not left on whatever was focused before', async () => {
+    render(<ConfirmationModal title="Request submitted" message="All done." onClose={jest.fn()} />);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it('traps Tab focus inside the dialog — cycling never lands on document.body', async () => {
+    const user = userEvent.setup();
+    render(<ConfirmationModal title="Request submitted" message="All done." onClose={jest.fn()} />);
+
+    const dialog = screen.getByRole('dialog');
+    // More tabs than the dialog has focusable elements (Close + OK) —
+    // if the trap were broken, this would walk focus out to <body>.
+    for (let i = 0; i < 6; i += 1) {
+      await user.tab();
+      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    }
+  });
 });
