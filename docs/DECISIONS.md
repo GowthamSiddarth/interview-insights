@@ -4970,6 +4970,35 @@ this is the durable decision record it points back to).
   manifest/CI job for a feature that is fundamentally a role column and
   some guards.
 
+**Permission matrix** (`api/src/admin-auth/permissions.ts` is the source
+of truth — this table is a snapshot, not authoritative):
+
+| Permission | Staff | Moderator | Admin |
+|---|:-:|:-:|:-:|
+| `moderation:queue:read` | ✅ | ✅ | ✅ |
+| `moderation:search:read` | ✅ | ✅ | ✅ |
+| `moderation:analytics:read`† | ✅ | ✅ | ✅ |
+| `admin:round_types:read` | ✅ | ✅ | ✅ |
+| `moderation:queue:approve` / `reject` / `flag` | | ✅ | ✅ |
+| `moderation:queue:claim` / `release` | | ✅ | ✅ |
+| `admin:round_types:write` | | ✅ | ✅ |
+| `admin:staff:manage` | | | ✅ |
+
+† Defined and assigned to every role, but as of Phase 42 has no
+`@RequirePermission()`-gated route and no UI — the "moderator/SLA
+analytics dashboards" it names haven't been built. Grep
+`MODERATION_ANALYTICS_READ` before relying on it existing.
+
+Enforcement is `PermissionsGuard` (runs after `AdminJwtAuthGuard`,
+checked via `@RequirePermission()` per-route) plus matching UI-side
+gating in `web/src/app/moderation/{page,round-type-options,staff}.tsx`
+(e.g. staff sees Approve/Reject/Flag/Claim/Release hidden, round-type
+options rendered read-only, and `/moderation/staff` redirects away for
+non-admins). The one root `ADMIN` (`createdById: null`) sits outside this
+table entirely — see issue #607/#608: excluded from `/admin/staff`
+listing and every mutation there, managed only via
+`infra/scripts/rotate-admin-credentials.sh`.
+
 **Alternatives considered:**
 - *Three hardcoded flat role checks (`if (role === 'ADMIN' || ...)`)
   scattered per controller.* Rejected — see the authorization-shape
