@@ -1,5 +1,7 @@
 'use client';
 
+import * as Dialog from '@radix-ui/react-dialog';
+import { X } from 'lucide-react';
 import { Button } from '@/components/Button';
 
 interface ConfirmationModalProps {
@@ -12,35 +14,43 @@ interface ConfirmationModalProps {
 // plain informational acknowledgment, not a yes/no decision, so OK and
 // the corner close both just dismiss it identically; there's no
 // divergent behavior to choose between.
+//
+// Built on Radix's Dialog primitive (GitHub issue #615) rather than
+// hand-rolled markup — focus trap, ESC-to-close, click-outside-to-close,
+// and the dialog/labelledby ARIA wiring all come from Radix instead of
+// being reimplemented (and previously, not implemented at all: the
+// hand-rolled version had none of the first three). `open` is always
+// `true` — the parent already controls mounting via conditional
+// rendering, so there's no separate trigger; `onOpenChange` routes every
+// close path (OK, the X, ESC, overlay click) through the same `onClose`.
 export function ConfirmationModal({ title, message, onClose }: ConfirmationModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirmation-modal-title"
-        className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg dark:bg-gray-900"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <h2 id="confirmation-modal-title" className="text-lg font-semibold">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-200"
-          >
-            ✕
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{message}</p>
-        <div className="mt-4 flex justify-end">
-          <Button type="button" onClick={onClose}>
-            OK
-          </Button>
-        </div>
-      </div>
-    </div>
+    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-lg dark:bg-gray-900">
+          <div className="flex items-start justify-between gap-4">
+            <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                aria-label="Close"
+                className="text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X aria-hidden="true" className="h-4 w-4" />
+              </button>
+            </Dialog.Close>
+          </div>
+          <Dialog.Description className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            {message}
+          </Dialog.Description>
+          <div className="mt-4 flex justify-end">
+            <Dialog.Close asChild>
+              <Button type="button">OK</Button>
+            </Dialog.Close>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
