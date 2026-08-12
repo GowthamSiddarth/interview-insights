@@ -2225,3 +2225,9 @@ Epic: GitHub issue #584.
       varied roles (GitHub issue #592)
 - [x] Engineering blog (last) (GitHub issue #593) — one post per issue
       under `wiki/blog/phase-42-staff-role-hierarchy-admin-moderator-tooling/`
+- [x] Post-launch fix: hide the root admin (`createdById: null`) from
+      `/admin/staff` (never listed or actionable through the API — it's
+      managed by `rotate-admin-credentials.sh` only) and reject
+      deactivating/demoting the last remaining active non-root admin.
+      Found live using #591's UI; filed as a follow-up sub-issue of this
+      same epic rather than a separate phase (GitHub issue #607)

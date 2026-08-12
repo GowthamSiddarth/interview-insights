@@ -1,3 +1,4 @@
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffAuditLogService } from '../admin-auth/staff-audit-log.service';
@@ -12,6 +13,7 @@ describe('StaffAccountsService', () => {
       create: jest.Mock;
       update: jest.Mock;
       findUniqueOrThrow: jest.Mock;
+      count: jest.Mock;
     };
   };
   let staffAuditLog: { record: jest.Mock };
@@ -23,6 +25,7 @@ describe('StaffAccountsService', () => {
         create: jest.fn(),
         update: jest.fn(),
         findUniqueOrThrow: jest.fn(),
+        count: jest.fn(),
       },
     };
     staffAuditLog = { record: jest.fn().mockResolvedValue(undefined) };
@@ -33,14 +36,15 @@ describe('StaffAccountsService', () => {
   });
 
   describe('list', () => {
-    it('never selects passwordHash', async () => {
+    it('never selects passwordHash, and excludes the root admin (createdById: null)', async () => {
       prisma.moderator.findMany.mockResolvedValue([]);
       await service.list();
 
       const [[call]] = prisma.moderator.findMany.mock.calls as [
-        [{ select: Record<string, boolean> }],
+        [{ select: Record<string, boolean>; where: Record<string, unknown> }],
       ];
       expect(call.select.passwordHash).toBeUndefined();
+      expect(call.where).toEqual({ createdById: { not: null } });
     });
   });
 
@@ -81,9 +85,32 @@ describe('StaffAccountsService', () => {
     });
   });
 
+  describe('root admin guard (GitHub issue #607)', () => {
+    it.each([
+      ['updateRole', () => service.updateRole('mod-actor', 'root-id', 'staff')],
+      ['deactivate', () => service.deactivate('mod-actor', 'root-id')],
+      ['reactivate', () => service.reactivate('mod-actor', 'root-id')],
+      ['resetPassword', () => service.resetPassword('mod-actor', 'root-id')],
+    ])('%s rejects a target whose createdById is null (the root admin)', async (_name, call) => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'admin',
+        isActive: true,
+        createdById: null,
+      });
+
+      await expect(call()).rejects.toThrow(ForbiddenException);
+      expect(prisma.moderator.update).not.toHaveBeenCalled();
+      expect(staffAuditLog.record).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateRole', () => {
     it('updates the role and records role_changed with old/new role in detail', async () => {
-      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ role: 'staff' });
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'staff',
+        isActive: true,
+        createdById: 'mod-actor',
+      });
       prisma.moderator.update.mockResolvedValue({
         id: 'mod-1',
         username: 'someone',
@@ -104,10 +131,60 @@ describe('StaffAccountsService', () => {
         detail: { oldRole: 'staff', newRole: 'moderator' },
       });
     });
+
+    it('rejects demoting the last remaining active non-root admin', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'admin',
+        isActive: true,
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.count.mockResolvedValue(0);
+
+      await expect(service.updateRole('mod-actor', 'mod-1', 'moderator')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.moderator.count).toHaveBeenCalledWith({
+        where: { role: 'admin', isActive: true, createdById: { not: null }, id: { not: 'mod-1' } },
+      });
+      expect(prisma.moderator.update).not.toHaveBeenCalled();
+    });
+
+    it('allows demoting an admin when another active non-root admin remains', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'admin',
+        isActive: true,
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.count.mockResolvedValue(1);
+      prisma.moderator.update.mockResolvedValue({ id: 'mod-1', role: 'moderator' });
+
+      await expect(service.updateRole('mod-actor', 'mod-1', 'moderator')).resolves.toMatchObject({
+        role: 'moderator',
+      });
+    });
+
+    it('does not run the last-admin check when the target is not currently an active admin', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'staff',
+        isActive: true,
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.update.mockResolvedValue({ id: 'mod-1', role: 'moderator' });
+
+      await service.updateRole('mod-actor', 'mod-1', 'moderator');
+
+      expect(prisma.moderator.count).not.toHaveBeenCalled();
+    });
   });
 
   describe('deactivate / reactivate', () => {
-    it('deactivate sets isActive: false and records deactivated', async () => {
+    it('deactivate sets isActive: false and records deactivated, when another active non-root admin remains', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'admin',
+        isActive: true,
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.count.mockResolvedValue(1);
       prisma.moderator.update.mockResolvedValue({ id: 'mod-1', isActive: false });
 
       await service.deactivate('mod-actor', 'mod-1');
@@ -122,7 +199,33 @@ describe('StaffAccountsService', () => {
       });
     });
 
+    it('rejects deactivating the last remaining active non-root admin', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'admin',
+        isActive: true,
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.count.mockResolvedValue(0);
+
+      await expect(service.deactivate('mod-actor', 'mod-1')).rejects.toThrow(ConflictException);
+      expect(prisma.moderator.update).not.toHaveBeenCalled();
+    });
+
+    it('deactivating a non-admin never runs the last-admin check', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        role: 'moderator',
+        isActive: true,
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.update.mockResolvedValue({ id: 'mod-1', isActive: false });
+
+      await service.deactivate('mod-actor', 'mod-1');
+
+      expect(prisma.moderator.count).not.toHaveBeenCalled();
+    });
+
     it('reactivate sets isActive: true and records reactivated', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ createdById: 'some-other-admin' });
       prisma.moderator.update.mockResolvedValue({ id: 'mod-1', isActive: true });
 
       await service.reactivate('mod-actor', 'mod-1');
@@ -140,6 +243,7 @@ describe('StaffAccountsService', () => {
 
   describe('resetPassword', () => {
     it('sets a new bcrypt-hashed random password and records password_reset, returning the plaintext once', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ createdById: 'some-other-admin' });
       prisma.moderator.update.mockResolvedValue({});
 
       const result = await service.resetPassword('mod-actor', 'mod-1');

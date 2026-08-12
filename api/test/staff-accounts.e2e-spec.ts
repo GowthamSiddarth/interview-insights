@@ -2,9 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
+import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin, loginAsSecondModerator, loginAsStaff } from './support/admin-session';
+
+// GitHub issue #607 — a raw connection, bypassing the app's own guarded
+// endpoints, same pattern moderation.e2e-spec.ts's own rawPrisma already
+// uses: `moderators` isn't one of truncate-database.ts's wiped tables (see
+// admin-session.ts's own comment), so admin-role rows created by earlier
+// test runs — including this file's own "allows deactivating..." test,
+// which deliberately leaves a second admin active — persist and would
+// otherwise make the last-admin guard tests' "this is the only active
+// non-root admin" precondition false.
+const rawPrisma = new PrismaClient();
 
 interface StaffAccountBody {
   id: string;
@@ -47,8 +58,23 @@ describe('Staff accounts (e2e)', () => {
     await app.close();
   });
 
+  afterAll(async () => {
+    await rawPrisma.$disconnect();
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
   const server = () => request(app.getHttpServer());
+
+  // GitHub issue #607 — bypasses the guarded /deactivate endpoint (which
+  // would itself refuse to deactivate a last-remaining admin) to force a
+  // clean "exactly one active non-root admin" precondition regardless of
+  // what earlier tests/runs left behind.
+  async function deactivateEveryOtherActiveAdmin(exceptId: string): Promise<void> {
+    await rawPrisma.moderator.updateMany({
+      where: { role: 'admin', isActive: true, createdById: { not: null }, id: { not: exceptId } },
+      data: { isActive: false },
+    });
+  }
   const uniqueUsername = () => `staff-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
   it('rejects unauthenticated requests with 401', async () => {
@@ -182,5 +208,96 @@ describe('Staff accounts (e2e)', () => {
       .post('/admin/staff/123e4567-e89b-12d3-a456-426614174000/deactivate')
       .set('Cookie', adminCookie)
       .expect(404);
+  });
+
+  // GitHub issue #607 — the root admin (createdById: null) is never
+  // listed or actionable through this API; it's managed by
+  // infra/scripts/rotate-admin-credentials.sh only.
+  describe('root admin exclusion', () => {
+    it('never appears in the list', async () => {
+      const meRes = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
+      const { id: rootId } = body<{ id: string }>(meRes);
+
+      const listRes = await server().get('/admin/staff').set('Cookie', adminCookie).expect(200);
+      const ids = body<StaffAccountBody[]>(listRes).map((a) => a.id);
+      expect(ids).not.toContain(rootId);
+    });
+
+    it('403s every mutating action targeted at the root admin id', async () => {
+      const meRes = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
+      const { id: rootId } = body<{ id: string }>(meRes);
+
+      await server()
+        .patch(`/admin/staff/${rootId}/role`)
+        .set('Cookie', adminCookie)
+        .send({ role: 'staff' })
+        .expect(403);
+      await server().post(`/admin/staff/${rootId}/deactivate`).set('Cookie', adminCookie).expect(403);
+      await server().post(`/admin/staff/${rootId}/reactivate`).set('Cookie', adminCookie).expect(403);
+      await server().post(`/admin/staff/${rootId}/reset-password`).set('Cookie', adminCookie).expect(403);
+    });
+  });
+
+  // GitHub issue #607 — deactivating or demoting the last remaining
+  // active non-root admin would leave the staff-management UI with no
+  // manageable admin at all (root doesn't count — see the service's own
+  // comment on why counting it would make this guard meaningless).
+  describe('last-admin guard', () => {
+    it('rejects deactivating the last remaining active non-root admin', async () => {
+      const username = uniqueUsername();
+      const createRes = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username, email: `${username}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id } = body<StaffAccountBody>(createRes);
+      await deactivateEveryOtherActiveAdmin(id);
+
+      await server().post(`/admin/staff/${id}/deactivate`).set('Cookie', adminCookie).expect(409);
+    });
+
+    it('rejects demoting the last remaining active non-root admin', async () => {
+      const username = uniqueUsername();
+      const createRes = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username, email: `${username}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id } = body<StaffAccountBody>(createRes);
+      await deactivateEveryOtherActiveAdmin(id);
+
+      await server()
+        .patch(`/admin/staff/${id}/role`)
+        .set('Cookie', adminCookie)
+        .send({ role: 'moderator' })
+        .expect(409);
+    });
+
+    it('allows deactivating an admin once a second active non-root admin exists', async () => {
+      const usernameA = uniqueUsername();
+      const createResA = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username: usernameA, email: `${usernameA}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id: idA } = body<StaffAccountBody>(createResA);
+
+      const usernameB = uniqueUsername();
+      const createResB = await server()
+        .post('/admin/staff')
+        .set('Cookie', adminCookie)
+        .send({ username: usernameB, email: `${usernameB}@example.com`, role: 'admin' })
+        .expect(201);
+      const { id: idB } = body<StaffAccountBody>(createResB);
+
+      await server().post(`/admin/staff/${idA}/deactivate`).set('Cookie', adminCookie).expect(201);
+
+      // Cleanup: idB would otherwise stay active forever (moderators isn't
+      // truncated between test runs) and keep satisfying every future
+      // "last admin" test's precondition-clearing helper above trivially —
+      // deactivateEveryOtherActiveAdmin() already handles that case, but
+      // there's no reason to let unique-per-run rows accumulate unbounded.
+      await rawPrisma.moderator.update({ where: { id: idB }, data: { isActive: false } });
+    });
   });
 });

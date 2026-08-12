@@ -159,9 +159,11 @@ post per phase — this file no longer inlines that running history.
   epic #484 closed). Phase 41 (Moderator Queue Priority, Filters &
   Seed-Data Parity) is fully done too, blog included (issues #522-#525,
   epic #521 closed). Phase 42 (Staff Role Hierarchy & Admin/Moderator
-  Tooling) is fully done too, blog included (issues #585-#593, epic
-  #584 closed) — real `admin`/`moderator`/`staff` accounts via
-  `StaffAccountsModule`, permission-set authorization
+  Tooling) is fully done too, blog included (issues #585-#593, plus a
+  post-launch fix — #607 hides the root admin from `/admin/staff` and
+  rejects deactivating/demoting the last remaining active non-root
+  admin — epic #584 closed) — real `admin`/`moderator`/`staff` accounts
+  via `StaffAccountsModule`, permission-set authorization
   (`RequirePermission`/`PermissionsGuard`), root credential narrowed to
   break-glass recovery only, role-aware frontend. Phase 40 (CI
   Infrastructure: Self-Hosted GitHub Actions Runner) is the current

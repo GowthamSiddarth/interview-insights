@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { StaffRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { StaffAuditLogService } from '../admin-auth/staff-audit-log.service';
@@ -36,9 +36,19 @@ export interface StaffAccountSummary {
 // initiated password reset, every action durably audited via
 // StaffAuditLogService. Deactivate, never delete — same precedent
 // claimedById already set by never being cleared. No existence check
-// before update/create: a missing target or duplicate username is left to
-// Prisma's own P2025/P2002, mapped to 404/409 by PrismaExceptionFilter
-// (same pattern round-type-registry's admin CRUD already uses).
+// before create: a duplicate username is left to Prisma's own P2002,
+// mapped to 409 by PrismaExceptionFilter (same pattern round-type-
+// registry's admin CRUD already uses).
+//
+// GitHub issue #607 — the root admin (createdById: null, D99's "exactly
+// one root ADMIN stays imperatively boot-seeded") is deliberately never
+// listed or actionable through this API. Every mutation against it is a
+// silent no-op in practice anyway: AdminAuthService.onModuleInit() resets
+// its role/isActive/passwordHash from env on every boot regardless of
+// what this API did to it in between, so exposing it here would just let
+// an operator "successfully" change something that reverts on the next
+// restart with no indication why. Root is managed by
+// infra/scripts/rotate-admin-credentials.sh only.
 @Injectable()
 export class StaffAccountsService {
   constructor(
@@ -46,8 +56,18 @@ export class StaffAccountsService {
     private readonly staffAuditLog: StaffAuditLogService,
   ) {}
 
+  private assertNotRoot(target: { createdById: string | null }): void {
+    if (target.createdById === null) {
+      throw new ForbiddenException(
+        'The root admin account is managed via infra/scripts/rotate-admin-credentials.sh, not this API.',
+      );
+    }
+  }
+
+  // Excludes the root admin (createdById: null) — see class comment.
   list(): Promise<StaffAccountSummary[]> {
     return this.prisma.moderator.findMany({
+      where: { createdById: { not: null } },
       select: STAFF_ACCOUNT_SELECT,
       orderBy: { createdAt: 'asc' },
     });
@@ -81,11 +101,37 @@ export class StaffAccountsService {
     return { ...created, password };
   }
 
+  // GitHub issue #607 — the root admin is always excluded from this count
+  // (see class comment: it's never listed or actionable here, so it can
+  // never be the "last one" a demotion/deactivation needs to preserve).
+  // Counting it would make the guard below meaningless — root's own
+  // boot-time self-heal means it's *always* isActive/role:'admin', so an
+  // operator could deactivate every account actually visible in the UI
+  // and this check would never fire.
+  private countOtherActiveNonRootAdmins(excludeId: string): Promise<number> {
+    return this.prisma.moderator.count({
+      where: { role: 'admin', isActive: true, createdById: { not: null }, id: { not: excludeId } },
+    });
+  }
+
   async updateRole(actorId: string, targetId: string, role: StaffRole): Promise<StaffAccountSummary> {
     const before = await this.prisma.moderator.findUniqueOrThrow({
       where: { id: targetId },
-      select: { role: true },
+      select: { role: true, isActive: true, createdById: true },
     });
+    this.assertNotRoot(before);
+
+    // Demoting the last remaining non-root admin away from 'admin' has the
+    // same effect as deactivating them — no manageable admin left — so it
+    // gets the same guard, not just deactivate() below.
+    if (before.role === 'admin' && before.isActive && role !== 'admin') {
+      const remaining = await this.countOtherActiveNonRootAdmins(targetId);
+      if (remaining === 0) {
+        throw new ConflictException(
+          'Cannot change the role of the last remaining active admin account.',
+        );
+      }
+    }
 
     const updated = await this.prisma.moderator.update({
       where: { id: targetId },
@@ -104,6 +150,19 @@ export class StaffAccountsService {
   }
 
   async deactivate(actorId: string, targetId: string): Promise<StaffAccountSummary> {
+    const target = await this.prisma.moderator.findUniqueOrThrow({
+      where: { id: targetId },
+      select: { role: true, isActive: true, createdById: true },
+    });
+    this.assertNotRoot(target);
+
+    if (target.role === 'admin' && target.isActive) {
+      const remaining = await this.countOtherActiveNonRootAdmins(targetId);
+      if (remaining === 0) {
+        throw new ConflictException('Cannot deactivate the last remaining active admin account.');
+      }
+    }
+
     const updated = await this.prisma.moderator.update({
       where: { id: targetId },
       data: { isActive: false },
@@ -115,6 +174,12 @@ export class StaffAccountsService {
   }
 
   async reactivate(actorId: string, targetId: string): Promise<StaffAccountSummary> {
+    const target = await this.prisma.moderator.findUniqueOrThrow({
+      where: { id: targetId },
+      select: { createdById: true },
+    });
+    this.assertNotRoot(target);
+
     const updated = await this.prisma.moderator.update({
       where: { id: targetId },
       data: { isActive: true },
@@ -126,6 +191,12 @@ export class StaffAccountsService {
   }
 
   async resetPassword(actorId: string, targetId: string): Promise<{ password: string }> {
+    const target = await this.prisma.moderator.findUniqueOrThrow({
+      where: { id: targetId },
+      select: { createdById: true },
+    });
+    this.assertNotRoot(target);
+
     const password = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
