@@ -2261,36 +2261,52 @@ status vocabulary). The wizard (Phase 26) and moderation queue (Phases
 carries the new token system through, not a restructure. Milestone:
 "Phase 43 — Design System Refresh & Theming". Epic: GitHub issue #611.
 
-- [ ] Design tokens & Tailwind foundation — color/space/radius/
+- [x] Design tokens & Tailwind foundation — color/space/radius/
       elevation as CSS custom properties, `darkMode: 'class'` in
       `tailwind.config.ts`, slate-leaning neutral scale replacing bare
-      `gray-*` (GitHub issue #612)
-- [ ] Light / dark / system theme toggle — `ThemeProvider`, FOUC-safe
-      inline blocking script in `layout.tsx`'s head, `localStorage`
+      `gray-*` (GitHub issue #612, D100)
+- [x] Light / dark / system theme toggle — `getStoredThemePreference`/
+      `applyThemePreference` in `src/lib/theme.ts`, FOUC-safe inline
+      blocking script in `layout.tsx`'s head, `localStorage`
       persistence, three-way switch in `NavBar` (GitHub issue #613)
-- [ ] Icon system: adopt `lucide-react` (GitHub issue #614)
-- [ ] Accessible primitives: adopt Radix UI for Dialog/Tooltip/Tabs/
-      DropdownMenu; migrate `ConfirmationModal` and `HelpTooltip` onto
-      them (GitHub issue #615)
-- [ ] `NavBar` redesign — responsive/mobile menu (the current nav has
+- [x] Icon system: adopt `lucide-react` (GitHub issue #614) — zero
+      new transitive dependencies, confirmed via the lockfile diff
+- [x] Accessible primitives: adopt Radix UI for Dialog/Tooltip;
+      migrate `ConfirmationModal` and `HelpTooltip` onto them (GitHub
+      issue #615) — Tabs/DropdownMenu not needed, no call site for
+      either surfaced once the redesign issues actually landed
+- [x] `NavBar` redesign — responsive/mobile menu (the current nav had
       no small-viewport handling at all), theme toggle, refined brand
       mark (GitHub issue #616)
-- [ ] Landing page redesign — hero search, trending-company card grid
-      with score chips, stats strip; keeps Phase 33's search-first
-      information architecture (GitHub issue #617)
-- [ ] Company profile redesign — tabbed layout (Overview / Round
-      ratings / Recruiter experience / All reviews), hero score ring,
-      redesigned review cards (GitHub issue #618)
-- [ ] Analytics dashboard redesign — stat-tile row + single-hue
-      magnitude bar chart, replacing the current `dl` grid of
-      `ScoreDisplay` pairs (GitHub issue #619)
-- [ ] Status vocabulary rollout — moderation queue & `/admin/staff`;
-      Phases 36/41/42's layout and interaction model stay as-is
+- [x] Landing page redesign — hero search, trending-company card grid
+      (`CompanyCard`); keeps Phase 33's search-first information
+      architecture (GitHub issue #617) — score chips/stats strip
+      dropped from scope: `Company`/`CompanySearchResult` don't carry
+      aggregate scores or platform-wide counts today, and a bulk-scores
+      endpoint is backend work outside this frontend-only phase
+- [x] Company profile redesign — hero header (avatar, score ring),
+      redesigned review cards with a round-type `Chip` (GitHub issue
+      #618) — no tabbed layout: this page's real content is just
+      "Overall experience" + "Reviews" (Round ratings/Recruiter
+      experience live only on `/analytics`), so tabs for content the
+      page doesn't fetch would have been fabricated structure
+- [x] Analytics dashboard redesign — stat-tile row (`StatTile`) +
+      single-hue magnitude bar chart (`DifficultyBar`, using the
+      `--chart-seq-1..5` tokens #612 defined), replacing the `dl` grid
+      of `ScoreDisplay` pairs (GitHub issue #619)
+- [x] Status vocabulary rollout — `StatusPill`, applied to `/me`'s
+      round/recruiter/overall-review statuses, the moderation queue's
+      "Auto-flagged" notice, and `/admin/staff`'s Active/Deactivated
+      state; found and fixed a real bug in the process — `pending` and
+      `flagged` previously rendered as the *identical* amber text
       (GitHub issue #620)
-- [ ] Wizard visual pass — stepper/progress indicator across the
-      flashcard steps, round-entry cards redrawn on the new tokens
-      (GitHub issue #621)
-- [ ] Accessibility & responsive audit across the phase (GitHub issue
-      #622)
-- [ ] Engineering blog (last) (GitHub issue #623) — one post per issue
+- [x] Wizard visual pass — completion progress bar + rated/unrated
+      icons in `StepNavigator`; Phase 26's free-jump navigation model
+      unchanged (GitHub issue #621)
+- [x] Accessibility & responsive audit across the phase (GitHub issue
+      #622) — found and fixed two real bugs: a round-type label
+      truncating on mobile, and `StatusPill`'s dark-mode "Rejected"
+      text failing AA-normal contrast (3.62:1) against its real
+      rendered background
+- [x] Engineering blog (last) (GitHub issue #623) — one post per issue
       under `wiki/blog/phase-43-design-system-refresh-theming/`
