@@ -560,3 +560,29 @@ issues are done — this phase's blog is complete.
 6. [Issue #590 — Retiring the shared admin credential for the general case](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-590-retire-shared-admin-credential/README.md)
 7. [Issue #591 — Frontend: role-aware admin panel + staff account management UI](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-591-frontend-role-aware-admin-panel/README.md)
 8. [Issue #592 — seed-demo-data: vary staff/moderator/admin roles across seeded moderators](phase-42-staff-role-hierarchy-admin-moderator-tooling/issue-592-seed-demo-data-varied-roles/README.md)
+
+## Phase 43 — Design System Refresh & Theming
+
+See `docs/ROADMAP.md` Phase 43 and `docs/DECISIONS.md` D100. Raised
+from a Frontend SME brainstorm pass (a design-brief artifact covering
+tokens, a component gallery, and page mockups) after noticing the app
+ran on stock Tailwind `gray-*`/`indigo-600` with no token layer and no
+real theme switch — `dark:` classes just mirrored the OS preference.
+Direction: a "structured evaluation" visual identity built around this
+product's own shape (per-round difficulty, named interviewer traits,
+shrinkage-adjusted aggregates that can legitimately be "not enough
+data yet"), not a generic SaaS reskin or a comp-transparency tool's
+layout borrowed wholesale. All eleven issues are done — this phase's
+blog is complete.
+
+1. [Issue #612 — Design tokens & Tailwind foundation: remapping the palette instead of rewriting components](phase-43-design-system-refresh-theming/issue-612-design-tokens-tailwind-foundation/README.md)
+2. [Issue #613 — Light/dark/system theme toggle](phase-43-design-system-refresh-theming/issue-613-theme-toggle/README.md)
+3. [Issue #614 — Icon system: adopting lucide-react](phase-43-design-system-refresh-theming/issue-614-lucide-icons/README.md)
+4. [Issue #615 — Accessible primitives via Radix UI: ConfirmationModal and HelpTooltip](phase-43-design-system-refresh-theming/issue-615-radix-primitives/README.md)
+5. [Issue #616 — NavBar redesign: responsive mobile menu](phase-43-design-system-refresh-theming/issue-616-navbar-redesign/README.md)
+6. [Issue #617 — Landing page redesign: hero + card grid](phase-43-design-system-refresh-theming/issue-617-landing-page-redesign/README.md)
+7. [Issue #618 — Company profile redesign: hero header, score rings, review cards](phase-43-design-system-refresh-theming/issue-618-company-profile-redesign/README.md)
+8. [Issue #619 — Analytics dashboard redesign: stat tiles + magnitude bar chart](phase-43-design-system-refresh-theming/issue-619-analytics-dashboard-redesign/README.md)
+9. [Issue #620 — Status vocabulary rollout: a real StatusPill component](phase-43-design-system-refresh-theming/issue-620-status-vocabulary-rollout/README.md)
+10. [Issue #621 — Wizard visual pass: completion progress + rated/unrated icons](phase-43-design-system-refresh-theming/issue-621-wizard-visual-pass/README.md)
+11. [Issue #622 — Accessibility & responsive audit: two real bugs found and fixed](phase-43-design-system-refresh-theming/issue-622-accessibility-responsive-audit/README.md)
