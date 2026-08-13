@@ -25,3 +25,8 @@ These apply to this Next.js frontend specifically — see the root
   directly — it throws under Jest/jsdom and requires a secure context in
   real browsers, which none of this project's deployed environments have
   yet (plain HTTP, no TLS).
+- Read `docs/DESIGN_SYSTEM.md` before adding a new color, component, or
+  icon — it has the real token values (not the Phase 43 planning
+  artifact's, which diverged from what shipped) and a reference for
+  which shared component to reach for (e.g. `ScoreRing` vs. `StatTile`
+  vs. `ScoreDisplay`).
