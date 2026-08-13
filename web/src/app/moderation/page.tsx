@@ -20,6 +20,7 @@ import {
 } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
 import { formatRoundLabel } from '@/lib/format-round-label';
@@ -66,11 +67,7 @@ const CATEGORY_LABEL: Record<ModerationQueueCategory, string> = {
 };
 
 function CategoryBadge({ category }: { category: ModerationQueueCategory }) {
-  return (
-    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-      {CATEGORY_LABEL[category]}
-    </span>
-  );
+  return <Chip>{CATEGORY_LABEL[category]}</Chip>;
 }
 
 // GitHub issue #487 (Phase 36, D80) — surfaces who (if anyone) currently
