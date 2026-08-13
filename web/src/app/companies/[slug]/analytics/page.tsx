@@ -33,7 +33,12 @@ function seqStepFor(value: number, max: number): number {
 // hidden zero-width bar, same rule ScoreRing/StatTile apply elsewhere.
 function DifficultyBar({ roundType, value, max = 5 }: { roundType: string; value: number | null; max?: number }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_2fr_3rem] items-center gap-3">
+    <div className="grid grid-cols-[7.5rem_1fr_3rem] items-center gap-3">
+      {/* GitHub issue #622 — a fixed-width label column, not
+          minmax(0,1fr): the flexible version let the bar/value columns
+          crowd it out on narrow viewports, truncating real round-type
+          names ("System Design" → "System ..."). 7.5rem comfortably
+          fits every current round-type label at every viewport width. */}
       <span className="truncate text-sm text-gray-600 dark:text-gray-400">{roundTypeLabel(roundType)}</span>
       <div className="h-2.5 rounded-full bg-gray-100 dark:bg-gray-800">
         {value !== null && (

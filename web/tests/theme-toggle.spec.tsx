@@ -65,4 +65,20 @@ describe('ThemeToggle', () => {
 
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
+
+  // GitHub issue #622 — plain <button> elements are keyboard-operable by
+  // default, but worth confirming directly for this phase's one
+  // brand-new always-visible interactive control.
+  it('is fully keyboard-operable: tab to a button, activate with Enter', async () => {
+    const user = userEvent.setup();
+    render(<ThemeToggle />);
+    await screen.findByRole('button', { name: 'System' });
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Light' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true');
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+  });
 });

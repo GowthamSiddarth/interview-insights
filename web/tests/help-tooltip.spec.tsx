@@ -25,4 +25,19 @@ describe('HelpTooltip (GitHub issue #305)', () => {
     expect(screen.getByRole('button', { name: 'clarity help' })).toHaveFocus();
     expect(await screen.findByText('How clear the prompt was.')).toBeInTheDocument();
   });
+
+  // GitHub issue #622 — Radix Tooltip's ESC-to-close was part of #615's
+  // stated justification for the migration but never had its own test.
+  it('closes on Escape without losing focus from the trigger', async () => {
+    const user = userEvent.setup();
+    render(<HelpTooltip label="clarity help" text="How clear the prompt was." />);
+
+    await user.tab();
+    await screen.findByText('How clear the prompt was.');
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByText('How clear the prompt was.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'clarity help' })).toHaveFocus();
+  });
 });
