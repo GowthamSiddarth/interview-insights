@@ -18,16 +18,16 @@ resource "hcloud_firewall" "ssh_only" {
 }
 
 resource "hcloud_server" "this" {
-  name        = var.server_name
-  server_type = var.server_type
-  location    = var.location
-  image       = var.image
-  ssh_keys    = [hcloud_ssh_key.deploy.id]
+  name         = var.server_name
+  server_type  = var.server_type
+  location     = var.location
+  image        = var.image
+  ssh_keys     = [hcloud_ssh_key.deploy.id]
   firewall_ids = [hcloud_firewall.ssh_only.id]
 
   user_data = templatefile("${path.module}/cloud-init.yaml.tpl", {
-    admin_username  = var.admin_username
-    ssh_public_key  = trimspace(file(pathexpand(var.ssh_public_key_path)))
+    admin_username = var.admin_username
+    ssh_public_key = trimspace(file(pathexpand(var.ssh_public_key_path)))
   })
 
   labels = {
