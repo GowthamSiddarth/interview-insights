@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
+import { StatusPill } from '@/components/StatusPill';
 
 const STAFF_ROLES: StaffRole[] = ['staff', 'moderator', 'admin'];
 
@@ -123,7 +124,12 @@ function StaffAccountRow({ account, onChanged, setError, onSessionExpired, onOne
       <Button type="button" variant="warning" onClick={() => void handleResetPassword()}>
         Reset password
       </Button>
-      {!account.isActive && <span className="text-xs text-gray-500">deactivated</span>}
+      {/* GitHub issue #620 — both states get the same pill treatment now,
+          not just the negative one (the old version only ever rendered
+          a plain "deactivated" label, nothing for the active case). */}
+      <StatusPill tone={account.isActive ? 'good' : 'critical'}>
+        {account.isActive ? 'Active' : 'Deactivated'}
+      </StatusPill>
     </div>
   );
 }
