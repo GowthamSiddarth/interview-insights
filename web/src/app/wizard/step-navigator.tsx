@@ -1,16 +1,29 @@
 'use client';
 
+import { CheckCircle2, Circle } from 'lucide-react';
 import { ProcessDraft } from '@/lib/draft-store';
 import { Button } from '@/components/Button';
 import { formatRoundLabel } from '@/lib/format-round-label';
 import { ROUND_TYPE_LABELS } from './round-type-labels';
 
 function stepButtonClass(active: boolean): string {
-  return `w-full rounded-md px-2 py-1 text-left transition-colors ${
+  return `flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors ${
     active
       ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
       : 'hover:bg-gray-50 dark:hover:bg-gray-800'
   }`;
+}
+
+// A step's own rated/unrated icon (GitHub issue #621) — 'process' and
+// 'review' are structural, not something with a "rating" to complete,
+// so they render no icon at all rather than a misleading always-empty
+// or always-filled one.
+function RatedIcon({ rated }: { rated: boolean }) {
+  return rated ? (
+    <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+  ) : (
+    <Circle aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" />
+  );
 }
 
 interface StepNavigatorProps {
@@ -30,8 +43,35 @@ export function StepNavigator({
   onSelect,
   onAddRecruiter,
 }: StepNavigatorProps) {
+  // GitHub issue #621 — a completion count, not a step *position*
+  // (Phase 26's free-jump sidebar already shows position via the
+  // highlighted item): how many of the ratings this review actually
+  // needs are done. 'process'/'review' aren't ratings, so they're not
+  // counted either way.
+  const ratedCount =
+    draft.rounds.filter((s) => s.round.rating).length +
+    draft.recruiterInteractions.filter((s) => s.interaction.rating).length +
+    (draft.overallReview ? 1 : 0);
+  const totalCount = draft.rounds.length + draft.recruiterInteractions.length + 1;
+  const progressPct = totalCount === 0 ? 0 : (ratedCount / totalCount) * 100;
+
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>Progress</span>
+          <span className="font-mono tabular-nums">
+            {ratedCount} of {totalCount} rated
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800">
+          <div
+            className="h-full rounded-full bg-indigo-600 transition-[width] dark:bg-indigo-400"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
       <ul className="flex flex-col gap-1 text-sm">
         <li>
           <button
@@ -49,6 +89,7 @@ export function StepNavigator({
               onClick={() => onSelect(step.clientId)}
               className={stepButtonClass(activeStepId === step.clientId)}
             >
+              <RatedIcon rated={Boolean(step.round.rating)} />
               Round {index + 1}:{' '}
               {formatRoundLabel(ROUND_TYPE_LABELS[step.round.roundType], step.round.title)}
             </button>
@@ -61,6 +102,7 @@ export function StepNavigator({
               onClick={() => onSelect(step.clientId)}
               className={stepButtonClass(activeStepId === step.clientId)}
             >
+              <RatedIcon rated={Boolean(step.interaction.rating)} />
               Recruiter ({step.timing === 'start' ? 'pre-interview' : 'post-interview'}):{' '}
               {step.interaction.recruiterIdentifier || <em>untitled</em>}
             </button>
@@ -72,6 +114,7 @@ export function StepNavigator({
             onClick={() => onSelect('overall')}
             className={stepButtonClass(activeStepId === 'overall')}
           >
+            <RatedIcon rated={Boolean(draft.overallReview)} />
             Overall review
           </button>
         </li>
