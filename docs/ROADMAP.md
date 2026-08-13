@@ -2310,3 +2310,57 @@ carries the new token system through, not a restructure. Milestone:
       rendered background
 - [x] Engineering blog (last) (GitHub issue #623) — one post per issue
       under `wiki/blog/phase-43-design-system-refresh-theming/`
+
+## Phase 44 — Hetzner Cloud: Account Setup & Hardened VM Provisioning
+
+Filed retroactively 2026-08-13, to give already-completed work a real
+record rather than leave it undocumented. #501 (Phase 40, Oracle Cloud
+Always Free A1.Flex) has been stuck on "out of host capacity" since
+2026-08-04; a Hetzner Cloud account, Terraform
+(`infra/terraform/hetzner/`), and one hardened pilot VM were stood up
+as a parallel, low-cost path in the meantime — not a replacement for
+#501 (its retry loop keeps running), and not a change to D11 (AWS
+remains the real Phase 8 production target). See D101 for the full
+reasoning: the AWS/OCI cost comparison that motivated looking beyond
+Oracle, why Hetzner specifically, and the explicit boundary against
+D11. This phase covers infrastructure provisioning only — what actually
+runs on the VM is Phase 45's scope. Milestone: "Phase 44 — Hetzner
+Cloud: Account Setup & Hardened VM Provisioning". Epic: GitHub issue
+#641.
+
+- [x] Decision record (D101): Hetzner Cloud as a parallel low-cost
+      provisioning path — relationship to D11 and #501 (GitHub issue
+      #651)
+- [x] Provision Hetzner Cloud VM via Terraform (GitHub issue #639) —
+      SSH key-only auth, no root login, dedicated non-root `deploy`
+      user, unattended-upgrades, fail2ban, inbound restricted to SSH
+      only via a Cloud Firewall; `HCLOUD_TOKEN` read from the
+      environment, never committed
+- [x] Run `terraform apply`; verify SSH hardening (GitHub issue #643)
+      — corrected `cx32`/`ash` (invalid server type; Ashburn's
+      Regular Performance tier at ~$41.99/mo) to `cx33`/`nbg1`
+      (~$9.99/mo) before apply; confirmed key-only login, root login
+      refused, password auth refused
+- [ ] Engineering blog (last) (GitHub issue #644)
+
+## Phase 45 — App-Hosting Pilot on Hetzner
+
+Filed 2026-08-13, same planning pass as Phase 44. Builds on Phase 44's
+hardened VM: install k3s and deploy this repo's existing
+`infra/k8s/base` manifests as a lean-launch pilot — a real, reachable
+instance of the full stack (api/web/notification-service/
+review-analyzer/Postgres/OpenSearch/Redpanda) at a fraction of managed-
+cloud cost. Separate from D11's AWS production target, which this
+doesn't change or supersede. Milestone: "Phase 45 — App-Hosting Pilot
+on Hetzner". Epic: GitHub issue #642.
+
+- [ ] Install k3s on the Hetzner pilot VM (GitHub issue #645)
+- [ ] `overlays/hetzner-pilot` kustomize overlay for `infra/k8s/base`
+      (GitHub issue #646)
+- [ ] Secrets for the pilot environment — no LocalStack, real values,
+      never committed (GitHub issue #647)
+- [ ] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
+      end (GitHub issue #648)
+- [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
+      issue #649)
+- [ ] Engineering blog (last) (GitHub issue #650)

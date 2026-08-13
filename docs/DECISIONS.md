@@ -5087,6 +5087,46 @@ never an arbitrary hex value.
 
 ---
 
+### D101 — Hetzner Cloud as a parallel low-cost provisioning path (GitHub issue #651, Phase 44)
+
+**Context:** #501 (Phase 40, Oracle Cloud Always Free A1.Flex) has been
+blocked on "out of host capacity" since 2026-08-04. An AWS-vs-OCI cost
+comparison for this project's Phase 8 target architecture (K8s +
+Postgres + OpenSearch + a Kafka-compatible bus) found OCI running
+roughly 2.5x cheaper than AWS at lean-launch scale — mostly structural
+fees (EKS's flat control-plane charge, AWS's NAT Gateway, AWS's 100GB
+egress free tier vs OCI's 10TB) rather than raw compute pricing. But
+OCI's Always Free A1.Flex allocation turned out to be capacity-
+constrained in practice, not just cheap on paper.
+
+**Decision:** Use Hetzner Cloud as a third, parallel option — genuinely
+cheaper than both AWS and OCI at this scale, and provisions instantly
+with no capacity queue. CX33 (4 vCPU / 8 GB / 80 GB) runs ~$9.99/mo,
+but only in EU/Singapore locations — an initial attempt scoped to
+Ashburn, VA (US East) only exposed Hetzner's pricier Regular
+Performance tier (~$41.99/mo for the same spec, since the cheap
+Cost-Optimized tier is EU/Singapore-only), corrected to Nuremberg
+(`nbg1`) once caught against the live console. AWS Lightsail was also
+considered — staying inside AWS's ecosystem avoids a third vendor
+relationship entirely — but priced out at ~4.4x Hetzner for a
+comparable spec (2 vCPU/8GB/160GB at $44/mo vs Hetzner's 4 vCPU/8GB/80GB
+at $9.99/mo), and its dedicated free trial was discontinued for AWS
+accounts created after 2025-07-15.
+
+**Explicit boundary against D11:** this does not change or supersede
+D11. AWS remains the target for Phase 8's real production build-out.
+Hetzner is a parallel, low-cost pilot track only — Phase 44
+(provisioning) and Phase 45 (app-hosting pilot) — evaluated and adopted
+specifically because Phase 8 hasn't triggered yet and this project's
+own D9 instinct is to not sit idle waiting on infrastructure (Oracle's
+queue) when a cheap, honest alternative exists for pilot-scale work.
+
+**Revisit when:** Phase 8's own AWS build-out actually starts under
+D11, or if this pilot's traffic/reliability needs outgrow what a single
+Hetzner box can reasonably serve.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
