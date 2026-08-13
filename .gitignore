@@ -7,3 +7,13 @@ coverage/
 .env
 .env.local
 .idea/
+
+# Terraform — state and var files can carry resource IDs/secrets, never committed
+# (.terraform.lock.hcl is NOT ignored — it pins provider versions, same reasoning as a package-lock.json)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
