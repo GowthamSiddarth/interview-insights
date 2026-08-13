@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError, CompanyAnalytics } from '@/lib/api';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { StatTile } from '@/components/StatTile';
 import { GatedSection } from '@/components/GatedSection';
 import { Card } from '@/components/Card';
 import { PageContainer } from '@/components/PageContainer';
@@ -14,6 +14,43 @@ function roundTypeLabel(roundType: string): string {
     .split('_')
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+// GitHub issue #619 — one hue, lightness carries magnitude (docs/
+// DECISIONS.md D100's --chart-seq-1..5 tokens, defined in #612 for
+// exactly this, unused until now). Round type is a category label
+// here, not a competing series, so it doesn't need its own hue —
+// distinguishing five *difficulty levels* of the same metric is a
+// magnitude job, not an identity job (dataviz skill's form heuristic).
+function seqStepFor(value: number, max: number): number {
+  const fraction = Math.max(0, Math.min(1, value / max));
+  return Math.min(5, Math.max(1, Math.ceil(fraction * 5)));
+}
+
+// value is nullable — a round type having enough *samples* overall
+// doesn't guarantee every individual metric clears the shrinkage floor
+// on its own (CLAUDE.md hard constraint #3); an empty track, not a
+// hidden zero-width bar, same rule ScoreRing/StatTile apply elsewhere.
+function DifficultyBar({ roundType, value, max = 5 }: { roundType: string; value: number | null; max?: number }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_2fr_3rem] items-center gap-3">
+      <span className="truncate text-sm text-gray-600 dark:text-gray-400">{roundTypeLabel(roundType)}</span>
+      <div className="h-2.5 rounded-full bg-gray-100 dark:bg-gray-800">
+        {value !== null && (
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: `${Math.max(0, Math.min(1, value / max)) * 100}%`,
+              backgroundColor: `var(--chart-seq-${seqStepFor(value, max)})`,
+            }}
+          />
+        )}
+      </div>
+      <span className="text-right font-mono text-sm tabular-nums text-gray-600 dark:text-gray-400">
+        {value !== null ? value.toFixed(1) : '—'}
+      </span>
+    </div>
+  );
 }
 
 export default function CompanyAnalyticsPage() {
@@ -93,81 +130,80 @@ export default function CompanyAnalyticsPage() {
         <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">Overall experience</h2>
           {analytics.overall ? (
-            <dl className="grid grid-cols-2 gap-4">
-              <ScoreDisplay
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile
                 label="Overall experience"
                 value={analytics.overall.scores.overallExperience}
                 sampleSize={analytics.overall.sampleSize}
               />
-              <ScoreDisplay
+              <StatTile
                 label="Would recommend"
                 value={analytics.overall.scores.wouldRecommendPct}
                 sampleSize={analytics.overall.sampleSize}
                 suffix="%"
               />
-            </dl>
+            </div>
           ) : (
             <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
           )}
         </Card>
 
-        <Card as="section" className="flex flex-col gap-3">
+        <Card as="section" className="flex flex-col gap-4">
           <h2 className="font-medium">By round type</h2>
           {analytics.roundTypes.length === 0 ? (
             <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
           ) : (
-            <div className="flex flex-col gap-4">
-              {analytics.roundTypes.map((rt) => (
-                <div key={rt.roundType}>
-                  <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
-                  <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <ScoreDisplay
-                      label="Difficulty"
-                      value={rt.scores.difficulty}
-                      sampleSize={rt.sampleSize}
-                    />
-                    <ScoreDisplay
-                      label="Fluency"
-                      value={rt.scores.fluency}
-                      sampleSize={rt.sampleSize}
-                    />
-                    <ScoreDisplay
-                      label="Clarity"
-                      value={rt.scores.clarity}
-                      sampleSize={rt.sampleSize}
-                    />
-                    <ScoreDisplay
-                      label="Focus"
-                      value={rt.scores.focus}
-                      sampleSize={rt.sampleSize}
-                    />
-                  </dl>
-                </div>
-              ))}
-            </div>
+            <>
+              {/* Difficulty first, as a magnitude comparison across every
+                  round type at once — the one metric worth comparing
+                  side-by-side. Fluency/clarity/focus (interviewer traits,
+                  not round properties) follow per round type below, where
+                  "per round type" is the meaningful grouping for them. */}
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Difficulty
+                </p>
+                {analytics.roundTypes.map((rt) => (
+                  <DifficultyBar key={rt.roundType} roundType={rt.roundType} value={rt.scores.difficulty} />
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                {analytics.roundTypes.map((rt) => (
+                  <div key={rt.roundType}>
+                    <h3 className="mb-2 text-sm font-medium">{roundTypeLabel(rt.roundType)}</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      <StatTile label="Fluency" value={rt.scores.fluency} sampleSize={rt.sampleSize} />
+                      <StatTile label="Clarity" value={rt.scores.clarity} sampleSize={rt.sampleSize} />
+                      <StatTile label="Focus" value={rt.scores.focus} sampleSize={rt.sampleSize} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </Card>
 
         <Card as="section" className="flex flex-col gap-3">
           <h2 className="font-medium">Recruiter experience</h2>
           {analytics.recruiter ? (
-            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <ScoreDisplay
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <StatTile
                 label="Reachability"
                 value={analytics.recruiter.scores.reachability}
                 sampleSize={analytics.recruiter.sampleSize}
               />
-              <ScoreDisplay
+              <StatTile
                 label="Responsiveness"
                 value={analytics.recruiter.scores.responsiveness}
                 sampleSize={analytics.recruiter.sampleSize}
               />
-              <ScoreDisplay
+              <StatTile
                 label="Guidelines shared"
                 value={analytics.recruiter.scores.guidelinesShared}
                 sampleSize={analytics.recruiter.sampleSize}
               />
-            </dl>
+            </div>
           ) : (
             <p className="text-sm text-gray-500 italic">Not enough reviews yet</p>
           )}
