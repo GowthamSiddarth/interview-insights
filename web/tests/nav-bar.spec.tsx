@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { NavBar } from '../src/components/NavBar';
 
@@ -75,5 +76,60 @@ describe('NavBar', () => {
     setLoggedInCookie(true);
     render(<NavBar />);
     expect(await screen.findByRole('link', { name: 'My drafts' })).toHaveAttribute('href', '/drafts');
+  });
+
+  // GitHub issue #616 — below `sm`, the desktop row collapses into a
+  // panel toggled by a hamburger button; the desktop row's own copy of
+  // every link stays in the DOM throughout (CSS-hidden via `hidden
+  // sm:flex`, not unmounted), so these assert against the *panel*
+  // specifically via its container id, not just "a link named X exists
+  // somewhere" (which the desktop row alone would already satisfy).
+  describe('mobile menu', () => {
+    it('is closed by default', async () => {
+      setLoggedInCookie(false);
+      render(<NavBar />);
+      await screen.findByRole('link', { name: 'Log in' });
+      expect(document.getElementById('mobile-nav-panel')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open menu' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('opens on hamburger click and closes again on a second click', async () => {
+      const user = userEvent.setup();
+      setLoggedInCookie(false);
+      render(<NavBar />);
+      await screen.findByRole('link', { name: 'Log in' });
+
+      await user.click(screen.getByRole('button', { name: 'Open menu' }));
+      expect(document.getElementById('mobile-nav-panel')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Close menu' })).toHaveAttribute('aria-expanded', 'true');
+
+      await user.click(screen.getByRole('button', { name: 'Close menu' }));
+      expect(document.getElementById('mobile-nav-panel')).not.toBeInTheDocument();
+    });
+
+    it('closes itself when a link inside it is clicked, not left open across navigation', async () => {
+      const user = userEvent.setup();
+      setLoggedInCookie(true);
+      render(<NavBar />);
+      await screen.findByRole('link', { name: 'My reviews' });
+
+      await user.click(screen.getByRole('button', { name: 'Open menu' }));
+      const panel = document.getElementById('mobile-nav-panel') as HTMLElement;
+      const panelMyReviewsLink = within(panel).getByRole('link', { name: 'My reviews' });
+
+      await user.click(panelMyReviewsLink);
+      expect(document.getElementById('mobile-nav-panel')).not.toBeInTheDocument();
+    });
+
+    it('includes the theme toggle', async () => {
+      const user = userEvent.setup();
+      setLoggedInCookie(false);
+      render(<NavBar />);
+      await screen.findByRole('link', { name: 'Log in' });
+
+      await user.click(screen.getByRole('button', { name: 'Open menu' }));
+      const panel = document.getElementById('mobile-nav-panel') as HTMLElement;
+      expect(within(panel).getByRole('group', { name: 'Theme' })).toBeInTheDocument();
+    });
   });
 });
