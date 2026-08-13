@@ -5,9 +5,17 @@ to issue #501 (Oracle Cloud A1.Flex), which is blocked on Oracle's
 "out of host capacity" queue. This doesn't replace that effort — it
 unblocks work now without waiting on it.
 
-Default spec: CX32 (4 vCPU / 8 GB / 80 GB), Ashburn, VA (`ash`), Ubuntu
-24.04. Override any of it via `-var` or a local (gitignored) `.tfvars`
-file — see `variables.tf`.
+Default spec: CX33 (4 vCPU / 8 GB / 80 GB), Nuremberg (`nbg1`), Ubuntu
+24.04 — **~$9.99/mo**. Override any of it via `-var` or a local
+(gitignored) `.tfvars` file — see `variables.tf`.
+
+**Why Nuremberg, not a US location:** Hetzner's cheap Shared Resources /
+Cost-Optimized tier (the CX line) is only sold in EU/Singapore locations.
+Ashburn/Hillsboro (US) only expose the pricier Regular Performance /
+General Purpose tiers — the same 4 vCPU / 8 GB spec runs **~$41.99/mo**
+in Ashburn, roughly 4x. Worth revisiting deliberately if this box ever
+needs to be latency-local to US end users; not worth it for its current
+job (CI runner / provisioning pilot).
 
 ## Credentials
 
