@@ -246,6 +246,63 @@ readiness + 0 restarts + no `ResourceNotFoundException` in logs is the
 actual externally-observable proof, since the bootstrap function has no
 fallback to silently succeed with.
 
+## Hetzner pilot (Phase 45): a third environment, every secret is Pattern B
+
+Scope: `overlays/hetzner-pilot` only. Does not change the Pattern-A
+default for `dev`/`staging`/`prod` above — see D102 for the full
+reasoning (LocalStack is dev-only by design, D20/D22/D23; real AWS
+Secrets Manager would blur D101's boundary against D11 for one pilot
+VM; a hosted secrets service adds a vendor relationship this
+single-box pilot doesn't need).
+
+| Secret (k8s Secret name) | Pattern | Consumed by | Env var(s) |
+|---|---|---|---|
+| `postgres-credentials` | B (D77, unchanged) | Postgres's own container | `POSTGRES_PASSWORD` |
+| `api-secrets` | B (D102) | `api` | `DATABASE_URL`, `EMAIL_HASH_SECRET`, `EMAIL_ENCRYPTION_KEY`, `CANDIDATE_JWT_SECRET`, `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET` |
+| `notification-service-secrets` | B (D102) | `notification-service` | `DATABASE_URL`, `EMAIL_ENCRYPTION_KEY` |
+| `review-analyzer-secrets` | B (D102) | `review-analyzer` | `DATABASE_URL`, `ANTHROPIC_API_KEY` (optional — omit `--from-literal` for it entirely when not configured, same "absent, not empty" rule as the gotcha below) |
+
+Same 7 logical values as the Pattern-A table above (`anthropic-api-key`
+included), just distributed across four k8s Secrets instead of via
+Secrets Manager — grouped by consuming service instead of one entry
+per value, since there's no per-secret IAM role to scope here.
+
+**`DATABASE_URL` must be built by hand from the same
+`POSTGRES_PASSWORD`** used for `postgres-credentials`, percent-encoded
+exactly like `seed-localstack.sh` already does (D92) — construct it
+once, then pass the same literal string to both `api-secrets`'s and
+`notification-service-secrets`'s/`review-analyzer-secrets`'s
+`--from-literal=DATABASE_URL=...`. There is no seeding script doing
+this automatically here; get it wrong and Postgres auth fails silently
+until someone checks pod logs.
+
+**Wired in:** `overlays/hetzner-pilot`'s Deployment patches add
+`envFrom: - secretRef: name: <service>-secrets` alongside the existing
+`configMapRef` (#646's job, not this issue's). Its ConfigMap patch
+does **not** set `SECRETS_SOURCE=localstack` — left unset, so
+`bootstrapSecretsFromLocalStack()` stays a no-op and every service
+reads these as plain env vars, the same fallback path docker-compose
+already exercises.
+
+**Sourcing the literal values:** generated once (e.g. `openssl rand
+-hex 32` for the JWT/hash secrets), stored in the operator's own
+password manager — never in a repo file, shell history, or a GitHub
+Actions repo secret (CD doesn't reach this environment). Prefer a
+small local helper script using `read -s` prompts over typing
+`--from-literal=X=<value>` directly on the command line, to keep raw
+values out of `.bash_history`.
+
+**Provisioning order:** all four Secrets above must exist before
+`kubectl apply -k overlays/hetzner-pilot` — same ordering requirement
+Pattern B always has (`envFrom` doesn't hot-reload).
+
+**Verification:** no automated equivalent of `verify-secrets-manager.sh`
+exists for this environment yet (that script is LocalStack/IAM
+specific, and there's no Secrets-Manager-side state to check here) —
+pod readiness + 0 restarts is the same externally-observable proof
+used elsewhere. A pilot-specific verify script, if one turns out to be
+worth writing, belongs to #648 (deploy/verify), not this issue.
+
 ## Adding a new secret
 
 1. **Does it need to exist before any of this project's own NestJS code

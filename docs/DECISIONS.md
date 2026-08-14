@@ -5127,6 +5127,63 @@ Hetzner box can reasonably serve.
 
 ---
 
+### D102 — Hetzner pilot secrets: every secret becomes Pattern B (out-of-band k3s Secrets), not LocalStack Secrets Manager (GitHub issue #647, Phase 45)
+
+**Context:** `overlays/hetzner-pilot` needs real values for `DATABASE_URL`,
+`EMAIL_HASH_SECRET`, `EMAIL_ENCRYPTION_KEY`, `CANDIDATE_JWT_SECRET`,
+`ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET`, and optionally
+`ANTHROPIC_API_KEY` to reach `api`/`notification-service`/
+`review-analyzer`, without ever committing them (CLAUDE.md hard
+constraint #6). In `dev`/`staging`/`prod` these are Pattern A —
+LocalStack Secrets Manager, fetched at boot via each service's
+`localstack-secrets-bootstrap.ts`. LocalStack itself is dev-only by
+design (D20/D22/D23): an emulator for exercising the Secrets
+Manager/IAM code path locally, not something to run as the real
+secrets backend for a pilot instance meant to actually be reachable.
+Real AWS Secrets Manager was also considered and rejected for this
+specific environment — D101 draws an explicit boundary between this
+pilot and D11's AWS production track, so standing up a real Secrets
+Manager account/IAM footprint just to serve one pilot VM would blur
+that boundary for no real benefit at this scale. A hosted
+secrets-service option (Infisical/Doppler free tier) was considered
+too, but adds a new external vendor relationship and its own
+account/token management for a single-VM pilot that doesn't need
+rotation history or a UI.
+
+**Decision:** Every secret this environment needs becomes Pattern B —
+provisioned imperatively via `kubectl create secret generic ...
+--from-literal=... --dry-run=client -o yaml | kubectl apply -f -`,
+run by hand on the k3s VM (or over SSH) from values that exist only in
+the operator's own password manager, never in a repo file or a
+GitHub Actions secret (CD doesn't reach this environment). This is not
+a new pattern — it's the exact shape this repo already uses for
+`postgres-credentials`/`admin-credentials`/`anthropic-credentials`/
+`localstack-credentials`, just extended to cover the secrets that are
+Pattern A everywhere else. `overlays/hetzner-pilot`'s kustomization
+excludes `infra/k8s/base/localstack/` entirely — no LocalStack pod, no
+IAM roles/policies, no seeding scripts (`seed-localstack.sh`/
+`localstack/init/seed.sh`) are deployed to this environment at all.
+
+**Why this needs zero application-code changes:**
+`bootstrapSecretsFromLocalStack()` in each service's
+`localstack-secrets-bootstrap.ts` is already a no-op unless
+`SECRETS_SOURCE=localstack` is set (GitHub issue #79, Phase 11) — every
+other environment (docker-compose, and now this pilot) falls back to
+reading these values as plain env vars. `overlays/hetzner-pilot`'s
+ConfigMap patch simply never sets `SECRETS_SOURCE`, so that fallback
+path — already exercised daily by docker-compose — is what serves the
+pilot too. The only net-new work (for #646/#648, not this issue) is
+adding `envFrom.secretRef` entries to each Deployment's pod spec
+pointing at the new imperatively-created Secrets, alongside the
+existing `configMapRef`.
+
+**Revisit when:** Phase 8's own AWS build-out actually starts under
+D11 (real Secrets Manager becomes the natural home then), or if this
+pilot ever needs secret rotation/audit history beyond what one operator
+manually re-running `kubectl create secret` can reasonably track.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
