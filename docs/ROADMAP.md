@@ -2359,6 +2359,12 @@ on Hetzner". Epic: GitHub issue #642.
       (GitHub issue #646)
 - [ ] Secrets for the pilot environment — no LocalStack, real values,
       never committed (GitHub issue #647)
+- [ ] Real SMTP relay, replacing Mailpit — Mailpit is a local-only
+      catcher (D29) that would silently swallow every email on a pilot
+      meant to be actually reachable; scoped out of #647 into its own
+      issue once that distinction surfaced. Depends on #647, informs
+      #646/#648 (GitHub issue #655, filed 2026-08-14, added to this
+      phase after the original planning pass)
 - [ ] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
       end (GitHub issue #648)
 - [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
