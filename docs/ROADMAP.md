@@ -2341,7 +2341,7 @@ Cloud: Account Setup & Hardened VM Provisioning". Epic: GitHub issue
       Regular Performance tier at ~$41.99/mo) to `cx33`/`nbg1`
       (~$9.99/mo) before apply; confirmed key-only login, root login
       refused, password auth refused
-- [ ] Engineering blog (last) (GitHub issue #644)
+- [x] Engineering blog (last) (GitHub issue #644)
 
 ## Phase 45 — App-Hosting Pilot on Hetzner
 
