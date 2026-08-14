@@ -601,3 +601,15 @@ issues are done — this phase's blog is complete.
 1. [Issue #639 — Provision Hetzner Cloud VM via Terraform (parallel path to #501)](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-639-provision-hetzner-vm-terraform/README.md)
 2. [Issue #643 — Run terraform apply; verify SSH hardening on the Hetzner VM](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-643-terraform-apply-ssh-hardening-verification/README.md)
 3. [Issue #651 — Decision record (D101): Hetzner Cloud as a parallel low-cost provisioning path](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-651-decision-record-d101-hetzner-parallel-path/README.md)
+
+## Phase 47 — Moderation Queue Correctness Hardening
+
+See `docs/ROADMAP.md` Phase 47 and `docs/DECISIONS.md` D104. Filed from
+an end-to-end audit of the notification/communication chains: a
+read-then-write race in `ModerationService.review()`/`claim()`/
+`release()` (no lock held between the check and the write) could let two
+concurrent moderator actions on the same queue entry both commit.
+
+1. [Issue #674 — Fix the TOCTOU race in `ModerationService.review()`](phase-47-moderation-queue-correctness-hardening/issue-674-review-toctou-fix/README.md)
+2. [Issue #675 — Fix the same TOCTOU race in `claim()`/`release()`](phase-47-moderation-queue-correctness-hardening/issue-675-claim-release-toctou-fix/README.md)
+3. [Issue #676 — Real-Postgres regression coverage for concurrent moderation actions](phase-47-moderation-queue-correctness-hardening/issue-676-concurrent-regression-tests/README.md)
