@@ -2356,7 +2356,8 @@ on Hetzner". Epic: GitHub issue #642.
 
 - [ ] Install k3s on the Hetzner pilot VM (GitHub issue #645)
 - [ ] `overlays/hetzner-pilot` kustomize overlay for `infra/k8s/base`
-      (GitHub issue #646)
+      (GitHub issue #646) — its Ingress hostnames depend on Phase 46's
+      domain-decision and ingress-nginx-on-k3s issues below
 - [x] Secrets for the pilot environment — no LocalStack, real values,
       never committed (GitHub issue #647)
 - [ ] Real SMTP relay, replacing Mailpit — Mailpit is a local-only
@@ -2364,9 +2365,72 @@ on Hetzner". Epic: GitHub issue #642.
       meant to be actually reachable; scoped out of #647 into its own
       issue once that distinction surfaced. Depends on #647, informs
       #646/#648 (GitHub issue #655, filed 2026-08-14, added to this
-      phase after the original planning pass)
+      phase after the original planning pass) — its `MAIL_FROM_ADDRESS`
+      depends on Phase 46's domain-decision issue below
 - [ ] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
-      end (GitHub issue #648)
+      end (GitHub issue #648) — blocked on Phase 46's domain, firewall,
+      image-registry, ingress-nginx, and TLS issues: there's no reachable
+      HTTPS endpoint to smoke-test against without them
 - [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
       issue #649)
 - [ ] Engineering blog (last) (GitHub issue #650)
+
+**Note:** despite the lower phase number, several of this phase's
+issues (#646/#655/#648 above) cannot fully close until Phase 46 below
+resolves its blocking issues — Phase 46 was filed after gaps surfaced
+during #647's own work, same "discovered after the original planning
+pass" situation as #655. Same precedent as Phase 44/45's own
+out-of-strict-order relationship (see Phase 44's intro).
+
+## Phase 46 — Hetzner Pilot: Reachability & Operational Hardening
+
+Filed 2026-08-14, surfaced while working #647: getting `api`/`web`
+actually reachable over the real internet — not just deployed inside
+the cluster — needs a domain, an open firewall, TLS, a way for images
+to reach a VM that isn't the CI runner's own machine, and a handful of
+operational safeguards (backups, disk monitoring, access control) that
+`dev`/`staging`/`prod` never needed because they're not real, reachable
+environments. See D103 for why this is its own phase rather than more
+issues folded into #642. Milestone: "Phase 46 — Hetzner Pilot:
+Reachability & Operational Hardening". Epic: GitHub issue #657.
+
+Ordered by dependency — each issue only depends on ones above it in
+this list unless noted otherwise:
+
+- [ ] Decide the pilot's public domain and create DNS records pointing
+      at the Phase 44 VM's IP (GitHub issue #658) — blocks the Ingress
+      hostnames in #646, TLS issuance below, and `MAIL_FROM_ADDRESS` in
+      #655
+- [ ] Open ports 80/443 in the Hetzner Cloud Firewall via Terraform
+      (GitHub issue #659) — `infra/terraform/hetzner/main.tf`'s
+      `hcloud_firewall.ssh_only` (Phase 44) currently allows only port
+      22; blocks TLS issuance below and #648's reachability check
+- [ ] Container image delivery path to the pilot VM — registry
+      push/pull, since `cd.yml`'s `kind load image-archive` only works
+      because CD and the target cluster are the same machine today
+      (GitHub issue #660) — blocks #648
+- [ ] Install `ingress-nginx` on the k3s cluster, disabling k3s's
+      default Traefik (GitHub issue #661) — depends on #645 (k3s
+      installed); blocks #646/#648, since `infra/k8s/base/07-ingress.yaml`
+      hardcodes `ingressClassName: nginx`
+- [ ] TLS for the pilot via cert-manager + Let's Encrypt, and flipping
+      `COOKIE_SECURE` to `"true"` in the pilot overlay once real HTTPS
+      is live (GitHub issue #662) — depends on #658, #659, #661; blocks
+      #648's smoke test
+- [ ] Backup strategy for the pilot's Postgres data, with a proven
+      restore path (GitHub issue #663) — no hard blocker, but should
+      land before #648 starts creating real-shaped data
+- [ ] Guardrail against running `seed-demo-data`/`seed-demo-data-undo`
+      against the pilot (GitHub issue #664) — should land before #648
+      first runs with real intent
+- [ ] Decide and document the deploy pipeline to the pilot — manual via
+      the runbook, or a future CD job (GitHub issue #665) — depends on
+      #660 if a CD job is chosen; informs #649
+- [ ] k3s upgrade/patch cadence for the pilot VM (GitHub issue #666) —
+      informs #649
+- [ ] Disk-usage monitoring for the pilot VM, mirroring the CI runner's
+      D85/D86/D87 lesson (GitHub issue #667)
+- [ ] kubeconfig and access control for the pilot cluster — who can
+      `kubectl` against it, from where (GitHub issue #668) — informs
+      #649
+- [ ] Engineering blog (last) (GitHub issue #669)
