@@ -246,7 +246,7 @@ readiness + 0 restarts + no `ResourceNotFoundException` in logs is the
 actual externally-observable proof, since the bootstrap function has no
 fallback to silently succeed with.
 
-## Hetzner pilot (Phase 45): a third environment, every secret is Pattern B
+## Hetzner pilot (Phase 45/46): a third environment, every secret is Pattern B
 
 Scope: `overlays/hetzner-pilot` only. Does not change the Pattern-A
 default for `dev`/`staging`/`prod` above — see D102 for the full
@@ -255,46 +255,54 @@ Secrets Manager would blur D101's boundary against D11 for one pilot
 VM; a hosted secrets service adds a vendor relationship this
 single-box pilot doesn't need).
 
-| Secret (k8s Secret name) | Pattern | Consumed by | Env var(s) |
-|---|---|---|---|
-| `postgres-credentials` | B (D77, unchanged) | Postgres's own container | `POSTGRES_PASSWORD` |
-| `api-secrets` | B (D102) | `api` | `DATABASE_URL`, `EMAIL_HASH_SECRET`, `EMAIL_ENCRYPTION_KEY`, `CANDIDATE_JWT_SECRET`, `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET` |
-| `notification-service-secrets` | B (D102) | `notification-service` | `DATABASE_URL`, `EMAIL_ENCRYPTION_KEY` |
-| `review-analyzer-secrets` | B (D102) | `review-analyzer` | `DATABASE_URL`, `ANTHROPIC_API_KEY` (optional — omit `--from-literal` for it entirely when not configured, same "absent, not empty" rule as the gotcha below) |
+**Sourcing changed by D105 (Phase 46, #708):** D102 originally sourced
+every value below manually, from the operator's own password manager,
+specifically because no CD workflow reached this environment yet.
+`cd-hetzner.yml` (#708) changes that — it is a real CD workflow that
+reaches this environment, the same way `cd.yml` already reaches the
+local `kind` cluster. Once #708 ships, every Secret below is provisioned
+*by that workflow*, not by hand — see D105 for the full reasoning and
+the accepted blast-radius tradeoff. Until #708 ships, the manual
+provisioning this section originally described is still how these get
+created.
+
+| Secret (k8s Secret name) | Pattern | Consumed by | Env var(s) | Sourced from (GitHub Actions repo secret, post-#708) |
+|---|---|---|---|---|
+| `postgres-credentials` | B (D77/D105) | Postgres's own container | `POSTGRES_PASSWORD` | `HETZNER_POSTGRES_PASSWORD` |
+| `api-secrets` | B (D105) | `api` | `DATABASE_URL`, `EMAIL_HASH_SECRET`, `EMAIL_ENCRYPTION_KEY`, `CANDIDATE_JWT_SECRET`, `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET` | `HETZNER_DATABASE_URL`, `HETZNER_EMAIL_HASH_SECRET`, `HETZNER_EMAIL_ENCRYPTION_KEY`, `HETZNER_CANDIDATE_JWT_SECRET`, `HETZNER_ADMIN_PASSWORD_HASH`, `HETZNER_ADMIN_JWT_SECRET` |
+| `notification-service-secrets` | B (D105) | `notification-service` | `DATABASE_URL`, `EMAIL_ENCRYPTION_KEY` | (same `HETZNER_DATABASE_URL`/`HETZNER_EMAIL_ENCRYPTION_KEY` as above) |
+| `review-analyzer-secrets` | B (D105) | `review-analyzer` | `DATABASE_URL`, `ANTHROPIC_API_KEY` (optional — omit `--from-literal` for it entirely when not configured, same "absent, not empty" rule as the gotcha below) | `HETZNER_DATABASE_URL`, `HETZNER_ANTHROPIC_API_KEY` (optional) |
+| `ghcr-pull-secret` | B (D105, new — #660) | k3s node, via each Deployment's `imagePullSecrets` | n/a — a `kubernetes.io/dockerconfigjson`, not a literal env var | `HETZNER_GHCR_PAT` (also used directly by the self-hosted runner for `docker login ghcr.io` on the push side) |
 
 Same 7 logical values as the Pattern-A table above (`anthropic-api-key`
-included), just distributed across four k8s Secrets instead of via
-Secrets Manager — grouped by consuming service instead of one entry
-per value, since there's no per-secret IAM role to scope here.
+included), plus the new GHCR pull secret #660 introduces — distributed
+across five k8s Secrets instead of via Secrets Manager, grouped by
+consuming service instead of one entry per value, since there's no
+per-secret IAM role to scope here.
 
 **`DATABASE_URL` must be built by hand from the same
 `POSTGRES_PASSWORD`** used for `postgres-credentials`, percent-encoded
 exactly like `seed-localstack.sh` already does (D92) — construct it
-once, then pass the same literal string to both `api-secrets`'s and
-`notification-service-secrets`'s/`review-analyzer-secrets`'s
-`--from-literal=DATABASE_URL=...`. There is no seeding script doing
-this automatically here; get it wrong and Postgres auth fails silently
-until someone checks pod logs.
+once, then store the same literal string as the `HETZNER_DATABASE_URL`
+repo secret consumed by both `api-secrets` and
+`notification-service-secrets`/`review-analyzer-secrets`. There is no
+seeding script doing this automatically here; get it wrong and Postgres
+auth fails silently until someone checks pod logs.
 
 **Wired in:** `overlays/hetzner-pilot`'s Deployment patches add
 `envFrom: - secretRef: name: <service>-secrets` alongside the existing
-`configMapRef` (#646's job, not this issue's). Its ConfigMap patch
-does **not** set `SECRETS_SOURCE=localstack` — left unset, so
+`configMapRef` (#646's job, not this issue's), plus `imagePullSecrets:
+- name: ghcr-pull-secret` (#660/#708's job). Its ConfigMap patch does
+**not** set `SECRETS_SOURCE=localstack` — left unset, so
 `bootstrapSecretsFromLocalStack()` stays a no-op and every service
 reads these as plain env vars, the same fallback path docker-compose
 already exercises.
 
-**Sourcing the literal values:** generated once (e.g. `openssl rand
--hex 32` for the JWT/hash secrets), stored in the operator's own
-password manager — never in a repo file, shell history, or a GitHub
-Actions repo secret (CD doesn't reach this environment). Prefer a
-small local helper script using `read -s` prompts over typing
-`--from-literal=X=<value>` directly on the command line, to keep raw
-values out of `.bash_history`.
-
-**Provisioning order:** all four Secrets above must exist before
+**Provisioning order:** all five Secrets above must exist before
 `kubectl apply -k overlays/hetzner-pilot` — same ordering requirement
-Pattern B always has (`envFrom` doesn't hot-reload).
+Pattern B always has (`envFrom`/`imagePullSecrets` don't hot-reload).
+`cd-hetzner.yml` (#708) is responsible for this ordering, same as
+`cd.yml` already is for the kind cluster's own Pattern B secrets.
 
 **Verification:** no automated equivalent of `verify-secrets-manager.sh`
 exists for this environment yet (that script is LocalStack/IAM

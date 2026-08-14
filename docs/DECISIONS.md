@@ -5288,6 +5288,58 @@ real auto-assignment engine becomes worth building.
 
 ---
 
+### D105 — Hetzner pilot secrets move to CD-provisioned GitHub Actions repo secrets, superseding D102 for app secrets (GitHub issue #708, Phase 46)
+
+**Context:** D102 set every Hetzner-pilot secret to Pattern B (imperative
+`kubectl create secret`), sourced manually — values typed by hand from
+the operator's own password manager — specifically because, at the
+time, "CD doesn't reach this environment." A TPM-style review of Phases
+45-51 (2026-08-14) surfaced that #708 (Phase 46: `cd-hetzner.yml`, a
+real CD workflow that builds, pushes to GHCR, and deploys to the pilot's
+k3s cluster) directly invalidates that premise — CD now does reach this
+environment, the same way it already reaches the local `kind` cluster
+via `cd.yml`.
+
+**Decision:** Once #708 ships, every Hetzner-pilot secret —
+`postgres-credentials`, `api-secrets`, `notification-service-secrets`,
+`review-analyzer-secrets`, and the new GHCR pull secret (#660) — is
+provisioned by `cd-hetzner.yml` itself, the same
+`kubectl create secret generic ... --from-literal=X=${{ secrets.Y }}
+--dry-run=client -o yaml | kubectl apply -f -` shape `cd.yml` already
+uses for the kind cluster's `admin-credentials`/`postgres-credentials`/
+`anthropic-credentials`/`localstack-credentials` — just extended here to
+cover every secret this environment needs (not only the
+LocalStack-bootstrap subset `cd.yml` covers), since `overlays/
+hetzner-pilot` has no LocalStack pod to fall back on at all. Values live
+only as GitHub Actions repo secrets (`HETZNER_POSTGRES_PASSWORD`,
+`HETZNER_DATABASE_URL`, `HETZNER_EMAIL_HASH_SECRET`,
+`HETZNER_EMAIL_ENCRYPTION_KEY`, `HETZNER_CANDIDATE_JWT_SECRET`,
+`HETZNER_ADMIN_PASSWORD_HASH`, `HETZNER_ADMIN_JWT_SECRET`,
+`HETZNER_ANTHROPIC_API_KEY` optional, `HETZNER_GHCR_PAT`) — never
+committed, same never-plaintext bar as every other credential in this
+project (CLAUDE.md hard constraint #6). `HETZNER_DATABASE_URL` must
+still be hand-assembled consistent with `HETZNER_POSTGRES_PASSWORD`
+before being stored as its own repo secret, the same "must match, no
+automated derivation" caveat D102 already flagged for the manual path —
+there is still no `seed-localstack.sh`-equivalent script for this
+environment.
+
+**Explicit risk accepted:** this widens blast radius versus D102's
+original manual model — a compromised repo or self-hosted-runner
+credential can now reach a real, internet-facing pilot's live secrets,
+not just a local dev `kind` cluster. Accepted because the self-hosted
+runner is already the same trust boundary holding `cd.yml`'s own
+production-adjacent secrets (`ADMIN_PASSWORD_HASH` etc.) for the kind
+cluster today, and #667/#668 (Phase 46, disk monitoring and kubeconfig
+access control) further scope who/what can reach the pilot cluster
+itself.
+
+**Revisit when:** Phase 8's real AWS build-out starts (D11) — real
+Secrets Manager becomes the natural home then, same revisit condition
+D102 already carried.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
