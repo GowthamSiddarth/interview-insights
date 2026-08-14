@@ -586,3 +586,18 @@ blog is complete.
 9. [Issue #620 — Status vocabulary rollout: a real StatusPill component](phase-43-design-system-refresh-theming/issue-620-status-vocabulary-rollout/README.md)
 10. [Issue #621 — Wizard visual pass: completion progress + rated/unrated icons](phase-43-design-system-refresh-theming/issue-621-wizard-visual-pass/README.md)
 11. [Issue #622 — Accessibility & responsive audit: two real bugs found and fixed](phase-43-design-system-refresh-theming/issue-622-accessibility-responsive-audit/README.md)
+
+## Phase 44 — Hetzner Cloud: Account Setup & Hardened VM Provisioning
+
+See `docs/ROADMAP.md` Phase 44 and `docs/DECISIONS.md` D101. Filed
+retroactively after #501 (Phase 40, Oracle Cloud A1.Flex) sat blocked
+on "out of host capacity" for over a week — a Hetzner Cloud VM, stood
+up via this repo's first real Terraform, as a parallel low-cost path
+that unblocks work now without waiting on Oracle's queue. Not a
+replacement for #501, which keeps retrying independently, and not a
+change to D11 (AWS remains the Phase 8 production target). All three
+issues are done — this phase's blog is complete.
+
+1. [Issue #639 — Provision Hetzner Cloud VM via Terraform (parallel path to #501)](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-639-provision-hetzner-vm-terraform/README.md)
+2. [Issue #643 — Run terraform apply; verify SSH hardening on the Hetzner VM](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-643-terraform-apply-ssh-hardening-verification/README.md)
+3. [Issue #651 — Decision record (D101): Hetzner Cloud as a parallel low-cost provisioning path](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-651-decision-record-d101-hetzner-parallel-path/README.md)
