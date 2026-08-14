@@ -2425,7 +2425,14 @@ this list unless noted otherwise:
       first runs with real intent
 - [ ] Decide and document the deploy pipeline to the pilot — manual via
       the runbook, or a future CD job (GitHub issue #665) — depends on
-      #660 if a CD job is chosen; informs #649
+      #660 if a CD job is chosen; informs #649 and #708
+- [ ] Build `cd-hetzner.yml` — push images to GHCR, deploy
+      `overlays/hetzner-pilot` to the Hetzner k3s cluster (GitHub issue
+      #708) — a second CD workflow alongside the existing `cd.yml`
+      (kind/local target), not a replacement; depends on #660 (GHCR
+      chosen as the image delivery path), #661/#662 (ingress-nginx/TLS
+      live, so there's a real endpoint to smoke-test against), and
+      #665 resolving to "CD job"; blocks #648
 - [ ] k3s upgrade/patch cadence for the pilot VM (GitHub issue #666) —
       informs #649
 - [ ] Disk-usage monitoring for the pilot VM, mirroring the CI runner's
