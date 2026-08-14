@@ -38,6 +38,31 @@ function getCreateCallData(createMock: jest.Mock): CreateCallData {
   return args.data;
 }
 
+// GitHub issue #674 (Phase 47, D104) — review()'s reviewedAt gate moved
+// from a plain findUniqueOrThrow + update to an atomic updateMany (see
+// moderation.service.ts's own comment on why). This mimics that atomicity
+// in the mock: updateMany only "succeeds" (count: 1) while reviewedAt is
+// still null, matching real Postgres's row-lock-then-recheck behavior for
+// concurrent callers, and findUniqueOrThrow reflects whatever the last
+// successful updateMany wrote — so a caller's `result` and a
+// second-caller's ConflictException both come out the same as they would
+// against a real database.
+function mockPendingQueueEntry(
+  prisma: {
+    moderationQueueEntry: { findUniqueOrThrow: jest.Mock; updateMany: jest.Mock };
+  },
+  entry: { id: string; entityType: string; entityId: string },
+) {
+  const state: Record<string, unknown> = { ...entry, reviewedAt: null, flagReason: null };
+  prisma.moderationQueueEntry.findUniqueOrThrow.mockImplementation(() => Promise.resolve({ ...state }));
+  prisma.moderationQueueEntry.updateMany.mockImplementation((args: { data: object }) => {
+    if (state.reviewedAt !== null) return Promise.resolve({ count: 0 });
+    Object.assign(state, args.data);
+    return Promise.resolve({ count: 1 });
+  });
+  return state;
+}
+
 describe('ModerationService', () => {
   let service: ModerationService;
   let prisma: {
@@ -46,6 +71,7 @@ describe('ModerationService', () => {
       findMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
       delete: jest.Mock;
       deleteMany: jest.Mock;
     };
@@ -92,6 +118,7 @@ describe('ModerationService', () => {
         findMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
         delete: jest.fn(),
         deleteMany: jest.fn(),
       },
@@ -692,16 +719,7 @@ describe('ModerationService', () => {
 
   describe('approve / reject / flag', () => {
     function mockPendingRoundRatingEntry() {
-      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
-        id: 'queue-1',
-        entityType: 'round_rating',
-        entityId: 'rating-1',
-        reviewedAt: null,
-        flagReason: null,
-      });
-      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
-        Promise.resolve({ id: 'queue-1', ...args.data }),
-      );
+      mockPendingQueueEntry(prisma, { id: 'queue-1', entityType: 'round_rating', entityId: 'rating-1' });
       prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
       prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
         id: 'rating-1',
@@ -729,8 +747,8 @@ describe('ModerationService', () => {
         where: { id: 'rating-1' },
         data: { status: 'approved' },
       });
-      expect(prisma.moderationQueueEntry.update).toHaveBeenCalledWith({
-        where: { id: 'queue-1' },
+      expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'queue-1', reviewedAt: null },
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
         data: { reviewedAt: expect.any(Date), reviewedBy: 'gowtham', flagReason: undefined },
       });
@@ -784,8 +802,8 @@ describe('ModerationService', () => {
         where: { id: 'rating-1' },
         data: { status: 'flagged' },
       });
-      expect(prisma.moderationQueueEntry.update).toHaveBeenCalledWith({
-        where: { id: 'queue-1' },
+      expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'queue-1', reviewedAt: null },
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
         data: { reviewedAt: expect.any(Date), reviewedBy: undefined, flagReason: 'spam_pattern' },
       });
@@ -804,17 +822,52 @@ describe('ModerationService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    function mockPendingRecruiterRatingEntry() {
+    // GitHub issue #674 (Phase 47, D104) — the TOCTOU race this phase
+    // fixes: this call's own initial findUniqueOrThrow read reviewedAt:
+    // null (nothing else had committed yet), but by the time its own
+    // transaction reaches the atomic updateMany, another caller already
+    // has. Before the fix, review() used a plain `update({ where: { id } })`
+    // here — unconditional on reviewedAt — so this call would have
+    // succeeded anyway, flipping the entity's status a second time.
+    it('treats updateMany matching zero rows as a lost race and throws a conflict, even though the initial read saw reviewedAt: null', async () => {
       prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
-        id: 'queue-2',
-        entityType: 'recruiter_rating',
-        entityId: 'rating-2',
+        id: 'queue-1',
+        entityType: 'round_rating',
+        entityId: 'rating-1',
         reviewedAt: null,
         flagReason: null,
       });
-      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
-        Promise.resolve({ id: 'queue-2', ...args.data }),
-      );
+      prisma.roundRating.findUnique.mockResolvedValue({ id: 'rating-1' });
+      prisma.moderationQueueEntry.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.approve('queue-1', { reviewedBy: 'moderator-a' })).rejects.toThrow(ConflictException);
+
+      expect(prisma.roundRating.update).not.toHaveBeenCalled();
+    });
+
+    // Same fix, exercised end to end: two moderators (or a moderator
+    // racing the AI auto-approval path, GitHub issue #440) both calling
+    // approve() on the same entry concurrently. mockPendingRoundRatingEntry()
+    // uses mockPendingQueueEntry()'s stateful updateMany, which only
+    // reports count: 1 while reviewedAt is still null — so exactly one of
+    // the two calls here must win, never both and never neither.
+    it('lets only one of two concurrent approve() calls on the same entry succeed', async () => {
+      mockPendingRoundRatingEntry();
+
+      const results = await Promise.allSettled([
+        service.approve('queue-1', { reviewedBy: 'moderator-a' }),
+        service.approve('queue-1', { reviewedBy: 'moderator-b' }),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictException);
+      expect(prisma.roundRating.update).toHaveBeenCalledTimes(1);
+    });
+
+    function mockPendingRecruiterRatingEntry() {
+      mockPendingQueueEntry(prisma, { id: 'queue-2', entityType: 'recruiter_rating', entityId: 'rating-2' });
       prisma.recruiterRating.update.mockResolvedValue({ id: 'rating-2', status: 'approved' });
       prisma.recruiterRating.findUniqueOrThrow.mockResolvedValue({
         id: 'rating-2',
@@ -848,16 +901,7 @@ describe('ModerationService', () => {
     });
 
     function mockPendingOverallReviewEntry() {
-      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
-        id: 'queue-3',
-        entityType: 'overall_review',
-        entityId: 'review-1',
-        reviewedAt: null,
-        flagReason: null,
-      });
-      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
-        Promise.resolve({ id: 'queue-3', ...args.data }),
-      );
+      mockPendingQueueEntry(prisma, { id: 'queue-3', entityType: 'overall_review', entityId: 'review-1' });
       prisma.overallReview.update.mockResolvedValue({ id: 'review-1', status: 'approved' });
       prisma.overallReview.findUniqueOrThrow.mockResolvedValue({
         id: 'review-1',
@@ -891,16 +935,7 @@ describe('ModerationService', () => {
     });
 
     function mockPendingCompanyEntry() {
-      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
-        id: 'queue-4',
-        entityType: 'company',
-        entityId: 'company-1',
-        reviewedAt: null,
-        flagReason: null,
-      });
-      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
-        Promise.resolve({ id: 'queue-4', ...args.data }),
-      );
+      mockPendingQueueEntry(prisma, { id: 'queue-4', entityType: 'company', entityId: 'company-1' });
       prisma.company.update.mockResolvedValue({ id: 'company-1', status: 'approved' });
       prisma.company.findUniqueOrThrow.mockResolvedValue({
         id: 'company-1',
@@ -1001,7 +1036,7 @@ describe('ModerationService', () => {
       expect(prisma.moderationQueueEntry.delete).toHaveBeenCalledWith({ where: { id: 'queue-1' } });
       expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
       expect(prisma.roundRating.update).not.toHaveBeenCalled();
-      expect(prisma.moderationQueueEntry.update).not.toHaveBeenCalled();
+      expect(prisma.moderationQueueEntry.updateMany).not.toHaveBeenCalled();
     });
 
     // GitHub issue #332 (Phase 30, D53) — best-effort domain event
@@ -1193,16 +1228,7 @@ describe('ModerationService', () => {
   // addition that a durable audit row is written in the same transaction.
   describe('approveWithAudit', () => {
     function mockPendingRoundRatingEntry() {
-      prisma.moderationQueueEntry.findUniqueOrThrow.mockResolvedValue({
-        id: 'queue-1',
-        entityType: 'round_rating',
-        entityId: 'rating-1',
-        reviewedAt: null,
-        flagReason: null,
-      });
-      prisma.moderationQueueEntry.update.mockImplementation((args: { data: object }) =>
-        Promise.resolve({ id: 'queue-1', ...args.data }),
-      );
+      mockPendingQueueEntry(prisma, { id: 'queue-1', entityType: 'round_rating', entityId: 'rating-1' });
       prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
       prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
         id: 'rating-1',
@@ -1238,8 +1264,8 @@ describe('ModerationService', () => {
         where: { id: 'rating-1' },
         data: { status: 'approved' },
       });
-      expect(prisma.moderationQueueEntry.update).toHaveBeenCalledWith({
-        where: { id: 'queue-1' },
+      expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'queue-1', reviewedAt: null },
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
         data: { reviewedAt: expect.any(Date), reviewedBy: 'system:ai-auto-approval', flagReason: undefined },
       });
