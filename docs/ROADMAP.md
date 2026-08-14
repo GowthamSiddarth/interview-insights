@@ -2394,8 +2394,17 @@ environments. See D103 for why this is its own phase rather than more
 issues folded into #642. Milestone: "Phase 46 — Hetzner Pilot:
 Reachability & Operational Hardening". Epic: GitHub issue #657.
 
-Ordered by dependency — each issue only depends on ones above it in
-this list unless noted otherwise:
+Split into two tracks, added 2026-08-14 during a TPM-style review of
+Phases 45-51: **Track A** is the critical path to a reachable HTTPS
+pilot (blocks #648); **Track B** is operational hardening that doesn't
+block reachability, only (per each issue's own note) either "should
+land before #648 creates real data" or "informs #649" (the runbook).
+Track A/B is a reading aid, not a new epic split — both stay under
+#657. Within Track A, #658/#659/#660 have no dependency on each other
+and can run in parallel; #661/#662/#708 depend on the outcome of that
+first group.
+
+### Track A — critical path to reachability
 
 - [ ] Decide the pilot's public domain and create DNS records pointing
       at the Phase 44 VM's IP (GitHub issue #658) — blocks the Ingress
@@ -2408,7 +2417,11 @@ this list unless noted otherwise:
 - [ ] Container image delivery path to the pilot VM — registry
       push/pull, since `cd.yml`'s `kind load image-archive` only works
       because CD and the target cluster are the same machine today
-      (GitHub issue #660) — blocks #648
+      (GitHub issue #660) — blocks #648. Also documents the new GHCR
+      PAT this introduces in `docs/SECRETS.md`'s inventory table (used
+      both by the runner for `docker push` and as the pilot's
+      `imagePullSecret`) — no secret this project provisions should be
+      missing from that inventory, per CLAUDE.md's hard constraint #6
 - [ ] Install `ingress-nginx` on the k3s cluster, disabling k3s's
       default Traefik (GitHub issue #661) — depends on #645 (k3s
       installed); blocks #646/#648, since `infra/k8s/base/07-ingress.yaml`
@@ -2417,22 +2430,29 @@ this list unless noted otherwise:
       `COOKIE_SECURE` to `"true"` in the pilot overlay once real HTTPS
       is live (GitHub issue #662) — depends on #658, #659, #661; blocks
       #648's smoke test
+- [ ] Decide and document the deploy pipeline to the pilot — manual via
+      the runbook, or a future CD job (GitHub issue #665) — depends on
+      #660 if a CD job is chosen; informs #649 and #708. Resolved
+      2026-08-14: CD job, via #708
+- [ ] Build `cd-hetzner.yml` — push images to GHCR, deploy
+      `overlays/hetzner-pilot` to the Hetzner k3s cluster, **and
+      provision every Hetzner-pilot secret itself** from GitHub Actions
+      repo secrets (GitHub issue #708) — a second CD workflow alongside
+      the existing `cd.yml` (kind/local target), not a replacement;
+      depends on #660 (GHCR chosen as the image delivery path),
+      #661/#662 (ingress-nginx/TLS live, so there's a real endpoint to
+      smoke-test against), and #665 resolving to "CD job"; blocks #648.
+      See D105 — supersedes D102's manual/out-of-band secret sourcing
+      for this environment now that a CD workflow actually reaches it
+
+### Track B — operational hardening (non-blocking)
+
 - [ ] Backup strategy for the pilot's Postgres data, with a proven
       restore path (GitHub issue #663) — no hard blocker, but should
       land before #648 starts creating real-shaped data
 - [ ] Guardrail against running `seed-demo-data`/`seed-demo-data-undo`
       against the pilot (GitHub issue #664) — should land before #648
       first runs with real intent
-- [ ] Decide and document the deploy pipeline to the pilot — manual via
-      the runbook, or a future CD job (GitHub issue #665) — depends on
-      #660 if a CD job is chosen; informs #649 and #708
-- [ ] Build `cd-hetzner.yml` — push images to GHCR, deploy
-      `overlays/hetzner-pilot` to the Hetzner k3s cluster (GitHub issue
-      #708) — a second CD workflow alongside the existing `cd.yml`
-      (kind/local target), not a replacement; depends on #660 (GHCR
-      chosen as the image delivery path), #661/#662 (ingress-nginx/TLS
-      live, so there's a real endpoint to smoke-test against), and
-      #665 resolving to "CD job"; blocks #648
 - [ ] k3s upgrade/patch cadence for the pilot VM (GitHub issue #666) —
       informs #649
 - [ ] Disk-usage monitoring for the pilot VM, mirroring the CI runner's
