@@ -648,15 +648,32 @@ export class ModerationService {
     // NotImplementedException guard that used to live here is gone because
     // there's nothing left to guard against; the switch is exhaustive over
     // the enum.
+    //
+    // GitHub issue #674 (Phase 47, D104) — the `reviewedAt` check above
+    // only protects against a *sequential* double-review; two concurrent
+    // review() calls on the same entry (two moderators, or a moderator
+    // racing the AI auto-approval path) can both read reviewedAt: null
+    // before either writes. The fix is to make `reviewedAt: null` part of
+    // the update's own WHERE clause via updateMany, not a separate read —
+    // Postgres row-locks the matching row for the duration of this
+    // transaction, so a second concurrent call's updateMany blocks until
+    // the first commits, then matches zero rows (reviewedAt is no longer
+    // null) instead of racing it. count === 0 here means this call lost
+    // the race, not that the entry doesn't exist (existence was already
+    // confirmed above).
     const updatedEntry = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.moderationQueueEntry.update({
-        where: { id },
+      const { count } = await tx.moderationQueueEntry.updateMany({
+        where: { id, reviewedAt: null },
         data: {
           reviewedAt: new Date(),
           reviewedBy: dto.reviewedBy,
           flagReason,
         },
       });
+      if (count === 0) {
+        throw new ConflictException('This item has already been reviewed.');
+      }
+      const updated = await tx.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
       const statusUpdate = { where: { id: entry.entityId }, data: { status: decision } };
       switch (entry.entityType) {
         case 'round_rating':
