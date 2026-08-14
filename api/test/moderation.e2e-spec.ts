@@ -269,6 +269,25 @@ describe('Moderation (e2e)', () => {
       .expect(409);
   });
 
+  // GitHub issue #676 (Phase 47, D104) — the real-Postgres counterpart to
+  // #674's mocked unit tests: proves the atomic updateMany fix actually
+  // serializes two genuinely concurrent HTTP requests against a real
+  // database, not just that the service's logic is correct under an
+  // assumed-atomic mock.
+  it('only one of two concurrent approve requests on the same entry succeeds', async () => {
+    const { ratingId } = await submitRating();
+    const entry = await findQueueEntryFor(ratingId);
+    const second = await loginAsSecondModerator(app);
+
+    const [first, secondRes] = await Promise.all([
+      server().post(`/moderation/queue/${entry.id}/approve`).set('Cookie', adminCookie).send({}),
+      server().post(`/moderation/queue/${entry.id}/approve`).set('Cookie', second.cookie).send({}),
+    ]);
+
+    const statuses = [first.status, secondRes.status].sort();
+    expect(statuses).toEqual([201, 409]);
+  });
+
   it('returns 404 for a non-existent queue entry', async () => {
     await server()
       .post('/moderation/queue/123e4567-e89b-12d3-a456-426614174000/approve')
@@ -308,6 +327,22 @@ describe('Moderation (e2e)', () => {
 
       await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie).expect(201);
       await server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie).expect(409);
+    });
+
+    // GitHub issue #676 (Phase 47, D104) — real-Postgres counterpart to
+    // #675's mocked unit tests.
+    it('only one of two concurrent claim requests from different moderators succeeds', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+      const second = await loginAsSecondModerator(app);
+
+      const [first, secondRes] = await Promise.all([
+        server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', adminCookie),
+        server().post(`/moderation/queue/${entry.id}/claim`).set('Cookie', second.cookie),
+      ]);
+
+      const statuses = [first.status, secondRes.status].sort();
+      expect(statuses).toEqual([201, 409]);
     });
 
     it('releasing clears the claim, letting another moderator claim it', async () => {
