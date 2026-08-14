@@ -5184,6 +5184,46 @@ manually re-running `kubectl create secret` can reasonably track.
 
 ---
 
+### D103 — Hetzner pilot reachability/operability gaps become a new phase (46), not more issues under #642 (GitHub issue #657, Phase 46)
+
+**Context:** Auditing what #647's own secrets work implied about the
+rest of the pilot surfaced eleven more gaps — no domain, no open
+firewall ports beyond SSH, no TLS anywhere in this repo's manifests, no
+way for a built image to reach a VM that isn't the CI runner's own
+machine (`cd.yml`'s `kind load image-archive` only works because CD and
+`kind` share a machine today), plus operational gaps (Postgres backups,
+a seed-data guardrail, deploy-pipeline choice, k3s's own upgrade
+cadence, disk monitoring, kubeconfig access control) that `dev`/
+`staging`/`prod` never needed because none of them are real, reachable
+environments.
+
+**Decision:** File these as a new phase (46) with its own epic, rather
+than adding them as more sub-issues to #642 (Phase 45's epic). Phase
+45's own issues (#645/#646/#647/#655/#648/#649/#650) are about
+deploying and operating *this app* on the pilot VM; Phase 46's issues
+are about making the *VM itself* reachable and keeping it healthy —
+a different, cross-cutting concern that would keep growing #642 past
+what "a themed, date-less body of work" (CLAUDE.md's Epics-vs-
+Milestones definition) should hold. Same reasoning Phase 44 already
+established for itself relative to #501/Phase 40: a genuinely separate
+concern gets its own phase even when it's discovered mid-stream rather
+than during an upfront planning pass, and even when (as here) some of
+its issues are prerequisites for an earlier-numbered phase to actually
+finish — Phase 45's own roadmap entry cross-links this explicitly
+rather than pretending phase number order implies dependency order.
+
+**Ordering:** Phase 46's issues are filed in dependency order (domain
+→ firewall → image registry → ingress-nginx → TLS → the five
+operational issues → blog), matching how `docs/ROADMAP.md` lists them,
+since GitHub itself has no first-class "blocked by" relationship this
+project relies on elsewhere — issue bodies and the roadmap's own prose
+are the source of truth for sequencing, same as every other phase.
+
+**Revisit when:** Phase 46 closes and Phase 45's #646/#655/#648 can
+actually verify against a real, reachable HTTPS endpoint.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
