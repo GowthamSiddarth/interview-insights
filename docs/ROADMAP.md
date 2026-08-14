@@ -2434,3 +2434,136 @@ this list unless noted otherwise:
       `kubectl` against it, from where (GitHub issue #668) — informs
       #649
 - [ ] Engineering blog (last) (GitHub issue #669)
+
+## Phase 47 — Moderation Queue Correctness Hardening
+
+Filed 2026-08-14, surfaced by an end-to-end audit of this project's
+notification/communication chains: `ModerationService.review()` and
+`claim()`/`release()` (`api/src/moderation/moderation.service.ts`) both
+read a queue entry's state, then write it back later with no condition
+guarding that the state hasn't changed in between — two moderators (or a
+moderator racing the AI auto-approval path) acting on the same entry
+within that window can both commit, producing duplicate `status_changed`
+events and, in the worst case, contradictory approved/rejected emails to
+the same candidate. See D104. Milestone: "Phase 47 — Moderation Queue
+Correctness Hardening". Epic: GitHub issue #673.
+
+Ordered by dependency — each issue only depends on ones above it in this
+list unless noted otherwise:
+
+- [ ] Fix TOCTOU race in `ModerationService.review()` via an atomic
+      conditional update (GitHub issue #674)
+- [ ] Fix the same race shape in `claim()`/`release()` (GitHub issue
+      #675) — independent of #674, same fix pattern
+- [ ] Regression tests for concurrent moderation actions (GitHub issue
+      #676) — depends on #674, #675
+- [ ] Engineering blog (last) (GitHub issue #677)
+
+## Phase 48 — Candidate Password Authentication
+
+Filed 2026-08-14, from the same audit: candidates were the only actor in
+this system still on magic-link-only auth, while `admin-auth`
+(`api/src/admin-auth/`) already proves a password + bcrypt +
+login-throttle pattern in production for staff accounts. This phase
+brings candidate-auth to parity with that existing pattern and retires
+magic-link as the primary login path — see D104 for why. Milestone:
+"Phase 48 — Candidate Password Authentication". Epic: GitHub issue #678.
+
+Ordered by dependency:
+
+- [ ] `Candidate` schema migration — passwordHash/passwordSetAt/
+      tokenVersion (GitHub issue #679) — blocks everything else in this
+      phase
+- [ ] `POST /candidates/register` + verification email (GitHub issue
+      #680) — depends on #679
+- [ ] `POST /candidates/login` + `CandidateLoginThrottleGuard` (GitHub
+      issue #681) — depends on #679
+- [ ] `PasswordResetToken` table + request/confirm endpoints (GitHub
+      issue #682) — depends on #679
+- [ ] Retire magic-link as primary login; update frontend (GitHub issue
+      #683) — depends on #680, #681, #682
+- [ ] Engineering blog (last) (GitHub issue #684)
+
+## Phase 49 — Resubmission Loop & Rejection Feedback
+
+Filed 2026-08-14, from the same audit: candidates can edit a
+rejected/flagged rating or review indefinitely (throttled only to
+5/hour, no lifetime cap — `api/src/common/edit-throttle.service.ts`),
+and a confirmed bug in `NotificationLog`'s idempotency key
+(`services/notification-service/prisma/schema.prisma`) means a candidate
+is never notified of any review decision after the first one on a given
+entity, since the key doesn't account for the fresh
+`ModerationQueueEntry` each edit creates. This phase also activates D99's
+parked "candidate-communication-loop" idea. See D104. Milestone: "Phase
+49 — Resubmission Loop & Rejection Feedback". Epic: GitHub issue #685.
+
+Ordered by dependency:
+
+- [ ] Add `moderationQueueEntryId` to `*.status_changed.v1` event schemas
+      (GitHub issue #686) — blocks #687
+- [ ] Fix `NotificationLog` idempotency key to include
+      `moderationQueueEntryId` (GitHub issue #687) — depends on #686,
+      the confirmed-bug fix
+- [ ] Add `rejectionReasonCategory` + `reviewNote` to
+      `ModerationActionDto` (GitHub issue #688)
+- [ ] Lifetime resubmission cap + escalation to senior-moderator/admin
+      queue (GitHub issue #689)
+- [ ] New `closed`/`permanently_rejected` terminal status (GitHub issue
+      #690) — depends on #689's escalation permission
+- [ ] Surface prior-submission history in moderator queue UI (GitHub
+      issue #691) — depends on #688 for the reason text
+- [ ] Publish resubmission-ack event on `reenqueue()` (GitHub issue #692)
+      — depends on #687's fixed idempotency key
+- [ ] Move `EditThrottleService` off in-memory storage before horizontal
+      scaling (GitHub issue #693)
+- [ ] Engineering blog (last) (GitHub issue #694)
+
+## Phase 50 — Company Creation Request Lifecycle
+
+Filed 2026-08-14, from the same audit: a rejected company creation
+request permanently occupies its slug (no recovery path —
+`CompaniesService.create()`'s own comment flags this as "unresolved")
+and generates zero notification on submit/approve/reject, since
+`ModerationService.publishCreatedEvent`/`publishStatusChangedEvent` both
+explicitly no-op for `entityType: 'company'`. Scoped to the pragmatic
+partial-unique-index fix rather than a full CompanyCreationRequest/
+Company entity split — see D104 for why. Milestone: "Phase 50 — Company
+Creation Request Lifecycle". Epic: GitHub issue #695.
+
+Ordered by dependency:
+
+- [ ] `candidateId` FK on `Company` + partial unique index on `slug`
+      scoped to `pending`/`approved` (GitHub issue #696) — blocks #697,
+      #698
+- [ ] `PATCH` edit endpoint for a candidate's own rejected/pending
+      company request (GitHub issue #697) — depends on #696
+- [ ] `company.created.v1`/`company.status_changed.v1` events +
+      notification-service consumption (GitHub issue #698) — depends on
+      #696
+- [ ] Engineering blog (last) (GitHub issue #699)
+
+## Phase 51 — Staff/Admin/Moderator Notification Platform
+
+Filed 2026-08-14, from the same audit: `StaffAccountsService`'s five
+mutating methods (create/updateRole/deactivate/reactivate/resetPassword)
+end in only a Postgres write plus `StaffAuditLogService.record()` — no
+email, no domain event, no in-app signal reaches the affected staff
+member or any other admin. Separately, `SlaBreachDetectionService`'s
+hourly sweep notifies the claiming moderator (Phase 36, #489) but an
+*unclaimed* breach notifies no one. Sequenced last so it reuses Phase
+49's event/idempotency conventions rather than building a third parallel
+notification scheme. See D104. Milestone: "Phase 51 — Staff/Admin/
+Moderator Notification Platform". Epic: GitHub issue #700.
+
+Ordered by dependency:
+
+- [ ] `staff.account.*` event schemas (GitHub issue #701) — blocks #702
+- [ ] Publish `staff.*` events from `StaffAccountsService` (GitHub issue
+      #702) — depends on #701
+- [ ] `StaffNotificationRecipientsService` (role -> active email list)
+      (GitHub issue #703) — blocks #704, #705
+- [ ] Tiered SLA escalation — broadcast to moderators, escalate
+      unclaimed breaches to admins (GitHub issue #704) — depends on #703
+- [ ] notification-service consumer extension + templates for `staff.*`
+      events (GitHub issue #705) — depends on #702, #703
+- [ ] Engineering blog (last) (GitHub issue #706)

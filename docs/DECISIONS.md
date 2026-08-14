@@ -5224,6 +5224,70 @@ actually verify against a real, reachable HTTPS endpoint.
 
 ---
 
+### D104 — 2026-08-14 notification/communication-chain audit: five phases (47-51), magic-link retirement, and three scoped-fix choices (GitHub issues #673/#678/#685/#695/#700, Phases 47-51)
+
+**Context:** An end-to-end audit of this project's notification/
+communication chains — candidate register/login, review submission,
+company creation, candidate response to moderator reject/flag, and
+admin/moderator/staff account activity — surfaced two confirmed bugs and
+several structural gaps, not just missing features. The bugs: a live
+TOCTOU race in `ModerationService.review()`/`claim()`/`release()` (a
+read-then-write with no condition guarding the write itself, so two
+concurrent moderator actions on the same queue entry can both commit),
+and a silent-notification bug in `NotificationLog`'s idempotency key
+(`(entityType, entityId, eventType)` doesn't account for the fresh
+`ModerationQueueEntry` a candidate's edit creates, so a candidate is
+never notified of any review decision after the first one on a given
+entity). The structural gaps: candidates are the only actor still on
+magic-link-only auth while `admin-auth` already proves a password+bcrypt
+pattern for staff; a rejected company-creation request permanently
+occupies its slug with zero notification anywhere in that flow; and
+`StaffAccountsService`'s account-lifecycle actions produce only an audit
+log row, no email, event, or in-app signal to anyone. Four design
+questions needed resolving before issues could be filed: how many phases,
+whether magic-link survives, how to fix the company-slug collision, and
+how to close the unclaimed-SLA-breach gap without over-building.
+
+**Decision:**
+
+- **Five phases, not one.** Phase 47 (moderation-queue correctness
+  hardening) ships first — it's a live bug, independent of every other
+  phase here. Phase 48 (candidate password auth) is also independent.
+  Phase 49 (resubmission loop & rejection feedback) contains the
+  notification-idempotency fix and activates D99's parked
+  "candidate-communication-loop" idea. Phase 50 (company creation request
+  lifecycle) and Phase 51 (staff/admin/moderator notification platform)
+  are sequenced last — Phase 51 deliberately after Phase 49 so it reuses
+  Phase 49's event-schema/idempotency conventions instead of building a
+  third parallel notification scheme.
+- **Magic-link login retires as the primary candidate login path** once
+  Phase 48 ships (product decision, not an engineering default) — its
+  existing token machinery is repurposed to deliver password-reset emails
+  only. Running two parallel first-class login systems long-term was
+  judged not worth the doubled auth surface area to secure and test,
+  given `admin-auth` already proves the password pattern works here.
+- **Company slug collision fixed via a Postgres partial unique index**
+  scoped to `status IN ('pending', 'approved')`, not a full
+  `CompanyCreationRequest`/`Company` entity split. Same "don't build
+  infra nothing's asking for yet" instinct as D9 — the entity split is
+  the scaling path if request volume ever justifies it, not a
+  lean-launch requirement.
+- **Unclaimed SLA breaches get a tiered broadcast/escalation extension**
+  to the existing hourly `SlaBreachDetectionService` cron (75% elapsed →
+  broadcast to active moderators, 100% elapsed still unclaimed → escalate
+  to active admins), not a new auto-assignment engine. D80's
+  manual-claim-only model stays as-is; this only adds visibility for the
+  case where it currently fails silently (an unclaimed breach notifies no
+  one today).
+
+**Revisit when:** Phase 49 ships and real resubmission volume shows
+whether the default lifetime-resubmission-cap threshold (3) needs tuning;
+Phase 50's request volume ever grows enough to justify the entity-split
+alternative; or Phase 51's tiered escalation proves insufficient and a
+real auto-assignment engine becomes worth building.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
