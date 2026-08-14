@@ -564,6 +564,17 @@ export class ModerationService {
   // claim is an optional "I've got this" signal, not a gate on reviewing).
   // Rejects claiming an already-claimed entry outright rather than
   // silently reassigning it out from under whoever already has it.
+  //
+  // GitHub issue #675 (Phase 47, D104) — same TOCTOU shape as #674's fix
+  // to review(): two moderators concurrently claiming the same unclaimed
+  // entry could both read claimedById: null before either wrote, then
+  // both plain-update() — the second write silently overwrites the
+  // first's claimedById, so both moderators believe they hold the claim
+  // but only one actually does. The write below is now an atomic
+  // updateMany gated on the same claimedById: null the initial read saw;
+  // count === 0 means another caller won the race in between, and a
+  // cheap re-fetch (only reached on that losing path) picks the specific
+  // error message ("already reviewed" vs "already claimed") to report.
   async claim(id: string, moderatorId: string) {
     const entry = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
 
@@ -574,9 +585,20 @@ export class ModerationService {
       throw new ConflictException('This item is already claimed by another moderator.');
     }
 
-    return this.prisma.moderationQueueEntry.update({
-      where: { id },
+    const { count } = await this.prisma.moderationQueueEntry.updateMany({
+      where: { id, reviewedAt: null, claimedById: null },
       data: { claimedById: moderatorId, claimedAt: new Date() },
+    });
+    if (count === 0) {
+      const current = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
+      if (current.reviewedAt) {
+        throw new ConflictException('This item has already been reviewed.');
+      }
+      throw new ConflictException('This item is already claimed by another moderator.');
+    }
+
+    return this.prisma.moderationQueueEntry.findUniqueOrThrow({
+      where: { id },
       include: { claimedBy: { select: { id: true, username: true } } },
     });
   }
@@ -584,6 +606,11 @@ export class ModerationService {
   // Counterpart to claim() — only the moderator currently holding the
   // claim can release it, so one moderator can't clear another's
   // in-progress work out from under them.
+  //
+  // GitHub issue #675 — same fix pattern as claim() above: the write is
+  // gated atomically on claimedById: moderatorId, the exact condition the
+  // initial read checked, rather than trusting that read still holds by
+  // the time the write happens.
   async release(id: string, moderatorId: string) {
     const entry = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
 
@@ -594,9 +621,20 @@ export class ModerationService {
       throw new ForbiddenException('This item is claimed by another moderator.');
     }
 
-    return this.prisma.moderationQueueEntry.update({
-      where: { id },
+    const { count } = await this.prisma.moderationQueueEntry.updateMany({
+      where: { id, claimedById: moderatorId },
       data: { claimedById: null, claimedAt: null },
+    });
+    if (count === 0) {
+      const current = await this.prisma.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
+      if (!current.claimedById) {
+        throw new ConflictException('This item is not currently claimed.');
+      }
+      throw new ForbiddenException('This item is claimed by another moderator.');
+    }
+
+    return this.prisma.moderationQueueEntry.findUniqueOrThrow({
+      where: { id },
       include: { claimedBy: { select: { id: true, username: true } } },
     });
   }
