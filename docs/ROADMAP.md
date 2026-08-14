@@ -2357,7 +2357,7 @@ on Hetzner". Epic: GitHub issue #642.
 - [ ] Install k3s on the Hetzner pilot VM (GitHub issue #645)
 - [ ] `overlays/hetzner-pilot` kustomize overlay for `infra/k8s/base`
       (GitHub issue #646)
-- [ ] Secrets for the pilot environment — no LocalStack, real values,
+- [x] Secrets for the pilot environment — no LocalStack, real values,
       never committed (GitHub issue #647)
 - [ ] Real SMTP relay, replacing Mailpit — Mailpit is a local-only
       catcher (D29) that would silently swallow every email on a pilot
