@@ -5340,6 +5340,59 @@ D102 already carried.
 
 ---
 
+### D106 — notification-service reconciliation sweep, not a Kafka dead-letter topic; fixed via Phase 49, not Phase 8g (GitHub issue #711, Phase 49)
+
+**Context:** A TPM-style review of Phases 45-51 (2026-08-14) found that
+`docs/ROADMAP.md` Phase 8's sub-area 8g ("distributed systems
+hardening") had its trigger fire when Phase 31 shipped, but — despite
+both Phase 31's own roadmap entry and D81's addendum explicitly saying
+it would get "its own planning pass... once Phase 31 actually ships" —
+nobody ever filed it. Reading `notification-consumer.service.ts`
+confirmed a real gap behind that stale trigger: `handleMessage` catches
+both malformed events and processing failures, logs them, and returns
+normally; neither service configures `autoCommit: false` or anything
+else that would block the offset from advancing, so despite a code
+comment claiming a failed message "will be retried on redelivery,"
+nothing in the current implementation causes one. A transient failure
+(DB blip, email-provider hiccup) silently and permanently drops that
+notification today, with a log line as the only trace. `review-analyzer`
+already solved the equivalent problem for its own AI-triage workflow via
+`ReconciliationSweepService` (GitHub issue #442, Phase 39, D71; ported
+via #340, Phase 32, D81) — `notification-service` has nothing
+equivalent.
+
+**Decision:** Two questions, two answers:
+
+- **Where it gets fixed:** Phase 49 (#685), not a Phase 8g planning
+  pass. Phase 8 stays exactly as scoped — a trigger-gated menu deferred
+  for the real AWS migration (D11) — rather than reclassifying this as
+  Phase 8 work now. The concrete gap sits squarely inside Phase 49's own
+  "candidates reliably get notified of review decisions" scope (D104),
+  so it ships there instead, as GitHub issue #711.
+- **How it gets fixed:** a reconciliation sweep, mirroring
+  `review-analyzer`'s existing `ReconciliationSweepService` pattern —
+  not a literal Kafka dead-letter topic. A periodic cron finds
+  `*.created`/`*.status_changed` events with no matching
+  `NotificationLog` row within a staleness window and retries the send.
+  Rejected the literal-DLQ alternative (a new `*.dlq` topic, produced to
+  from the consumer's catch block, with its own drain/alert consumer):
+  it's more infrastructure to operate (a second topic, a second
+  consumer) for a service kept deliberately single-replica with modest
+  volume, and the sweep pattern is already proven working in this exact
+  codebase rather than being net-new.
+
+#711 depends on #687 (the fixed `moderationQueueEntryId`-aware
+idempotency key) — sweeping against the pre-fix key shape would produce
+false positives for every resubmission.
+
+**Revisit when:** notification volume or replica count grows enough
+that a hourly-or-so sweep's latency (vs. near-real-time DLQ redelivery)
+stops being acceptable, or Phase 8's real AWS migration trigger fires
+and a broader, project-wide DLQ pattern across every consumer becomes
+worth designing in one pass rather than per-service.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

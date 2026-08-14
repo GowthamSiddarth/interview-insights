@@ -2531,6 +2531,15 @@ Ordered by dependency:
 - [ ] Fix `NotificationLog` idempotency key to include
       `moderationQueueEntryId` (GitHub issue #687) — depends on #686,
       the confirmed-bug fix
+- [ ] `notification-service` reconciliation sweep for missed/failed
+      notification deliveries (GitHub issue #711) — depends on #687
+      (needs the corrected idempotency key to tell "already sent" from
+      "missing"); mirrors `review-analyzer`'s existing
+      `ReconciliationSweepService` rather than a literal Kafka
+      dead-letter topic. Surfaced by Phase 8g's never-executed planning
+      pass (D106) — Phase 8 itself stays deferred for the real AWS
+      migration, this fix landed here instead since it's squarely
+      inside this phase's own notification-reliability scope
 - [ ] Add `rejectionReasonCategory` + `reviewNote` to
       `ModerationActionDto` (GitHub issue #688)
 - [ ] Lifetime resubmission cap + escalation to senior-moderator/admin
