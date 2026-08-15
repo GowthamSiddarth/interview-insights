@@ -238,6 +238,34 @@ describe('Moderation (e2e)', () => {
     expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).not.toContain(ratingId);
   });
 
+  // GitHub issue #688 (Phase 49, D104).
+  it('rejecting with a rejectionReasonCategory and reviewNote persists both on the queue entry', async () => {
+    const { ratingId } = await submitRating();
+    const entry = await findQueueEntryFor(ratingId);
+
+    const rejectRes = await server()
+      .post(`/moderation/queue/${entry.id}/reject`)
+      .set('Cookie', adminCookie)
+      .send({ rejectionReasonCategory: 'low_quality', reviewNote: 'Free text was too vague to be useful.' })
+      .expect(201);
+
+    expect(body<{ rejectionReasonCategory: string; reviewNote: string }>(rejectRes)).toMatchObject({
+      rejectionReasonCategory: 'low_quality',
+      reviewNote: 'Free text was too vague to be useful.',
+    });
+  });
+
+  it('rejects an unrecognized rejectionReasonCategory with 400', async () => {
+    const { ratingId } = await submitRating();
+    const entry = await findQueueEntryFor(ratingId);
+
+    await server()
+      .post(`/moderation/queue/${entry.id}/reject`)
+      .set('Cookie', adminCookie)
+      .send({ rejectionReasonCategory: 'not_a_real_category' })
+      .expect(400);
+  });
+
   it('flagging a pending rating records the reason and keeps it hidden', async () => {
     const { roundId, ratingId } = await submitRating();
     const entry = await findQueueEntryFor(ratingId);

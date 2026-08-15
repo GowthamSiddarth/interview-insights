@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ModerationEntityType, ModerationFlagReason, ModerationStatus, Prisma } from '@prisma/client';
+import { ModerationEntityType, ModerationFlagReason, ModerationRejectionReason, ModerationStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
 import { CompanySearchService } from '../search/company-search.service';
@@ -87,6 +87,12 @@ interface RawQueueEntry {
   flagReason: ModerationFlagReason | null;
   reviewedBy: string | null;
   reviewedAt: Date | null;
+  // GitHub issue #688 (Phase 49, D104) — a moderator's own stated
+  // rejection reason + free-text note, set by review() alongside
+  // reviewedAt/reviewedBy. enrichEntries() passes these through
+  // unchanged, same as every other raw column here.
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
   // GitHub issue #486 (Phase 36) — claim/release (#487) and SLA-breach
   // detection (#488) both need these on hand; enrichEntries() just passes
   // them through unchanged, same as every other raw column here.
@@ -154,6 +160,8 @@ export interface ModerationQueueEntry {
   flagReason: ModerationFlagReason | null;
   reviewedBy: string | null;
   reviewedAt: Date | null;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
   slaDeadline: Date;
   claimedById: string | null;
   claimedAt: Date | null;
@@ -706,6 +714,13 @@ export class ModerationService {
           reviewedAt: new Date(),
           reviewedBy: dto.reviewedBy,
           flagReason,
+          // GitHub issue #688 (Phase 49, D104) — persisted whenever the
+          // caller provides them, regardless of decision (reject() is
+          // the only caller that gives rejectionReasonCategory real
+          // meaning; ModerationActionDto is shared across
+          // approve()/reject()/flag(), same as reviewedBy already is).
+          rejectionReasonCategory: dto.rejectionReasonCategory,
+          reviewNote: dto.reviewNote,
         },
       });
       if (count === 0) {

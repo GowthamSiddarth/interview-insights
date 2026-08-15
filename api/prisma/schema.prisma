@@ -498,6 +498,21 @@ enum ModerationFlagReason {
   ai_triage_stalled
 }
 
+// GitHub issue #688 (Phase 49, D104) — a moderator's own stated reason
+// for rejecting content, distinct from ModerationFlagReason above (a
+// system/pre-write signal, set before a human ever looks at the entry).
+// Surfaced back to the candidate (#688's own rejection-feedback scope)
+// and, alongside reviewNote below, to the moderator queue UI when a
+// resubmission's prior-submission history is shown (#691).
+enum ModerationRejectionReason {
+  low_quality
+  guideline_violation
+  identifying_information
+  spam_or_promotional
+  inaccurate_or_unverifiable
+  other
+}
+
 model ModerationQueueEntry {
   id          String                @id @default(uuid()) @db.Uuid
   entityType  ModerationEntityType  @map("entity_type")
@@ -507,6 +522,15 @@ model ModerationQueueEntry {
   flagReason  ModerationFlagReason? @map("flag_reason")
   reviewedBy  String?               @map("reviewed_by")
   reviewedAt  DateTime?             @map("reviewed_at") @db.Timestamptz
+  // GitHub issue #688 (Phase 49, D104) — only ever set alongside a
+  // 'rejected' decision (ModerationService.review() only writes these
+  // when ModerationActionDto carries them, which reject() alone accepts
+  // meaningfully — approve()/flag() calls extending this DTO doesn't add
+  // reject-only semantics to them). reviewNote is a free-text elaboration
+  // a moderator can add to any decision, not gated to rejections the way
+  // rejectionReasonCategory is.
+  rejectionReasonCategory ModerationRejectionReason? @map("rejection_reason_category")
+  reviewNote              String?                    @map("review_note")
   // GitHub issue #486 (Phase 36, D80) — createdAt + a configurable number
   // of hours (default 48, see ModerationSlaService), computed at enqueue/
   // reenqueue time, not a DB-only default: the configurable-hours value

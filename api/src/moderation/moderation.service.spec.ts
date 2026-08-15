@@ -749,8 +749,14 @@ describe('ModerationService', () => {
       });
       expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
         where: { id: 'queue-1', reviewedAt: null },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
-        data: { reviewedAt: expect.any(Date), reviewedBy: 'gowtham', flagReason: undefined },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+          reviewedAt: expect.any(Date),
+          reviewedBy: 'gowtham',
+          flagReason: undefined,
+          rejectionReasonCategory: undefined,
+          reviewNote: undefined,
+        },
       });
       expect(result).toMatchObject({ reviewedBy: 'gowtham' });
     });
@@ -793,6 +799,29 @@ describe('ModerationService', () => {
       expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
     });
 
+    // GitHub issue #688 (Phase 49, D104).
+    it('reject() persists rejectionReasonCategory and reviewNote on the queue entry', async () => {
+      mockPendingRoundRatingEntry();
+
+      const result = await service.reject('queue-1', {
+        rejectionReasonCategory: 'low_quality',
+        reviewNote: 'Free text was too vague to be useful.',
+      });
+
+      expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'queue-1', reviewedAt: null },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.objectContaining() is typed `any` by @types/jest
+        data: expect.objectContaining({
+          rejectionReasonCategory: 'low_quality',
+          reviewNote: 'Free text was too vague to be useful.',
+        }),
+      });
+      expect(result).toMatchObject({
+        rejectionReasonCategory: 'low_quality',
+        reviewNote: 'Free text was too vague to be useful.',
+      });
+    });
+
     it('flag() flips the round rating to flagged, records the flag reason, and does not index it', async () => {
       mockPendingRoundRatingEntry();
 
@@ -804,8 +833,14 @@ describe('ModerationService', () => {
       });
       expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
         where: { id: 'queue-1', reviewedAt: null },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
-        data: { reviewedAt: expect.any(Date), reviewedBy: undefined, flagReason: 'spam_pattern' },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+          reviewedAt: expect.any(Date),
+          reviewedBy: undefined,
+          flagReason: 'spam_pattern',
+          rejectionReasonCategory: undefined,
+          reviewNote: undefined,
+        },
       });
       expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
     });
@@ -1319,8 +1354,14 @@ describe('ModerationService', () => {
       });
       expect(prisma.moderationQueueEntry.updateMany).toHaveBeenCalledWith({
         where: { id: 'queue-1', reviewedAt: null },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
-        data: { reviewedAt: expect.any(Date), reviewedBy: 'system:ai-auto-approval', flagReason: undefined },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+          reviewedAt: expect.any(Date),
+          reviewedBy: 'system:ai-auto-approval',
+          flagReason: undefined,
+          rejectionReasonCategory: undefined,
+          reviewNote: undefined,
+        },
       });
     });
 
