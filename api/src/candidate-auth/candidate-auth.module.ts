@@ -6,6 +6,8 @@ import { MailModule } from '../mail/mail.module';
 import { getRequiredCandidateJwtSecret } from './candidate-auth.env';
 import { CandidateAuthController } from './candidate-auth.controller';
 import { CandidateAuthService } from './candidate-auth.service';
+import { CandidateLoginThrottleGuard } from './candidate-login-throttle.guard';
+import { CandidateLoginThrottleService } from './candidate-login-throttle.service';
 import { CandidateJwtAuthGuard } from './guards/candidate-jwt-auth.guard';
 import { MagicLinkThrottleGuard } from './magic-link-throttle.guard';
 import { MagicLinkThrottleService } from './magic-link-throttle.service';
@@ -32,6 +34,8 @@ import { CandidateJwtStrategy } from './strategies/candidate-jwt.strategy';
     CandidateJwtStrategy,
     MagicLinkThrottleService,
     MagicLinkThrottleGuard,
+    CandidateLoginThrottleService,
+    CandidateLoginThrottleGuard,
     CandidateJwtAuthGuard,
   ],
   // CandidateJwtAuthGuard is exported so issue #146's write-path modules

@@ -1,4 +1,4 @@
-import { ConflictException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, GoneException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { CandidatesService } from '../candidates/candidates.service';
@@ -80,6 +80,27 @@ export class CandidateAuthService {
     // failed send here shouldn't undo the account/password that was just
     // durably created; the candidate can always request a fresh link.
     await this.issueAndSendVerificationEmail(candidate.id, email, 'verify').catch(() => undefined);
+
+    return { candidateId: candidate.id, tokenVersion: candidate.tokenVersion };
+  }
+
+  // GitHub issue #681 (Phase 48, D104) — password login, parity with
+  // AdminAuthService.validateAdmin(). Returns null-ish via throwing
+  // UnauthorizedException for both "no such email" and "wrong password"
+  // (and "no password ever set" — a magic-link-only candidate) — the
+  // same message for all three so this can't be used to enumerate
+  // registered emails.
+  async login(email: string, password: string): Promise<CandidateSessionPayload> {
+    const emailHash = hashEmail(email, getEmailHashSecret());
+    const candidate = await this.prisma.candidate.findUnique({ where: { emailHash } });
+    if (!candidate?.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    const matches = await bcrypt.compare(password, candidate.passwordHash);
+    if (!matches) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
 
     return { candidateId: candidate.id, tokenVersion: candidate.tokenVersion };
   }

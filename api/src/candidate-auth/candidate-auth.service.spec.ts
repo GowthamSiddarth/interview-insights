@@ -226,6 +226,41 @@ describe('CandidateAuthService', () => {
     });
   });
 
+  // GitHub issue #681 (Phase 48, D104) — password login.
+  describe('login', () => {
+    it('returns the session payload for a correct password', async () => {
+      const bcrypt = await import('bcryptjs');
+      const passwordHash = await bcrypt.hash('correct-password', 10);
+      prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', passwordHash, tokenVersion: 2 });
+
+      const result = await service.login('candidate@example.com', 'correct-password');
+
+      expect(result).toEqual({ candidateId: 'candidate-1', tokenVersion: 2 });
+    });
+
+    it('rejects an unknown email with the same message as a wrong password', async () => {
+      prisma.candidate.findUnique.mockResolvedValue(null);
+
+      await expect(service.login('unknown@example.com', 'whatever')).rejects.toThrow('Invalid email or password.');
+    });
+
+    it('rejects a candidate who has never set a password (magic-link only)', async () => {
+      prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', passwordHash: null, tokenVersion: 0 });
+
+      await expect(service.login('candidate@example.com', 'whatever')).rejects.toThrow('Invalid email or password.');
+    });
+
+    it('rejects an incorrect password', async () => {
+      const bcrypt = await import('bcryptjs');
+      const passwordHash = await bcrypt.hash('correct-password', 10);
+      prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', passwordHash, tokenVersion: 0 });
+
+      await expect(service.login('candidate@example.com', 'wrong-password')).rejects.toThrow(
+        'Invalid email or password.',
+      );
+    });
+  });
+
   describe('issueToken', () => {
     it('signs a JWT with the session payload', () => {
       const token = service.issueToken({ candidateId: 'candidate-1', tokenVersion: 0 });
