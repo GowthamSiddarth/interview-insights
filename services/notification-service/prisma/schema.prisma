@@ -66,3 +66,53 @@ enum ModerationStatus {
   rejected
   flagged
 }
+
+// GitHub issue #711 (Phase 49, D104) — ReconciliationSweepService's read
+// needs, same minimal-mirror D75 pattern as Candidate/Moderator above.
+// Deliberately narrow: only reviewedAt (to find stale reviewed entries)
+// and the polymorphic entityType/entityId reference — no flagReason,
+// slaDeadline, or claim fields, since the sweep only cares "was this
+// resolved, and is there a notification for it yet."
+model ModerationQueueEntry {
+  id         String    @id @db.Uuid
+  entityType String    @map("entity_type")
+  entityId   String    @map("entity_id") @db.Uuid
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz
+
+  @@map("moderation_queue")
+}
+
+// Three more minimal mirrors, same reasoning — only what the sweep needs
+// to decide whether a missed decision is notification-worthy
+// (status: approved/rejected only, same as notificationFor()'s existing
+// no-op for pending/flagged) and who to email.
+// createdAt lets the sweep also cover a missed *.created notification
+// (D106's documented scope for this sweep), bounded to a two-sided
+// window (see reconciliation-sweep.service.ts's own comment) so the
+// query never has to scan every row this table has ever held.
+model RoundRating {
+  id          String           @id @db.Uuid
+  candidateId String           @map("candidate_id") @db.Uuid
+  status      ModerationStatus
+  createdAt   DateTime         @map("created_at") @db.Timestamptz
+
+  @@map("round_ratings")
+}
+
+model RecruiterRating {
+  id          String           @id @db.Uuid
+  candidateId String           @map("candidate_id") @db.Uuid
+  status      ModerationStatus
+  createdAt   DateTime         @map("created_at") @db.Timestamptz
+
+  @@map("recruiter_ratings")
+}
+
+model OverallReview {
+  id          String           @id @db.Uuid
+  candidateId String           @map("candidate_id") @db.Uuid
+  status      ModerationStatus
+  createdAt   DateTime         @map("created_at") @db.Timestamptz
+
+  @@map("overall_reviews")
+}
