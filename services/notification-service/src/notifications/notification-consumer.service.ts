@@ -34,6 +34,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { decryptEmail } from '../candidates/email-encryption.util';
+import { subjectAndBodyFor } from './notification-templates.util';
 
 type CreatedEvent = RoundRatingCreatedEventV1 | RecruiterRatingCreatedEventV1 | OverallReviewCreatedEventV1;
 type StatusChangedEvent =
@@ -60,7 +61,9 @@ const TOPICS = [
 // Same interval class of value as api's DomainEventPublisher.
 const RECONNECT_INTERVAL_MS = 30_000;
 
-function getEmailEncryptionKey(): string {
+// Exported so ReconciliationSweepService (GitHub issue #711) can decrypt
+// a candidate email too, without duplicating this env-read.
+export function getEmailEncryptionKey(): string {
   const key = process.env.EMAIL_ENCRYPTION_KEY;
   if (!key) {
     throw new Error('EMAIL_ENCRYPTION_KEY must be set to decrypt a candidate email to notify.');
@@ -113,25 +116,6 @@ function entityIdFor(event: ModerationEvent): string {
 // (see entityIdFor() above), so there's nothing extra to disambiguate.
 function moderationQueueEntryIdFor(event: ModerationEvent): string {
   return isStatusChangedEvent(event) ? (event.moderationQueueEntryId ?? '') : '';
-}
-
-// The two "approved"/"rejected" fixed templates D73 anticipated — never
-// called for 'flagged' (see processEvent's own comment for why that's a
-// deliberate no-op) or 'pending' (review() never re-emits the status it
-// started from).
-function subjectAndBodyFor(newStatus: 'approved' | 'rejected'): { subject: string; text: string; html: string } {
-  if (newStatus === 'approved') {
-    return {
-      subject: 'Your submission has been approved',
-      text: "Good news! Your submission has been reviewed and approved. It's now live.",
-      html: "<p>Good news! Your submission has been reviewed and approved. It's now live.</p>",
-    };
-  }
-  return {
-    subject: 'Your submission was not approved',
-    text: 'Your submission was reviewed and was not approved. Thank you for taking the time to share your feedback.',
-    html: '<p>Your submission was reviewed and was not approved. Thank you for taking the time to share your feedback.</p>',
-  };
 }
 
 // GitHub issue #489 — the one fixed template for an SLA breach, same

@@ -1,0 +1,119 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { ModerationStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
+import { decryptEmail } from '../candidates/email-encryption.util';
+import { getEmailEncryptionKey } from './notification-consumer.service';
+import { subjectAndBodyFor } from './notification-templates.util';
+
+// GitHub issue #711 (Phase 49, D104) — mirrors review-analyzer's own
+// ReconciliationSweepService (issue #442/#340, D81): a periodic sweep
+// that closes the "lost/never-processed event" gap without a
+// transactional outbox. Shorter window than review-analyzer's 24h (which
+// accounts for LLM retry latency) — a status_changed notification has no
+// such latency once the decision commits, so an hour is generous room
+// for a broker hiccup or a consumer restart before treating a decision
+// as genuinely missed.
+const STALENESS_WINDOW_MS = 60 * 60 * 1000;
+
+type NotifiableEntityType = 'round_rating' | 'recruiter_rating' | 'overall_review';
+
+function eventTypeFor(entityType: NotifiableEntityType): string {
+  return `moderation.${entityType}.status_changed`;
+}
+
+@Injectable()
+export class ReconciliationSweepService {
+  private readonly logger = new Logger(ReconciliationSweepService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async sweep(): Promise<void> {
+    const staleBefore = new Date(Date.now() - STALENESS_WINDOW_MS);
+    const staleEntries = await this.prisma.moderationQueueEntry.findMany({
+      where: { reviewedAt: { not: null, lt: staleBefore } },
+    });
+
+    for (const entry of staleEntries) {
+      await this.reconcileOne(entry.id, entry.entityType, entry.entityId);
+    }
+  }
+
+  // Public — same "testable without the cron/kafkajs envelope" shape
+  // api's ModerationService.publishCreatedEvent() and this service's own
+  // NotificationConsumerService.processEvent() already use.
+  async reconcileOne(moderationQueueEntryId: string, entityType: string, entityId: string): Promise<void> {
+    if (!isNotifiableEntityType(entityType)) return; // 'company' — never notified, same as processEvent()'s own scope
+
+    const eventType = eventTypeFor(entityType);
+    const alreadySent = await this.prisma.notificationLog.findUnique({
+      where: { notification_log_dedup_key: { entityType, entityId, eventType, moderationQueueEntryId } },
+    });
+    if (alreadySent) return;
+
+    const entity = await this.findEntity(entityType, entityId);
+    if (!entity) return; // deleted since the queue entry was written — nothing left to notify about
+
+    // Same as notificationFor()'s existing no-op for 'flagged'/'pending':
+    // only a genuine approve/reject decision is notification-worthy.
+    if (entity.status !== 'approved' && entity.status !== 'rejected') return;
+
+    const candidate = await this.prisma.candidate.findUnique({ where: { id: entity.candidateId } });
+    if (!candidate?.emailEncrypted) {
+      this.logger.warn(`No email on file for candidate ${entity.candidateId} — cannot send reconciled notification`);
+      return;
+    }
+
+    const email = decryptEmail(candidate.emailEncrypted, getEmailEncryptionKey());
+    await this.mailService.send({ to: email, ...subjectAndBodyFor(entity.status) });
+
+    this.logger.warn(
+      `Reconciliation sweep sent a missed ${eventType} notification for ${entityType} ${entityId} (moderation_queue entry ${moderationQueueEntryId})`,
+    );
+
+    // Same after-send, swallow-P2002 shape as NotificationConsumerService's
+    // own writes — a crash in the gap between send and this write can
+    // still produce a duplicate email; the unique constraint only
+    // prevents this row itself from ever being written twice.
+    await this.prisma.notificationLog
+      .create({ data: { entityType, entityId, eventType, moderationQueueEntryId } })
+      .catch((err: unknown) => {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          return;
+        }
+        throw err;
+      });
+  }
+
+  private async findEntity(
+    entityType: NotifiableEntityType,
+    entityId: string,
+  ): Promise<{ candidateId: string; status: ModerationStatus } | null> {
+    switch (entityType) {
+      case 'round_rating':
+        return this.prisma.roundRating.findUnique({
+          where: { id: entityId },
+          select: { candidateId: true, status: true },
+        });
+      case 'recruiter_rating':
+        return this.prisma.recruiterRating.findUnique({
+          where: { id: entityId },
+          select: { candidateId: true, status: true },
+        });
+      case 'overall_review':
+        return this.prisma.overallReview.findUnique({
+          where: { id: entityId },
+          select: { candidateId: true, status: true },
+        });
+    }
+  }
+}
+
+function isNotifiableEntityType(entityType: string): entityType is NotifiableEntityType {
+  return entityType === 'round_rating' || entityType === 'recruiter_rating' || entityType === 'overall_review';
+}
