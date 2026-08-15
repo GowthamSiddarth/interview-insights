@@ -13,17 +13,22 @@ interface SessionWithCandidateId {
 // candidateId instead of IP since the abuse surface here is a single
 // authenticated candidate editing their own content repeatedly, not an
 // anonymous caller.
+//
+// GitHub issue #693 (Phase 49, D104) — async now that
+// EditThrottleService.recordAttemptIfAllowed() is a Postgres call, not an
+// in-memory Map lookup; Nest's CanActivate already supports a Promise
+// return, so no other wiring changes.
 @Injectable()
 export class EditThrottleGuard implements CanActivate {
   constructor(private readonly editThrottleService: EditThrottleService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
     const candidateId = (req.user as SessionWithCandidateId).candidateId;
-    if (this.editThrottleService.isBlocked(candidateId)) {
+    const allowed = await this.editThrottleService.recordAttemptIfAllowed(candidateId);
+    if (!allowed) {
       throw new HttpException('Too many edits. Try again later.', HttpStatus.TOO_MANY_REQUESTS);
     }
-    this.editThrottleService.recordAttempt(candidateId);
     return true;
   }
 }
