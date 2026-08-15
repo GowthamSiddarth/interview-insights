@@ -15,4 +15,7 @@ export interface OverallReviewStatusChangedEventV1 {
   previousStatus: 'pending';
   newStatus: ModerationStatus;
   reviewedBy?: string;
+  // GitHub issue #686 (Phase 49, D104) — see round-rating-status-changed
+  // .event.ts's own comment. Optional, non-breaking v1 addition.
+  moderationQueueEntryId?: string;
 }

@@ -17,4 +17,8 @@ export interface RoundRatingStatusChangedEventV1 {
   previousStatus: 'pending';
   newStatus: ModerationStatus;
   reviewedBy?: string;
+  // GitHub issue #686 (Phase 49, D104) — see api's own
+  // round-rating-status-changed.event.ts comment for why. Optional,
+  // non-breaking addition to the existing v1 contract per docs/EVENTS.md.
+  moderationQueueEntryId?: string;
 }
