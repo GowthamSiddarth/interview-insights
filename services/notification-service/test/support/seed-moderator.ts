@@ -10,10 +10,20 @@ import { PrismaClient } from '@prisma/client';
 // `moderators` table also has NOT NULL `username`/`password_hash` with
 // no default, which this fixture has to satisfy but which this service's
 // own runtime code never needs to know exist.
-export async function seedModeratorWithEmail(prisma: PrismaClient, email: string): Promise<string> {
+// GitHub issue #703/#704 (Phase 51, D104) — role defaults to 'moderator'
+// (matching the real table's own DEFAULT), overridable to 'admin' for
+// e2e cases exercising StaffNotificationRecipientsService.activeAdminEmails()
+// (the unclaimed-sla_breach escalation tier) rather than
+// activeModeratorEmails() (which every pre-existing caller of this
+// helper implicitly exercises via the default).
+export async function seedModeratorWithEmail(
+  prisma: PrismaClient,
+  email: string,
+  role: 'staff' | 'moderator' | 'admin' = 'moderator',
+): Promise<string> {
   const id = randomUUID();
   const fixtureUsername = `e2e-moderator-${randomUUID()}`;
   const fixturePasswordHash = 'not-a-real-hash'; // never read by this service
-  await prisma.$executeRaw`INSERT INTO moderators (id, username, password_hash, email) VALUES (${id}::uuid, ${fixtureUsername}, ${fixturePasswordHash}, ${email})`;
+  await prisma.$executeRaw`INSERT INTO moderators (id, username, password_hash, email, role) VALUES (${id}::uuid, ${fixtureUsername}, ${fixturePasswordHash}, ${email}, ${role}::"StaffRole")`;
   return id;
 }

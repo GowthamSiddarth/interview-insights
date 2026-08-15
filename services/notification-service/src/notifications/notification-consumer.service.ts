@@ -43,6 +43,26 @@ import {
   MODERATION_QUEUE_SLA_WARNING_V1_TOPIC,
   ModerationQueueSlaWarningEventV1,
 } from '../events/schemas/moderation-queue-sla-warning.event';
+import {
+  STAFF_ACCOUNT_CREATED_V1_TOPIC,
+  StaffAccountCreatedEventV1,
+} from '../events/schemas/staff-account-created.event';
+import {
+  STAFF_ACCOUNT_ROLE_CHANGED_V1_TOPIC,
+  StaffAccountRoleChangedEventV1,
+} from '../events/schemas/staff-account-role-changed.event';
+import {
+  STAFF_ACCOUNT_DEACTIVATED_V1_TOPIC,
+  StaffAccountDeactivatedEventV1,
+} from '../events/schemas/staff-account-deactivated.event';
+import {
+  STAFF_ACCOUNT_REACTIVATED_V1_TOPIC,
+  StaffAccountReactivatedEventV1,
+} from '../events/schemas/staff-account-reactivated.event';
+import {
+  STAFF_ACCOUNT_PASSWORD_RESET_V1_TOPIC,
+  StaffAccountPasswordResetEventV1,
+} from '../events/schemas/staff-account-password-reset.event';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { decryptEmail } from '../candidates/email-encryption.util';
@@ -74,11 +94,25 @@ type StatusChangedEvent =
 // the same structurally-different kind of event (no candidateId), but
 // its own recipient resolution is a broadcast (StaffNotificationRecipientsService)
 // rather than a single claimedById lookup — see processSlaWarningEvent().
+//
+// GitHub issue #705 (Phase 51, D104) — staff.account.* joins them too: no
+// candidateId either, but its recipient is neither a claimant lookup nor
+// a broadcast — the affected moderator's own email is already right on
+// the event (StaffAccountsService already had it in hand at publish
+// time, #702), so processStaffAccountEvent() never queries Prisma for a
+// recipient at all.
+type StaffAccountEvent =
+  | StaffAccountCreatedEventV1
+  | StaffAccountRoleChangedEventV1
+  | StaffAccountDeactivatedEventV1
+  | StaffAccountReactivatedEventV1
+  | StaffAccountPasswordResetEventV1;
 type ModerationEvent =
   | CreatedEvent
   | StatusChangedEvent
   | ModerationQueueSlaBreachEventV1
-  | ModerationQueueSlaWarningEventV1;
+  | ModerationQueueSlaWarningEventV1
+  | StaffAccountEvent;
 
 const TOPICS = [
   ROUND_RATING_CREATED_V1_TOPIC,
@@ -91,6 +125,11 @@ const TOPICS = [
   COMPANY_STATUS_CHANGED_V1_TOPIC,
   MODERATION_QUEUE_SLA_BREACH_V1_TOPIC,
   MODERATION_QUEUE_SLA_WARNING_V1_TOPIC,
+  STAFF_ACCOUNT_CREATED_V1_TOPIC,
+  STAFF_ACCOUNT_ROLE_CHANGED_V1_TOPIC,
+  STAFF_ACCOUNT_DEACTIVATED_V1_TOPIC,
+  STAFF_ACCOUNT_REACTIVATED_V1_TOPIC,
+  STAFF_ACCOUNT_PASSWORD_RESET_V1_TOPIC,
 ];
 
 // Same interval class of value as api's DomainEventPublisher.
@@ -128,6 +167,15 @@ function entityTypeFor(event: ModerationEvent): string {
     case 'moderation.queue.sla_breach':
     case 'moderation.queue.sla_warning':
       return 'moderation_queue';
+    // GitHub issue #705 (Phase 51, D104) — a fifth, structurally
+    // distinct "entity type" for NotificationLog dedup purposes: a
+    // staff account, not a moderated rating/review/company request.
+    case 'staff.account.created':
+    case 'staff.account.role_changed':
+    case 'staff.account.deactivated':
+    case 'staff.account.reactivated':
+    case 'staff.account.password_reset':
+      return 'staff_account';
   }
 }
 
@@ -148,11 +196,45 @@ function entityIdFor(event: ModerationEvent): string {
     case 'moderation.queue.sla_breach':
     case 'moderation.queue.sla_warning':
       return event.queueEntryId;
+    case 'staff.account.created':
+    case 'staff.account.role_changed':
+    case 'staff.account.deactivated':
+    case 'staff.account.reactivated':
+    case 'staff.account.password_reset':
+      return event.moderatorId;
   }
 }
 
+// GitHub issue #705 (Phase 51, D104) — an explicit allow-list, not
+// `event.eventType.endsWith('.created')`: 'staff.account.created' also
+// ends with '.created' but is a StaffAccountEvent, not a CreatedEvent
+// (a different recipient/template path entirely, see
+// processStaffAccountEvent()) — the suffix check alone would have
+// silently misclassified it the moment that event type existed.
+const CREATED_EVENT_TYPES = new Set<string>([
+  'moderation.round_rating.created',
+  'moderation.recruiter_rating.created',
+  'moderation.overall_review.created',
+  'moderation.company.created',
+]);
+
 function isCreatedEvent(event: ModerationEvent): event is CreatedEvent {
-  return event.eventType.endsWith('.created');
+  return CREATED_EVENT_TYPES.has(event.eventType);
+}
+
+function isStaffAccountEvent(event: ModerationEvent): event is StaffAccountEvent {
+  return event.eventType.startsWith('staff.account.');
+}
+
+// GitHub issue #705 (Phase 51, D104) — a real type guard (not just a
+// runtime string check) so parseEvent()'s validation still gets proper
+// TS narrowing on `event.candidateId`, the same way the old hardcoded
+// `!==` comparison chain did before this event family made that chain
+// unwieldy.
+function hasCandidateId(
+  event: ModerationEvent,
+): event is Exclude<ModerationEvent, ModerationQueueSlaBreachEventV1 | ModerationQueueSlaWarningEventV1 | StaffAccountEvent> {
+  return !NO_CANDIDATE_ID_EVENT_TYPES.has(event.eventType);
 }
 
 // GitHub issue #687 (Phase 49, D104) — the confirmed-bug fix: a
@@ -170,9 +252,17 @@ function isCreatedEvent(event: ModerationEvent): event is CreatedEvent {
 // api's ModerationService.publishCreatedEvent() now includes for that
 // case. This can never collide with the original submission's dedup row
 // (still keyed '') since a real queue entry id is never the empty string.
+//
+// GitHub issue #705 (Phase 51, D104) — staff.account.* events have no
+// moderation_queue entry to key off at all (a staff action isn't a
+// moderated entity), so they use their own fresh actionId (#701) for the
+// exact same purpose: several of these event types can repeat on the
+// same moderatorId, and each occurrence needs its own dedup key rather
+// than colliding with a prior action on the same account.
 function moderationQueueEntryIdFor(event: ModerationEvent): string {
   if (isStatusChangedEvent(event)) return event.moderationQueueEntryId ?? '';
   if (isCreatedEvent(event) && event.isResubmission) return event.moderationQueueEntryId ?? '';
+  if (isStaffAccountEvent(event)) return event.actionId;
   return '';
 }
 
@@ -196,6 +286,47 @@ function slaWarningSubjectAndBody(): { subject: string; text: string; html: stri
     text: 'An unclaimed moderation queue item is nearing its SLA deadline and still needs a moderator to claim it.',
     html: '<p>An unclaimed moderation queue item is nearing its SLA deadline and still needs a moderator to claim it.</p>',
   };
+}
+
+// GitHub issue #705 (Phase 51, D104) — one fixed template per
+// staff.account.* event type, addressed to the affected account itself
+// (never a broadcast). create()/resetPassword() are the two that carry
+// a plaintext temporaryPassword — see those events' own schema comments
+// for why that's a deliberate, one-time exception, mirroring what the
+// creating/resetting admin's own HTTP response already returns.
+function staffAccountNotificationFor(event: StaffAccountEvent): { subject: string; text: string; html: string } {
+  switch (event.eventType) {
+    case 'staff.account.created':
+      return {
+        subject: 'Your staff account has been created',
+        text: `An account has been created for you with the role "${event.role}". Your temporary password is: ${event.temporaryPassword} — please log in and change it as soon as possible.`,
+        html: `<p>An account has been created for you with the role "${event.role}".</p><p>Your temporary password is: <strong>${event.temporaryPassword}</strong> — please log in and change it as soon as possible.</p>`,
+      };
+    case 'staff.account.role_changed':
+      return {
+        subject: `Your staff account role has been changed to ${event.newRole}`,
+        text: `Your staff account role has been changed from "${event.oldRole}" to "${event.newRole}".`,
+        html: `<p>Your staff account role has been changed from "${event.oldRole}" to "${event.newRole}".</p>`,
+      };
+    case 'staff.account.deactivated':
+      return {
+        subject: 'Your staff account has been deactivated',
+        text: 'Your staff account has been deactivated. Contact an administrator if you believe this is a mistake.',
+        html: '<p>Your staff account has been deactivated. Contact an administrator if you believe this is a mistake.</p>',
+      };
+    case 'staff.account.reactivated':
+      return {
+        subject: 'Your staff account has been reactivated',
+        text: 'Your staff account has been reactivated — you can log in again.',
+        html: '<p>Your staff account has been reactivated — you can log in again.</p>',
+      };
+    case 'staff.account.password_reset':
+      return {
+        subject: 'Your staff account password has been reset',
+        text: `An administrator has reset your password. Your new temporary password is: ${event.temporaryPassword} — please log in and change it as soon as possible.`,
+        html: `<p>An administrator has reset your password. Your new temporary password is: <strong>${event.temporaryPassword}</strong> — please log in and change it as soon as possible.</p>`,
+      };
+  }
 }
 
 // GitHub issue #335 (Phase 31) — the first real consumer of Phase 30's
@@ -258,7 +389,7 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
       });
       this.connected = true;
       if (wasDisconnected) {
-        this.logger.log('Connected to Redpanda, consuming moderation.*.created.v1, moderation.*.status_changed.v1, moderation.queue.sla_breach.v1, and moderation.queue.sla_warning.v1 topics');
+        this.logger.log('Connected to Redpanda, consuming moderation.*.created.v1, moderation.*.status_changed.v1, moderation.queue.sla_breach.v1, moderation.queue.sla_warning.v1, and staff.account.*.v1 topics');
       }
     } catch (err) {
       this.logger.error(
@@ -302,17 +433,14 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     if (!TOPICS_BY_EVENT_TYPE.has(event.eventType)) {
       throw new Error(`Unrecognized eventType "${String(event.eventType)}"`);
     }
-    // GitHub issue #489 — a sla_breach event has no candidateId at all
-    // (nothing about it is candidate-facing); the check below only
-    // applies to the event shapes that do carry one. GitHub issue #704 —
-    // sla_warning is the same "no candidateId at all" shape. The `!==`
-    // guards narrow `event` for the `&&`'s second operand, same as any
-    // other discriminated-union check.
-    if (
-      event.eventType !== 'moderation.queue.sla_breach' &&
-      event.eventType !== 'moderation.queue.sla_warning' &&
-      !event.candidateId
-    ) {
+    // GitHub issue #489 — sla_breach has no candidateId at all (nothing
+    // about it is candidate-facing); the check below only applies to the
+    // event shapes that do carry one. GitHub issue #704 (sla_warning) and
+    // #705 (every staff.account.* event) are the same "no candidateId at
+    // all" shape. hasCandidateId() is a real type guard (not just a
+    // runtime Set check) so TS narrows `event` for the `&&`'s second
+    // operand, same as the old chained `!==` comparisons did.
+    if (hasCandidateId(event) && !event.candidateId) {
       throw new Error('Event is missing candidateId');
     }
     return event;
@@ -333,6 +461,12 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     }
     if (event.eventType === 'moderation.queue.sla_warning') {
       return this.processSlaWarningEvent(event);
+    }
+    // GitHub issue #705 (Phase 51, D104) — same early-branch shape: no
+    // candidateId, and its recipient is neither a claimant lookup nor a
+    // broadcast (the target's own email is already on the event).
+    if (isStaffAccountEvent(event)) {
+      return this.processStaffAccountEvent(event);
     }
 
     // 'flagged' (GitHub issue #336): the issue/ROADMAP scope is explicitly
@@ -491,6 +625,37 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
         throw err;
       });
   }
+
+  // GitHub issue #705 (Phase 51, D104) — the simplest recipient
+  // resolution of any event this service consumes: the affected
+  // moderator's own email is already right on the event
+  // (StaffAccountsService had it in hand at publish time, #702), so this
+  // never queries Prisma for anything except the idempotency check
+  // itself and the eventual NotificationLog write.
+  private async processStaffAccountEvent(event: StaffAccountEvent): Promise<void> {
+    const entityType = entityTypeFor(event);
+    const entityId = entityIdFor(event);
+    const moderationQueueEntryId = moderationQueueEntryIdFor(event);
+
+    const alreadySent = await this.prisma.notificationLog.findUnique({
+      where: { notification_log_dedup_key: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } },
+    });
+    if (alreadySent) {
+      this.logger.log(`Already sent a ${event.eventType} notification for moderator ${entityId} — skipping duplicate`);
+      return;
+    }
+
+    await this.mailService.send({ to: event.email, ...staffAccountNotificationFor(event) });
+
+    await this.prisma.notificationLog
+      .create({ data: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } })
+      .catch((err: unknown) => {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          return;
+        }
+        throw err;
+      });
+  }
 }
 
 function isStatusChangedEvent(event: ModerationEvent): event is StatusChangedEvent {
@@ -523,4 +688,21 @@ const TOPICS_BY_EVENT_TYPE = new Set<string>([
   'moderation.company.status_changed',
   'moderation.queue.sla_breach',
   'moderation.queue.sla_warning',
+  'staff.account.created',
+  'staff.account.role_changed',
+  'staff.account.deactivated',
+  'staff.account.reactivated',
+  'staff.account.password_reset',
+]);
+
+// GitHub issue #705 (Phase 51, D104) — used by parseEvent()'s
+// candidateId validation; see that call site's own comment.
+const NO_CANDIDATE_ID_EVENT_TYPES = new Set<string>([
+  'moderation.queue.sla_breach',
+  'moderation.queue.sla_warning',
+  'staff.account.created',
+  'staff.account.role_changed',
+  'staff.account.deactivated',
+  'staff.account.reactivated',
+  'staff.account.password_reset',
 ]);

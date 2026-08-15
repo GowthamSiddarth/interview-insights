@@ -9,6 +9,7 @@ import { ROUND_RATING_STATUS_CHANGED_V1_TOPIC } from '../src/events/schemas/roun
 import { COMPANY_CREATED_V1_TOPIC } from '../src/events/schemas/company-created.event';
 import { COMPANY_STATUS_CHANGED_V1_TOPIC } from '../src/events/schemas/company-status-changed.event';
 import { MODERATION_QUEUE_SLA_BREACH_V1_TOPIC } from '../src/events/schemas/moderation-queue-sla-breach.event';
+import { STAFF_ACCOUNT_CREATED_V1_TOPIC } from '../src/events/schemas/staff-account-created.event';
 import { seedCandidateWithEmail } from './support/seed-candidate';
 import { seedModeratorWithEmail } from './support/seed-moderator';
 import { publishTestEvent } from './support/redpanda-producer';
@@ -406,11 +407,53 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
     25000,
   );
 
-  // No auto-assignment under this phase's manual-claim-only model (D80)
-  // — an unclaimed breach has no recipient. Proven against the real
-  // broker so a future change can't silently start guessing one.
+  // GitHub issue #704 (Phase 51, D104) — no auto-assignment under this
+  // phase's manual-claim-only model (D80) still means an unclaimed
+  // breach has no *claimant*, but it's no longer a silent no-op: it now
+  // escalates to every active admin instead. This test used to assert
+  // the pre-#704 "never sends an email" behavior; it's now the opposite,
+  // proven against the real broker/Postgres/Mailpit stack.
   it(
-    'a real moderation.queue.sla_breach.v1 event with no claimant never sends an email',
+    'a real moderation.queue.sla_breach.v1 event with no claimant escalates to every active admin',
+    async () => {
+      const adminEmail = `admin-${unique()}@example.com`;
+      await seedModeratorWithEmail(prisma, adminEmail, 'admin');
+      // A plain moderator must never receive the escalation — only admins.
+      await seedModeratorWithEmail(prisma, `mod-${unique()}@example.com`, 'moderator');
+      const queueEntryId = randomUUID();
+      const event = {
+        eventType: 'moderation.queue.sla_breach' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        queueEntryId,
+        entityType: 'overall_review',
+        entityId: randomUUID(),
+        slaDeadline: new Date(Date.now() - 60_000).toISOString(),
+        claimedById: null,
+      };
+
+      await publishTestEvent(MODERATION_QUEUE_SLA_BREACH_V1_TOPIC, event, queueEntryId);
+
+      const message = await waitForMailpitMessage(adminEmail);
+      expect(message.Subject).toBe('A moderation queue item you claimed is overdue');
+
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'moderation_queue',
+            entityId: queueEntryId,
+            eventType: 'moderation.queue.sla_breach',
+            moderationQueueEntryId: '',
+          },
+        },
+      });
+      expect(logged).not.toBeNull();
+    },
+    25000,
+  );
+
+  it(
+    'a real moderation.queue.sla_breach.v1 event with no claimant and no active admins never sends an email',
     async () => {
       const queueEntryId = randomUUID();
       const event = {
@@ -442,6 +485,47 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
         },
       });
       expect(logged).toBeNull();
+    },
+    25000,
+  );
+
+  // GitHub issue #705 (Phase 51, D104) — the recipient email is already
+  // on the event (StaffAccountsService had it in hand at publish time,
+  // #702), so unlike every other e2e case in this file, this one needs
+  // no seeded Candidate/Moderator row at all.
+  it(
+    'a real staff.account.created.v1 event sends the new account its temporary password',
+    async () => {
+      const email = `new-staff-${unique()}@example.com`;
+      const moderatorId = randomUUID();
+      const event = {
+        eventType: 'staff.account.created' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        moderatorId,
+        email,
+        role: 'moderator' as const,
+        actorId: randomUUID(),
+        temporaryPassword: 'e2e-temp-password',
+        actionId: randomUUID(),
+      };
+
+      await publishTestEvent(STAFF_ACCOUNT_CREATED_V1_TOPIC, event, moderatorId);
+
+      const message = await waitForMailpitMessage(email);
+      expect(message.Subject).toBe('Your staff account has been created');
+
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'staff_account',
+            entityId: moderatorId,
+            eventType: 'staff.account.created',
+            moderationQueueEntryId: event.actionId,
+          },
+        },
+      });
+      expect(logged).not.toBeNull();
     },
     25000,
   );
