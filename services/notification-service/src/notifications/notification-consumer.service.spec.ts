@@ -75,6 +75,7 @@ describe('NotificationConsumerService', () => {
     companyId: 'company-1',
     previousStatus: 'pending',
     newStatus,
+    moderationQueueEntryId: 'queue-1',
   });
 
   beforeEach(async () => {
@@ -117,7 +118,12 @@ describe('NotificationConsumerService', () => {
         expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission is pending review' }),
       );
       expect(prisma.notificationLog.create).toHaveBeenCalledWith({
-        data: { entityType: 'round_rating', entityId: 'rating-1', eventType: 'moderation.round_rating.created' },
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          eventType: 'moderation.round_rating.created',
+          moderationQueueEntryId: '',
+        },
       });
     });
 
@@ -145,6 +151,7 @@ describe('NotificationConsumerService', () => {
           entityType: 'recruiter_rating',
           entityId: 'recruiter-rating-1',
           eventType: 'moderation.recruiter_rating.created',
+          moderationQueueEntryId: '',
         },
       });
 
@@ -160,7 +167,12 @@ describe('NotificationConsumerService', () => {
       };
       await service.processEvent(overallEvent);
       expect(prisma.notificationLog.create).toHaveBeenCalledWith({
-        data: { entityType: 'overall_review', entityId: 'review-1', eventType: 'moderation.overall_review.created' },
+        data: {
+          entityType: 'overall_review',
+          entityId: 'review-1',
+          eventType: 'moderation.overall_review.created',
+          moderationQueueEntryId: '',
+        },
       });
     });
 
@@ -229,7 +241,12 @@ describe('NotificationConsumerService', () => {
         expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission has been approved' }),
       );
       expect(prisma.notificationLog.create).toHaveBeenCalledWith({
-        data: { entityType: 'round_rating', entityId: 'rating-1', eventType: 'moderation.round_rating.status_changed' },
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          eventType: 'moderation.round_rating.status_changed',
+          moderationQueueEntryId: 'queue-1',
+        },
       });
     });
 
@@ -247,7 +264,12 @@ describe('NotificationConsumerService', () => {
         expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission was not approved' }),
       );
       expect(prisma.notificationLog.create).toHaveBeenCalledWith({
-        data: { entityType: 'round_rating', entityId: 'rating-1', eventType: 'moderation.round_rating.status_changed' },
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          eventType: 'moderation.round_rating.status_changed',
+          moderationQueueEntryId: 'queue-1',
+        },
       });
     });
 
@@ -258,6 +280,65 @@ describe('NotificationConsumerService', () => {
       expect(prisma.notificationLog.findUnique).not.toHaveBeenCalled();
       expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
       expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #687 (Phase 49, D104) — the dedup lookup is keyed on
+    // moderationQueueEntryId too, not just entityType/entityId/eventType.
+    it('looks up the dedup key scoped to the queue entry, not just the entity', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(statusChangedEvent('approved'));
+
+      expect(prisma.notificationLog.findUnique).toHaveBeenCalledWith({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'round_rating',
+            entityId: 'rating-1',
+            eventType: 'moderation.round_rating.status_changed',
+            moderationQueueEntryId: 'queue-1',
+          },
+        },
+      });
+    });
+
+    // The confirmed bug this issue fixes: two decisions on the same
+    // entity from two different moderation_queue entries (a
+    // resubmission) must each independently be treated as un-notified —
+    // the second must not be swallowed by the first's dedup row.
+    it('treats a decision from a different moderation_queue entry on the same entity as un-notified', async () => {
+      prisma.notificationLog.findUnique.mockImplementation(
+        ({ where }: { where: { notification_log_dedup_key: { moderationQueueEntryId: string } } }) =>
+          Promise.resolve(where.notification_log_dedup_key.moderationQueueEntryId === 'queue-1' ? { id: 'log-1' } : null),
+      );
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      // queue-1's decision was already notified — a no-op.
+      await service.processEvent(statusChangedEvent('approved'));
+      expect(mailService.send).not.toHaveBeenCalled();
+
+      // A resubmission's decision, from a different queue entry — must
+      // still send, not get swallowed by queue-1's dedup row.
+      await service.processEvent({ ...statusChangedEvent('rejected'), moderationQueueEntryId: 'queue-2' });
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: 'Your submission was not approved' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          eventType: 'moderation.round_rating.status_changed',
+          moderationQueueEntryId: 'queue-2',
+        },
+      });
     });
 
     it('never sends twice for the same entity+eventType — a redelivered status_changed event is a no-op', async () => {
@@ -287,7 +368,12 @@ describe('NotificationConsumerService', () => {
         }),
       );
       expect(prisma.notificationLog.create).toHaveBeenCalledWith({
-        data: { entityType: 'moderation_queue', entityId: 'queue-1', eventType: 'moderation.queue.sla_breach' },
+        data: {
+          entityType: 'moderation_queue',
+          entityId: 'queue-1',
+          eventType: 'moderation.queue.sla_breach',
+          moderationQueueEntryId: '',
+        },
       });
     });
 
