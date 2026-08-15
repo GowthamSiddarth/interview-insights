@@ -613,6 +613,14 @@ model ModerationQueueEntry {
   // if the entry is later reviewed — same "record what had happened,
   // don't erase history" precedent slaDeadline's own comment already set.
   breachNotifiedAt DateTime?        @map("breach_notified_at") @db.Timestamptz
+  // GitHub issue #704 (Phase 51, D104) — set the first time
+  // SlaBreachDetectionService's sweep publishes a
+  // moderation.queue.sla_warning.v1 event for this entry (the new,
+  // earlier 75%-elapsed-still-unclaimed tier), so it's never
+  // re-broadcast on every later sweep tick before the entry is either
+  // claimed, reviewed, or actually breaches. Same "never cleared once
+  // set" precedent breachNotifiedAt's own comment already established.
+  warningNotifiedAt DateTime?       @map("warning_notified_at") @db.Timestamptz
   createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz
 
   claimedBy Moderator? @relation(fields: [claimedById], references: [id])

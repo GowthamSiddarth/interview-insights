@@ -39,10 +39,15 @@ import {
   MODERATION_QUEUE_SLA_BREACH_V1_TOPIC,
   ModerationQueueSlaBreachEventV1,
 } from '../events/schemas/moderation-queue-sla-breach.event';
+import {
+  MODERATION_QUEUE_SLA_WARNING_V1_TOPIC,
+  ModerationQueueSlaWarningEventV1,
+} from '../events/schemas/moderation-queue-sla-warning.event';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { decryptEmail } from '../candidates/email-encryption.util';
 import { pendingReviewSubjectAndBody, subjectAndBodyFor } from './notification-templates.util';
+import { StaffNotificationRecipientsService } from './staff-notification-recipients.service';
 
 // GitHub issue #698 (Phase 50, D104) — company joins the three original
 // rated/reviewed entity types here. Its events have no companyId field
@@ -64,7 +69,16 @@ type StatusChangedEvent =
 // recipient is resolved via claimedById -> Moderator.email, not a
 // decrypted Candidate email. processEvent() branches on eventType before
 // any of the candidateId-shaped logic below ever runs against it.
-type ModerationEvent = CreatedEvent | StatusChangedEvent | ModerationQueueSlaBreachEventV1;
+//
+// GitHub issue #704 (Phase 51, D104) — sla_warning joins sla_breach as
+// the same structurally-different kind of event (no candidateId), but
+// its own recipient resolution is a broadcast (StaffNotificationRecipientsService)
+// rather than a single claimedById lookup — see processSlaWarningEvent().
+type ModerationEvent =
+  | CreatedEvent
+  | StatusChangedEvent
+  | ModerationQueueSlaBreachEventV1
+  | ModerationQueueSlaWarningEventV1;
 
 const TOPICS = [
   ROUND_RATING_CREATED_V1_TOPIC,
@@ -76,6 +90,7 @@ const TOPICS = [
   OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC,
   COMPANY_STATUS_CHANGED_V1_TOPIC,
   MODERATION_QUEUE_SLA_BREACH_V1_TOPIC,
+  MODERATION_QUEUE_SLA_WARNING_V1_TOPIC,
 ];
 
 // Same interval class of value as api's DomainEventPublisher.
@@ -107,10 +122,11 @@ function entityTypeFor(event: ModerationEvent): string {
     case 'moderation.company.created':
     case 'moderation.company.status_changed':
       return 'company';
-    // Not one of the four entity types above — this event is about the
-    // moderation_queue row itself, not the entity it wraps (that's
-    // carried separately, as event.entityType/entityId).
+    // Not one of the four entity types above — these two events are
+    // about the moderation_queue row itself, not the entity they wrap
+    // (that's carried separately, as event.entityType/entityId).
     case 'moderation.queue.sla_breach':
+    case 'moderation.queue.sla_warning':
       return 'moderation_queue';
   }
 }
@@ -130,6 +146,7 @@ function entityIdFor(event: ModerationEvent): string {
     case 'moderation.company.status_changed':
       return event.companyId;
     case 'moderation.queue.sla_breach':
+    case 'moderation.queue.sla_warning':
       return event.queueEntryId;
   }
 }
@@ -170,6 +187,17 @@ function slaBreachSubjectAndBody(): { subject: string; text: string; html: strin
   };
 }
 
+// GitHub issue #704 (Phase 51, D104) — the warning tier's own fixed
+// template, broadcast rather than addressed to a specific claimant (the
+// body deliberately doesn't say "you claimed" — no one has yet).
+function slaWarningSubjectAndBody(): { subject: string; text: string; html: string } {
+  return {
+    subject: 'A moderation queue item is nearing its SLA deadline',
+    text: 'An unclaimed moderation queue item is nearing its SLA deadline and still needs a moderator to claim it.',
+    html: '<p>An unclaimed moderation queue item is nearing its SLA deadline and still needs a moderator to claim it.</p>',
+  };
+}
+
 // GitHub issue #335 (Phase 31) — the first real consumer of Phase 30's
 // event bus (docs/EVENTS.md). Subscribes to all three moderation.*.created.v1
 // topics and sends a "your submission is pending review" email per event,
@@ -196,6 +224,7 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     @Inject(EVENT_CONSUMER) private readonly consumer: Consumer,
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly staffNotificationRecipients: StaffNotificationRecipientsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -229,7 +258,7 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
       });
       this.connected = true;
       if (wasDisconnected) {
-        this.logger.log('Connected to Redpanda, consuming moderation.*.created.v1, moderation.*.status_changed.v1, and moderation.queue.sla_breach.v1 topics');
+        this.logger.log('Connected to Redpanda, consuming moderation.*.created.v1, moderation.*.status_changed.v1, moderation.queue.sla_breach.v1, and moderation.queue.sla_warning.v1 topics');
       }
     } catch (err) {
       this.logger.error(
@@ -275,10 +304,15 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     }
     // GitHub issue #489 — a sla_breach event has no candidateId at all
     // (nothing about it is candidate-facing); the check below only
-    // applies to the two event shapes that do carry one. The `!==` guard
-    // narrows `event` for the `&&`'s second operand, same as any other
-    // discriminated-union check.
-    if (event.eventType !== 'moderation.queue.sla_breach' && !event.candidateId) {
+    // applies to the event shapes that do carry one. GitHub issue #704 —
+    // sla_warning is the same "no candidateId at all" shape. The `!==`
+    // guards narrow `event` for the `&&`'s second operand, same as any
+    // other discriminated-union check.
+    if (
+      event.eventType !== 'moderation.queue.sla_breach' &&
+      event.eventType !== 'moderation.queue.sla_warning' &&
+      !event.candidateId
+    ) {
       throw new Error('Event is missing candidateId');
     }
     return event;
@@ -296,6 +330,9 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     // against it.
     if (event.eventType === 'moderation.queue.sla_breach') {
       return this.processSlaBreachEvent(event);
+    }
+    if (event.eventType === 'moderation.queue.sla_warning') {
+      return this.processSlaWarningEvent(event);
     }
 
     // 'flagged' (GitHub issue #336): the issue/ROADMAP scope is explicitly
@@ -360,21 +397,21 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
       });
   }
 
-  // GitHub issue #489 — recipient is the claiming moderator, resolved via
-  // this service's own minimal Moderator mirror (D75 pattern), not a
+  // GitHub issue #489 — recipient is the claiming moderator (resolved via
+  // this service's own minimal Moderator mirror, D75 pattern), not a
   // decrypted candidate email. Same idempotency shape as processEvent()'s
   // own guard, keyed the same way (entityTypeFor/entityIdFor already
   // handle 'moderation.queue.sla_breach' — see their own comments).
+  //
+  // GitHub issue #704 (Phase 51, D104) — an *unclaimed* breach no longer
+  // means "no recipient." Under this phase's manual-claim-only model
+  // (D80) there's still no auto-assignment, but leaving a breached,
+  // unclaimed item silently unnotified forever was the actual gap this
+  // issue closes: it now escalates to every active admin instead —
+  // resolved by StaffNotificationRecipientsService (#703), never by this
+  // service reaching back into api. The idempotency check moved ahead of
+  // the claimed/unclaimed branch so it applies uniformly to both paths.
   private async processSlaBreachEvent(event: ModerationQueueSlaBreachEventV1): Promise<void> {
-    // No auto-assignment under this phase's manual-claim-only model
-    // (D80) — an unclaimed breach has no recipient. The event itself
-    // still fires (api's SlaBreachDetectionService doesn't know or care
-    // whether anyone will act on it); this is simply nothing to email.
-    if (!event.claimedById) {
-      this.logger.log(`SLA breach for queue entry ${event.queueEntryId} has no claimant — skipping (no recipient)`);
-      return;
-    }
-
     const entityType = entityTypeFor(event);
     const entityId = entityIdFor(event);
     const moderationQueueEntryId = moderationQueueEntryIdFor(event);
@@ -387,13 +424,63 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
       return;
     }
 
-    const moderator = await this.prisma.moderator.findUnique({ where: { id: event.claimedById } });
-    if (!moderator) {
-      this.logger.warn(`No moderator found for id ${event.claimedById} — cannot send SLA breach notification`);
+    const recipients = event.claimedById
+      ? await this.resolveClaimantEmail(event.claimedById)
+      : await this.staffNotificationRecipients.activeAdminEmails();
+
+    if (recipients.length === 0) {
+      this.logger.warn(
+        event.claimedById
+          ? `No moderator found for id ${event.claimedById} — cannot send SLA breach notification`
+          : `SLA breach for queue entry ${event.queueEntryId} has no claimant and no active admins to escalate to — skipping`,
+      );
       return;
     }
 
-    await this.mailService.send({ to: moderator.email, ...slaBreachSubjectAndBody() });
+    await Promise.all(recipients.map((email) => this.mailService.send({ to: email, ...slaBreachSubjectAndBody() })));
+
+    await this.prisma.notificationLog
+      .create({ data: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } })
+      .catch((err: unknown) => {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          return;
+        }
+        throw err;
+      });
+  }
+
+  private async resolveClaimantEmail(claimedById: string): Promise<string[]> {
+    const moderator = await this.prisma.moderator.findUnique({ where: { id: claimedById } });
+    return moderator ? [moderator.email] : [];
+  }
+
+  // GitHub issue #704 (Phase 51, D104) — the new 75%-elapsed-still-
+  // unclaimed tier, broadcast to every active moderator (both
+  // `moderator` and `admin` roles — StaffNotificationRecipientsService's
+  // own comment for why) rather than the single claimant sla_breach.v1
+  // targets. Same idempotency/best-effort shape as processSlaBreachEvent().
+  private async processSlaWarningEvent(event: ModerationQueueSlaWarningEventV1): Promise<void> {
+    const entityType = entityTypeFor(event);
+    const entityId = entityIdFor(event);
+    const moderationQueueEntryId = moderationQueueEntryIdFor(event);
+
+    const alreadySent = await this.prisma.notificationLog.findUnique({
+      where: { notification_log_dedup_key: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } },
+    });
+    if (alreadySent) {
+      this.logger.log(`Already sent an SLA warning notification for queue entry ${entityId} — skipping duplicate`);
+      return;
+    }
+
+    const recipients = await this.staffNotificationRecipients.activeModeratorEmails();
+    if (recipients.length === 0) {
+      this.logger.warn(
+        `SLA warning for queue entry ${event.queueEntryId} has no active moderators to notify — skipping`,
+      );
+      return;
+    }
+
+    await Promise.all(recipients.map((email) => this.mailService.send({ to: email, ...slaWarningSubjectAndBody() })));
 
     await this.prisma.notificationLog
       .create({ data: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } })
@@ -435,4 +522,5 @@ const TOPICS_BY_EVENT_TYPE = new Set<string>([
   'moderation.overall_review.status_changed',
   'moderation.company.status_changed',
   'moderation.queue.sla_breach',
+  'moderation.queue.sla_warning',
 ]);

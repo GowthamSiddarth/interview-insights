@@ -300,6 +300,7 @@ Generic moderation record referencing any of the rating/review tables above.
 | claimed_by | uuid FK → moderators, nullable | manual-claim assignment (GitHub issue #486/#487, Phase 36) |
 | claimed_at | timestamptz | nullable |
 | breach_notified_at | timestamptz | nullable — set once `SlaBreachDetectionService`'s hourly sweep has published a `moderation.queue.sla_breach.v1` event for this entry, so it's never re-notified on a later sweep tick (GitHub issue #488, Phase 36) |
+| warning_notified_at | timestamptz | nullable — set once the sweep has published a `moderation.queue.sla_warning.v1` event for this entry (75% of the SLA window elapsed, still unclaimed), same never-cleared/never-re-notified precedent as `breach_notified_at` (GitHub issue #704, Phase 51) |
 | created_at | timestamptz | |
 
 ---

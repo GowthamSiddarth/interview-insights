@@ -13,6 +13,8 @@ import { RoundRatingStatusChangedEventV1 } from '../events/schemas/round-rating-
 import { CompanyCreatedEventV1 } from '../events/schemas/company-created.event';
 import { CompanyStatusChangedEventV1 } from '../events/schemas/company-status-changed.event';
 import { ModerationQueueSlaBreachEventV1 } from '../events/schemas/moderation-queue-sla-breach.event';
+import { ModerationQueueSlaWarningEventV1 } from '../events/schemas/moderation-queue-sla-warning.event';
+import { StaffNotificationRecipientsService } from './staff-notification-recipients.service';
 
 const ENCRYPTION_KEY = 'a'.repeat(64);
 
@@ -43,6 +45,7 @@ describe('NotificationConsumerService', () => {
     notificationLog: { findUnique: jest.Mock; create: jest.Mock };
   };
   let mailService: { send: jest.Mock };
+  let staffNotificationRecipients: { activeModeratorEmails: jest.Mock; activeAdminEmails: jest.Mock };
   const originalKey = process.env.EMAIL_ENCRYPTION_KEY;
 
   const roundRatingEvent: RoundRatingCreatedEventV1 = {
@@ -66,6 +69,17 @@ describe('NotificationConsumerService', () => {
     slaDeadline: '2026-08-01T00:00:00.000Z',
     claimedById,
   });
+
+  // GitHub issue #704 (Phase 51, D104).
+  const slaWarningEvent: ModerationQueueSlaWarningEventV1 = {
+    eventType: 'moderation.queue.sla_warning',
+    eventVersion: 1,
+    occurredAt: '2026-08-15T00:00:00.000Z',
+    queueEntryId: 'queue-1',
+    entityType: 'round_rating',
+    entityId: 'rating-1',
+    slaDeadline: '2026-08-16T00:00:00.000Z',
+  };
 
   const statusChangedEvent = (newStatus: 'approved' | 'rejected' | 'flagged'): RoundRatingStatusChangedEventV1 => ({
     eventType: 'moderation.round_rating.status_changed',
@@ -111,6 +125,10 @@ describe('NotificationConsumerService', () => {
       notificationLog: { findUnique: jest.fn(), create: jest.fn() },
     };
     mailService = { send: jest.fn().mockResolvedValue(undefined) };
+    staffNotificationRecipients = {
+      activeModeratorEmails: jest.fn().mockResolvedValue([]),
+      activeAdminEmails: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -118,6 +136,7 @@ describe('NotificationConsumerService', () => {
         { provide: EVENT_CONSUMER, useValue: fakeConsumer() },
         { provide: PrismaService, useValue: prisma },
         { provide: MailService, useValue: mailService },
+        { provide: StaffNotificationRecipientsService, useValue: staffNotificationRecipients },
       ],
     }).compile();
 
@@ -565,11 +584,41 @@ describe('NotificationConsumerService', () => {
       });
     });
 
-    it('skips (without touching NotificationLog) when the entry was never claimed', async () => {
+    // GitHub issue #704 (Phase 51, D104) — an unclaimed breach used to be
+    // a silent no-op (skips (without touching NotificationLog)); it now
+    // escalates to every active admin instead.
+    it('escalates to every active admin when the entry was never claimed', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      staffNotificationRecipients.activeAdminEmails.mockResolvedValue([
+        'admin-a@example.com',
+        'admin-b@example.com',
+      ]);
+      prisma.notificationLog.create.mockResolvedValue({});
+
       await service.processEvent(slaBreachEvent(null));
 
-      expect(prisma.notificationLog.findUnique).not.toHaveBeenCalled();
       expect(prisma.moderator.findUnique).not.toHaveBeenCalled();
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'admin-a@example.com', subject: 'A moderation queue item you claimed is overdue' }),
+      );
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'admin-b@example.com' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'moderation_queue',
+          entityId: 'queue-1',
+          eventType: 'moderation.queue.sla_breach',
+          moderationQueueEntryId: '',
+        },
+      });
+    });
+
+    it('skips (without throwing) when unclaimed and no active admins exist to escalate to', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+
+      await expect(service.processEvent(slaBreachEvent(null))).resolves.toBeUndefined();
+
       expect(mailService.send).not.toHaveBeenCalled();
       expect(prisma.notificationLog.create).not.toHaveBeenCalled();
     });
@@ -600,6 +649,65 @@ describe('NotificationConsumerService', () => {
       prisma.notificationLog.create.mockResolvedValue({});
 
       await service.processEvent(slaBreachEvent('mod-1'));
+
+      expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // GitHub issue #704 (Phase 51, D104).
+  describe('processEvent — moderation.queue.sla_warning', () => {
+    it('broadcasts to every active moderator and records it', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      staffNotificationRecipients.activeModeratorEmails.mockResolvedValue([
+        'mod-a@example.com',
+        'admin-a@example.com',
+      ]);
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(slaWarningEvent);
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'mod-a@example.com',
+          subject: 'A moderation queue item is nearing its SLA deadline',
+        }),
+      );
+      expect(mailService.send).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin-a@example.com' }));
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'moderation_queue',
+          entityId: 'queue-1',
+          eventType: 'moderation.queue.sla_warning',
+          moderationQueueEntryId: '',
+        },
+      });
+    });
+
+    it('skips (without throwing) when there are no active moderators to notify', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+
+      await expect(service.processEvent(slaWarningEvent)).resolves.toBeUndefined();
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('never sends twice for the same queue entry — idempotent against redelivery', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
+
+      await service.processEvent(slaWarningEvent);
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(staffNotificationRecipients.activeModeratorEmails).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('never touches Candidate — this event has no candidateId at all', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      staffNotificationRecipients.activeModeratorEmails.mockResolvedValue(['mod-a@example.com']);
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(slaWarningEvent);
 
       expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
     });
