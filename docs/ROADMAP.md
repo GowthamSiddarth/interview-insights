@@ -2601,13 +2601,13 @@ Moderator Notification Platform". Epic: GitHub issue #700.
 
 Ordered by dependency:
 
-- [ ] `staff.account.*` event schemas (GitHub issue #701) — blocks #702
-- [ ] Publish `staff.*` events from `StaffAccountsService` (GitHub issue
+- [x] `staff.account.*` event schemas (GitHub issue #701) — blocks #702
+- [x] Publish `staff.*` events from `StaffAccountsService` (GitHub issue
       #702) — depends on #701
-- [ ] `StaffNotificationRecipientsService` (role -> active email list)
+- [x] `StaffNotificationRecipientsService` (role -> active email list)
       (GitHub issue #703) — blocks #704, #705
-- [ ] Tiered SLA escalation — broadcast to moderators, escalate
+- [x] Tiered SLA escalation — broadcast to moderators, escalate
       unclaimed breaches to admins (GitHub issue #704) — depends on #703
-- [ ] notification-service consumer extension + templates for `staff.*`
+- [x] notification-service consumer extension + templates for `staff.*`
       events (GitHub issue #705) — depends on #702, #703
-- [ ] Engineering blog (last) (GitHub issue #706)
+- [x] Engineering blog (last) (GitHub issue #706)
