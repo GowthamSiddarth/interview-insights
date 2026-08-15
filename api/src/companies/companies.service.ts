@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { ModerationService } from '../moderation/moderation.service';
@@ -49,6 +49,43 @@ export class CompaniesService {
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('company', company.id);
     return company;
+  }
+
+  // GitHub issue #697 (Phase 50, D104) — same reset-to-pending +
+  // reenqueue() shape as RoundRatingsService.update(), with one
+  // deliberate difference: an *approved* company can't be edited back to
+  // a draft state through this endpoint at all (a 403, same as the
+  // ownership check below) — companies are public/canonical once
+  // approved, unlike a rating/review, where the candidate's own content
+  // can always be revised. Only the requesting candidate may edit at any
+  // status short of that; a non-owner (or an unattributed, e.g.
+  // seed/admin-created, company with no candidateId at all) always gets
+  // the same 403.
+  async update(id: string, candidateId: string, dto: CreateCompanyDto) {
+    const company = await this.prisma.company.findFirstOrThrow({ where: { id } });
+    if (company.candidateId !== candidateId) {
+      throw new ForbiddenException('You can only edit your own company request.');
+    }
+    if (company.status === 'approved') {
+      throw new ForbiddenException('An approved company can no longer be edited.');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.company.update({
+        where: { id },
+        data: { ...dto, status: 'pending' },
+      });
+      await this.moderationService.reenqueue('company', id, tx);
+      return updated;
+    });
+    // GitHub issue #370 — same after-commit, best-effort shape as
+    // create()'s own call.
+    await this.moderationService.indexForSearch('company', id);
+    // No publishCreatedEvent() call here — 'company' is out of scope for
+    // #692's resubmission-ack event too, same as it already was for
+    // publishCreatedEvent()'s original create()-time call (never one of
+    // the three "moderated entity types" #331/#332 were scoped to).
+    return updated;
   }
 
   findAll() {

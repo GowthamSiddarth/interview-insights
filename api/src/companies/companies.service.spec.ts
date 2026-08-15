@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CompaniesService } from './companies.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,13 +9,15 @@ describe('CompaniesService', () => {
   let prisma: {
     company: {
       create: jest.Mock;
+      update: jest.Mock;
       findFirst: jest.Mock;
       findFirstOrThrow: jest.Mock;
       findMany: jest.Mock;
     };
     roundRating: { count: jest.Mock; findMany: jest.Mock };
+    $transaction: jest.Mock;
   };
-  let moderationService: { enqueue: jest.Mock; indexForSearch: jest.Mock };
+  let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; indexForSearch: jest.Mock };
 
   const dto = { name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' as const };
   const createdCompany = {
@@ -33,6 +35,7 @@ describe('CompaniesService', () => {
     prisma = {
       company: {
         create: jest.fn().mockResolvedValue(createdCompany),
+        update: jest.fn().mockResolvedValue({ ...createdCompany, status: 'pending' }),
         findFirst: jest.fn().mockResolvedValue(null),
         findFirstOrThrow: jest.fn().mockResolvedValue(createdCompany),
         findMany: jest.fn().mockResolvedValue([]),
@@ -41,9 +44,11 @@ describe('CompaniesService', () => {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     moderationService = {
       enqueue: jest.fn().mockResolvedValue(undefined),
+      reenqueue: jest.fn().mockResolvedValue({ id: 'queue-2' }),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -111,6 +116,53 @@ describe('CompaniesService', () => {
       await service.create(dto, 'candidate-1');
 
       expect(prisma.company.create).toHaveBeenCalled();
+    });
+  });
+
+  // GitHub issue #697 (Phase 50, D104).
+  describe('update', () => {
+    it('resets a pending company to pending (no-op status-wise) and re-enqueues it for moderation', async () => {
+      prisma.company.findFirstOrThrow.mockResolvedValue({ ...createdCompany, candidateId: 'candidate-1', status: 'pending' });
+
+      const result = await service.update('company-1', 'candidate-1', dto);
+
+      expect(prisma.company.update).toHaveBeenCalledWith({
+        where: { id: 'company-1' },
+        data: { ...dto, status: 'pending' },
+      });
+      expect(moderationService.reenqueue).toHaveBeenCalledWith('company', 'company-1', prisma);
+      expect(result).toEqual({ ...createdCompany, status: 'pending' });
+    });
+
+    it('resets a rejected company to pending and re-enqueues it, letting a resubmission through', async () => {
+      prisma.company.findFirstOrThrow.mockResolvedValue({ ...createdCompany, candidateId: 'candidate-1', status: 'rejected' });
+
+      await service.update('company-1', 'candidate-1', dto);
+
+      expect(prisma.company.update).toHaveBeenCalledWith({
+        where: { id: 'company-1' },
+        data: { ...dto, status: 'pending' },
+      });
+    });
+
+    it('rejects an edit from anyone but the owning candidate', async () => {
+      prisma.company.findFirstOrThrow.mockResolvedValue({ ...createdCompany, candidateId: 'candidate-1', status: 'pending' });
+
+      await expect(service.update('company-1', 'candidate-2', dto)).rejects.toThrow(ForbiddenException);
+      expect(prisma.company.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an edit attempt on a company with no requester at all (seed/admin-created)', async () => {
+      prisma.company.findFirstOrThrow.mockResolvedValue({ ...createdCompany, candidateId: null, status: 'pending' });
+
+      await expect(service.update('company-1', 'candidate-1', dto)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects editing an approved company, even by its own requester', async () => {
+      prisma.company.findFirstOrThrow.mockResolvedValue({ ...createdCompany, candidateId: 'candidate-1', status: 'approved' });
+
+      await expect(service.update('company-1', 'candidate-1', dto)).rejects.toThrow(ForbiddenException);
+      expect(prisma.company.update).not.toHaveBeenCalled();
     });
   });
 
