@@ -3,12 +3,15 @@ import { Request, Response } from 'express';
 import { getSessionCookieOptions } from '../common/session-cookie-options.util';
 import { CandidateAuthService, CandidateSessionPayload } from './candidate-auth.service';
 import { CandidateLoginDto } from './dto/candidate-login.dto';
+import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { RequestLinkDto } from './dto/request-link.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { VerifyMagicLinkDto } from './dto/verify-magic-link.dto';
 import { CandidateLoginThrottleGuard } from './candidate-login-throttle.guard';
 import { CandidateJwtAuthGuard } from './guards/candidate-jwt-auth.guard';
 import { MagicLinkThrottleGuard } from './magic-link-throttle.guard';
+import { PasswordResetThrottleGuard } from './password-reset-throttle.guard';
 import { CANDIDATE_SESSION_COOKIE } from './strategies/candidate-jwt.strategy';
 
 const SESSION_MAX_AGE_MS = 60 * 60 * 1000; // 1h, matches JwtModule's signOptions.expiresIn
@@ -86,6 +89,30 @@ export class CandidateAuthController {
   @UseGuards(CandidateLoginThrottleGuard)
   async login(@Body() dto: CandidateLoginDto, @Res({ passthrough: true }) res: Response) {
     const session = await this.candidateAuthService.login(dto.email, dto.password);
+    this.issueSession(session, res);
+    return { status: 'ok' };
+  }
+
+  // GitHub issue #682 (Phase 48, D104) — forgot-password flow. Rate-
+  // limited same as request-link — a new public endpoint accepting an
+  // email is a spam/abuse surface. Always the same shape regardless of
+  // whether the email was known — requestPasswordReset() never throws on
+  // an unknown one.
+  @Post('request-password-reset')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(PasswordResetThrottleGuard)
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    await this.candidateAuthService.requestPasswordReset(dto.email);
+    return { status: 'ok' };
+  }
+
+  // Auto-issues a session on success, same reasoning as register(): the
+  // candidate just proved control of the reset link and chose a new
+  // password, so there's nothing left to gate access on.
+  @Post('confirm-password-reset')
+  @HttpCode(HttpStatus.OK)
+  async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto, @Res({ passthrough: true }) res: Response) {
+    const session = await this.candidateAuthService.confirmPasswordReset(dto.token, dto.newPassword);
     this.issueSession(session, res);
     return { status: 'ok' };
   }
