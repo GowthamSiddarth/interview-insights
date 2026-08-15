@@ -226,6 +226,19 @@ export class VerdictConsumerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // GitHub issue #689 (Phase 49, D104) — an escalated entry (a
+    // resubmission past the lifetime cap) needs a human admin's
+    // judgment, not another automated pass. Same "leave it advisory-
+    // only" outcome as the no-queue-entry case above — the verdict was
+    // already persisted by handleVerdictComputed() before this method
+    // ever runs, so nothing is lost by not auto-approving.
+    if (queueEntry.escalated) {
+      this.logger.warn(
+        `Auto-approval eligible for ${entityType} ${entityId} but its moderation queue entry is escalated — leaving it advisory-only for admin review`,
+      );
+      return;
+    }
+
     await this.moderationService.approveWithAudit(
       queueEntry.id,
       { reviewedBy: AUTO_APPROVAL_SYSTEM_ACTOR },

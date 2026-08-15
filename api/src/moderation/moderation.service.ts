@@ -45,6 +45,13 @@ import { getModerationSlaHours } from './moderation-sla.env';
 type ModerationDecision = 'approved' | 'rejected' | 'flagged';
 type PrismaTransaction = Prisma.TransactionClient;
 
+// GitHub issue #689 (Phase 49, D104) — default threshold, revisited (per
+// D104's own "revisit when" note) once Phase 49 ships and real
+// resubmission volume shows whether it needs tuning. Not read from env —
+// unlike getModerationSlaHours(), no operational reason has come up yet
+// to change this without a code change too.
+const LIFETIME_RESUBMISSION_CAP = 3;
+
 // GitHub issue #522 (Phase 41) — GET /moderation/queue's own filters,
 // mirroring ModerationQueueCategory's shape (defined here, imported by
 // the query DTO) rather than the other way around. claimState has no
@@ -93,6 +100,9 @@ interface RawQueueEntry {
   // unchanged, same as every other raw column here.
   rejectionReasonCategory: ModerationRejectionReason | null;
   reviewNote: string | null;
+  // GitHub issue #689 (Phase 49, D104) — set by reenqueue() once a
+  // resubmission crosses the lifetime cap.
+  escalated: boolean;
   // GitHub issue #486 (Phase 36) — claim/release (#487) and SLA-breach
   // detection (#488) both need these on hand; enrichEntries() just passes
   // them through unchanged, same as every other raw column here.
@@ -162,6 +172,9 @@ export interface ModerationQueueEntry {
   reviewedAt: Date | null;
   rejectionReasonCategory: ModerationRejectionReason | null;
   reviewNote: string | null;
+  // GitHub issue #689 (Phase 49, D104) — set by reenqueue() once a
+  // resubmission crosses the lifetime cap.
+  escalated: boolean;
   slaDeadline: Date;
   claimedById: string | null;
   claimedAt: Date | null;
@@ -223,9 +236,25 @@ export class ModerationService {
   // that old entry alongside a new one would let a moderator review the
   // same entity twice — superseding (deleting) any still-unreviewed
   // entry first keeps exactly one live entry per entity.
+  //
+  // GitHub issue #689 (Phase 49, D104) — lifetime resubmission cap: only
+  // the still-unreviewed duplicate above is ever deleted, so every past
+  // *reviewed* decision on this entityId stays in the table as a
+  // permanent trail — counting those rows (before creating this new one)
+  // is therefore already an exact count of every submission this entity
+  // has ever had, with no separate counter column needed. Once that
+  // count reaches the cap, this resubmission is escalated: gated to
+  // admin-only resolution (EscalatedEntryGuard) and excluded from AI
+  // auto-approval (VerdictConsumerService). Never un-escalated by a later
+  // edit — once escalated, always escalated, same "record what had
+  // happened" reasoning slaDeadline's own comment already established.
   async reenqueue(entityType: ModerationEntityType, entityId: string, tx: PrismaTransaction = this.prisma) {
     await tx.moderationQueueEntry.deleteMany({ where: { entityType, entityId, reviewedAt: null } });
-    return tx.moderationQueueEntry.create({ data: { entityType, entityId, slaDeadline: this.computeSlaDeadline() } });
+    const priorSubmissionCount = await tx.moderationQueueEntry.count({ where: { entityType, entityId } });
+    const escalated = priorSubmissionCount >= LIFETIME_RESUBMISSION_CAP;
+    return tx.moderationQueueEntry.create({
+      data: { entityType, entityId, slaDeadline: this.computeSlaDeadline(), escalated },
+    });
   }
 
   // GitHub issue #486 (Phase 36, D80) — SLA clock starts at entry creation

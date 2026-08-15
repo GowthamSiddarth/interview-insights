@@ -531,6 +531,16 @@ model ModerationQueueEntry {
   // rejectionReasonCategory is.
   rejectionReasonCategory ModerationRejectionReason? @map("rejection_reason_category")
   reviewNote              String?                    @map("review_note")
+  // GitHub issue #689 (Phase 49, D104) — set by ModerationService.reenqueue()
+  // when a resubmission crosses the lifetime cap (default 3 prior
+  // submissions, see LIFETIME_RESUBMISSION_CAP in moderation.service.ts).
+  // Gates approve()/reject() to admin-only via EscalatedEntryGuard, and
+  // skips AI auto-approval entirely (VerdictConsumerService) — a
+  // repeatedly-rejected item needs a human admin's judgment, not another
+  // automated pass. Never cleared once set, same "record what had
+  // happened, don't erase history" precedent slaDeadline's own comment
+  // already established.
+  escalated               Boolean                    @default(false)
   // GitHub issue #486 (Phase 36, D80) — createdAt + a configurable number
   // of hours (default 48, see ModerationSlaService), computed at enqueue/
   // reenqueue time, not a DB-only default: the configurable-hours value

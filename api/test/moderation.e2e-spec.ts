@@ -34,6 +34,7 @@ interface QueueEntryBody {
   reviewedAt: string | null;
   reviewedBy: string | null;
   flagReason: string | null;
+  escalated: boolean;
   claimedBy: { id: string; username: string } | null;
   entity: Record<string, unknown> | null;
 }
@@ -264,6 +265,79 @@ describe('Moderation (e2e)', () => {
       .set('Cookie', adminCookie)
       .send({ rejectionReasonCategory: 'not_a_real_category' })
       .expect(400);
+  });
+
+  // GitHub issue #689 (Phase 49, D104) — lifetime resubmission cap (3).
+  describe('lifetime resubmission cap and escalation', () => {
+    it('escalates once a resubmission crosses the cap, gating resolution to admin', async () => {
+      const email = uniqueEmail();
+      const { cookie: candidateCookie } = await loginAsCandidate(app, email);
+      const { id: companyId } = await createApprovedCompany(app, candidateCookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', candidateCookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const { id: processId } = body<ProcessBody>(processRes);
+      const roundRes = await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+        .expect(201);
+      const { id: roundId } = body<RoundBody>(roundRes);
+      const ratingRes = await server()
+        .post(`/rounds/${roundId}/ratings`)
+        .set('Cookie', candidateCookie)
+        .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+        .expect(201);
+      const { id: ratingId } = body<RatingBody>(ratingRes);
+
+      // Three reject-then-edit cycles: the initial submission plus two
+      // resubmissions land under the cap (priorSubmissionCount 1, 2 —
+      // both < 3); the third resubmission's reenqueue() sees
+      // priorSubmissionCount 3, crossing it.
+      for (let i = 0; i < 3; i++) {
+        const entry = await findQueueEntryFor(ratingId);
+        await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({}).expect(201);
+        await server()
+          .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+          .set('Cookie', candidateCookie)
+          .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+          .expect(200);
+      }
+
+      const escalatedEntry = await findQueueEntryFor(ratingId);
+      expect(escalatedEntry.escalated).toBe(true);
+
+      const second = await loginAsSecondModerator(app);
+      await server()
+        .post(`/moderation/queue/${escalatedEntry.id}/approve`)
+        .set('Cookie', second.cookie)
+        .send({})
+        .expect(403);
+
+      await server()
+        .post(`/moderation/queue/${escalatedEntry.id}/approve`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+    }, 20000);
+
+    it('is not escalated below the cap', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+
+      expect(entry.escalated).toBe(false);
+
+      const second = await loginAsSecondModerator(app);
+      await server()
+        .post(`/moderation/queue/${entry.id}/approve`)
+        .set('Cookie', second.cookie)
+        .send({})
+        .expect(201);
+    });
   });
 
   it('flagging a pending rating records the reason and keeps it hidden', async () => {

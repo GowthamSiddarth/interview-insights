@@ -32,6 +32,7 @@ interface CreateCallData {
   entityType: string;
   entityId: string;
   slaDeadline: unknown;
+  escalated?: boolean;
 }
 function getCreateCallData(createMock: jest.Mock): CreateCallData {
   const [args] = createMock.mock.calls[0] as [{ data: CreateCallData }];
@@ -74,6 +75,7 @@ describe('ModerationService', () => {
       updateMany: jest.Mock;
       delete: jest.Mock;
       deleteMany: jest.Mock;
+      count: jest.Mock;
     };
     roundRating: {
       update: jest.Mock;
@@ -121,6 +123,7 @@ describe('ModerationService', () => {
         updateMany: jest.fn(),
         delete: jest.fn(),
         deleteMany: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
       },
       roundRating: {
         update: jest.fn(),
@@ -223,6 +226,7 @@ describe('ModerationService', () => {
   describe('reenqueue', () => {
     it('deletes any still-unreviewed entry for the entity before creating a fresh one, with a fresh SLA deadline', async () => {
       prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.moderationQueueEntry.count.mockResolvedValue(0);
       prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-2' });
 
       await service.reenqueue('round_rating', 'rating-1');
@@ -240,6 +244,7 @@ describe('ModerationService', () => {
       const tx = {
         moderationQueueEntry: {
           deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+          count: jest.fn().mockResolvedValue(0),
           create: jest.fn().mockResolvedValue({ id: 'queue-2' }),
         },
       };
@@ -247,8 +252,44 @@ describe('ModerationService', () => {
       await service.reenqueue('round_rating', 'rating-1', tx as never);
 
       expect(tx.moderationQueueEntry.deleteMany).toHaveBeenCalled();
+      expect(tx.moderationQueueEntry.count).toHaveBeenCalled();
       expect(tx.moderationQueueEntry.create).toHaveBeenCalled();
       expect(prisma.moderationQueueEntry.deleteMany).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #689 (Phase 49, D104) — lifetime resubmission cap.
+    it('counts every past submission for this entity (the still-live delete only removes the unreviewed duplicate)', async () => {
+      prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.moderationQueueEntry.count.mockResolvedValue(1);
+      prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-2' });
+
+      await service.reenqueue('round_rating', 'rating-1');
+
+      expect(prisma.moderationQueueEntry.count).toHaveBeenCalledWith({
+        where: { entityType: 'round_rating', entityId: 'rating-1' },
+      });
+    });
+
+    it('is not escalated below the lifetime resubmission cap', async () => {
+      prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.moderationQueueEntry.count.mockResolvedValue(2); // cap is 3
+      prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-2' });
+
+      await service.reenqueue('round_rating', 'rating-1');
+
+      const data = getCreateCallData(prisma.moderationQueueEntry.create);
+      expect(data.escalated).toBe(false);
+    });
+
+    it('is escalated once the prior-submission count reaches the lifetime cap', async () => {
+      prisma.moderationQueueEntry.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.moderationQueueEntry.count.mockResolvedValue(3); // cap is 3
+      prisma.moderationQueueEntry.create.mockResolvedValue({ id: 'queue-2' });
+
+      await service.reenqueue('round_rating', 'rating-1');
+
+      const data = getCreateCallData(prisma.moderationQueueEntry.create);
+      expect(data.escalated).toBe(true);
     });
   });
 
