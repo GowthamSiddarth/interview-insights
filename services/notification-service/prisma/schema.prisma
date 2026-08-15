@@ -38,12 +38,16 @@ enum StaffRole {
 
 // api/prisma/schema.prisma's Moderator model, same D75 "duplicate a
 // read-only subset of an existing table, generate an independent client"
-// pattern already used for Candidate above. Only id/email are ever
-// read — resolving a moderation.queue.sla_breach.v1 event's claimedById
-// to an address to send the notification to.
+// pattern already used for Candidate above. id/email resolve a
+// moderation.queue.sla_breach.v1 event's claimedById to an address.
+// GitHub issue #703 (Phase 51, D104) added role/isActive —
+// StaffNotificationRecipientsService's own role -> active email list
+// query.
 model Moderator {
-  id    String @id @db.Uuid
-  email String
+  id       String    @id @db.Uuid
+  email    String
+  role     StaffRole @default(moderator)
+  isActive Boolean   @default(true) @map("is_active")
 
   @@map("moderators")
 }
