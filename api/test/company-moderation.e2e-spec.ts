@@ -237,4 +237,93 @@ describe('Company moderation gate (e2e)', () => {
       .send({ name: 'Anon Co', slug: `anon-${unique()}`, sizeBucket: 'mid' })
       .expect(401);
   });
+
+  // GitHub issue #697 (Phase 50, D104).
+  describe('PATCH /companies/:id', () => {
+    it("edits and resubmits the owning candidate's own rejected company request", async () => {
+      const slug = `edit-rejected-${unique()}`;
+      const company = await createPendingCompany(app, candidateCookie, { name: 'Old Name', slug });
+      const adminCookie = await loginAsAdmin(app);
+      const entryId = await findCompanyQueueEntryId(app, adminCookie, company.id);
+      await server()
+        .post(`/moderation/queue/${entryId}/reject`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+
+      const res = await server()
+        .patch(`/companies/${company.id}`)
+        .set('Cookie', candidateCookie)
+        .send({ name: 'New Name', slug, sizeBucket: 'large' })
+        .expect(200);
+
+      expect(body<{ name: string; status: string }>(res)).toMatchObject({
+        name: 'New Name',
+        status: 'pending',
+      });
+      const newEntryId = await findCompanyQueueEntryId(app, adminCookie, company.id);
+      expect(newEntryId).not.toBe(entryId);
+    });
+
+    it("edits and resubmits the owning candidate's own still-pending company request", async () => {
+      const company = await createPendingCompany(app, candidateCookie, {
+        name: 'Old Name',
+        slug: `edit-pending-${unique()}`,
+      });
+
+      const res = await server()
+        .patch(`/companies/${company.id}`)
+        .set('Cookie', candidateCookie)
+        .send({ name: 'New Name', slug: company.slug, sizeBucket: 'mid' })
+        .expect(200);
+
+      expect(body<{ name: string }>(res).name).toBe('New Name');
+    });
+
+    it('rejects an edit from anyone but the owning candidate', async () => {
+      const company = await createPendingCompany(app, candidateCookie, {
+        name: 'Old Name',
+        slug: `edit-other-${unique()}`,
+      });
+      const otherCookie = (await loginAsCandidate(app, `other-${unique()}@example.com`)).cookie;
+
+      await server()
+        .patch(`/companies/${company.id}`)
+        .set('Cookie', otherCookie)
+        .send({ name: 'New Name', slug: company.slug, sizeBucket: 'mid' })
+        .expect(403);
+    });
+
+    it('rejects editing an approved company, even by its own requester', async () => {
+      const company = await createPendingCompany(app, candidateCookie, {
+        name: 'Old Name',
+        slug: `edit-approved-${unique()}`,
+      });
+      const adminCookie = await loginAsAdmin(app);
+      const entryId = await findCompanyQueueEntryId(app, adminCookie, company.id);
+      await server()
+        .post(`/moderation/queue/${entryId}/approve`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+
+      await server()
+        .patch(`/companies/${company.id}`)
+        .set('Cookie', candidateCookie)
+        .send({ name: 'New Name', slug: company.slug, sizeBucket: 'mid' })
+        .expect(403);
+    });
+
+    it('rejects an unauthenticated edit request', async () => {
+      const company = await createPendingCompany(app, candidateCookie, {
+        name: 'Old Name',
+        slug: `edit-anon-${unique()}`,
+      });
+
+      await server()
+        .patch(`/companies/${company.id}`)
+        .send({ name: 'New Name', slug: company.slug, sizeBucket: 'mid' })
+        .expect(401);
+    });
+  });
 });

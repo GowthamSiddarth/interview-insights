@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CandidateJwtAuthGuard } from '../candidate-auth/guards/candidate-jwt-auth.guard';
 import { CurrentCandidateId } from '../candidate-auth/current-candidate.decorator';
+import { EditThrottleGuard } from '../common/edit-throttle.guard';
 import { CompanyCreationThrottleGuard } from './company-creation-throttle.guard';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -20,6 +21,20 @@ export class CompaniesController {
   @UseGuards(CandidateJwtAuthGuard, CompanyCreationThrottleGuard)
   create(@Body() dto: CreateCompanyDto, @CurrentCandidateId() candidateId: string) {
     return this.companiesService.create(dto, candidateId);
+  }
+
+  // GitHub issue #697 (Phase 50, D104). EditThrottleGuard must run after
+  // CandidateJwtAuthGuard so req.user.candidateId is already populated —
+  // same guard-ordering pattern RoundRatingsController's own PATCH route
+  // already uses.
+  @Patch(':id')
+  @UseGuards(CandidateJwtAuthGuard, EditThrottleGuard)
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateCompanyDto,
+    @CurrentCandidateId() candidateId: string,
+  ) {
+    return this.companiesService.update(id, candidateId, dto);
   }
 
   @Get()
