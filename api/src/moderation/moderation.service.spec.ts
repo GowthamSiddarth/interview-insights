@@ -1170,6 +1170,10 @@ describe('ModerationService', () => {
         slug: 'acme-corp',
         industry: null,
         sizeBucket: 'mid',
+        // GitHub issue #698 (Phase 50, D104) — publishStatusChangedEvent()'s
+        // own 'company' case fetches this same row again for its event
+        // payload, so candidateId must be present here too.
+        candidateId: 'candidate-4',
       });
     }
 
@@ -1184,13 +1188,13 @@ describe('ModerationService', () => {
         where: { id: 'company-1' },
         data: { status: 'approved' },
       });
-      expect(companySearchService.indexCompany).toHaveBeenCalledWith({
+      expect(companySearchService.indexCompany).toHaveBeenCalledWith(expect.objectContaining({
         id: 'company-1',
         name: 'Acme Corp',
         slug: 'acme-corp',
         industry: null,
         sizeBucket: 'mid',
-      });
+      }));
     });
 
     it('approve() on a company still succeeds even if search indexing fails', async () => {
@@ -1342,8 +1346,38 @@ describe('ModerationService', () => {
       );
     });
 
-    it('never publishes a status_changed event for a company decision (out of scope for #332)', async () => {
+    // GitHub issue #698 (Phase 50, D104) — 'company' publishes now
+    // (previously a permanent no-op, #332's original scope).
+    it('approve() publishes a company status_changed event', async () => {
       mockPendingCompanyEntry();
+
+      await service.approve('queue-4', { reviewedBy: 'gowtham' });
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.company.status_changed.v1',
+        expect.objectContaining({
+          eventType: 'moderation.company.status_changed',
+          companyId: 'company-1',
+          candidateId: 'candidate-4',
+          previousStatus: 'pending',
+          newStatus: 'approved',
+          reviewedBy: 'gowtham',
+          moderationQueueEntryId: 'queue-4',
+        }),
+        'company-1',
+      );
+    });
+
+    it('never publishes a status_changed event for a seed/admin-created company with no requester', async () => {
+      mockPendingCompanyEntry();
+      prisma.company.findUniqueOrThrow.mockResolvedValue({
+        id: 'company-1',
+        name: 'Acme Corp',
+        slug: 'acme-corp',
+        industry: null,
+        sizeBucket: 'mid',
+        candidateId: null,
+      });
 
       await service.approve('queue-4', {});
 
@@ -1723,7 +1757,34 @@ describe('ModerationService', () => {
       );
     });
 
-    it('never publishes a created event for a company request (out of scope for #332)', async () => {
+    // GitHub issue #698 (Phase 50, D104) — 'company' publishes now
+    // (previously a permanent no-op, #332's original scope).
+    it('publishes a company created event when the request has a requester', async () => {
+      prisma.company.findUniqueOrThrow.mockResolvedValue({
+        id: 'company-1',
+        candidateId: 'candidate-1',
+      });
+
+      await service.publishCreatedEvent('company', 'company-1');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.company.created.v1',
+        expect.objectContaining({
+          eventType: 'moderation.company.created',
+          companyId: 'company-1',
+          candidateId: 'candidate-1',
+          status: 'pending',
+        }),
+        'company-1',
+      );
+    });
+
+    it('never publishes a created event for a seed/admin-created company with no requester', async () => {
+      prisma.company.findUniqueOrThrow.mockResolvedValue({
+        id: 'company-1',
+        candidateId: null,
+      });
+
       await service.publishCreatedEvent('company', 'company-1');
 
       expect(domainEventPublisher.publish).not.toHaveBeenCalled();

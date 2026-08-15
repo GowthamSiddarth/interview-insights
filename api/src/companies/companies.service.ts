@@ -48,6 +48,11 @@ export class CompaniesService {
     await this.moderationService.enqueue('company', company.id);
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('company', company.id);
+    // GitHub issue #698 (Phase 50, D104) — domain event, after commit,
+    // same best-effort shape as every other write path's own call. A
+    // no-op inside ModerationService itself when candidateId is
+    // undefined (a seed/admin-created company) — nothing to notify.
+    await this.moderationService.publishCreatedEvent('company', company.id);
     return company;
   }
 

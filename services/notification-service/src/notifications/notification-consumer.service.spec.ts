@@ -10,6 +10,8 @@ import { RoundRatingCreatedEventV1 } from '../events/schemas/round-rating-create
 import { RecruiterRatingCreatedEventV1 } from '../events/schemas/recruiter-rating-created.event';
 import { OverallReviewCreatedEventV1 } from '../events/schemas/overall-review-created.event';
 import { RoundRatingStatusChangedEventV1 } from '../events/schemas/round-rating-status-changed.event';
+import { CompanyCreatedEventV1 } from '../events/schemas/company-created.event';
+import { CompanyStatusChangedEventV1 } from '../events/schemas/company-status-changed.event';
 import { ModerationQueueSlaBreachEventV1 } from '../events/schemas/moderation-queue-sla-breach.event';
 
 const ENCRYPTION_KEY = 'a'.repeat(64);
@@ -73,6 +75,29 @@ describe('NotificationConsumerService', () => {
     roundId: 'round-1',
     candidateId: 'candidate-1',
     companyId: 'company-1',
+    previousStatus: 'pending',
+    newStatus,
+    moderationQueueEntryId: 'queue-1',
+  });
+
+  // GitHub issue #698 (Phase 50, D104).
+  const companyCreatedEvent: CompanyCreatedEventV1 = {
+    eventType: 'moderation.company.created',
+    eventVersion: 1,
+    occurredAt: '2026-08-15T00:00:00.000Z',
+    companyId: 'company-1',
+    candidateId: 'candidate-1',
+    status: 'pending',
+  };
+
+  const companyStatusChangedEvent = (
+    newStatus: 'approved' | 'rejected' | 'flagged',
+  ): CompanyStatusChangedEventV1 => ({
+    eventType: 'moderation.company.status_changed',
+    eventVersion: 1,
+    occurredAt: '2026-08-15T00:00:00.000Z',
+    companyId: 'company-1',
+    candidateId: 'candidate-1',
     previousStatus: 'pending',
     newStatus,
     moderationQueueEntryId: 'queue-1',
@@ -407,6 +432,111 @@ describe('NotificationConsumerService', () => {
       expect(mailService.send).not.toHaveBeenCalled();
       expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
       expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // GitHub issue #698 (Phase 50, D104) — company reuses every code path
+  // above (entityTypeFor()/entityIdFor()'s own switches are the only
+  // company-specific branches anywhere in this service), proven directly
+  // rather than just inferred from the other entity types' coverage.
+  describe('processEvent — company (GitHub issue #698)', () => {
+    it('sends a pending-review email for a company.created event, keyed by companyId', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(companyCreatedEvent);
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission is pending review' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'company',
+          entityId: 'company-1',
+          eventType: 'moderation.company.created',
+          moderationQueueEntryId: '',
+        },
+      });
+    });
+
+    it('sends an "approved" email for a company.status_changed event', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(companyStatusChangedEvent('approved'));
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: 'Your submission has been approved' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'company',
+          entityId: 'company-1',
+          eventType: 'moderation.company.status_changed',
+          moderationQueueEntryId: 'queue-1',
+        },
+      });
+    });
+
+    it('sends a "rejected" email for a company.status_changed event', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(companyStatusChangedEvent('rejected'));
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: 'Your submission was not approved' }),
+      );
+    });
+
+    it('is a no-op for "flagged" — no email, no idempotency lookup, no log row (same as the other entity types)', async () => {
+      await service.processEvent(companyStatusChangedEvent('flagged'));
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.findUnique).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('never sends twice for the same company + eventType — a redelivered event is a no-op', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
+
+      await service.processEvent(companyCreatedEvent);
+
+      expect(mailService.send).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #692/#687 (Phase 49, D104) — a resubmitted company
+    // (edited via #697's PATCH endpoint) gets a fresh moderation_queue
+    // entry; its eventual decision must not collide with a prior
+    // decision's already-sent dedup row.
+    it("keys a resubmission's decision by its own moderation_queue entry, not the original decision's", async () => {
+      prisma.notificationLog.findUnique.mockImplementation(
+        ({ where }: { where: { notification_log_dedup_key: { moderationQueueEntryId: string } } }) =>
+          Promise.resolve(where.notification_log_dedup_key.moderationQueueEntryId === 'queue-1' ? { id: 'log-1' } : null),
+      );
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent({ ...companyStatusChangedEvent('rejected'), moderationQueueEntryId: 'queue-2' });
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: 'Your submission was not approved' }),
+      );
     });
   });
 

@@ -38,6 +38,14 @@ import {
   OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC,
   OverallReviewStatusChangedEventV1,
 } from '../events/schemas/overall-review-status-changed.event';
+import {
+  COMPANY_CREATED_V1_TOPIC,
+  CompanyCreatedEventV1,
+} from '../events/schemas/company-created.event';
+import {
+  COMPANY_STATUS_CHANGED_V1_TOPIC,
+  CompanyStatusChangedEventV1,
+} from '../events/schemas/company-status-changed.event';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 import { getModerationSlaHours } from './moderation-sla.env';
@@ -911,9 +919,9 @@ export class ModerationService {
     await this.removeFromSearchIndex(entry.entityType, entry.entityId);
 
     // GitHub issue #332 (Phase 30, D53) — best-effort domain event, same
-    // after-commit shape as every other side-effect in this method. Only
-    // the three rating/review entity types are in scope (see
-    // publishStatusChangedEvent's own switch); 'company' is a no-op.
+    // after-commit shape as every other side-effect in this method. As
+    // of GitHub issue #698 (Phase 50), 'company' publishes too — see
+    // publishStatusChangedEvent's own switch.
     await this.publishStatusChangedEvent(entry.entityType, entry.entityId, entityStatus, dto.reviewedBy, id);
 
     return updatedEntry;
@@ -971,13 +979,9 @@ export class ModerationService {
 
   // GitHub issue #332 (Phase 30, D53) — called by every write-path
   // service's create() right after its own transaction commits, same
-  // best-effort/after-commit call shape as indexForSearch(). Only the
-  // three rating/review entity types publish a domain event; 'company'
-  // is out of scope for this issue (a create-company request isn't one
-  // of the "moderated entity types" #331/#332 were scoped to) and is a
-  // deliberate no-op, not an oversight. Fetches fresh from Postgres
-  // rather than trusting caller context, same reasoning as
-  // indexForSearch()'s own comment.
+  // best-effort/after-commit call shape as indexForSearch(). Fetches
+  // fresh from Postgres rather than trusting caller context, same
+  // reasoning as indexForSearch()'s own comment.
   //
   // GitHub issue #692 (Phase 49, D104) — also called from each
   // write-path service's update(), right after reenqueue() commits, with
@@ -987,6 +991,14 @@ export class ModerationService {
   // resubmitted got no acknowledgment until the eventual decision, and
   // review-analyzer's re-triage of the edited content only happened via
   // its 24h reconciliation sweep instead of immediately.
+  //
+  // GitHub issue #698 (Phase 50, D104) — 'company' publishes too now
+  // (previously a deliberate no-op: a create-company request wasn't one
+  // of the "moderated entity types" #331/#332 originally scoped to).
+  // CompaniesService.update() never calls this with a `resubmission`
+  // option, though (#697) — a company resubmission-ack email stays out
+  // of scope for this issue, same as it was for the original three
+  // entity types before #692.
   async publishCreatedEvent(
     entityType: ModerationEntityType,
     entityId: string,
@@ -1057,8 +1069,23 @@ export class ModerationService {
           await this.domainEventPublisher.publish(OVERALL_REVIEW_CREATED_V1_TOPIC, event, r.id);
           return;
         }
-        case 'company':
+        case 'company': {
+          const c = await this.prisma.company.findUniqueOrThrow({ where: { id: entityId } });
+          // Nothing to notify — a seed/admin-created company has no
+          // requester at all (Company.candidateId's own schema comment,
+          // GitHub issue #696).
+          if (!c.candidateId) return;
+          const event: CompanyCreatedEventV1 = {
+            eventType: 'moderation.company.created',
+            eventVersion: 1,
+            occurredAt,
+            companyId: c.id,
+            candidateId: c.candidateId,
+            status: 'pending',
+          };
+          await this.domainEventPublisher.publish(COMPANY_CREATED_V1_TOPIC, event, c.id);
           return;
+        }
       }
     } catch (err) {
       this.logger.error(
@@ -1146,8 +1173,26 @@ export class ModerationService {
           await this.domainEventPublisher.publish(OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;
         }
-        case 'company':
+        // GitHub issue #698 (Phase 50, D104) — publishes now, same
+        // "nothing to notify" skip as publishCreatedEvent()'s own
+        // 'company' case for a requester-less company.
+        case 'company': {
+          const c = await this.prisma.company.findUniqueOrThrow({ where: { id: entityId } });
+          if (!c.candidateId) return;
+          const event: CompanyStatusChangedEventV1 = {
+            eventType: 'moderation.company.status_changed',
+            eventVersion: 1,
+            occurredAt,
+            companyId: c.id,
+            candidateId: c.candidateId,
+            previousStatus: 'pending',
+            newStatus,
+            reviewedBy,
+            moderationQueueEntryId,
+          };
+          await this.domainEventPublisher.publish(COMPANY_STATUS_CHANGED_V1_TOPIC, event, c.id);
           return;
+        }
       }
     } catch (err) {
       this.logger.error(

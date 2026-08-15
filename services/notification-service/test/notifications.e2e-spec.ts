@@ -6,6 +6,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { MAIL_TRANSPORTER } from '../src/mail/mail-transporter.provider';
 import { ROUND_RATING_CREATED_V1_TOPIC } from '../src/events/schemas/round-rating-created.event';
 import { ROUND_RATING_STATUS_CHANGED_V1_TOPIC } from '../src/events/schemas/round-rating-status-changed.event';
+import { COMPANY_CREATED_V1_TOPIC } from '../src/events/schemas/company-created.event';
+import { COMPANY_STATUS_CHANGED_V1_TOPIC } from '../src/events/schemas/company-status-changed.event';
 import { MODERATION_QUEUE_SLA_BREACH_V1_TOPIC } from '../src/events/schemas/moderation-queue-sla-breach.event';
 import { seedCandidateWithEmail } from './support/seed-candidate';
 import { seedModeratorWithEmail } from './support/seed-moderator';
@@ -157,6 +159,70 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
       // Redelivery of the resubmission event must never send a second copy.
       await publishTestEvent(ROUND_RATING_CREATED_V1_TOPIC, resubmissionEvent, roundRatingId);
       await assertMailpitMessageCountStaysAt(email, 2);
+    },
+    25000,
+  );
+
+  // GitHub issue #698 (Phase 50, D104) — company reuses every consumer
+  // code path the other three entity types already exercise above;
+  // proven directly against real Redpanda/Postgres/Mailpit rather than
+  // just inferred from unit coverage.
+  it(
+    'a real moderation.company.created.v1 event results in a pending-review email, and moderation.company.status_changed.v1 results in an approval email',
+    async () => {
+      const marker = unique();
+      const email = `candidate-${marker}@example.com`;
+      const candidateId = await seedCandidateWithEmail(prisma, email);
+      const companyId = randomUUID();
+      const moderationQueueEntryId = randomUUID();
+
+      const createdEvent = {
+        eventType: 'moderation.company.created' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        companyId,
+        candidateId,
+        status: 'pending' as const,
+      };
+      await publishTestEvent(COMPANY_CREATED_V1_TOPIC, createdEvent, companyId);
+
+      const pendingMessage = await waitForMailpitMessage(email);
+      expect(pendingMessage.Subject).toBe('Your submission is pending review');
+
+      const loggedCreated = await prisma.notificationLog.findUnique({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'company',
+            entityId: companyId,
+            eventType: 'moderation.company.created',
+            moderationQueueEntryId: '',
+          },
+        },
+      });
+      expect(loggedCreated).not.toBeNull();
+
+      const statusChangedEvent = {
+        eventType: 'moderation.company.status_changed' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        companyId,
+        candidateId,
+        previousStatus: 'pending' as const,
+        newStatus: 'approved' as const,
+        moderationQueueEntryId,
+      };
+      await publishTestEvent(COMPANY_STATUS_CHANGED_V1_TOPIC, statusChangedEvent, companyId);
+
+      const deadline = Date.now() + 20000;
+      let messages: Awaited<ReturnType<typeof searchMailpit>> = [];
+      while (Date.now() < deadline) {
+        messages = await searchMailpit(`to:${email}`);
+        if (messages.length >= 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      expect(messages).toHaveLength(2);
+      const approvalMessage = messages.find((m) => m.Subject === 'Your submission has been approved');
+      expect(approvalMessage).toBeDefined();
     },
     25000,
   );

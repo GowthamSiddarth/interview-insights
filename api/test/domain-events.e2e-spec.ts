@@ -6,13 +6,15 @@ import { AppModule } from '../src/app.module';
 import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import { loginAsAdmin } from './support/admin-session';
 import { loginAsCandidate } from './support/candidate-session';
-import { createApprovedCompany } from './support/companies';
+import { createApprovedCompany, createPendingCompany, findCompanyQueueEntryId } from './support/companies';
 import { findQueueEntry, QueueGroupBody } from './support/moderation-queue';
 import { waitForEvent } from './support/redpanda';
 import { RoundRatingCreatedEventV1 } from '../src/events/schemas/round-rating-created.event';
 import { RoundRatingStatusChangedEventV1 } from '../src/events/schemas/round-rating-status-changed.event';
 import { RecruiterRatingCreatedEventV1 } from '../src/events/schemas/recruiter-rating-created.event';
 import { OverallReviewCreatedEventV1 } from '../src/events/schemas/overall-review-created.event';
+import { CompanyCreatedEventV1 } from '../src/events/schemas/company-created.event';
+import { CompanyStatusChangedEventV1 } from '../src/events/schemas/company-status-changed.event';
 
 interface ProcessBody {
   id: string;
@@ -221,6 +223,58 @@ describe('Domain events (e2e, against a real Redpanda broker)', () => {
       previousStatus: 'pending',
       newStatus: 'approved',
       reviewedBy: 'gowtham',
+    });
+  }, 20000);
+
+  // GitHub issue #698 (Phase 50, D104) — 'company' publishes *.created/
+  // *.status_changed too now, previously a permanent no-op.
+  it('submitting a company request publishes a moderation.company.created.v1 event', async () => {
+    const { cookie, candidateId } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
+
+    const company = await createPendingCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
+
+    const event = await waitForEvent<CompanyCreatedEventV1>(
+      'moderation.company.created.v1',
+      (e) => e.companyId === company.id,
+    );
+
+    expect(event).toMatchObject({
+      eventType: 'moderation.company.created',
+      companyId: company.id,
+      candidateId,
+      status: 'pending',
+    });
+  }, 20000);
+
+  it('approving a company request publishes a moderation.company.status_changed.v1 event', async () => {
+    const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
+    const company = await createPendingCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
+    const entryId = await findCompanyQueueEntryId(app, adminCookie, company.id);
+
+    await server()
+      .post(`/moderation/queue/${entryId}/approve`)
+      .set('Cookie', adminCookie)
+      .send({ reviewedBy: 'gowtham' })
+      .expect(201);
+
+    const event = await waitForEvent<CompanyStatusChangedEventV1>(
+      'moderation.company.status_changed.v1',
+      (e) => e.companyId === company.id,
+    );
+
+    expect(event).toMatchObject({
+      eventType: 'moderation.company.status_changed',
+      companyId: company.id,
+      previousStatus: 'pending',
+      newStatus: 'approved',
+      reviewedBy: 'gowtham',
+      moderationQueueEntryId: entryId,
     });
   }, 20000);
 

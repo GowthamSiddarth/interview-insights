@@ -79,23 +79,32 @@ version in place.
 
 ## Defined events
 
-Ten event types — one `*.created`, one `*.status_changed`, and (GitHub
+Twelve event types — one `*.created`, one `*.status_changed`, and (GitHub
 issue #340) one `*.verdict_computed` per moderated entity type
 (`round_rating`, `recruiter_rating`, `overall_review`), plus (GitHub
 issue #488) one `moderation.queue.sla_breach.v1`, not scoped to a single
 entity type — it fires off `ModerationQueueEntry` (`moderation_queue`)
 directly, the one table shared by all four entity types including
-`company`. `company` (a create-company request, Phase 35) is deliberately
-out of scope for the three per-entity-type events above — see
-`ModerationService.publishCreatedEvent`/
-`publishStatusChangedEvent`'s own comments for why, and D81 for why
-`review-analyzer` never subscribes to `company`'s own `*.created` topic
-either. Every `*.created` event carries `candidateId`/`companyId` context
-so a consumer can act without an immediate callback into the monolith,
-plus (GitHub issue #692, Phase 49, D104) an optional `isResubmission`
-flag and `moderationQueueEntryId` — set when this event was published
-from `update()`'s `reenqueue()` path (a candidate resubmitting rejected/
-flagged content) rather than the entity's original creation; every
+`company`. As of GitHub issue #698 (Phase 50, D104), `company` (a
+create-company request, Phase 35) gets its own `*.created`/
+`*.status_changed` pair too — deliberately out of scope until then (see
+D81 for why `review-analyzer` still never subscribes to `company`'s own
+`*.created` topic: no LLM triage for company requests, unaffected by
+#698). `company`'s events have no `companyId`-vs-`entityId` distinction
+the way the other three do (the entity *is* the company) and carry no
+`*.verdict_computed` counterpart. Every `*.created` event carries
+`candidateId`/`companyId` context (for `company`'s own pair,
+`candidateId` only — there's no separate company to reference)
+so a consumer can act without an immediate callback into the monolith.
+The three original entity types' `*.created` also carries (GitHub issue
+#692, Phase 49, D104) an optional `isResubmission` flag and
+`moderationQueueEntryId` — set when this event was published from
+`update()`'s `reenqueue()` path (a candidate resubmitting rejected/
+flagged content) rather than the entity's original creation;
+`company.created.v1` doesn't — `CompaniesService.update()` never calls
+`publishCreatedEvent()` with a `resubmission` option at all (#697), so a
+company resubmission produces no ack email, only the eventual
+`status_changed` one. Every
 `*.status_changed` event additionally carries `previousStatus`
 (always `'pending'` — `ModerationService.review()` only ever runs against
 an unreviewed entry), `newStatus`, and the optional `reviewedBy` label.
@@ -119,6 +128,8 @@ not baked in as an email address).
 | `moderation.overall_review.created.v1` | `OverallReviewCreatedEventV1` | `api/src/events/schemas/overall-review-created.event.ts` |
 | `moderation.overall_review.status_changed.v1` | `OverallReviewStatusChangedEventV1` | `api/src/events/schemas/overall-review-status-changed.event.ts` |
 | `moderation.overall_review.verdict_computed.v1` | `OverallReviewVerdictComputedEventV1` | `services/review-analyzer/src/events/schemas/overall-review-verdict-computed.event.ts` (duplicated into `api/src/events/schemas/`) |
+| `moderation.company.created.v1` | `CompanyCreatedEventV1` | `api/src/events/schemas/company-created.event.ts` |
+| `moderation.company.status_changed.v1` | `CompanyStatusChangedEventV1` | `api/src/events/schemas/company-status-changed.event.ts` |
 | `moderation.queue.sla_breach.v1` | `ModerationQueueSlaBreachEventV1` | `api/src/events/schemas/moderation-queue-sla-breach.event.ts` |
 
 Published from:
@@ -136,7 +147,10 @@ Published from:
   and `notification-service` sends a distinct "your edited submission is
   back in review" ack, deduped separately from the original submission's
   (same per-queue-entry keying `*.status_changed` already established,
-  #686/#687).
+  #686/#687). As of GitHub issue #698 (Phase 50, D104),
+  `CompaniesService.create()` calls it too — but its own `update()`
+  (#697) never passes a `resubmission` option, so `company.created.v1`
+  only ever fires once per company, from creation.
 - **`*.status_changed`** — `ModerationService.review()`, the shared
   implementation behind `approve()`/`reject()`/`flag()` (and
   `approveWithAudit()`, the AI auto-approval entry point).
