@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffAuditLogService } from '../admin-auth/staff-audit-log.service';
+import { DomainEventPublisher } from '../events/domain-event-publisher';
 import { CreateStaffAccountDto } from './dto/create-staff-account.dto';
 import { StaffAccountsService } from './staff-accounts.service';
 
@@ -17,6 +18,7 @@ describe('StaffAccountsService', () => {
     };
   };
   let staffAuditLog: { record: jest.Mock };
+  let domainEventPublisher: { publish: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -29,9 +31,11 @@ describe('StaffAccountsService', () => {
       },
     };
     staffAuditLog = { record: jest.fn().mockResolvedValue(undefined) };
+    domainEventPublisher = { publish: jest.fn().mockResolvedValue(undefined) };
     service = new StaffAccountsService(
       prisma as unknown as PrismaService,
       staffAuditLog as unknown as StaffAuditLogService,
+      domainEventPublisher as unknown as DomainEventPublisher,
     );
   });
 
@@ -83,6 +87,35 @@ describe('StaffAccountsService', () => {
         detail: { role: 'staff' },
       });
     });
+
+    // GitHub issue #702 (Phase 51, D104).
+    it('publishes a staff.account.created event carrying the one-time temporary password', async () => {
+      const dto: CreateStaffAccountDto = { username: 'new-staff', email: 'new@example.com', role: 'staff' };
+      prisma.moderator.create.mockResolvedValue({
+        id: 'mod-new',
+        username: 'new-staff',
+        email: 'new@example.com',
+        role: 'staff',
+        isActive: true,
+        createdById: 'mod-actor',
+        createdAt: new Date('2026-08-11T00:00:00Z'),
+      });
+
+      const result = await service.create('mod-actor', dto);
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'staff.account.created.v1',
+        expect.objectContaining({
+          eventType: 'staff.account.created',
+          moderatorId: 'mod-new',
+          email: 'new@example.com',
+          role: 'staff',
+          actorId: 'mod-actor',
+          temporaryPassword: result.password,
+        }),
+        'mod-new',
+      );
+    });
   });
 
   describe('root admin guard (GitHub issue #607)', () => {
@@ -101,12 +134,14 @@ describe('StaffAccountsService', () => {
       await expect(call()).rejects.toThrow(ForbiddenException);
       expect(prisma.moderator.update).not.toHaveBeenCalled();
       expect(staffAuditLog.record).not.toHaveBeenCalled();
+      expect(domainEventPublisher.publish).not.toHaveBeenCalled();
     });
   });
 
   describe('updateRole', () => {
     it('updates the role and records role_changed with old/new role in detail', async () => {
       prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        email: 'someone@example.com',
         role: 'staff',
         isActive: true,
         createdById: 'mod-actor',
@@ -130,6 +165,32 @@ describe('StaffAccountsService', () => {
         action: 'role_changed',
         detail: { oldRole: 'staff', newRole: 'moderator' },
       });
+    });
+
+    // GitHub issue #702 (Phase 51, D104).
+    it('publishes a staff.account.role_changed event with the old and new role', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        email: 'someone@example.com',
+        role: 'staff',
+        isActive: true,
+        createdById: 'mod-actor',
+      });
+      prisma.moderator.update.mockResolvedValue({ id: 'mod-1', role: 'moderator' });
+
+      await service.updateRole('mod-actor', 'mod-1', 'moderator');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'staff.account.role_changed.v1',
+        expect.objectContaining({
+          eventType: 'staff.account.role_changed',
+          moderatorId: 'mod-1',
+          email: 'someone@example.com',
+          oldRole: 'staff',
+          newRole: 'moderator',
+          actorId: 'mod-actor',
+        }),
+        'mod-1',
+      );
     });
 
     it('rejects demoting the last remaining active non-root admin', async () => {
@@ -180,6 +241,7 @@ describe('StaffAccountsService', () => {
   describe('deactivate / reactivate', () => {
     it('deactivate sets isActive: false and records deactivated, when another active non-root admin remains', async () => {
       prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        email: 'someone@example.com',
         role: 'admin',
         isActive: true,
         createdById: 'some-other-admin',
@@ -197,6 +259,16 @@ describe('StaffAccountsService', () => {
         targetId: 'mod-1',
         action: 'deactivated',
       });
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'staff.account.deactivated.v1',
+        expect.objectContaining({
+          eventType: 'staff.account.deactivated',
+          moderatorId: 'mod-1',
+          email: 'someone@example.com',
+          actorId: 'mod-actor',
+        }),
+        'mod-1',
+      );
     });
 
     it('rejects deactivating the last remaining active non-root admin', async () => {
@@ -225,7 +297,10 @@ describe('StaffAccountsService', () => {
     });
 
     it('reactivate sets isActive: true and records reactivated', async () => {
-      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ createdById: 'some-other-admin' });
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        email: 'someone@example.com',
+        createdById: 'some-other-admin',
+      });
       prisma.moderator.update.mockResolvedValue({ id: 'mod-1', isActive: true });
 
       await service.reactivate('mod-actor', 'mod-1');
@@ -238,12 +313,25 @@ describe('StaffAccountsService', () => {
         targetId: 'mod-1',
         action: 'reactivated',
       });
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'staff.account.reactivated.v1',
+        expect.objectContaining({
+          eventType: 'staff.account.reactivated',
+          moderatorId: 'mod-1',
+          email: 'someone@example.com',
+          actorId: 'mod-actor',
+        }),
+        'mod-1',
+      );
     });
   });
 
   describe('resetPassword', () => {
     it('sets a new bcrypt-hashed random password and records password_reset, returning the plaintext once', async () => {
-      prisma.moderator.findUniqueOrThrow.mockResolvedValue({ createdById: 'some-other-admin' });
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        email: 'someone@example.com',
+        createdById: 'some-other-admin',
+      });
       prisma.moderator.update.mockResolvedValue({});
 
       const result = await service.resetPassword('mod-actor', 'mod-1');
@@ -260,6 +348,29 @@ describe('StaffAccountsService', () => {
         targetId: 'mod-1',
         action: 'password_reset',
       });
+    });
+
+    // GitHub issue #702 (Phase 51, D104).
+    it('publishes a staff.account.password_reset event carrying the one-time temporary password', async () => {
+      prisma.moderator.findUniqueOrThrow.mockResolvedValue({
+        email: 'someone@example.com',
+        createdById: 'some-other-admin',
+      });
+      prisma.moderator.update.mockResolvedValue({});
+
+      const result = await service.resetPassword('mod-actor', 'mod-1');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'staff.account.password_reset.v1',
+        expect.objectContaining({
+          eventType: 'staff.account.password_reset',
+          moderatorId: 'mod-1',
+          email: 'someone@example.com',
+          actorId: 'mod-actor',
+          temporaryPassword: result.password,
+        }),
+        'mod-1',
+      );
     });
   });
 });
