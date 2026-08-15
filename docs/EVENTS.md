@@ -79,7 +79,7 @@ version in place.
 
 ## Defined events
 
-Twelve event types — one `*.created`, one `*.status_changed`, and (GitHub
+Seventeen event types — one `*.created`, one `*.status_changed`, and (GitHub
 issue #340) one `*.verdict_computed` per moderated entity type
 (`round_rating`, `recruiter_rating`, `overall_review`), plus (GitHub
 issue #488) one `moderation.queue.sla_breach.v1`, not scoped to a single
@@ -117,6 +117,23 @@ for a reconciliation-sweep escalation with no verdict at all.
 and `claimedById` (nullable — who to notify, resolved by the consumer,
 not baked in as an email address).
 
+As of GitHub issue #701 (Phase 51, D104), five more: one per
+`StaffAccountsService` mutating method (`create`, `updateRole`,
+`deactivate`, `reactivate`, `resetPassword`) — a structurally distinct
+family under a `staff.*` (not `moderation.*`) topic prefix, since these
+describe actions on staff accounts themselves, not on moderated content.
+Each carries `moderatorId`/`email` (the affected account),
+`actorId` (the admin who took the action), and action-specific context
+(`role` + a one-time `temporaryPassword` for `created`; `oldRole`/
+`newRole` for `role_changed`; another one-time `temporaryPassword` for
+`password_reset`). Every one also carries `actionId` — a fresh id minted
+per publish, playing the same disambiguating role
+`moderationQueueEntryId` already plays for `*.status_changed`
+(#686/#687): staff actions have no moderation_queue entry to key
+`notification-service`'s idempotency dedup off, and several of these
+event types (unlike `staff.account.created.v1`) can legitimately repeat
+on the same `moderatorId`.
+
 | Topic | Type | Schema file |
 |---|---|---|
 | `moderation.round_rating.created.v1` | `RoundRatingCreatedEventV1` | `api/src/events/schemas/round-rating-created.event.ts` |
@@ -131,6 +148,11 @@ not baked in as an email address).
 | `moderation.company.created.v1` | `CompanyCreatedEventV1` | `api/src/events/schemas/company-created.event.ts` |
 | `moderation.company.status_changed.v1` | `CompanyStatusChangedEventV1` | `api/src/events/schemas/company-status-changed.event.ts` |
 | `moderation.queue.sla_breach.v1` | `ModerationQueueSlaBreachEventV1` | `api/src/events/schemas/moderation-queue-sla-breach.event.ts` |
+| `staff.account.created.v1` | `StaffAccountCreatedEventV1` | `api/src/events/schemas/staff-account-created.event.ts` |
+| `staff.account.role_changed.v1` | `StaffAccountRoleChangedEventV1` | `api/src/events/schemas/staff-account-role-changed.event.ts` |
+| `staff.account.deactivated.v1` | `StaffAccountDeactivatedEventV1` | `api/src/events/schemas/staff-account-deactivated.event.ts` |
+| `staff.account.reactivated.v1` | `StaffAccountReactivatedEventV1` | `api/src/events/schemas/staff-account-reactivated.event.ts` |
+| `staff.account.password_reset.v1` | `StaffAccountPasswordResetEventV1` | `api/src/events/schemas/staff-account-password-reset.event.ts` |
 
 Published from:
 - **`*.created`** — `RoundRatingsService.create()`, `RecruiterRatingsService.create()`,

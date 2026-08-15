@@ -27,6 +27,15 @@ model Candidate {
 }
 
 // GitHub issue #489 (Phase 36) — a deliberately minimal mirror of
+// GitHub issue #701 (Phase 51, D104) — mirrors api/prisma/schema.prisma's
+// own StaffRole enum, needed by staff.account.created.v1/role_changed.v1's
+// TS types (StaffAccountCreatedEventV1/StaffAccountRoleChangedEventV1).
+enum StaffRole {
+  staff
+  moderator
+  admin
+}
+
 // api/prisma/schema.prisma's Moderator model, same D75 "duplicate a
 // read-only subset of an existing table, generate an independent client"
 // pattern already used for Candidate above. Only id/email are ever
