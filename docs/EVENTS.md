@@ -189,6 +189,11 @@ Published from:
   reached the broker — same best-effort contract as every other event
   here (D16/D17/D53), just applied to a scheduled scan instead of a
   request-triggered write.
+- **`staff.account.*.v1`** — GitHub issue #702 (Phase 51, D104):
+  `StaffAccountsService`'s five mutating methods (`create`, `updateRole`,
+  `deactivate`, `reactivate`, `resetPassword`), each after its own
+  `StaffAuditLogService.record()` call commits — same best-effort/
+  after-commit shape every other publisher here already uses.
 
 `moderation.*.created.v1` is consumed by `notification-service` as of
 GitHub issue #335 (the "your submission is pending review" email) and,

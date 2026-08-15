@@ -15,6 +15,7 @@ import { RecruiterRatingCreatedEventV1 } from '../src/events/schemas/recruiter-r
 import { OverallReviewCreatedEventV1 } from '../src/events/schemas/overall-review-created.event';
 import { CompanyCreatedEventV1 } from '../src/events/schemas/company-created.event';
 import { CompanyStatusChangedEventV1 } from '../src/events/schemas/company-status-changed.event';
+import { StaffAccountCreatedEventV1 } from '../src/events/schemas/staff-account-created.event';
 
 interface ProcessBody {
   id: string;
@@ -328,6 +329,40 @@ describe('Domain events (e2e, against a real Redpanda broker)', () => {
     expect(roundRatingEvent.status).toBe('pending');
     expect(recruiterRatingEvent.status).toBe('pending');
     expect(overallReviewEvent.processId).toBe(processId);
+  }, 20000);
+
+  // GitHub issue #702 (Phase 51, D104) — proves the real Redpanda wiring
+  // for the new staff.account.* event family; the other four
+  // (role_changed/deactivated/reactivated/password_reset) share the
+  // exact same publish call shape and are covered by unit tests in
+  // staff-accounts.service.spec.ts instead of five near-duplicate e2e
+  // cases here.
+  it('creating a staff account publishes a staff.account.created.v1 event carrying the one-time password', async () => {
+    const meRes = await server().get('/auth/admin/me').set('Cookie', adminCookie).expect(200);
+    const { id: actorId } = body<{ id: string }>(meRes);
+    const username = `staff-${unique()}`;
+
+    const createRes = await server()
+      .post('/admin/staff')
+      .set('Cookie', adminCookie)
+      .send({ username, email: `${username}@example.com`, role: 'moderator' })
+      .expect(201);
+    const created = body<{ id: string; password: string }>(createRes);
+
+    const event = await waitForEvent<StaffAccountCreatedEventV1>(
+      'staff.account.created.v1',
+      (e) => e.moderatorId === created.id,
+    );
+
+    expect(event).toMatchObject({
+      eventType: 'staff.account.created',
+      moderatorId: created.id,
+      email: `${username}@example.com`,
+      role: 'moderator',
+      actorId,
+      temporaryPassword: created.password,
+    });
+    expect(event.actionId).toBeTruthy();
   }, 20000);
 });
 

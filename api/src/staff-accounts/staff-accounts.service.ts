@@ -1,8 +1,30 @@
+import { randomUUID } from 'crypto';
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { StaffRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { StaffAuditLogService } from '../admin-auth/staff-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DomainEventPublisher } from '../events/domain-event-publisher';
+import {
+  STAFF_ACCOUNT_CREATED_V1_TOPIC,
+  StaffAccountCreatedEventV1,
+} from '../events/schemas/staff-account-created.event';
+import {
+  STAFF_ACCOUNT_ROLE_CHANGED_V1_TOPIC,
+  StaffAccountRoleChangedEventV1,
+} from '../events/schemas/staff-account-role-changed.event';
+import {
+  STAFF_ACCOUNT_DEACTIVATED_V1_TOPIC,
+  StaffAccountDeactivatedEventV1,
+} from '../events/schemas/staff-account-deactivated.event';
+import {
+  STAFF_ACCOUNT_REACTIVATED_V1_TOPIC,
+  StaffAccountReactivatedEventV1,
+} from '../events/schemas/staff-account-reactivated.event';
+import {
+  STAFF_ACCOUNT_PASSWORD_RESET_V1_TOPIC,
+  StaffAccountPasswordResetEventV1,
+} from '../events/schemas/staff-account-password-reset.event';
 import { CreateStaffAccountDto } from './dto/create-staff-account.dto';
 import { generateTemporaryPassword } from './temporary-password.util';
 
@@ -49,11 +71,20 @@ export interface StaffAccountSummary {
 // an operator "successfully" change something that reverts on the next
 // restart with no indication why. Root is managed by
 // infra/scripts/rotate-admin-credentials.sh only.
+//
+// GitHub issue #702 (Phase 51, D104) — every mutating method below now
+// also publishes its matching staff.account.*.v1 event (#701's schemas),
+// after StaffAuditLogService.record() commits, same best-effort/
+// after-commit shape D16/D17/D53 already establish for every other
+// domain-event publish in this codebase: a publish failure never affects
+// (or even surfaces back to) the underlying write, which has already
+// committed by the time it's attempted.
 @Injectable()
 export class StaffAccountsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly staffAuditLog: StaffAuditLogService,
+    private readonly domainEventPublisher: DomainEventPublisher,
   ) {}
 
   private assertNotRoot(target: { createdById: string | null }): void {
@@ -98,6 +129,19 @@ export class StaffAccountsService {
       detail: { role: created.role },
     });
 
+    const event: StaffAccountCreatedEventV1 = {
+      eventType: 'staff.account.created',
+      eventVersion: 1,
+      occurredAt: new Date().toISOString(),
+      moderatorId: created.id,
+      email: created.email,
+      role: created.role,
+      actorId,
+      temporaryPassword: password,
+      actionId: randomUUID(),
+    };
+    await this.domainEventPublisher.publish(STAFF_ACCOUNT_CREATED_V1_TOPIC, event, created.id);
+
     return { ...created, password };
   }
 
@@ -117,7 +161,7 @@ export class StaffAccountsService {
   async updateRole(actorId: string, targetId: string, role: StaffRole): Promise<StaffAccountSummary> {
     const before = await this.prisma.moderator.findUniqueOrThrow({
       where: { id: targetId },
-      select: { role: true, isActive: true, createdById: true },
+      select: { email: true, role: true, isActive: true, createdById: true },
     });
     this.assertNotRoot(before);
 
@@ -146,13 +190,26 @@ export class StaffAccountsService {
       detail: { oldRole: before.role, newRole: role },
     });
 
+    const event: StaffAccountRoleChangedEventV1 = {
+      eventType: 'staff.account.role_changed',
+      eventVersion: 1,
+      occurredAt: new Date().toISOString(),
+      moderatorId: targetId,
+      email: before.email,
+      oldRole: before.role,
+      newRole: role,
+      actorId,
+      actionId: randomUUID(),
+    };
+    await this.domainEventPublisher.publish(STAFF_ACCOUNT_ROLE_CHANGED_V1_TOPIC, event, targetId);
+
     return updated;
   }
 
   async deactivate(actorId: string, targetId: string): Promise<StaffAccountSummary> {
     const target = await this.prisma.moderator.findUniqueOrThrow({
       where: { id: targetId },
-      select: { role: true, isActive: true, createdById: true },
+      select: { email: true, role: true, isActive: true, createdById: true },
     });
     this.assertNotRoot(target);
 
@@ -170,13 +227,25 @@ export class StaffAccountsService {
     });
 
     await this.staffAuditLog.record({ actorId, targetId, action: 'deactivated' });
+
+    const event: StaffAccountDeactivatedEventV1 = {
+      eventType: 'staff.account.deactivated',
+      eventVersion: 1,
+      occurredAt: new Date().toISOString(),
+      moderatorId: targetId,
+      email: target.email,
+      actorId,
+      actionId: randomUUID(),
+    };
+    await this.domainEventPublisher.publish(STAFF_ACCOUNT_DEACTIVATED_V1_TOPIC, event, targetId);
+
     return updated;
   }
 
   async reactivate(actorId: string, targetId: string): Promise<StaffAccountSummary> {
     const target = await this.prisma.moderator.findUniqueOrThrow({
       where: { id: targetId },
-      select: { createdById: true },
+      select: { email: true, createdById: true },
     });
     this.assertNotRoot(target);
 
@@ -187,13 +256,25 @@ export class StaffAccountsService {
     });
 
     await this.staffAuditLog.record({ actorId, targetId, action: 'reactivated' });
+
+    const event: StaffAccountReactivatedEventV1 = {
+      eventType: 'staff.account.reactivated',
+      eventVersion: 1,
+      occurredAt: new Date().toISOString(),
+      moderatorId: targetId,
+      email: target.email,
+      actorId,
+      actionId: randomUUID(),
+    };
+    await this.domainEventPublisher.publish(STAFF_ACCOUNT_REACTIVATED_V1_TOPIC, event, targetId);
+
     return updated;
   }
 
   async resetPassword(actorId: string, targetId: string): Promise<{ password: string }> {
     const target = await this.prisma.moderator.findUniqueOrThrow({
       where: { id: targetId },
-      select: { createdById: true },
+      select: { email: true, createdById: true },
     });
     this.assertNotRoot(target);
 
@@ -202,6 +283,18 @@ export class StaffAccountsService {
 
     await this.prisma.moderator.update({ where: { id: targetId }, data: { passwordHash } });
     await this.staffAuditLog.record({ actorId, targetId, action: 'password_reset' });
+
+    const event: StaffAccountPasswordResetEventV1 = {
+      eventType: 'staff.account.password_reset',
+      eventVersion: 1,
+      occurredAt: new Date().toISOString(),
+      moderatorId: targetId,
+      email: target.email,
+      actorId,
+      temporaryPassword: password,
+      actionId: randomUUID(),
+    };
+    await this.domainEventPublisher.publish(STAFF_ACCOUNT_PASSWORD_RESET_V1_TOPIC, event, targetId);
 
     return { password };
   }
