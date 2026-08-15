@@ -42,13 +42,16 @@ model Moderator {
 // See api/prisma/schema.prisma's own NotificationLog model for why
 // entityType/eventType are plain text here, not a shared Postgres enum.
 model NotificationLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  entityType String   @map("entity_type")
-  entityId   String   @map("entity_id") @db.Uuid
-  eventType  String   @map("event_type")
-  sentAt     DateTime @default(now()) @map("sent_at") @db.Timestamptz
+  id                     String   @id @default(uuid()) @db.Uuid
+  entityType             String   @map("entity_type")
+  entityId               String   @map("entity_id") @db.Uuid
+  eventType              String   @map("event_type")
+  // GitHub issue #687 (Phase 49, D104) — see api/prisma/schema.prisma's
+  // own NotificationLog model comment for why.
+  moderationQueueEntryId String   @default("") @map("moderation_queue_entry_id")
+  sentAt                 DateTime @default(now()) @map("sent_at") @db.Timestamptz
 
-  @@unique([entityType, entityId, eventType])
+  @@unique([entityType, entityId, eventType, moderationQueueEntryId], name: "notification_log_dedup_key")
   @@map("notification_log")
 }
 

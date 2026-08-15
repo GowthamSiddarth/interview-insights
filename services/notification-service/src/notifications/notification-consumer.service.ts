@@ -103,6 +103,18 @@ function entityIdFor(event: ModerationEvent): string {
   }
 }
 
+// GitHub issue #687 (Phase 49, D104) — the confirmed-bug fix: a
+// resubmission (reenqueue()) creates a fresh moderation_queue row for
+// the same entityId, so a status_changed event's decision must be
+// deduped per queue entry, not per entity. Empty string for the two
+// event shapes that don't need it — a `created` event only ever fires
+// once per entity (entityId+eventType is already unique on its own),
+// and a `sla_breach` event's entityId already *is* the queue entry id
+// (see entityIdFor() above), so there's nothing extra to disambiguate.
+function moderationQueueEntryIdFor(event: ModerationEvent): string {
+  return isStatusChangedEvent(event) ? (event.moderationQueueEntryId ?? '') : '';
+}
+
 // The two "approved"/"rejected" fixed templates D73 anticipated — never
 // called for 'flagged' (see processEvent's own comment for why that's a
 // deliberate no-op) or 'pending' (review() never re-emits the status it
@@ -276,16 +288,18 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
 
     const entityType = entityTypeFor(event);
     const entityId = entityIdFor(event);
+    const moderationQueueEntryId = moderationQueueEntryIdFor(event);
 
     // Idempotency (issue #335's own acceptance criteria, extended to
-    // status_changed by #336): a redelivered event must never send a
-    // duplicate email. Checked up front so the common
-    // redelivery-of-an-already-handled-event path never re-sends; the
-    // create() below is the actual race-safe guard (a unique constraint,
-    // not this check) for the narrow window where a crash happens between
-    // a successful send and this row being written.
+    // status_changed by #336; keyed per moderation_queue entry since
+    // #687 to also cover resubmissions correctly). Checked up front so
+    // the common redelivery-of-an-already-handled-event path never
+    // re-sends; the create() below is the actual race-safe guard (a
+    // unique constraint, not this check) for the narrow window where a
+    // crash happens between a successful send and this row being
+    // written.
     const alreadySent = await this.prisma.notificationLog.findUnique({
-      where: { entityType_entityId_eventType: { entityType, entityId, eventType: event.eventType } },
+      where: { notification_log_dedup_key: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } },
     });
     if (alreadySent) {
       this.logger.log(`Already sent a notification for ${event.eventType}:${entityId} — skipping duplicate`);
@@ -312,7 +326,7 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     // only prevents this row itself from ever being written twice, which
     // is what keeps every *other* redelivery (the common case) a no-op.
     await this.prisma.notificationLog
-      .create({ data: { entityType, entityId, eventType: event.eventType } })
+      .create({ data: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } })
       .catch((err: unknown) => {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           return;
@@ -338,9 +352,10 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
 
     const entityType = entityTypeFor(event);
     const entityId = entityIdFor(event);
+    const moderationQueueEntryId = moderationQueueEntryIdFor(event);
 
     const alreadySent = await this.prisma.notificationLog.findUnique({
-      where: { entityType_entityId_eventType: { entityType, entityId, eventType: event.eventType } },
+      where: { notification_log_dedup_key: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } },
     });
     if (alreadySent) {
       this.logger.log(`Already sent an SLA breach notification for queue entry ${entityId} — skipping duplicate`);
@@ -356,7 +371,7 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     await this.mailService.send({ to: moderator.email, ...slaBreachSubjectAndBody() });
 
     await this.prisma.notificationLog
-      .create({ data: { entityType, entityId, eventType: event.eventType } })
+      .create({ data: { entityType, entityId, eventType: event.eventType, moderationQueueEntryId } })
       .catch((err: unknown) => {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           return;

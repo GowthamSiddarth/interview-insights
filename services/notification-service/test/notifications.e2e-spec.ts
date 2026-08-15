@@ -72,10 +72,11 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
 
       const logged = await prisma.notificationLog.findUnique({
         where: {
-          entityType_entityId_eventType: {
+          notification_log_dedup_key: {
             entityType: 'round_rating',
             entityId: roundRatingId,
             eventType: 'moderation.round_rating.created',
+            moderationQueueEntryId: '',
           },
         },
       });
@@ -102,6 +103,7 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
       const email = `candidate-${marker}@example.com`;
       const candidateId = await seedCandidateWithEmail(prisma, email);
       const roundRatingId = randomUUID();
+      const moderationQueueEntryId = randomUUID();
 
       const event = {
         eventType: 'moderation.round_rating.status_changed' as const,
@@ -113,6 +115,7 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
         companyId: randomUUID(),
         previousStatus: 'pending' as const,
         newStatus: 'approved' as const,
+        moderationQueueEntryId,
       };
 
       await publishTestEvent(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, roundRatingId);
@@ -123,10 +126,11 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
 
       const logged = await prisma.notificationLog.findUnique({
         where: {
-          entityType_entityId_eventType: {
+          notification_log_dedup_key: {
             entityType: 'round_rating',
             entityId: roundRatingId,
             eventType: 'moderation.round_rating.status_changed',
+            moderationQueueEntryId,
           },
         },
       });
@@ -137,6 +141,52 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
 
       const messagesForRecipient = await searchMailpit(`to:${email}`);
       expect(messagesForRecipient).toHaveLength(1);
+    },
+    25000,
+  );
+
+  // GitHub issue #687 (Phase 49, D104) — the confirmed-bug fix, proven
+  // against the real broker/Postgres/Mailpit: a candidate who edits a
+  // rejected entity gets re-enqueued into a *different* moderation_queue
+  // row for the same underlying entityId (reenqueue()). Before this fix,
+  // the second decision's status_changed event would have been silently
+  // deduped against the first (same entityType+entityId+eventType), and
+  // the candidate would never learn their resubmission was reviewed.
+  it(
+    'two status_changed decisions on the same entity from different moderation_queue entries (a resubmission) both send an email',
+    async () => {
+      const marker = unique();
+      const email = `candidate-${marker}@example.com`;
+      const candidateId = await seedCandidateWithEmail(prisma, email);
+      const roundRatingId = randomUUID();
+
+      const firstDecision = {
+        eventType: 'moderation.round_rating.status_changed' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        roundRatingId,
+        roundId: randomUUID(),
+        candidateId,
+        companyId: randomUUID(),
+        previousStatus: 'pending' as const,
+        newStatus: 'rejected' as const,
+        moderationQueueEntryId: randomUUID(),
+      };
+      await publishTestEvent(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, firstDecision, roundRatingId);
+      await waitForMailpitMessage(email);
+
+      // A resubmission: same entity, a genuinely different
+      // moderation_queue entry, a different decision.
+      const secondDecision = { ...firstDecision, newStatus: 'approved' as const, moderationQueueEntryId: randomUUID() };
+      await publishTestEvent(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, secondDecision, roundRatingId);
+
+      await assertMailpitMessageCountStaysAt(email, 2);
+      const messagesForRecipient = await searchMailpit(`to:${email}`);
+      expect(messagesForRecipient).toHaveLength(2);
+      expect(messagesForRecipient.map((m) => m.Subject).sort()).toEqual([
+        'Your submission has been approved',
+        'Your submission was not approved',
+      ]);
     },
     25000,
   );
@@ -204,10 +254,11 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
 
       const logged = await prisma.notificationLog.findUnique({
         where: {
-          entityType_entityId_eventType: {
+          notification_log_dedup_key: {
             entityType: 'moderation_queue',
             entityId: queueEntryId,
             eventType: 'moderation.queue.sla_breach',
+            moderationQueueEntryId: '',
           },
         },
       });
@@ -249,10 +300,11 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
       await new Promise((resolve) => setTimeout(resolve, 3000));
       const logged = await prisma.notificationLog.findUnique({
         where: {
-          entityType_entityId_eventType: {
+          notification_log_dedup_key: {
             entityType: 'moderation_queue',
             entityId: queueEntryId,
             eventType: 'moderation.queue.sla_breach',
+            moderationQueueEntryId: '',
           },
         },
       });

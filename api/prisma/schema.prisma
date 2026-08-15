@@ -663,7 +663,19 @@ model NotificationLog {
   entityType String   @map("entity_type")
   entityId   String   @map("entity_id") @db.Uuid
   eventType  String   @map("event_type")
-  sentAt     DateTime @default(now()) @map("sent_at") @db.Timestamptz
+  // GitHub issue #687 (Phase 49, D104) — confirmed bug fix: a candidate
+  // editing a rejected/flagged entity gets re-enqueued (reenqueue()) into
+  // a *fresh* moderation_queue row for the same entityId, but the old key
+  // (entityType+entityId+eventType alone) treated any status_changed
+  // event on that entityId as "already notified," so a candidate was
+  // never notified of any review decision after the first one. Empty
+  // string default for event types that don't carry a real one
+  // (created/sla_breach — see notification-consumer.service.ts's own
+  // moderationQueueEntryIdFor()) so their pre-existing dedup behavior is
+  // unchanged; the actual moderation_queue entry id for status_changed
+  // events, giving each resubmission's decision its own dedup key.
+  moderationQueueEntryId String   @default("") @map("moderation_queue_entry_id")
+  sentAt                 DateTime @default(now()) @map("sent_at") @db.Timestamptz
 
   // The idempotency key itself (issue #335's acceptance criteria): a
   // redelivered event's INSERT hits this constraint and is skipped rather
@@ -671,6 +683,6 @@ model NotificationLog {
   // insert actually happened" shape as every unique-constraint-as-lock
   // pattern already used elsewhere in this schema (e.g. one rating per
   // candidate per round).
-  @@unique([entityType, entityId, eventType])
+  @@unique([entityType, entityId, eventType, moderationQueueEntryId], name: "notification_log_dedup_key")
   @@map("notification_log")
 }
