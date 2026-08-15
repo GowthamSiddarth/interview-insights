@@ -28,6 +28,14 @@ import {
   OverallReviewStatusChangedEventV1,
 } from '../events/schemas/overall-review-status-changed.event';
 import {
+  COMPANY_CREATED_V1_TOPIC,
+  CompanyCreatedEventV1,
+} from '../events/schemas/company-created.event';
+import {
+  COMPANY_STATUS_CHANGED_V1_TOPIC,
+  CompanyStatusChangedEventV1,
+} from '../events/schemas/company-status-changed.event';
+import {
   MODERATION_QUEUE_SLA_BREACH_V1_TOPIC,
   ModerationQueueSlaBreachEventV1,
 } from '../events/schemas/moderation-queue-sla-breach.event';
@@ -36,11 +44,21 @@ import { MailService } from '../mail/mail.service';
 import { decryptEmail } from '../candidates/email-encryption.util';
 import { pendingReviewSubjectAndBody, subjectAndBodyFor } from './notification-templates.util';
 
-type CreatedEvent = RoundRatingCreatedEventV1 | RecruiterRatingCreatedEventV1 | OverallReviewCreatedEventV1;
+// GitHub issue #698 (Phase 50, D104) — company joins the three original
+// rated/reviewed entity types here. Its events have no companyId field
+// of their own (the entity *is* the company), so it's structurally
+// identical to the other three for everything below except
+// entityTypeFor()/entityIdFor()'s own switches.
+type CreatedEvent =
+  | RoundRatingCreatedEventV1
+  | RecruiterRatingCreatedEventV1
+  | OverallReviewCreatedEventV1
+  | CompanyCreatedEventV1;
 type StatusChangedEvent =
   | RoundRatingStatusChangedEventV1
   | RecruiterRatingStatusChangedEventV1
-  | OverallReviewStatusChangedEventV1;
+  | OverallReviewStatusChangedEventV1
+  | CompanyStatusChangedEventV1;
 // GitHub issue #489 (Phase 36) — a third, structurally different kind of
 // event: no candidateId (nothing here is candidate-facing), and its
 // recipient is resolved via claimedById -> Moderator.email, not a
@@ -52,9 +70,11 @@ const TOPICS = [
   ROUND_RATING_CREATED_V1_TOPIC,
   RECRUITER_RATING_CREATED_V1_TOPIC,
   OVERALL_REVIEW_CREATED_V1_TOPIC,
+  COMPANY_CREATED_V1_TOPIC,
   ROUND_RATING_STATUS_CHANGED_V1_TOPIC,
   RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC,
   OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC,
+  COMPANY_STATUS_CHANGED_V1_TOPIC,
   MODERATION_QUEUE_SLA_BREACH_V1_TOPIC,
 ];
 
@@ -82,9 +102,14 @@ function entityTypeFor(event: ModerationEvent): string {
     case 'moderation.overall_review.created':
     case 'moderation.overall_review.status_changed':
       return 'overall_review';
-    // Not one of the three rated/reviewed entity types above — this
-    // event is about the moderation_queue row itself, not the entity it
-    // wraps (that's carried separately, as event.entityType/entityId).
+    // GitHub issue #698 (Phase 50, D104) — company joins the other three
+    // rated/reviewed entity types.
+    case 'moderation.company.created':
+    case 'moderation.company.status_changed':
+      return 'company';
+    // Not one of the four entity types above — this event is about the
+    // moderation_queue row itself, not the entity it wraps (that's
+    // carried separately, as event.entityType/entityId).
     case 'moderation.queue.sla_breach':
       return 'moderation_queue';
   }
@@ -101,6 +126,9 @@ function entityIdFor(event: ModerationEvent): string {
     case 'moderation.overall_review.created':
     case 'moderation.overall_review.status_changed':
       return event.overallReviewId;
+    case 'moderation.company.created':
+    case 'moderation.company.status_changed':
+      return event.companyId;
     case 'moderation.queue.sla_breach':
       return event.queueEntryId;
   }
@@ -401,8 +429,10 @@ const TOPICS_BY_EVENT_TYPE = new Set<string>([
   'moderation.round_rating.created',
   'moderation.recruiter_rating.created',
   'moderation.overall_review.created',
+  'moderation.company.created',
   'moderation.round_rating.status_changed',
   'moderation.recruiter_rating.status_changed',
   'moderation.overall_review.status_changed',
+  'moderation.company.status_changed',
   'moderation.queue.sla_breach',
 ]);

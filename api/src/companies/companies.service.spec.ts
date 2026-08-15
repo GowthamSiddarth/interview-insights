@@ -17,7 +17,12 @@ describe('CompaniesService', () => {
     roundRating: { count: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
-  let moderationService: { enqueue: jest.Mock; reenqueue: jest.Mock; indexForSearch: jest.Mock };
+  let moderationService: {
+    enqueue: jest.Mock;
+    reenqueue: jest.Mock;
+    indexForSearch: jest.Mock;
+    publishCreatedEvent: jest.Mock;
+  };
 
   const dto = { name: 'Acme Corp', slug: 'acme-corp', sizeBucket: 'mid' as const };
   const createdCompany = {
@@ -50,6 +55,7 @@ describe('CompaniesService', () => {
       enqueue: jest.fn().mockResolvedValue(undefined),
       reenqueue: jest.fn().mockResolvedValue({ id: 'queue-2' }),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
+      publishCreatedEvent: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -75,6 +81,13 @@ describe('CompaniesService', () => {
       });
       expect(moderationService.enqueue).toHaveBeenCalledWith('company', createdCompany.id);
       expect(result).toEqual(createdCompany);
+    });
+
+    // GitHub issue #698 (Phase 50, D104).
+    it('publishes a created domain event after creating the company', async () => {
+      await service.create(dto, 'candidate-1');
+
+      expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('company', createdCompany.id);
     });
 
     // GitHub issue #696 (Phase 50, D104) — seed-demo-data.ts creates
