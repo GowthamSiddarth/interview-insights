@@ -2498,18 +2498,23 @@ magic-link as the primary login path — see D104 for why. Milestone:
 
 Ordered by dependency:
 
-- [ ] `Candidate` schema migration — passwordHash/passwordSetAt/
+- [x] `Candidate` schema migration — passwordHash/passwordSetAt/
       tokenVersion (GitHub issue #679) — blocks everything else in this
       phase
-- [ ] `POST /candidates/register` + verification email (GitHub issue
-      #680) — depends on #679
-- [ ] `POST /candidates/login` + `CandidateLoginThrottleGuard` (GitHub
-      issue #681) — depends on #679
-- [ ] `PasswordResetToken` table + request/confirm endpoints (GitHub
+- [x] `POST /candidates/register` + verification email (GitHub issue
+      #680) — depends on #679. Shipped as `POST /auth/register` (not
+      literally under `/candidates`) — matches every other candidate
+      session endpoint's existing `CandidateAuthController`/`/auth`
+      prefix (`/auth/request-link`, `/auth/verify`, `/auth/login`), same
+      as admin-auth's own `/auth/admin/*` convention
+- [x] `POST /candidates/login` + `CandidateLoginThrottleGuard` (GitHub
+      issue #681) — depends on #679. Shipped as `POST /auth/login`, same
+      `/auth` prefix note as #680
+- [x] `PasswordResetToken` table + request/confirm endpoints (GitHub
       issue #682) — depends on #679
-- [ ] Retire magic-link as primary login; update frontend (GitHub issue
+- [x] Retire magic-link as primary login; update frontend (GitHub issue
       #683) — depends on #680, #681, #682
-- [ ] Engineering blog (last) (GitHub issue #684)
+- [x] Engineering blog (last) (GitHub issue #684)
 
 ## Phase 49 — Resubmission Loop & Rejection Feedback
 
