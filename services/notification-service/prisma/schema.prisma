@@ -86,10 +86,15 @@ model ModerationQueueEntry {
 // to decide whether a missed decision is notification-worthy
 // (status: approved/rejected only, same as notificationFor()'s existing
 // no-op for pending/flagged) and who to email.
+// createdAt lets the sweep also cover a missed *.created notification
+// (D106's documented scope for this sweep), bounded to a two-sided
+// window (see reconciliation-sweep.service.ts's own comment) so the
+// query never has to scan every row this table has ever held.
 model RoundRating {
   id          String           @id @db.Uuid
   candidateId String           @map("candidate_id") @db.Uuid
   status      ModerationStatus
+  createdAt   DateTime         @map("created_at") @db.Timestamptz
 
   @@map("round_ratings")
 }
@@ -98,6 +103,7 @@ model RecruiterRating {
   id          String           @id @db.Uuid
   candidateId String           @map("candidate_id") @db.Uuid
   status      ModerationStatus
+  createdAt   DateTime         @map("created_at") @db.Timestamptz
 
   @@map("recruiter_ratings")
 }
@@ -106,6 +112,7 @@ model OverallReview {
   id          String           @id @db.Uuid
   candidateId String           @map("candidate_id") @db.Uuid
   status      ModerationStatus
+  createdAt   DateTime         @map("created_at") @db.Timestamptz
 
   @@map("overall_reviews")
 }

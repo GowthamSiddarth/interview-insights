@@ -34,7 +34,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { decryptEmail } from '../candidates/email-encryption.util';
-import { subjectAndBodyFor } from './notification-templates.util';
+import { pendingReviewSubjectAndBody, subjectAndBodyFor } from './notification-templates.util';
 
 type CreatedEvent = RoundRatingCreatedEventV1 | RecruiterRatingCreatedEventV1 | OverallReviewCreatedEventV1;
 type StatusChangedEvent =
@@ -374,11 +374,7 @@ function isStatusChangedEvent(event: ModerationEvent): event is StatusChangedEve
 // comment).
 function notificationFor(event: ModerationEvent): { subject: string; text: string; html: string } | null {
   if (!isStatusChangedEvent(event)) {
-    return {
-      subject: 'Your submission is pending review',
-      text: "Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.",
-      html: "<p>Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.</p>",
-    };
+    return pendingReviewSubjectAndBody();
   }
   if (event.newStatus === 'approved' || event.newStatus === 'rejected') {
     return subjectAndBodyFor(event.newStatus);

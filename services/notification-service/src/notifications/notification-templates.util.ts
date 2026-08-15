@@ -23,3 +23,13 @@ export function subjectAndBodyFor(newStatus: 'approved' | 'rejected'): {
     html: '<p>Your submission was reviewed and was not approved. Thank you for taking the time to share your feedback.</p>',
   };
 }
+
+// The one fixed template for a *.created event — also reused by
+// ReconciliationSweepService (#711) for a missed pending-review email.
+export function pendingReviewSubjectAndBody(): { subject: string; text: string; html: string } {
+  return {
+    subject: 'Your submission is pending review',
+    text: "Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.",
+    html: "<p>Thanks for your submission! It's now in our moderation queue and will be reviewed shortly.</p>",
+  };
+}

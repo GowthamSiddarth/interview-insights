@@ -14,17 +14,18 @@ function encryptFixture(email: string): string {
   return Buffer.concat([iv, authTag, ciphertext]).toString('base64');
 }
 
-// GitHub issue #711 (Phase 49, D104) — mirrors review-analyzer's own
+// GitHub issue #711 (Phase 49, D104/D106) — mirrors review-analyzer's own
 // ReconciliationSweepService.spec.ts shape: a periodic sweep closing the
-// "lost/never-processed event" gap without a transactional outbox.
+// "lost/never-processed event" gap without a transactional outbox,
+// covering both status_changed and created events.
 describe('ReconciliationSweepService', () => {
   const originalKey = process.env.EMAIL_ENCRYPTION_KEY;
 
   let prisma: {
     moderationQueueEntry: { findMany: jest.Mock };
-    roundRating: { findUnique: jest.Mock };
-    recruiterRating: { findUnique: jest.Mock };
-    overallReview: { findUnique: jest.Mock };
+    roundRating: { findUnique: jest.Mock; findMany: jest.Mock };
+    recruiterRating: { findUnique: jest.Mock; findMany: jest.Mock };
+    overallReview: { findUnique: jest.Mock; findMany: jest.Mock };
     candidate: { findUnique: jest.Mock };
     notificationLog: { findUnique: jest.Mock; create: jest.Mock };
   };
@@ -34,9 +35,9 @@ describe('ReconciliationSweepService', () => {
     process.env.EMAIL_ENCRYPTION_KEY = ENCRYPTION_KEY;
     prisma = {
       moderationQueueEntry: { findMany: jest.fn().mockResolvedValue([]) },
-      roundRating: { findUnique: jest.fn() },
-      recruiterRating: { findUnique: jest.fn() },
-      overallReview: { findUnique: jest.fn() },
+      roundRating: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      recruiterRating: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      overallReview: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       candidate: { findUnique: jest.fn() },
       notificationLog: { findUnique: jest.fn(), create: jest.fn().mockResolvedValue({}) },
     };
@@ -51,7 +52,7 @@ describe('ReconciliationSweepService', () => {
     return new ReconciliationSweepService(prisma as unknown as PrismaService, mailService as unknown as MailService);
   }
 
-  describe('sweep', () => {
+  describe('sweep — status_changed half', () => {
     it('queries only reviewed, stale moderation_queue entries', async () => {
       const service = buildService();
 
@@ -78,11 +79,52 @@ describe('ReconciliationSweepService', () => {
     });
   });
 
-  describe('reconcileOne', () => {
+  describe('sweep — created half', () => {
+    it('queries all three entity types within the bounded window', async () => {
+      const service = buildService();
+
+      await service.sweep();
+
+      for (const table of [prisma.roundRating, prisma.recruiterRating, prisma.overallReview]) {
+        expect(table.findMany).toHaveBeenCalledWith({
+          where: {
+            createdAt: {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+              gte: expect.any(Date),
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+              lt: expect.any(Date),
+            },
+          },
+          select: { id: true, candidateId: true },
+        });
+      }
+    });
+
+    it('reconciles every entity found in the window', async () => {
+      prisma.roundRating.findMany.mockResolvedValue([{ id: 'rating-1', candidateId: 'candidate-1' }]);
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'already-logged' });
+      const service = buildService();
+
+      await service.sweep();
+
+      expect(prisma.notificationLog.findUnique).toHaveBeenCalledWith({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'round_rating',
+            entityId: 'rating-1',
+            eventType: 'moderation.round_rating.created',
+            moderationQueueEntryId: '',
+          },
+        },
+      });
+    });
+  });
+
+  describe('reconcileStatusChanged', () => {
     it('is a no-op for a company entry — never notification-worthy', async () => {
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'company', 'company-1');
+      await service.reconcileStatusChanged('queue-1', 'company', 'company-1');
 
       expect(prisma.notificationLog.findUnique).not.toHaveBeenCalled();
     });
@@ -91,7 +133,7 @@ describe('ReconciliationSweepService', () => {
       prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'round_rating', 'rating-1');
+      await service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1');
 
       expect(prisma.roundRating.findUnique).not.toHaveBeenCalled();
       expect(mailService.send).not.toHaveBeenCalled();
@@ -103,7 +145,7 @@ describe('ReconciliationSweepService', () => {
       prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: encryptFixture('candidate@example.com') });
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'round_rating', 'rating-1');
+      await service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1');
 
       expect(prisma.notificationLog.findUnique).toHaveBeenCalledWith({
         where: {
@@ -123,7 +165,7 @@ describe('ReconciliationSweepService', () => {
       prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: encryptFixture('candidate@example.com') });
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'round_rating', 'rating-1');
+      await service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1');
 
       expect(mailService.send).toHaveBeenCalledWith(
         expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission has been approved' }),
@@ -144,7 +186,7 @@ describe('ReconciliationSweepService', () => {
       prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: encryptFixture('candidate@example.com') });
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'recruiter_rating', 'rating-2');
+      await service.reconcileStatusChanged('queue-1', 'recruiter_rating', 'rating-2');
 
       expect(mailService.send).toHaveBeenCalledWith(
         expect.objectContaining({ subject: 'Your submission was not approved' }),
@@ -156,7 +198,7 @@ describe('ReconciliationSweepService', () => {
       prisma.overallReview.findUnique.mockResolvedValue({ candidateId: 'candidate-1', status: 'pending' });
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'overall_review', 'review-1');
+      await service.reconcileStatusChanged('queue-1', 'overall_review', 'review-1');
 
       expect(mailService.send).not.toHaveBeenCalled();
       expect(prisma.notificationLog.create).not.toHaveBeenCalled();
@@ -167,7 +209,7 @@ describe('ReconciliationSweepService', () => {
       prisma.roundRating.findUnique.mockResolvedValue({ candidateId: 'candidate-1', status: 'flagged' });
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'round_rating', 'rating-1');
+      await service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1');
 
       expect(mailService.send).not.toHaveBeenCalled();
     });
@@ -177,7 +219,7 @@ describe('ReconciliationSweepService', () => {
       prisma.roundRating.findUnique.mockResolvedValue(null);
       const service = buildService();
 
-      await service.reconcileOne('queue-1', 'round_rating', 'rating-1');
+      await service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1');
 
       expect(mailService.send).not.toHaveBeenCalled();
     });
@@ -188,7 +230,7 @@ describe('ReconciliationSweepService', () => {
       prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: null });
       const service = buildService();
 
-      await expect(service.reconcileOne('queue-1', 'round_rating', 'rating-1')).resolves.toBeUndefined();
+      await expect(service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1')).resolves.toBeUndefined();
 
       expect(mailService.send).not.toHaveBeenCalled();
     });
@@ -204,8 +246,69 @@ describe('ReconciliationSweepService', () => {
       prisma.notificationLog.create.mockRejectedValue(conflict);
       const service = buildService();
 
-      await expect(service.reconcileOne('queue-1', 'round_rating', 'rating-1')).resolves.toBeUndefined();
+      await expect(service.reconcileStatusChanged('queue-1', 'round_rating', 'rating-1')).resolves.toBeUndefined();
       expect(mailService.send).toHaveBeenCalled();
+    });
+  });
+
+  describe('reconcileCreated', () => {
+    it('is a no-op when a notification was already sent for this entity', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
+      const service = buildService();
+
+      await service.reconcileCreated('round_rating', 'rating-1', 'candidate-1');
+
+      expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
+      expect(mailService.send).not.toHaveBeenCalled();
+    });
+
+    it('looks up the dedup key with an empty moderationQueueEntryId', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: encryptFixture('candidate@example.com') });
+      const service = buildService();
+
+      await service.reconcileCreated('overall_review', 'review-1', 'candidate-1');
+
+      expect(prisma.notificationLog.findUnique).toHaveBeenCalledWith({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'overall_review',
+            entityId: 'review-1',
+            eventType: 'moderation.overall_review.created',
+            moderationQueueEntryId: '',
+          },
+        },
+      });
+    });
+
+    it('sends the missed pending-review email and records it', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: encryptFixture('candidate@example.com') });
+      const service = buildService();
+
+      await service.reconcileCreated('round_rating', 'rating-1', 'candidate-1');
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'candidate@example.com', subject: 'Your submission is pending review' }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          eventType: 'moderation.round_rating.created',
+          moderationQueueEntryId: '',
+        },
+      });
+    });
+
+    it('skips (without throwing) when the candidate has no email on file', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({ emailEncrypted: null });
+      const service = buildService();
+
+      await expect(service.reconcileCreated('round_rating', 'rating-1', 'candidate-1')).resolves.toBeUndefined();
+
+      expect(mailService.send).not.toHaveBeenCalled();
     });
   });
 });
