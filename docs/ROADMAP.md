@@ -2478,13 +2478,13 @@ Correctness Hardening". Epic: GitHub issue #673.
 Ordered by dependency — each issue only depends on ones above it in this
 list unless noted otherwise:
 
-- [ ] Fix TOCTOU race in `ModerationService.review()` via an atomic
+- [x] Fix TOCTOU race in `ModerationService.review()` via an atomic
       conditional update (GitHub issue #674)
-- [ ] Fix the same race shape in `claim()`/`release()` (GitHub issue
+- [x] Fix the same race shape in `claim()`/`release()` (GitHub issue
       #675) — independent of #674, same fix pattern
-- [ ] Regression tests for concurrent moderation actions (GitHub issue
+- [x] Regression tests for concurrent moderation actions (GitHub issue
       #676) — depends on #674, #675
-- [ ] Engineering blog (last) (GitHub issue #677)
+- [x] Engineering blog (last) (GitHub issue #677)
 
 ## Phase 48 — Candidate Password Authentication
 
