@@ -46,7 +46,7 @@ describe('OverallReviewsService', () => {
     };
     moderationService = {
       enqueue: jest.fn(),
-      reenqueue: jest.fn(),
+      reenqueue: jest.fn().mockResolvedValue({ id: 'queue-2' }),
       removeQueueEntries: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
@@ -147,6 +147,24 @@ describe('OverallReviewsService', () => {
         data: { ...dto, status: 'pending', moderationVerdict: Prisma.DbNull },
       });
       expect(moderationService.reenqueue).toHaveBeenCalledWith('overall_review', 'review-1', prisma);
+    });
+
+    // GitHub issue #692 (Phase 49, D104).
+    it('publishes a resubmission ack event after the transaction commits', async () => {
+      prisma.overallReview.findFirstOrThrow.mockResolvedValue({
+        id: 'review-1',
+        processId: 'process-1',
+        candidateId: 'candidate-1',
+        status: 'rejected',
+      });
+      prisma.overallReview.update.mockResolvedValue({ id: 'review-1', status: 'pending' });
+      moderationService.reenqueue.mockResolvedValue({ id: 'queue-2' });
+
+      await service.update('process-1', 'candidate-1', dto);
+
+      expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('overall_review', 'review-1', {
+        moderationQueueEntryId: 'queue-2',
+      });
     });
 
     it('rejects an edit from anyone but the owning candidate', async () => {

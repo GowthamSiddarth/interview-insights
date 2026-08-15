@@ -91,8 +91,12 @@ out of scope for the three per-entity-type events above — see
 `publishStatusChangedEvent`'s own comments for why, and D81 for why
 `review-analyzer` never subscribes to `company`'s own `*.created` topic
 either. Every `*.created` event carries `candidateId`/`companyId` context
-so a consumer can act without an immediate callback into the monolith;
-every `*.status_changed` event additionally carries `previousStatus`
+so a consumer can act without an immediate callback into the monolith,
+plus (GitHub issue #692, Phase 49, D104) an optional `isResubmission`
+flag and `moderationQueueEntryId` — set when this event was published
+from `update()`'s `reenqueue()` path (a candidate resubmitting rejected/
+flagged content) rather than the entity's original creation; every
+`*.status_changed` event additionally carries `previousStatus`
 (always `'pending'` — `ModerationService.review()` only ever runs against
 an unreviewed entry), `newStatus`, and the optional `reviewedBy` label.
 Every `*.verdict_computed` event carries the full LLM verdict payload
@@ -123,9 +127,16 @@ Published from:
   (one call per rated/reviewed entity it creates) — all after their
   transaction commits, alongside `indexForSearch()`. LLM triage no longer
   runs synchronously here (moved to `review-analyzer` by #340/D81) — an
-  edit (`update()`) resets `moderationVerdict` to null instead, so
-  `review-analyzer`'s reconciliation sweep picks the edited row back up
-  within its 24h window; there's no `*.created`-shaped event on edit.
+  edit (`update()`) resets `moderationVerdict` to null instead. As of
+  GitHub issue #692 (Phase 49, D104), `update()` also calls
+  `publishCreatedEvent()` again after its own `reenqueue()` commits, with
+  `isResubmission: true` and the fresh `moderationQueueEntryId` — so
+  `review-analyzer` re-triages an edit immediately (the same
+  `AnalysisConsumerService` subscription, no reconciliation-sweep wait)
+  and `notification-service` sends a distinct "your edited submission is
+  back in review" ack, deduped separately from the original submission's
+  (same per-queue-entry keying `*.status_changed` already established,
+  #686/#687).
 - **`*.status_changed`** — `ModerationService.review()`, the shared
   implementation behind `approve()`/`reject()`/`flag()` (and
   `approveWithAudit()`, the AI auto-approval entry point).

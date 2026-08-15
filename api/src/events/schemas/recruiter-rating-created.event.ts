@@ -11,4 +11,8 @@ export interface RecruiterRatingCreatedEventV1 {
   candidateId: string;
   companyId: string;
   status: 'pending';
+  // GitHub issue #692 (Phase 49, D104) — see round-rating-created.event.ts's
+  // own comment for the full reasoning; identical here.
+  isResubmission?: boolean;
+  moderationQueueEntryId?: string;
 }

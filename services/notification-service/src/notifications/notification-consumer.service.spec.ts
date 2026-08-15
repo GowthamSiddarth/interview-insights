@@ -127,6 +127,64 @@ describe('NotificationConsumerService', () => {
       });
     });
 
+    // GitHub issue #692 (Phase 49, D104).
+    it('sends a distinct "back in review" email for a resubmission created event, keyed by its own queue entry', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent({
+        ...roundRatingEvent,
+        isResubmission: true,
+        moderationQueueEntryId: 'queue-2',
+      });
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'candidate@example.com',
+          subject: 'Your edited submission is back in review',
+        }),
+      );
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          eventType: 'moderation.round_rating.created',
+          moderationQueueEntryId: 'queue-2',
+        },
+      });
+    });
+
+    // GitHub issue #692 (Phase 49, D104) — the exact bug #692's own
+    // acceptance criteria calls out: without moderationQueueEntryIdFor()
+    // keying a resubmission ack separately, this lookup would find the
+    // original submission's already-sent dedup row (both keyed '') and
+    // wrongly skip the resubmission email.
+    it("doesn't collide with the original submission's created notification dedup row", async () => {
+      prisma.notificationLog.findUnique.mockImplementation(
+        ({ where }: { where: { notification_log_dedup_key: { moderationQueueEntryId: string } } }) =>
+          Promise.resolve(where.notification_log_dedup_key.moderationQueueEntryId === '' ? {} : null),
+      );
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent({
+        ...roundRatingEvent,
+        isResubmission: true,
+        moderationQueueEntryId: 'queue-2',
+      });
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: 'Your edited submission is back in review' }),
+      );
+    });
+
     it('maps recruiter_rating and overall_review events to their own id fields', async () => {
       prisma.notificationLog.findUnique.mockResolvedValue(null);
       prisma.candidate.findUnique.mockResolvedValue({

@@ -47,7 +47,7 @@ describe('RecruiterRatingsService', () => {
     };
     moderationService = {
       enqueue: jest.fn(),
-      reenqueue: jest.fn(),
+      reenqueue: jest.fn().mockResolvedValue({ id: 'queue-2' }),
       removeQueueEntries: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
@@ -153,6 +153,24 @@ describe('RecruiterRatingsService', () => {
         'rating-1',
         prisma,
       );
+    });
+
+    // GitHub issue #692 (Phase 49, D104).
+    it('publishes a resubmission ack event after the transaction commits', async () => {
+      prisma.recruiterRating.findFirstOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        recruiterInteractionId: 'interaction-1',
+        candidateId: 'candidate-1',
+        status: 'rejected',
+      });
+      prisma.recruiterRating.update.mockResolvedValue({ id: 'rating-1', status: 'pending' });
+      moderationService.reenqueue.mockResolvedValue({ id: 'queue-2' });
+
+      await service.update('interaction-1', 'rating-1', 'candidate-1', dto);
+
+      expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('recruiter_rating', 'rating-1', {
+        moderationQueueEntryId: 'queue-2',
+      });
     });
 
     it('rejects an edit from anyone but the owning candidate', async () => {

@@ -978,9 +978,24 @@ export class ModerationService {
   // deliberate no-op, not an oversight. Fetches fresh from Postgres
   // rather than trusting caller context, same reasoning as
   // indexForSearch()'s own comment.
-  async publishCreatedEvent(entityType: ModerationEntityType, entityId: string): Promise<void> {
+  //
+  // GitHub issue #692 (Phase 49, D104) — also called from each
+  // write-path service's update(), right after reenqueue() commits, with
+  // resubmission set to the fresh queue entry's own id. Before this, an
+  // edit never re-published a *.created-shaped event at all (see this
+  // method's own git history / docs/EVENTS.md) — a candidate who
+  // resubmitted got no acknowledgment until the eventual decision, and
+  // review-analyzer's re-triage of the edited content only happened via
+  // its 24h reconciliation sweep instead of immediately.
+  async publishCreatedEvent(
+    entityType: ModerationEntityType,
+    entityId: string,
+    resubmission?: { moderationQueueEntryId: string },
+  ): Promise<void> {
     try {
       const occurredAt = new Date().toISOString();
+      const isResubmission = resubmission !== undefined;
+      const moderationQueueEntryId = resubmission?.moderationQueueEntryId;
       switch (entityType) {
         case 'round_rating': {
           const r = await this.prisma.roundRating.findUniqueOrThrow({
@@ -996,6 +1011,8 @@ export class ModerationService {
             candidateId: r.candidateId,
             companyId: r.round.process.companyId,
             status: 'pending',
+            isResubmission,
+            moderationQueueEntryId,
           };
           await this.domainEventPublisher.publish(ROUND_RATING_CREATED_V1_TOPIC, event, r.id);
           return;
@@ -1014,6 +1031,8 @@ export class ModerationService {
             candidateId: r.candidateId,
             companyId: r.recruiterInteraction.process.companyId,
             status: 'pending',
+            isResubmission,
+            moderationQueueEntryId,
           };
           await this.domainEventPublisher.publish(RECRUITER_RATING_CREATED_V1_TOPIC, event, r.id);
           return;
@@ -1032,6 +1051,8 @@ export class ModerationService {
             candidateId: r.candidateId,
             companyId: r.process.companyId,
             status: 'pending',
+            isResubmission,
+            moderationQueueEntryId,
           };
           await this.domainEventPublisher.publish(OVERALL_REVIEW_CREATED_V1_TOPIC, event, r.id);
           return;

@@ -14,4 +14,11 @@ export interface RoundRatingCreatedEventV1 {
   candidateId: string;
   companyId: string;
   status: 'pending';
+  // GitHub issue #692 (Phase 49, D104) — see api's own copy of this
+  // schema for the full reasoning; identical here. This service doesn't
+  // read either field (a re-triage runs the same way regardless of
+  // whether the trigger was a first-time submission or a resubmission),
+  // kept only for byte-for-byte shape parity with the contract.
+  isResubmission?: boolean;
+  moderationQueueEntryId?: string;
 }

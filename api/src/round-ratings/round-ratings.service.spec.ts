@@ -48,7 +48,7 @@ describe('RoundRatingsService', () => {
     };
     moderationService = {
       enqueue: jest.fn(),
-      reenqueue: jest.fn(),
+      reenqueue: jest.fn().mockResolvedValue({ id: 'queue-2' }),
       removeQueueEntries: jest.fn(),
       indexForSearch: jest.fn().mockResolvedValue(undefined),
       removeFromSearchIndex: jest.fn().mockResolvedValue(undefined),
@@ -147,6 +147,24 @@ describe('RoundRatingsService', () => {
         data: { ...dto, status: 'pending', moderationVerdict: Prisma.DbNull },
       });
       expect(moderationService.reenqueue).toHaveBeenCalledWith('round_rating', 'rating-1', prisma);
+    });
+
+    // GitHub issue #692 (Phase 49, D104).
+    it('publishes a resubmission ack event after the transaction commits', async () => {
+      prisma.roundRating.findFirstOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        status: 'rejected',
+      });
+      prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'pending' });
+      moderationService.reenqueue.mockResolvedValue({ id: 'queue-2' });
+
+      await service.update('round-1', 'rating-1', 'candidate-1', dto);
+
+      expect(moderationService.publishCreatedEvent).toHaveBeenCalledWith('round_rating', 'rating-1', {
+        moderationQueueEntryId: 'queue-2',
+      });
     });
 
     it('rejects an edit from anyone but the owning candidate', async () => {

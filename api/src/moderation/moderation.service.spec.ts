@@ -1688,6 +1688,41 @@ describe('ModerationService', () => {
       );
     });
 
+    // GitHub issue #692 (Phase 49, D104).
+    it('marks the event isResubmission: false and omits moderationQueueEntryId when called with no resubmission option', async () => {
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        round: { process: { companyId: 'company-1' } },
+      });
+
+      await service.publishCreatedEvent('round_rating', 'rating-1');
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.round_rating.created.v1',
+        expect.objectContaining({ isResubmission: false, moderationQueueEntryId: undefined }),
+        'rating-1',
+      );
+    });
+
+    it('marks the event isResubmission: true with the fresh queue entry id when called with a resubmission option', async () => {
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        round: { process: { companyId: 'company-1' } },
+      });
+
+      await service.publishCreatedEvent('round_rating', 'rating-1', { moderationQueueEntryId: 'queue-2' });
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.round_rating.created.v1',
+        expect.objectContaining({ isResubmission: true, moderationQueueEntryId: 'queue-2' }),
+        'rating-1',
+      );
+    });
+
     it('never publishes a created event for a company request (out of scope for #332)', async () => {
       await service.publishCreatedEvent('company', 'company-1');
 

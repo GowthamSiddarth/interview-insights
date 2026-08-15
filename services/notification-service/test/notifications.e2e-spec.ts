@@ -94,6 +94,73 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
     25000,
   );
 
+  // GitHub issue #692 (Phase 49, D104) — a resubmission fires the same
+  // *.created event shape a second time for the same roundRatingId; this
+  // must land a distinct "back in review" email, not be swallowed as an
+  // already-notified duplicate of the original submission's email above.
+  it(
+    'a resubmission created.v1 event (isResubmission: true) sends a distinct email, deduped separately from the original submission',
+    async () => {
+      const marker = unique();
+      const email = `candidate-${marker}@example.com`;
+      const candidateId = await seedCandidateWithEmail(prisma, email);
+      const roundRatingId = randomUUID();
+      const resubmissionQueueEntryId = randomUUID();
+
+      const originalEvent = {
+        eventType: 'moderation.round_rating.created' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        roundRatingId,
+        roundId: randomUUID(),
+        candidateId,
+        companyId: randomUUID(),
+        status: 'pending' as const,
+      };
+      await publishTestEvent(ROUND_RATING_CREATED_V1_TOPIC, originalEvent, roundRatingId);
+      await waitForMailpitMessage(email);
+
+      const resubmissionEvent = {
+        ...originalEvent,
+        occurredAt: new Date().toISOString(),
+        isResubmission: true,
+        moderationQueueEntryId: resubmissionQueueEntryId,
+      };
+      await publishTestEvent(ROUND_RATING_CREATED_V1_TOPIC, resubmissionEvent, roundRatingId);
+
+      // Poll until the second (resubmission) email actually lands —
+      // waitForMailpitMessage() alone would just re-return the first
+      // message already found by the original-submission check above.
+      const deadline = Date.now() + 20000;
+      let messages: Awaited<ReturnType<typeof searchMailpit>> = [];
+      while (Date.now() < deadline) {
+        messages = await searchMailpit(`to:${email}`);
+        if (messages.length >= 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      expect(messages).toHaveLength(2);
+      const resubmissionMessage = messages.find((m) => m.Subject === 'Your edited submission is back in review');
+      expect(resubmissionMessage).toBeDefined();
+
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'round_rating',
+            entityId: roundRatingId,
+            eventType: 'moderation.round_rating.created',
+            moderationQueueEntryId: resubmissionQueueEntryId,
+          },
+        },
+      });
+      expect(logged).not.toBeNull();
+
+      // Redelivery of the resubmission event must never send a second copy.
+      await publishTestEvent(ROUND_RATING_CREATED_V1_TOPIC, resubmissionEvent, roundRatingId);
+      await assertMailpitMessageCountStaysAt(email, 2);
+    },
+    25000,
+  );
+
   // GitHub issue #336 — same idempotent-consumer shape as #335's test
   // above, proven against the status_changed side instead.
   it(

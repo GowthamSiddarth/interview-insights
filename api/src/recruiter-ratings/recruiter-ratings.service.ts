@@ -72,24 +72,30 @@ export class RecruiterRatingsService {
       throw new ForbiddenException('This rating has been permanently rejected and can no longer be edited.');
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // moderationVerdict reset to null: a stale verdict against the
       // pre-edit text would be misleading to a moderator (GitHub issue
       // #163), and — since GitHub issue #340/D81 — this is also what makes
       // an edited row visible to review-analyzer's reconciliation sweep
-      // (it only re-triages rows with a null verdict). There's no
-      // *.created-shaped event published on edit today, so re-triage of
-      // edited content is no longer immediate: it now lands within the
-      // sweep's 24h window rather than synchronously in this request.
+      // (it only re-triages rows with a null verdict). GitHub issue #692
+      // (Phase 49, D104) — re-triage of edited content is immediate again
+      // now: publishCreatedEvent() below re-fires the same *.created-shaped
+      // event review-analyzer's AnalysisConsumerService already subscribes
+      // to, rather than waiting on the sweep's 24h window.
       const updated = await tx.recruiterRating.update({
         where: { id },
         data: { ...dto, status: 'pending', moderationVerdict: Prisma.DbNull },
       });
-      await this.moderationService.reenqueue('recruiter_rating', id, tx);
-      return updated;
+      const queueEntry = await this.moderationService.reenqueue('recruiter_rating', id, tx);
+      return { updated, queueEntry };
     });
     await this.moderationService.indexForSearch('recruiter_rating', id);
-    return updated;
+    // GitHub issue #692 (Phase 49, D104) — resubmission ack, after commit,
+    // same best-effort shape as create()'s own publishCreatedEvent() call.
+    await this.moderationService.publishCreatedEvent('recruiter_rating', id, {
+      moderationQueueEntryId: result.queueEntry.id,
+    });
+    return result.updated;
   }
 
   // GitHub issue #150 — same shape as RoundRatingsService.remove(), minus
