@@ -2531,12 +2531,12 @@ parked "candidate-communication-loop" idea. See D104. Milestone: "Phase
 
 Ordered by dependency:
 
-- [ ] Add `moderationQueueEntryId` to `*.status_changed.v1` event schemas
+- [x] Add `moderationQueueEntryId` to `*.status_changed.v1` event schemas
       (GitHub issue #686) — blocks #687
-- [ ] Fix `NotificationLog` idempotency key to include
+- [x] Fix `NotificationLog` idempotency key to include
       `moderationQueueEntryId` (GitHub issue #687) — depends on #686,
       the confirmed-bug fix
-- [ ] `notification-service` reconciliation sweep for missed/failed
+- [x] `notification-service` reconciliation sweep for missed/failed
       notification deliveries (GitHub issue #711) — depends on #687
       (needs the corrected idempotency key to tell "already sent" from
       "missing"); mirrors `review-analyzer`'s existing
@@ -2545,19 +2545,22 @@ Ordered by dependency:
       pass (D106) — Phase 8 itself stays deferred for the real AWS
       migration, this fix landed here instead since it's squarely
       inside this phase's own notification-reliability scope
-- [ ] Add `rejectionReasonCategory` + `reviewNote` to
-      `ModerationActionDto` (GitHub issue #688)
-- [ ] Lifetime resubmission cap + escalation to senior-moderator/admin
+- [x] Add `rejectionReasonCategory` + `reviewNote` to
+      `ModerationActionDto` (GitHub issue #688) — candidate-facing
+      surfacing (rejection email, `/me`) and required-when-rejected
+      validation never shipped in this pass; tracked as a follow-up,
+      GitHub issue #729
+- [x] Lifetime resubmission cap + escalation to senior-moderator/admin
       queue (GitHub issue #689)
-- [ ] New `closed`/`permanently_rejected` terminal status (GitHub issue
+- [x] New `closed`/`permanently_rejected` terminal status (GitHub issue
       #690) — depends on #689's escalation permission
-- [ ] Surface prior-submission history in moderator queue UI (GitHub
+- [x] Surface prior-submission history in moderator queue UI (GitHub
       issue #691) — depends on #688 for the reason text
-- [ ] Publish resubmission-ack event on `reenqueue()` (GitHub issue #692)
+- [x] Publish resubmission-ack event on `reenqueue()` (GitHub issue #692)
       — depends on #687's fixed idempotency key
-- [ ] Move `EditThrottleService` off in-memory storage before horizontal
+- [x] Move `EditThrottleService` off in-memory storage before horizontal
       scaling (GitHub issue #693)
-- [ ] Engineering blog (last) (GitHub issue #694)
+- [x] Engineering blog (last) (GitHub issue #694)
 
 ## Phase 50 — Company Creation Request Lifecycle
 

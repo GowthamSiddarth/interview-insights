@@ -167,11 +167,23 @@ post per phase — this file no longer inlines that running history.
   (`RequirePermission`/`PermissionsGuard`), root credential narrowed to
   break-glass recovery only, role-aware frontend. Phase 40 (CI
   Infrastructure: Self-Hosted GitHub Actions Runner) is the current
-  frontier — #501 (provision the runner VM) is next, in progress as of
-  2026-08-04. The GitHub Actions billing gate that prompted Phase 40 was
-  refreshed 2026-08-03 — back to normal wait-for-CI-green discipline
-  before merging, not the temporary merge-without-CI exception this line
-  used to describe.
+  frontier — #501 (provision the runner VM) is next, blocked on Oracle
+  A1.Flex capacity as of 2026-08-04 (see `docs/DECISIONS.md` D88/D89).
+  The GitHub Actions billing gate that prompted Phase 40 was refreshed
+  2026-08-03 — back to normal wait-for-CI-green discipline before
+  merging, not the temporary merge-without-CI exception this line used
+  to describe. Phases 47-51 (notification/communication-chain audit,
+  D104, filed 2026-08-14) ran ahead of Phase 40 while it's blocked:
+  Phase 47 (Moderation Queue Correctness Hardening) is fully done, blog
+  included (issues #674-#677, epic closed). Phase 48 (Candidate Password
+  Authentication) is fully done too, blog included (issues #679-#684,
+  epic closed). Phase 49 (Resubmission Loop & Rejection Feedback) is
+  fully done too, blog included (issues #686-#694 plus #711, epic #685
+  closed) — one open follow-up, #729, tracks #688's candidate-facing
+  rejection-reason surfacing (email, `/me`) that never shipped in this
+  pass. Phases 50 (Company Creation Request Lifecycle, epic #695) and 51
+  (Staff/Admin/Moderator Notification Platform, epic #700) are planned
+  but not yet implemented — next up.
 
 ## Open decisions still to make
 
