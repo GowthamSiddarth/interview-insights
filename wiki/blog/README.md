@@ -626,3 +626,24 @@ primary `/login` flow, with the magic link demoted to a secondary option.
 3. [Issue #681 — Password login + `CandidateLoginThrottleGuard`](phase-48-candidate-password-authentication/issue-681-login-throttle/README.md)
 4. [Issue #682 — Password reset](phase-48-candidate-password-authentication/issue-682-password-reset/README.md)
 5. [Issue #683 — Retire magic-link as primary login; update the frontend](phase-48-candidate-password-authentication/issue-683-retire-magic-link-frontend/README.md)
+
+## Phase 49 — Resubmission Loop & Rejection Feedback
+
+See `docs/ROADMAP.md` Phase 49 and `docs/DECISIONS.md` D104/D106. Filed
+from the same end-to-end notification/communication-chain audit as
+Phase 47: a confirmed bug in `NotificationLog`'s idempotency key meant a
+candidate was never notified of any review decision after the first one
+on a given entity, candidates could edit a rejected/flagged submission
+indefinitely with no lifetime cap, and `EditThrottleService`'s in-memory
+throttle wouldn't coordinate across `api` replicas. This phase activates
+D99's parked "candidate-communication-loop" idea.
+
+1. [Issue #686 — Add `moderationQueueEntryId` to `*.status_changed.v1` events](phase-49-resubmission-loop-rejection-feedback/issue-686-moderation-queue-entry-id-status-changed/README.md)
+2. [Issue #687 — Fix `NotificationLog`'s idempotency key](phase-49-resubmission-loop-rejection-feedback/issue-687-notification-log-dedup-key-fix/README.md)
+3. [Issue #711 — `notification-service` reconciliation sweep](phase-49-resubmission-loop-rejection-feedback/issue-711-notification-reconciliation-sweep/README.md)
+4. [Issue #688 — `rejectionReasonCategory` + `reviewNote` on `ModerationActionDto`](phase-49-resubmission-loop-rejection-feedback/issue-688-rejection-reason-review-note/README.md)
+5. [Issue #689 — Lifetime resubmission cap + escalation](phase-49-resubmission-loop-rejection-feedback/issue-689-lifetime-resubmission-cap-escalation/README.md)
+6. [Issue #690 — New `permanently_rejected` terminal status](phase-49-resubmission-loop-rejection-feedback/issue-690-permanently-rejected-terminal-status/README.md)
+7. [Issue #691 — Surface prior-submission history in the moderator queue UI](phase-49-resubmission-loop-rejection-feedback/issue-691-prior-submission-history-ui/README.md)
+8. [Issue #692 — Publish a resubmission-ack event on `reenqueue()`](phase-49-resubmission-loop-rejection-feedback/issue-692-resubmission-ack-event/README.md)
+9. [Issue #693 — Move `EditThrottleService` off in-memory storage](phase-49-resubmission-loop-rejection-feedback/issue-693-edit-throttle-postgres/README.md)
