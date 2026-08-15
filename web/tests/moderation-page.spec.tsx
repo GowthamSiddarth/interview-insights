@@ -37,6 +37,7 @@ const queueGroups = [
         slaDeadline: '2026-07-21T00:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        priorReviews: [],
         entity: {
           processId: 'process-1',
           companyName: 'Acme Corp',
@@ -74,6 +75,7 @@ const queueGroups = [
         // badge/no-Release-button branch has fixture coverage too.
         claimedBy: { id: 'mod-other', username: 'other-mod' },
         claimedAt: '2026-07-19T01:00:00Z',
+        priorReviews: [],
         entity: {
           processId: 'process-1',
           companyName: 'Acme Corp',
@@ -104,6 +106,7 @@ const queueGroups = [
         slaDeadline: '2026-07-21T00:02:00Z',
         claimedBy: null,
         claimedAt: null,
+        priorReviews: [],
         entity: {
           processId: 'process-2',
           companyName: 'Acme Corp',
@@ -133,6 +136,7 @@ const queueGroups = [
         slaDeadline: '2026-07-21T00:03:00Z',
         claimedBy: null,
         claimedAt: null,
+        priorReviews: [],
         entity: {
           processId: 'company-request-comp1',
           companyName: 'Globex Corp',
@@ -390,6 +394,57 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
     expect(screen.queryByText('Overall review')).not.toBeInTheDocument();
   });
 
+  // GitHub issue #691 (Phase 49, D104).
+  it('expanding a resubmitted entry shows its prior decision, reason, note, and reviewer', async () => {
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/auth/admin/me') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
+      }
+      if (url.endsWith('/companies') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(companiesMock) });
+      }
+      if (url.includes('/moderation/queue') && !url.includes('/moderation/queue/') && method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                ...queueGroups[0],
+                entries: [
+                  {
+                    ...queueGroups[0].entries[0],
+                    priorReviews: [
+                      {
+                        id: 'q-round-prior-1',
+                        decision: 'rejected',
+                        reviewedAt: '2026-07-18T00:00:00Z',
+                        reviewedBy: 'gowtham',
+                        rejectionReasonCategory: 'low_quality',
+                        reviewNote: 'Free text was too vague to be useful.',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ]),
+        });
+      }
+      throw new Error(`Unmocked fetch: ${method} ${url}`);
+    }) as jest.Mock;
+
+    const user = userEvent.setup();
+    render(<ModerationPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Acme Corp · Engineer/ }));
+
+    expect(screen.getByText(/Resubmitted — 1 prior submission/)).toBeInTheDocument();
+    expect(screen.getByText(/Rejected — Low quality/)).toBeInTheDocument();
+    expect(screen.getByText('Free text was too vague to be useful.')).toBeInTheDocument();
+    expect(screen.getByText(/gowtham/)).toBeInTheDocument();
+  });
+
   it('approve calls the endpoint and removes just that entry, collapsing the group once empty', async () => {
     const user = userEvent.setup();
     render(<ModerationPage />);
@@ -620,6 +675,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       slaDeadline: '2026-07-21T00:00:00Z',
       claimedBy: null,
       claimedAt: null,
+      priorReviews: [],
       entity: {
         processId: 'process-1',
         companyName: 'Acme Corp',
@@ -644,6 +700,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
       slaDeadline: '2026-07-21T00:03:00Z',
       claimedBy: null,
       claimedAt: null,
+      priorReviews: [],
       entity: {
         processId: 'company-request-comp1',
         companyName: 'Globex Corp',

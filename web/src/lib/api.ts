@@ -147,6 +147,16 @@ export type ModerationEntityType =
   | 'overall_review'
   | 'company';
 export type ModerationFlagReason = 'spam_pattern' | 'rate_limit' | 'duplicate' | 'manual_report';
+// GitHub issue #688/#691 (Phase 49, D104) — a moderator's own stated
+// rejection reason, distinct from ModerationFlagReason (a system/pre-write
+// signal). Only ever meaningful on a 'rejected' decision.
+export type ModerationRejectionReason =
+  | 'low_quality'
+  | 'guideline_violation'
+  | 'identifying_information'
+  | 'spam_or_promotional'
+  | 'inaccurate_or_unverifiable'
+  | 'other';
 // GitHub issue #370/#371 (Phase 35) — the moderator search box's two
 // buckets: every interview-review entity type collapses into one value,
 // a create-company request is the other. Derived client-side from
@@ -176,6 +186,17 @@ export interface ModerationQueueClaimedBy {
   username: string;
 }
 
+// GitHub issue #691 (Phase 49, D104) — one historical (already-reviewed)
+// queue entry for the same entity as a still-pending ModerationQueueEntry.
+export interface ModerationQueuePriorReview {
+  id: string;
+  decision: 'approved' | 'rejected' | 'flagged' | null;
+  reviewedAt: string;
+  reviewedBy: string | null;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
+}
+
 export interface ModerationQueueEntry {
   id: string;
   entityType: ModerationEntityType;
@@ -188,6 +209,10 @@ export interface ModerationQueueEntry {
   claimedBy: ModerationQueueClaimedBy | null;
   claimedAt: string | null;
   entity: ModerationQueueEntity | null;
+  // GitHub issue #691 (Phase 49, D104) — empty for a first-time submission;
+  // one entry per past reject/approve/flag decision on this same entity,
+  // most recent first.
+  priorReviews: ModerationQueuePriorReview[];
 }
 
 // GitHub issue #315: the queue groups every pending entity by its

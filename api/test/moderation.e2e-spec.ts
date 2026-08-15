@@ -37,6 +37,14 @@ interface QueueEntryBody {
   escalated: boolean;
   claimedBy: { id: string; username: string } | null;
   entity: Record<string, unknown> | null;
+  priorReviews: Array<{
+    id: string;
+    decision: string | null;
+    reviewedAt: string;
+    reviewedBy: string | null;
+    rejectionReasonCategory: string | null;
+    reviewNote: string | null;
+  }>;
 }
 interface QueueGroupBody {
   processId: string | null;
@@ -387,6 +395,70 @@ describe('Moderation (e2e)', () => {
         .set('Cookie', second.cookie)
         .send({})
         .expect(201);
+    });
+  });
+
+  // GitHub issue #691 (Phase 49, D104).
+  describe('prior-submission history', () => {
+    it('has no priorReviews on a first-time submission', async () => {
+      const { ratingId } = await submitRating();
+      const entry = await findQueueEntryFor(ratingId);
+
+      expect(entry.priorReviews).toEqual([]);
+    });
+
+    it("surfaces a rejected-then-resubmitted entity's prior decision, reason, and reviewer on the new pending entry", async () => {
+      const email = uniqueEmail();
+      const { cookie: candidateCookie } = await loginAsCandidate(app, email);
+      const { id: companyId } = await createApprovedCompany(app, candidateCookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', candidateCookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const { id: processId } = body<ProcessBody>(processRes);
+      const roundRes = await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+        .expect(201);
+      const { id: roundId } = body<RoundBody>(roundRes);
+      const ratingRes = await server()
+        .post(`/rounds/${roundId}/ratings`)
+        .set('Cookie', candidateCookie)
+        .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+        .expect(201);
+      const { id: ratingId } = body<RatingBody>(ratingRes);
+      const firstEntry = await findQueueEntryFor(ratingId);
+
+      await server()
+        .post(`/moderation/queue/${firstEntry.id}/reject`)
+        .set('Cookie', adminCookie)
+        .send({
+          reviewedBy: ADMIN_TEST_USERNAME,
+          rejectionReasonCategory: 'low_quality',
+          reviewNote: 'Free text was too vague.',
+        })
+        .expect(201);
+
+      await server()
+        .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+        .set('Cookie', candidateCookie)
+        .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+        .expect(200);
+
+      const secondEntry = await findQueueEntryFor(ratingId);
+      expect(secondEntry.priorReviews).toEqual([
+        expect.objectContaining({
+          id: firstEntry.id,
+          decision: 'rejected',
+          reviewedBy: ADMIN_TEST_USERNAME,
+          rejectionReasonCategory: 'low_quality',
+          reviewNote: 'Free text was too vague.',
+        }),
+      ]);
     });
   });
 

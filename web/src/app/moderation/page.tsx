@@ -15,7 +15,9 @@ import {
   ModerationQueueEntity,
   ModerationQueueEntry,
   ModerationQueueGroup,
+  ModerationQueuePriorReview,
   ModerationQueueStatus,
+  ModerationRejectionReason,
   StaffRole,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
@@ -69,6 +71,54 @@ const CATEGORY_LABEL: Record<ModerationQueueCategory, string> = {
 
 function CategoryBadge({ category }: { category: ModerationQueueCategory }) {
   return <Chip>{CATEGORY_LABEL[category]}</Chip>;
+}
+
+// GitHub issue #688/#691 (Phase 49, D104) — a moderator's own stated
+// rejection reason, human-readable. Never surfaced before now — #688 only
+// added the field to the backend DTO, this page is the first place it's
+// actually rendered.
+const REJECTION_REASON_LABEL: Record<ModerationRejectionReason, string> = {
+  low_quality: 'Low quality',
+  guideline_violation: 'Guideline violation',
+  identifying_information: 'Identifying information',
+  spam_or_promotional: 'Spam or promotional',
+  inaccurate_or_unverifiable: 'Inaccurate or unverifiable',
+  other: 'Other',
+};
+
+const DECISION_LABEL: Record<'approved' | 'rejected' | 'flagged', string> = {
+  approved: 'Approved',
+  rejected: 'Rejected',
+  flagged: 'Flagged',
+};
+
+// GitHub issue #691 (Phase 49, D104) — a resubmission's full history: each
+// past decision this same entity ever received, most recent first. Renders
+// nothing for the common case (a first-time submission, empty array) —
+// see ModerationQueuePriorReview's own comment for why decision can be
+// null (a row reviewed before this column existed).
+function PriorReviewsPanel({ priorReviews }: { priorReviews: ModerationQueuePriorReview[] }) {
+  if (priorReviews.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+      <p className="font-medium">
+        Resubmitted — {priorReviews.length} prior submission{priorReviews.length === 1 ? '' : 's'}
+      </p>
+      {priorReviews.map((review) => (
+        <div key={review.id} className="border-l-2 border-amber-300 pl-2 dark:border-amber-700">
+          <p>
+            {review.decision ? DECISION_LABEL[review.decision] : 'Unknown decision'}
+            {review.rejectionReasonCategory &&
+              ` — ${REJECTION_REASON_LABEL[review.rejectionReasonCategory]}`}
+            {' · '}
+            {new Date(review.reviewedAt).toLocaleDateString()}
+            {review.reviewedBy && ` · ${review.reviewedBy}`}
+          </p>
+          {review.reviewNote && <p className="italic">{review.reviewNote}</p>}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // GitHub issue #487 (Phase 36, D80) — surfaces who (if anyone) currently
@@ -237,6 +287,7 @@ function EntityDetails({ entry }: { entry: ModerationQueueEntry }) {
             page (CLAUDE.md hard constraint #1). */}
         {entity.recruiterLabel && <>{entity.recruiterLabel}</>}
       </p>
+      <PriorReviewsPanel priorReviews={entry.priorReviews} />
       {entry.entityType === 'round_rating' && <RoundContentDetails entity={entity} />}
       {entry.entityType === 'company' && <CompanyRequestDetails entity={entity} />}
       {scores.length > 0 && (

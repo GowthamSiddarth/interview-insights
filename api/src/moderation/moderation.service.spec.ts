@@ -756,6 +756,99 @@ describe('ModerationService', () => {
 
       expect(result).toHaveLength(2);
     });
+
+    // GitHub issue #691 (Phase 49, D104).
+    describe('priorReviews', () => {
+      function mockPendingRoundRating() {
+        prisma.roundRating.findMany.mockResolvedValue([
+          {
+            id: 'rr1',
+            difficulty: 3,
+            fluency: 4,
+            clarity: 4,
+            focus: 4,
+            technicalDepth: null,
+            freeText: 'better this time',
+            moderationVerdict: null,
+            round: {
+              title: 'Screen',
+              roundType: 'coding',
+              description: null,
+              typeMetadata: null,
+              scheduledDurationMinutes: null,
+              process: { id: 'process-1', roleTitle: 'Engineer', company: { name: 'Acme' } },
+            },
+          },
+        ]);
+      }
+
+      it('attaches prior reviewed queue entries for the same entity, most recent first', async () => {
+        prisma.moderationQueueEntry.findMany
+          .mockResolvedValueOnce([{ id: 'q2', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null }])
+          .mockResolvedValueOnce([
+            {
+              id: 'q1',
+              entityType: 'round_rating',
+              entityId: 'rr1',
+              decision: 'rejected',
+              reviewedAt: new Date('2026-01-01'),
+              reviewedBy: 'moderator-a',
+              rejectionReasonCategory: 'low_quality',
+              reviewNote: 'too vague',
+            },
+          ]);
+        mockPendingRoundRating();
+
+        const result = await service.listPending();
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenNthCalledWith(2, {
+          where: {
+            reviewedAt: { not: null },
+            OR: [{ entityType: 'round_rating', entityId: 'rr1' }],
+          },
+          orderBy: { reviewedAt: 'desc' },
+          select: {
+            id: true,
+            entityType: true,
+            entityId: true,
+            decision: true,
+            reviewedAt: true,
+            reviewedBy: true,
+            rejectionReasonCategory: true,
+            reviewNote: true,
+          },
+        });
+        expect(result[0].entries[0].priorReviews).toEqual([
+          {
+            id: 'q1',
+            decision: 'rejected',
+            reviewedAt: new Date('2026-01-01'),
+            reviewedBy: 'moderator-a',
+            rejectionReasonCategory: 'low_quality',
+            reviewNote: 'too vague',
+          },
+        ]);
+      });
+
+      it('leaves priorReviews empty for a first-time submission', async () => {
+        prisma.moderationQueueEntry.findMany
+          .mockResolvedValueOnce([{ id: 'q1', entityType: 'round_rating', entityId: 'rr1', reviewedAt: null }])
+          .mockResolvedValueOnce([]);
+        mockPendingRoundRating();
+
+        const result = await service.listPending();
+
+        expect(result[0].entries[0].priorReviews).toEqual([]);
+      });
+
+      it('skips the prior-reviews query entirely when the queue is empty', async () => {
+        prisma.moderationQueueEntry.findMany.mockResolvedValueOnce([]);
+
+        await service.listPending();
+
+        expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe('approve / reject / flag', () => {
@@ -795,6 +888,7 @@ describe('ModerationService', () => {
           reviewedAt: expect.any(Date),
           reviewedBy: 'gowtham',
           flagReason: undefined,
+          decision: 'approved',
           rejectionReasonCategory: undefined,
           reviewNote: undefined,
         },
@@ -935,6 +1029,7 @@ describe('ModerationService', () => {
           reviewedAt: expect.any(Date),
           reviewedBy: undefined,
           flagReason: 'spam_pattern',
+          decision: 'flagged',
           rejectionReasonCategory: undefined,
           reviewNote: undefined,
         },
@@ -1456,6 +1551,7 @@ describe('ModerationService', () => {
           reviewedAt: expect.any(Date),
           reviewedBy: 'system:ai-auto-approval',
           flagReason: undefined,
+          decision: 'approved',
           rejectionReasonCategory: undefined,
           reviewNote: undefined,
         },
