@@ -407,12 +407,56 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
     25000,
   );
 
-  // GitHub issue #704 (Phase 51, D104) — no auto-assignment under this
-  // phase's manual-claim-only model (D80) still means an unclaimed
-  // breach has no *claimant*, but it's no longer a silent no-op: it now
-  // escalates to every active admin instead. This test used to assert
-  // the pre-#704 "never sends an email" behavior; it's now the opposite,
-  // proven against the real broker/Postgres/Mailpit stack.
+  // GitHub issue #704 (Phase 51, D104) — this "no active admins" case
+  // has to run *before* any test in this file seeds an admin: the suite
+  // has no per-test DB truncation (only beforeAll/afterAll), so an admin
+  // seeded by an earlier test would still be active here and falsify
+  // this test's own premise. Kept immediately above the
+  // "escalates to every active admin" test (which is the one that seeds
+  // the file's only admin) for that reason — don't reorder independently.
+  it(
+    'a real moderation.queue.sla_breach.v1 event with no claimant and no active admins never sends an email',
+    async () => {
+      const queueEntryId = randomUUID();
+      const event = {
+        eventType: 'moderation.queue.sla_breach' as const,
+        eventVersion: 1 as const,
+        occurredAt: new Date().toISOString(),
+        queueEntryId,
+        entityType: 'overall_review',
+        entityId: randomUUID(),
+        slaDeadline: new Date(Date.now() - 60_000).toISOString(),
+        claimedById: null,
+      };
+
+      await publishTestEvent(MODERATION_QUEUE_SLA_BREACH_V1_TOPIC, event, queueEntryId);
+
+      // No candidate/moderator email to search Mailpit by here — instead,
+      // confirm no NotificationLog row was ever written, which is the
+      // real signal this path was a no-op (same "wait a beat, then
+      // assert" shape assertMailpitMessageCountStaysAt uses elsewhere).
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const logged = await prisma.notificationLog.findUnique({
+        where: {
+          notification_log_dedup_key: {
+            entityType: 'moderation_queue',
+            entityId: queueEntryId,
+            eventType: 'moderation.queue.sla_breach',
+            moderationQueueEntryId: '',
+          },
+        },
+      });
+      expect(logged).toBeNull();
+    },
+    25000,
+  );
+
+  // No auto-assignment under this phase's manual-claim-only model (D80)
+  // still means an unclaimed breach has no *claimant*, but it's no
+  // longer a silent no-op: it now escalates to every active admin
+  // instead. This test used to assert the pre-#704 "never sends an
+  // email" behavior; it's now the opposite, proven against the real
+  // broker/Postgres/Mailpit stack.
   it(
     'a real moderation.queue.sla_breach.v1 event with no claimant escalates to every active admin',
     async () => {
@@ -448,43 +492,6 @@ describe('NotificationConsumerService (e2e, against real Redpanda/Postgres/Mailp
         },
       });
       expect(logged).not.toBeNull();
-    },
-    25000,
-  );
-
-  it(
-    'a real moderation.queue.sla_breach.v1 event with no claimant and no active admins never sends an email',
-    async () => {
-      const queueEntryId = randomUUID();
-      const event = {
-        eventType: 'moderation.queue.sla_breach' as const,
-        eventVersion: 1 as const,
-        occurredAt: new Date().toISOString(),
-        queueEntryId,
-        entityType: 'overall_review',
-        entityId: randomUUID(),
-        slaDeadline: new Date(Date.now() - 60_000).toISOString(),
-        claimedById: null,
-      };
-
-      await publishTestEvent(MODERATION_QUEUE_SLA_BREACH_V1_TOPIC, event, queueEntryId);
-
-      // No candidate/moderator email to search Mailpit by here — instead,
-      // confirm no NotificationLog row was ever written, which is the
-      // real signal this path was a no-op (same "wait a beat, then
-      // assert" shape assertMailpitMessageCountStaysAt uses elsewhere).
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      const logged = await prisma.notificationLog.findUnique({
-        where: {
-          notification_log_dedup_key: {
-            entityType: 'moderation_queue',
-            entityId: queueEntryId,
-            eventType: 'moderation.queue.sla_breach',
-            moderationQueueEntryId: '',
-          },
-        },
-      });
-      expect(logged).toBeNull();
     },
     25000,
   );
