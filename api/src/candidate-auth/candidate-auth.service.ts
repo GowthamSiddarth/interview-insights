@@ -1,12 +1,23 @@
 import { ConflictException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcryptjs';
 import { CandidatesService } from '../candidates/candidates.service';
+import { getEmailHashSecret, getEmailEncryptionKey } from '../candidates/candidates.service';
+import { encryptEmail } from '../candidates/email-encryption.util';
+import { hashEmail } from '../candidates/email-hash.util';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateVerificationToken, hashVerificationToken } from './verification-token.util';
 
+// GitHub issue #679 (Phase 48, D104) — tokenVersion rides along on every
+// session so CandidateJwtStrategy can invalidate every JWT issued before
+// a password change/reset (#682 bumps this column) by re-checking it on
+// every request, same "re-check on every request rather than trust the
+// token's own claims" pattern AdminJwtStrategy already uses for
+// isActive/role.
 export interface CandidateSessionPayload {
   candidateId: string;
+  tokenVersion: number;
 }
 
 // Shorter than the old candidate-verification module's 24h token TTL
@@ -15,6 +26,11 @@ export interface CandidateSessionPayload {
 // response never discloses whether the email was known either way, so a
 // short expiry doesn't leak anything a longer one wouldn't.
 const TOKEN_TTL_MS = 15 * 60 * 1000;
+
+// Matches AdminAuthService's own cost factor (admin-auth.service.ts) —
+// no reason for candidate password hashing to be cheaper or more
+// expensive than staff's.
+const BCRYPT_COST = 10;
 
 @Injectable()
 export class CandidateAuthService {
@@ -33,28 +49,39 @@ export class CandidateAuthService {
     // POST /candidates endpoint — a returning candidate resolves back to
     // the same pseudonymous row instead of creating a duplicate.
     const candidate = await this.candidatesService.create({ email });
+    await this.issueAndSendVerificationEmail(candidate.id, email, 'login');
+  }
 
-    const { token, tokenHash } = generateVerificationToken();
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+  // GitHub issue #680 (Phase 48, D104) — candidates were the only actor
+  // still on magic-link-only auth; this brings them to parity with
+  // admin-auth's password pattern. Attaches a password to the same
+  // pseudonymous candidate row emailHash already resolves to (a
+  // candidate who previously only ever used the magic link gets one
+  // added, not a duplicate account) — rejected outright if a password is
+  // already set, so this can't be used to silently take over an existing
+  // password-protected account by re-registering its email.
+  async register(email: string, password: string): Promise<CandidateSessionPayload> {
+    const emailHash = hashEmail(email, getEmailHashSecret());
+    const existing = await this.prisma.candidate.findUnique({ where: { emailHash } });
+    if (existing?.passwordHash) {
+      throw new ConflictException('An account with this email already has a password set.');
+    }
 
-    await this.prisma.$transaction(async (tx) => {
-      // Only the most recently requested link should be valid.
-      await tx.candidateVerificationToken.updateMany({
-        where: { candidateId: candidate.id, consumedAt: null },
-        data: { consumedAt: new Date() },
-      });
-      await tx.candidateVerificationToken.create({
-        data: { candidateId: candidate.id, tokenHash, expiresAt },
-      });
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+    const emailEncrypted = encryptEmail(email, getEmailEncryptionKey());
+    const passwordSetAt = new Date();
+    const candidate = await this.prisma.candidate.upsert({
+      where: { emailHash },
+      create: { emailHash, emailEncrypted, passwordHash, passwordSetAt },
+      update: { emailEncrypted, passwordHash, passwordSetAt },
     });
 
-    const verifyUrl = `${process.env.CORS_ORIGIN ?? 'http://localhost:3000'}/auth/verify?token=${token}`;
-    await this.mailService.send({
-      to: email,
-      subject: 'Your Interview Insights login link',
-      text: `Click to log in: ${verifyUrl}\n\nThis link expires in 15 minutes and can only be used once.`,
-      html: `<p><a href="${verifyUrl}">Click to log in</a>.</p><p>This link expires in 15 minutes and can only be used once.</p>`,
-    });
+    // Best-effort, same as every other outbound mail in this class — a
+    // failed send here shouldn't undo the account/password that was just
+    // durably created; the candidate can always request a fresh link.
+    await this.issueAndSendVerificationEmail(candidate.id, email, 'verify').catch(() => undefined);
+
+    return { candidateId: candidate.id, tokenVersion: candidate.tokenVersion };
   }
 
   async verify(token: string): Promise<CandidateSessionPayload> {
@@ -94,10 +121,43 @@ export class CandidateAuthService {
       });
     });
 
-    return { candidateId: candidate.id };
+    return { candidateId: candidate.id, tokenVersion: candidate.tokenVersion };
   }
 
   issueToken(payload: CandidateSessionPayload): string {
     return this.jwtService.sign(payload);
+  }
+
+  // Shared by requestLink() (a login link) and register() (an email-
+  // ownership confirmation) — same token table, same consume-on-verify
+  // path (verify() above), only the outbound copy differs.
+  private async issueAndSendVerificationEmail(
+    candidateId: string,
+    email: string,
+    purpose: 'login' | 'verify',
+  ): Promise<void> {
+    const { token, tokenHash } = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Only the most recently requested link should be valid.
+      await tx.candidateVerificationToken.updateMany({
+        where: { candidateId, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+      await tx.candidateVerificationToken.create({
+        data: { candidateId, tokenHash, expiresAt },
+      });
+    });
+
+    const verifyUrl = `${process.env.CORS_ORIGIN ?? 'http://localhost:3000'}/auth/verify?token=${token}`;
+    const subject = purpose === 'login' ? 'Your Interview Insights login link' : 'Verify your Interview Insights email';
+    const action = purpose === 'login' ? 'log in' : 'verify your email';
+    await this.mailService.send({
+      to: email,
+      subject,
+      text: `Click to ${action}: ${verifyUrl}\n\nThis link expires in 15 minutes and can only be used once.`,
+      html: `<p><a href="${verifyUrl}">Click to ${action}</a>.</p><p>This link expires in 15 minutes and can only be used once.</p>`,
+    });
   }
 }

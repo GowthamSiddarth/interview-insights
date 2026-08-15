@@ -15,14 +15,25 @@ describe('CandidateAuthService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
-    candidate: { update: jest.Mock; findUniqueOrThrow: jest.Mock };
+    candidate: {
+      update: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      findUnique: jest.Mock;
+      upsert: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let candidatesService: { create: jest.Mock };
   let mailService: { send: jest.Mock };
   let jwtService: { sign: jest.Mock };
 
+  const originalSecret = process.env.EMAIL_HASH_SECRET;
+  const originalEncryptionKey = process.env.EMAIL_ENCRYPTION_KEY;
+
   beforeEach(async () => {
+    process.env.EMAIL_HASH_SECRET = 'test-secret';
+    process.env.EMAIL_ENCRYPTION_KEY = 'a'.repeat(64);
+
     prisma = {
       candidateVerificationToken: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -33,6 +44,8 @@ describe('CandidateAuthService', () => {
       candidate: {
         update: jest.fn(),
         findUniqueOrThrow: jest.fn(),
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
       },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
@@ -51,6 +64,11 @@ describe('CandidateAuthService', () => {
     }).compile();
 
     service = module.get(CandidateAuthService);
+  });
+
+  afterEach(() => {
+    process.env.EMAIL_HASH_SECRET = originalSecret;
+    process.env.EMAIL_ENCRYPTION_KEY = originalEncryptionKey;
   });
 
   describe('requestLink', () => {
@@ -127,8 +145,9 @@ describe('CandidateAuthService', () => {
       prisma.candidate.findUniqueOrThrow.mockResolvedValue({
         id: 'candidate-1',
         verificationStatus: 'unverified',
+        tokenVersion: 0,
       });
-      prisma.candidate.update.mockResolvedValue({ id: 'candidate-1' });
+      prisma.candidate.update.mockResolvedValue({ id: 'candidate-1', tokenVersion: 0 });
 
       const result = await service.verify('valid-token');
 
@@ -142,7 +161,7 @@ describe('CandidateAuthService', () => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
         data: { verificationStatus: 'email_verified', verifiedAt: expect.any(Date) },
       });
-      expect(result).toEqual({ candidateId: 'candidate-1' });
+      expect(result).toEqual({ candidateId: 'candidate-1', tokenVersion: 0 });
     });
 
     it('does not overwrite verifiedAt on a repeat login', async () => {
@@ -155,20 +174,63 @@ describe('CandidateAuthService', () => {
       prisma.candidate.findUniqueOrThrow.mockResolvedValue({
         id: 'candidate-1',
         verificationStatus: 'email_verified',
+        tokenVersion: 0,
       });
 
       const result = await service.verify('valid-token-2');
 
       expect(prisma.candidate.update).not.toHaveBeenCalled();
-      expect(result).toEqual({ candidateId: 'candidate-1' });
+      expect(result).toEqual({ candidateId: 'candidate-1', tokenVersion: 0 });
+    });
+  });
+
+  // GitHub issue #680 (Phase 48, D104) — password registration.
+  describe('register', () => {
+    it('hashes the password, upserts the candidate, and sends a verification email', async () => {
+      prisma.candidate.findUnique.mockResolvedValue(null);
+      prisma.candidate.upsert.mockResolvedValue({ id: 'candidate-1', tokenVersion: 0 });
+
+      const result = await service.register('candidate@example.com', 'a-strong-password');
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- jest.Mock's .mock.calls is typed `any[]`
+      const upsertArgs = prisma.candidate.upsert.mock.calls[0][0] as {
+        create: { passwordHash: string; passwordSetAt: Date };
+      };
+      expect(upsertArgs.create.passwordHash).not.toBe('a-strong-password');
+      expect(upsertArgs.create.passwordSetAt).toBeInstanceOf(Date);
+      expect(mailService.send).toHaveBeenCalledWith(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.stringContaining() is typed `any` by @types/jest
+        expect.objectContaining({ to: 'candidate@example.com', subject: expect.stringContaining('Verify') }),
+      );
+      expect(result).toEqual({ candidateId: 'candidate-1', tokenVersion: 0 });
+    });
+
+    it('rejects re-registering an email that already has a password set', async () => {
+      prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', passwordHash: 'existing-hash' });
+
+      await expect(service.register('candidate@example.com', 'a-strong-password')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.candidate.upsert).not.toHaveBeenCalled();
+    });
+
+    it('still succeeds even if the verification email fails to send', async () => {
+      prisma.candidate.findUnique.mockResolvedValue(null);
+      prisma.candidate.upsert.mockResolvedValue({ id: 'candidate-1', tokenVersion: 0 });
+      mailService.send.mockRejectedValue(new Error('Mailpit unreachable'));
+
+      await expect(service.register('candidate@example.com', 'a-strong-password')).resolves.toEqual({
+        candidateId: 'candidate-1',
+        tokenVersion: 0,
+      });
     });
   });
 
   describe('issueToken', () => {
     it('signs a JWT with the session payload', () => {
-      const token = service.issueToken({ candidateId: 'candidate-1' });
+      const token = service.issueToken({ candidateId: 'candidate-1', tokenVersion: 0 });
       expect(token).toBe('signed.jwt.token');
-      expect(jwtService.sign).toHaveBeenCalledWith({ candidateId: 'candidate-1' });
+      expect(jwtService.sign).toHaveBeenCalledWith({ candidateId: 'candidate-1', tokenVersion: 0 });
     });
   });
 });

@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res, Use
 import { Request, Response } from 'express';
 import { getSessionCookieOptions } from '../common/session-cookie-options.util';
 import { CandidateAuthService, CandidateSessionPayload } from './candidate-auth.service';
+import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { RequestLinkDto } from './dto/request-link.dto';
 import { VerifyMagicLinkDto } from './dto/verify-magic-link.dto';
 import { CandidateJwtAuthGuard } from './guards/candidate-jwt-auth.guard';
@@ -54,6 +55,27 @@ export class CandidateAuthController {
 
   private async verify(token: string, res: Response) {
     const session = await this.candidateAuthService.verify(token);
+    this.issueSession(session, res);
+    return { status: 'ok' };
+  }
+
+  // GitHub issue #680 (Phase 48, D104) — password registration.
+  // Auto-issues a session on success, same as magic-link verify() —
+  // the freshly set password is already proof of possession, and this
+  // project has no existing write path that gates on
+  // verificationStatus, so there's no reason to make the candidate wait
+  // on the verification email before they can use the account. The
+  // email itself is still sent (best-effort, inside the service) as a
+  // trust signal, not a login gate.
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() dto: RegisterCandidateDto, @Res({ passthrough: true }) res: Response) {
+    const session = await this.candidateAuthService.register(dto.email, dto.password);
+    this.issueSession(session, res);
+    return { status: 'ok' };
+  }
+
+  private issueSession(session: CandidateSessionPayload, res: Response): void {
     const jwt = this.candidateAuthService.issueToken(session);
     res.cookie(CANDIDATE_SESSION_COOKIE, jwt, {
       ...getSessionCookieOptions(),
@@ -64,7 +86,6 @@ export class CandidateAuthController {
       httpOnly: false,
       maxAge: SESSION_MAX_AGE_MS,
     });
-    return { status: 'ok' };
   }
 
   // Options must match how the cookie was set — a clearing Set-Cookie

@@ -180,3 +180,83 @@ describe('Candidate magic-link auth (e2e)', () => {
     expect(typeof body<{ candidateId: string }>(res).candidateId).toBe('string');
   }, 15000);
 });
+
+// GitHub issue #680 (Phase 48, D104) — password registration, against
+// real Postgres + Mailpit.
+describe('Candidate password registration (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    app = await bootApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
+  const server = () => request(app.getHttpServer());
+  const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
+
+  async function requestMagicLinkToken(email: string): Promise<string> {
+    await server().post('/auth/request-link').send({ email }).expect(200);
+    const message = await waitForMailpitMessage(email);
+    const full = await getMailpitMessage(message.ID);
+    const token = /token=([0-9a-f]{64})/.exec(full.Text)?.[1];
+    if (!token) throw new Error(`No token found in the email sent to ${email}`);
+    return token;
+  }
+
+  it('registering starts a session immediately and sends a real verification email', async () => {
+    const email = uniqueEmail();
+
+    const res = await server().post('/auth/register').send({ email, password: 'a-strong-password' }).expect(201);
+    expect(body<StatusBody>(res)).toEqual({ status: 'ok' });
+
+    const cookies = res.headers['set-cookie'] as unknown as string[];
+    const sessionCookie = cookies.find((c) => c.startsWith('candidate_session='));
+    expect(sessionCookie).toBeDefined();
+
+    const meRes = await server().get('/auth/me').set('Cookie', sessionCookie ?? '').expect(200);
+    expect(typeof body<{ candidateId: string }>(meRes).candidateId).toBe('string');
+
+    const message = await waitForMailpitMessage(email);
+    expect(message.Subject).toContain('Verify');
+  }, 15000);
+
+  it('rejects a password shorter than 12 characters', async () => {
+    await server().post('/auth/register').send({ email: uniqueEmail(), password: 'short' }).expect(400);
+  });
+
+  it('rejects re-registering an email that already has a password set', async () => {
+    const email = uniqueEmail();
+    await server().post('/auth/register').send({ email, password: 'a-strong-password' }).expect(201);
+
+    await server().post('/auth/register').send({ email, password: 'a-different-password' }).expect(409);
+  }, 15000);
+
+  it('lets a previously magic-link-only candidate attach a password to the same account', async () => {
+    const email = uniqueEmail();
+    const token = await requestMagicLinkToken(email);
+    const verifyRes = await server().get(`/auth/verify?token=${token}`).expect(200);
+    const magicLinkCookies = verifyRes.headers['set-cookie'] as unknown as string[];
+    const magicLinkSessionCookie = magicLinkCookies.find((c) => c.startsWith('candidate_session='));
+    const jwt = magicLinkSessionCookie?.split(';')[0].split('=')[1] ?? '';
+    const candidateIdFromMagicLink = (
+      JSON.parse(Buffer.from(jwt.split('.')[1], 'base64').toString()) as { candidateId: string }
+    ).candidateId;
+
+    const registerRes = await server()
+      .post('/auth/register')
+      .send({ email, password: 'a-strong-password' })
+      .expect(201);
+    const registerCookies = registerRes.headers['set-cookie'] as unknown as string[];
+    const registerSessionCookie = registerCookies.find((c) => c.startsWith('candidate_session='));
+    const registerJwt = registerSessionCookie?.split(';')[0].split('=')[1] ?? '';
+    const candidateIdFromRegister = (
+      JSON.parse(Buffer.from(registerJwt.split('.')[1], 'base64').toString()) as { candidateId: string }
+    ).candidateId;
+
+    expect(candidateIdFromRegister).toBe(candidateIdFromMagicLink);
+  }, 15000);
+});
