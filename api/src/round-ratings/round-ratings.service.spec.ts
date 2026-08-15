@@ -162,6 +162,21 @@ describe('RoundRatingsService', () => {
       );
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
+
+    // GitHub issue #690 (Phase 49, D104).
+    it('rejects an edit to a permanently_rejected rating, even from the owning candidate', async () => {
+      prisma.roundRating.findFirstOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        status: 'permanently_rejected',
+      });
+
+      await expect(service.update('round-1', 'rating-1', 'candidate-1', dto)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('remove', () => {

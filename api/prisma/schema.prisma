@@ -273,6 +273,14 @@ enum ModerationStatus {
   approved
   rejected
   flagged
+  // GitHub issue #690 (Phase 49, D104) — set instead of the normal
+  // 'rejected' when an admin rejects an already-escalated entry (#689:
+  // only an admin can, past the lifetime resubmission cap). Terminal:
+  // RoundRatingsService.update() and its recruiter_rating/overall_review
+  // counterparts refuse any further edit once an entity reaches this
+  // status, closing the resubmission loop for good rather than letting
+  // it cycle indefinitely.
+  permanently_rejected
 }
 
 model RoundRating {

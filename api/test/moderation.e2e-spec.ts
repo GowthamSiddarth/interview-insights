@@ -325,6 +325,56 @@ describe('Moderation (e2e)', () => {
         .expect(201);
     }, 20000);
 
+    // GitHub issue #690 (Phase 49, D104).
+    it('an admin rejecting an escalated entry sets a terminal status that blocks any further edit', async () => {
+      const email = uniqueEmail();
+      const { cookie: candidateCookie } = await loginAsCandidate(app, email);
+      const { id: companyId } = await createApprovedCompany(app, candidateCookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', candidateCookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const { id: processId } = body<ProcessBody>(processRes);
+      const roundRes = await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+        .expect(201);
+      const { id: roundId } = body<RoundBody>(roundRes);
+      const ratingRes = await server()
+        .post(`/rounds/${roundId}/ratings`)
+        .set('Cookie', candidateCookie)
+        .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+        .expect(201);
+      const { id: ratingId } = body<RatingBody>(ratingRes);
+
+      for (let i = 0; i < 3; i++) {
+        const entry = await findQueueEntryFor(ratingId);
+        await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({}).expect(201);
+        await server()
+          .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+          .set('Cookie', candidateCookie)
+          .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+          .expect(200);
+      }
+
+      const escalatedEntry = await findQueueEntryFor(ratingId);
+      await server()
+        .post(`/moderation/queue/${escalatedEntry.id}/reject`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+
+      await server()
+        .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+        .set('Cookie', candidateCookie)
+        .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+        .expect(403);
+    }, 20000);
+
     it('is not escalated below the cap', async () => {
       const { ratingId } = await submitRating();
       const entry = await findQueueEntryFor(ratingId);

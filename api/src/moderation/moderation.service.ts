@@ -736,6 +736,16 @@ export class ModerationService {
     // null) instead of racing it. count === 0 here means this call lost
     // the race, not that the entry doesn't exist (existence was already
     // confirmed above).
+    // GitHub issue #690 (Phase 49, D104) — an admin rejecting an
+    // already-escalated entry (only an admin can, per #689's
+    // EscalatedEntryGuard) sets a terminal status instead of the normal
+    // 'rejected', closing the resubmission loop for good rather than
+    // letting it cycle indefinitely. Computed before the transaction so
+    // both the entity-status write inside it and the domain event
+    // published after it agree on the same value.
+    const entityStatus: ModerationStatus =
+      decision === 'rejected' && entry.escalated ? 'permanently_rejected' : decision;
+
     const updatedEntry = await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.moderationQueueEntry.updateMany({
         where: { id, reviewedAt: null },
@@ -756,7 +766,7 @@ export class ModerationService {
         throw new ConflictException('This item has already been reviewed.');
       }
       const updated = await tx.moderationQueueEntry.findUniqueOrThrow({ where: { id } });
-      const statusUpdate = { where: { id: entry.entityId }, data: { status: decision } };
+      const statusUpdate = { where: { id: entry.entityId }, data: { status: entityStatus } };
       switch (entry.entityType) {
         case 'round_rating':
           await tx.roundRating.update(statusUpdate);
@@ -816,7 +826,7 @@ export class ModerationService {
     // after-commit shape as every other side-effect in this method. Only
     // the three rating/review entity types are in scope (see
     // publishStatusChangedEvent's own switch); 'company' is a no-op.
-    await this.publishStatusChangedEvent(entry.entityType, entry.entityId, decision, dto.reviewedBy, id);
+    await this.publishStatusChangedEvent(entry.entityType, entry.entityId, entityStatus, dto.reviewedBy, id);
 
     return updatedEntry;
   }

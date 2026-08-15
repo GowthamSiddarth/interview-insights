@@ -52,9 +52,9 @@ function mockPendingQueueEntry(
   prisma: {
     moderationQueueEntry: { findUniqueOrThrow: jest.Mock; updateMany: jest.Mock };
   },
-  entry: { id: string; entityType: string; entityId: string },
+  entry: { id: string; entityType: string; entityId: string; escalated?: boolean },
 ) {
-  const state: Record<string, unknown> = { ...entry, reviewedAt: null, flagReason: null };
+  const state: Record<string, unknown> = { escalated: false, ...entry, reviewedAt: null, flagReason: null };
   prisma.moderationQueueEntry.findUniqueOrThrow.mockImplementation(() => Promise.resolve({ ...state }));
   prisma.moderationQueueEntry.updateMany.mockImplementation((args: { data: object }) => {
     if (state.reviewedAt !== null) return Promise.resolve({ count: 0 });
@@ -838,6 +838,62 @@ describe('ModerationService', () => {
         data: { status: 'rejected' },
       });
       expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #690 (Phase 49, D104).
+    it('reject() on an escalated entry sets permanently_rejected instead of rejected', async () => {
+      mockPendingQueueEntry(prisma, {
+        id: 'queue-1',
+        entityType: 'round_rating',
+        entityId: 'rating-1',
+        escalated: true,
+      });
+      prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'permanently_rejected' });
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        freeText: 'Great round',
+        createdAt: new Date('2026-01-01'),
+        round: { roundType: 'coding', process: { companyId: 'company-1', roleTitle: 'Engineer' } },
+      });
+
+      await service.reject('queue-1', {});
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: { status: 'permanently_rejected' },
+      });
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.round_rating.status_changed.v1',
+        expect.objectContaining({ newStatus: 'permanently_rejected' }),
+        'rating-1',
+      );
+    });
+
+    it('approve() on an escalated entry still sets approved, not permanently_rejected', async () => {
+      mockPendingQueueEntry(prisma, {
+        id: 'queue-1',
+        entityType: 'round_rating',
+        entityId: 'rating-1',
+        escalated: true,
+      });
+      prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
+      prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
+        id: 'rating-1',
+        roundId: 'round-1',
+        candidateId: 'candidate-1',
+        freeText: 'Great round',
+        createdAt: new Date('2026-01-01'),
+        round: { roundType: 'coding', process: { companyId: 'company-1', roleTitle: 'Engineer' } },
+      });
+
+      await service.approve('queue-1', {});
+
+      expect(prisma.roundRating.update).toHaveBeenCalledWith({
+        where: { id: 'rating-1' },
+        data: { status: 'approved' },
+      });
     });
 
     // GitHub issue #688 (Phase 49, D104).
