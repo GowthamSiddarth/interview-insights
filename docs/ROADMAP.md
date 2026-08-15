@@ -2576,15 +2576,15 @@ Creation Request Lifecycle". Epic: GitHub issue #695.
 
 Ordered by dependency:
 
-- [ ] `candidateId` FK on `Company` + partial unique index on `slug`
+- [x] `candidateId` FK on `Company` + partial unique index on `slug`
       scoped to `pending`/`approved` (GitHub issue #696) — blocks #697,
       #698
-- [ ] `PATCH` edit endpoint for a candidate's own rejected/pending
+- [x] `PATCH` edit endpoint for a candidate's own rejected/pending
       company request (GitHub issue #697) — depends on #696
-- [ ] `company.created.v1`/`company.status_changed.v1` events +
+- [x] `company.created.v1`/`company.status_changed.v1` events +
       notification-service consumption (GitHub issue #698) — depends on
       #696
-- [ ] Engineering blog (last) (GitHub issue #699)
+- [x] Engineering blog (last) (GitHub issue #699)
 
 ## Phase 51 — Staff/Admin/Moderator Notification Platform
 
