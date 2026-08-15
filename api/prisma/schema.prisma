@@ -70,6 +70,21 @@ model Candidate {
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz
   createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz
 
+  // GitHub issue #679 (Phase 48, D104) — candidates were the only actor
+  // still on magic-link-only auth; this brings them to parity with
+  // admin-auth's password + bcrypt pattern (see AdminAuthService).
+  // Nullable: every pre-existing candidate row has never set one, and a
+  // magic-link login still works without a password ever being set.
+  passwordHash  String?   @map("password_hash")
+  passwordSetAt DateTime? @map("password_set_at") @db.Timestamptz
+  // Bumped on every password change/reset (and nowhere else) to
+  // invalidate every JWT issued before that point — CandidateJwtStrategy
+  // checks the token's own tokenVersion claim against this column on
+  // every request, same "re-check on every request rather than trust the
+  // token's claims" reasoning AdminJwtStrategy already uses for
+  // isActive/role (D99).
+  tokenVersion  Int       @default(0) @map("token_version")
+
   interviewProcesses InterviewProcess[]
   roundRatings       RoundRating[]
   recruiterRatings   RecruiterRating[]
