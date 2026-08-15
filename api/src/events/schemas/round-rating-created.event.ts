@@ -13,4 +13,16 @@ export interface RoundRatingCreatedEventV1 {
   candidateId: string;
   companyId: string;
   status: 'pending'; // always 'pending' at creation — see docs/DATA_MODEL.md
+  // GitHub issue #692 (Phase 49, D104) — true when this event was
+  // published by reenqueue() (a candidate's edit resubmitting rejected/
+  // flagged content), not the entity's original creation. Optional,
+  // non-breaking addition per docs/EVENTS.md — absent (or false) means
+  // "not a resubmission", same as every pre-#692 event already in flight.
+  isResubmission?: boolean;
+  // Only meaningful when isResubmission is true — the fresh
+  // moderation_queue row reenqueue() just created, letting
+  // notification-service dedupe this ack separately from the original
+  // submission's (same reasoning as moderationQueueEntryId on
+  // *.status_changed, #686/#687).
+  moderationQueueEntryId?: string;
 }

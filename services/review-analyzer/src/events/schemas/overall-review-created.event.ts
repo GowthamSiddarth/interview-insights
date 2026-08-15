@@ -11,4 +11,9 @@ export interface OverallReviewCreatedEventV1 {
   candidateId: string;
   companyId: string;
   status: 'pending';
+  // GitHub issue #692 (Phase 49, D104) — see api's own copy of this
+  // schema for the full reasoning; unused by this service (kept for
+  // byte-for-byte shape parity with the contract).
+  isResubmission?: boolean;
+  moderationQueueEntryId?: string;
 }

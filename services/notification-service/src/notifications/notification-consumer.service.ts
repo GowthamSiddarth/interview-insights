@@ -106,16 +106,29 @@ function entityIdFor(event: ModerationEvent): string {
   }
 }
 
+function isCreatedEvent(event: ModerationEvent): event is CreatedEvent {
+  return event.eventType.endsWith('.created');
+}
+
 // GitHub issue #687 (Phase 49, D104) — the confirmed-bug fix: a
 // resubmission (reenqueue()) creates a fresh moderation_queue row for
 // the same entityId, so a status_changed event's decision must be
-// deduped per queue entry, not per entity. Empty string for the two
-// event shapes that don't need it — a `created` event only ever fires
-// once per entity (entityId+eventType is already unique on its own),
-// and a `sla_breach` event's entityId already *is* the queue entry id
-// (see entityIdFor() above), so there's nothing extra to disambiguate.
+// deduped per queue entry, not per entity. Empty string for a
+// non-resubmission `created` event (fires once per entity — entityId+
+// eventType is already unique on its own) and for `sla_breach` (its
+// entityId already *is* the queue entry id, see entityIdFor() above).
+//
+// GitHub issue #692 (Phase 49, D104) — a *resubmission* `created` event
+// (isResubmission: true) is the one exception: it fires a second time
+// for the same entityId, so it needs the same per-queue-entry dedup
+// status_changed already gets, keyed off the fresh moderationQueueEntryId
+// api's ModerationService.publishCreatedEvent() now includes for that
+// case. This can never collide with the original submission's dedup row
+// (still keyed '') since a real queue entry id is never the empty string.
 function moderationQueueEntryIdFor(event: ModerationEvent): string {
-  return isStatusChangedEvent(event) ? (event.moderationQueueEntryId ?? '') : '';
+  if (isStatusChangedEvent(event)) return event.moderationQueueEntryId ?? '';
+  if (isCreatedEvent(event) && event.isResubmission) return event.moderationQueueEntryId ?? '';
+  return '';
 }
 
 // GitHub issue #489 — the one fixed template for an SLA breach, same
@@ -373,10 +386,12 @@ function isStatusChangedEvent(event: ModerationEvent): event is StatusChangedEve
 // deliberate no-op (a 'flagged' status_changed — see processEvent's own
 // comment).
 function notificationFor(event: ModerationEvent): { subject: string; text: string; html: string } | null {
-  if (!isStatusChangedEvent(event)) {
-    return pendingReviewSubjectAndBody();
+  if (isCreatedEvent(event)) {
+    // GitHub issue #692 (Phase 49, D104) — a distinct subject/body for a
+    // resubmission ack vs. a first-time "pending review" email.
+    return pendingReviewSubjectAndBody(event.isResubmission ?? false);
   }
-  if (event.newStatus === 'approved' || event.newStatus === 'rejected') {
+  if (isStatusChangedEvent(event) && (event.newStatus === 'approved' || event.newStatus === 'rejected')) {
     return subjectAndBodyFor(event.newStatus);
   }
   return null;

@@ -107,6 +107,72 @@ describe('Domain events (e2e, against a real Redpanda broker)', () => {
     });
   }, 20000);
 
+  // GitHub issue #692 (Phase 49, D104) — an edit that resubmits
+  // rejected/flagged content publishes a second *.created event (never
+  // did before this issue), distinguished from the original submission's
+  // by isResubmission/moderationQueueEntryId.
+  it('resubmitting a rejected round rating publishes a second created.v1 event marked isResubmission', async () => {
+    const { cookie, candidateId } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
+    const company = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
+
+    const processRes = await server()
+      .post(`/companies/${company.id}/processes`)
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+      .expect(201);
+    const processId = body<ProcessBody>(processRes).id;
+
+    const roundRes = await server()
+      .post(`/processes/${processId}/rounds`)
+      .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+      .expect(201);
+    const roundId = body<RoundBody>(roundRes).id;
+
+    const ratingRes = await server()
+      .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+      .expect(201);
+    const ratingId = body<RatingBody>(ratingRes).id;
+
+    // Consume (and discard) the original submission's created event first
+    // so the wait below can't accidentally match it instead.
+    await waitForEvent<RoundRatingCreatedEventV1>(
+      'moderation.round_rating.created.v1',
+      (e) => e.roundRatingId === ratingId,
+    );
+
+    const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
+    const entry = findQueueEntry(body<QueueGroupBody[]>(queueRes), ratingId);
+    if (!entry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
+    await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({}).expect(201);
+
+    await server()
+      .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 3, fluency: 5, clarity: 4, focus: 4 })
+      .expect(200);
+
+    const resubmissionEvent = await waitForEvent<RoundRatingCreatedEventV1>(
+      'moderation.round_rating.created.v1',
+      (e) => e.roundRatingId === ratingId && e.isResubmission === true,
+    );
+
+    expect(resubmissionEvent).toMatchObject({
+      eventType: 'moderation.round_rating.created',
+      roundRatingId: ratingId,
+      candidateId,
+      companyId: company.id,
+      status: 'pending',
+      isResubmission: true,
+    });
+    expect(resubmissionEvent.moderationQueueEntryId).toBeTruthy();
+    expect(resubmissionEvent.moderationQueueEntryId).not.toBe(entry.id);
+  }, 20000);
+
   it('approving a round rating publishes a moderation.round_rating.status_changed.v1 event', async () => {
     const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
     const company = await createApprovedCompany(app, cookie, {
