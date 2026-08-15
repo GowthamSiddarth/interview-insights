@@ -18,20 +18,33 @@ export class CompaniesService {
   // schema default) and enqueued, rather than indexed to OpenSearch
   // immediately. Indexing happens at approval time instead (see
   // ModerationService.review()'s 'company' case).
-  async create(dto: CreateCompanyDto) {
-    // A friendlier response for the specific case of a duplicate slug
-    // that's already pending review — direct user feedback. An existing
-    // *approved* row still falls through to the generic unique-constraint
-    // 409 below (the company genuinely already exists); a *rejected* row
-    // does too for now (unresolved, see the issue's own note).
-    const existing = await this.prisma.company.findUnique({ where: { slug: dto.slug } });
-    if (existing?.status === 'pending') {
+  //
+  // GitHub issue #696 (Phase 50, D104) — candidateId is now attributed
+  // (#146's "every write path derives candidateId from the session, never
+  // the body" convention, same as every other create() in this app), and
+  // the pending-duplicate pre-check uses findFirst() scoped to
+  // status: 'pending' rather than findUnique({ where: { slug } }) — slug
+  // is no longer a schema-level @unique field (see Company.slug's own
+  // comment: the real constraint is now a partial unique index, only
+  // pending/approved rows are constrained). An *approved* duplicate still
+  // falls through to that real constraint's 409; a *rejected* one no
+  // longer collides at all — the whole point of this issue. candidateId
+  // is optional here (never for the real HTTP endpoint, which always has
+  // an authenticated caller) only because seed-demo-data.ts creates
+  // companies ahead of any candidate existing in its own generation loop
+  // — the same "seed/admin-created company has no requester" case
+  // Company.candidateId's own schema comment already anticipates.
+  async create(dto: CreateCompanyDto, candidateId?: string) {
+    const pendingDuplicate = await this.prisma.company.findFirst({
+      where: { slug: dto.slug, status: 'pending' },
+    });
+    if (pendingDuplicate) {
       throw new ConflictException(
         'This company has already been requested and is pending review — please check back later.',
       );
     }
 
-    const company = await this.prisma.company.create({ data: dto });
+    const company = await this.prisma.company.create({ data: { ...dto, candidateId } });
     await this.moderationService.enqueue('company', company.id);
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('company', company.id);

@@ -25,7 +25,20 @@ enum CompanySizeBucket {
 model Company {
   id         String            @id @default(uuid()) @db.Uuid
   name       String
-  slug       String            @unique
+  // GitHub issue #696 (Phase 50, D104) — no longer a plain @unique: two
+  // *rejected* requests may now share a slug (a rejected request no
+  // longer permanently occupies it), enforced instead by a Postgres
+  // partial unique index scoped to WHERE status IN ('pending',
+  // 'approved') — see this migration's own .sql. Prisma's schema DSL has
+  // no way to express a partial/filtered unique constraint, so this
+  // column is deliberately left without a matching schema-level
+  // attribute; the real constraint only exists in the raw migration,
+  // same "hand-authored SQL is the source of truth" pattern this project
+  // already uses for anything Prisma's own migration engine can't
+  // express. findUnique({ where: { slug } }) is no longer valid Prisma
+  // Client usage for this reason — see CompaniesService.create()'s own
+  // findFirst()-based pending-duplicate check.
+  slug       String
   industry   String?
   sizeBucket CompanySizeBucket @map("size_bucket")
   logoUrl    String?           @map("logo_url")
@@ -36,8 +49,20 @@ model Company {
   // approved. A rejected request keeps its row (status: rejected) for an
   // audit trail rather than being deleted.
   status     ModerationStatus  @default(pending)
+  // GitHub issue #696 (Phase 50, D104) — who requested this company,
+  // for #697's own-request edit endpoint and #698's *.created event.
+  // Nullable: a seed/admin-created company has no requester. Deliberately
+  // ON DELETE SET NULL, unlike every other candidate-owned FK in this
+  // schema (which are ON DELETE RESTRICT, since RoundRating/etc. are the
+  // candidate's own content and get hard-deleted alongside them) — a
+  // Company is shared platform data other candidates' InterviewProcess
+  // rows may already reference, so GDPR erasure (me.service.ts) must
+  // anonymize this reference rather than be blocked by it or cascade
+  // into deleting the company itself.
+  candidateId String?          @map("candidate_id") @db.Uuid
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz
 
+  candidate            Candidate?             @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   interviewProcesses   InterviewProcess[]
   interviewers         Interviewer[]
   recruiters           Recruiter[]
@@ -94,6 +119,10 @@ model Candidate {
   // GitHub issue #693 (Phase 49, D104) — at most one row per candidate
   // (@id on candidateId below), not one row per edit attempt.
   editThrottleState  EditThrottleState?
+  // GitHub issue #696 (Phase 50, D104) — companies this candidate has
+  // requested creation of. ON DELETE SET NULL (see Company.candidate's
+  // own comment) — a GDPR erasure never touches rows in this relation.
+  companyRequests    Company[]
 
   @@map("candidates")
 }

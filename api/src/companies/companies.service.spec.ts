@@ -9,7 +9,7 @@ describe('CompaniesService', () => {
   let prisma: {
     company: {
       create: jest.Mock;
-      findUnique: jest.Mock;
+      findFirst: jest.Mock;
       findFirstOrThrow: jest.Mock;
       findMany: jest.Mock;
     };
@@ -33,7 +33,7 @@ describe('CompaniesService', () => {
     prisma = {
       company: {
         create: jest.fn().mockResolvedValue(createdCompany),
-        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         findFirstOrThrow: jest.fn().mockResolvedValue(createdCompany),
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -62,40 +62,53 @@ describe('CompaniesService', () => {
   // moderation: the row is created (status defaults to pending) and
   // enqueued, never indexed to OpenSearch directly.
   describe('create', () => {
-    it('creates the company and enqueues it for moderation', async () => {
-      const result = await service.create(dto);
+    it('creates the company, attributed to the given candidate, and enqueues it for moderation', async () => {
+      const result = await service.create(dto, 'candidate-1');
 
-      expect(prisma.company.create).toHaveBeenCalledWith({ data: dto });
+      expect(prisma.company.create).toHaveBeenCalledWith({
+        data: { ...dto, candidateId: 'candidate-1' },
+      });
       expect(moderationService.enqueue).toHaveBeenCalledWith('company', createdCompany.id);
       expect(result).toEqual(createdCompany);
     });
 
-    it('checks for an existing row by slug first', async () => {
+    // GitHub issue #696 (Phase 50, D104) — seed-demo-data.ts creates
+    // companies before any candidate exists in its own generation loop;
+    // candidateId is optional for exactly that "no requester" case.
+    it('creates the company with no candidateId when none is given', async () => {
       await service.create(dto);
 
-      expect(prisma.company.findUnique).toHaveBeenCalledWith({ where: { slug: dto.slug } });
+      expect(prisma.company.create).toHaveBeenCalledWith({
+        data: { ...dto, candidateId: undefined },
+      });
+    });
+
+    it('checks for an existing pending duplicate by slug first', async () => {
+      await service.create(dto, 'candidate-1');
+
+      expect(prisma.company.findFirst).toHaveBeenCalledWith({
+        where: { slug: dto.slug, status: 'pending' },
+      });
     });
 
     it('rejects with a friendly message when a pending duplicate already exists', async () => {
-      prisma.company.findUnique.mockResolvedValue({ ...createdCompany, status: 'pending' });
+      prisma.company.findFirst.mockResolvedValue({ ...createdCompany, status: 'pending' });
 
-      await expect(service.create(dto)).rejects.toThrow(ConflictException);
-      await expect(service.create(dto)).rejects.toThrow(/already been requested and is pending review/);
+      await expect(service.create(dto, 'candidate-1')).rejects.toThrow(ConflictException);
+      await expect(service.create(dto, 'candidate-1')).rejects.toThrow(
+        /already been requested and is pending review/,
+      );
       expect(prisma.company.create).not.toHaveBeenCalled();
     });
 
-    it('falls through to a normal create attempt when the existing duplicate is approved', async () => {
-      prisma.company.findUnique.mockResolvedValue({ ...createdCompany, status: 'approved' });
+    // GitHub issue #696 (Phase 50, D104) — findFirst() is now scoped to
+    // status: 'pending' directly (an approved or rejected duplicate is
+    // never returned by the query at all), so both cases fall straight
+    // through to create() without needing a second existing-row check.
+    it('falls through to a normal create attempt when no pending duplicate exists (approved or rejected slug reuse)', async () => {
+      prisma.company.findFirst.mockResolvedValue(null);
 
-      await service.create(dto);
-
-      expect(prisma.company.create).toHaveBeenCalled();
-    });
-
-    it('falls through to a normal create attempt when the existing duplicate is rejected', async () => {
-      prisma.company.findUnique.mockResolvedValue({ ...createdCompany, status: 'rejected' });
-
-      await service.create(dto);
+      await service.create(dto, 'candidate-1');
 
       expect(prisma.company.create).toHaveBeenCalled();
     });

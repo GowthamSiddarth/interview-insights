@@ -166,6 +166,16 @@ describe('GDPR erasure (e2e)', () => {
 
     await server().delete('/me').set('Cookie', cookie).expect(204);
 
+    // GitHub issue #696 (Phase 50, D104) — Company.candidateId is
+    // ON DELETE SET NULL, not RESTRICT (unlike every other candidate-
+    // owned FK below): the company this candidate requested is shared
+    // platform data and must survive erasure, just with its requester
+    // reference anonymized rather than the row deleted or the erasure
+    // itself blocked by a foreign key violation.
+    expect(await rawPrisma.company.findUnique({ where: { id: companyId } })).toMatchObject({
+      candidateId: null,
+    });
+
     // Every row across every table this candidate touched is gone.
     expect(await rawPrisma.candidate.findUnique({ where: { id: candidateId } })).toBeNull();
     expect(await rawPrisma.roundRating.findUnique({ where: { id: ratingId } })).toBeNull();
