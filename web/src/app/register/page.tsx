@@ -7,16 +7,17 @@ import { Button } from '@/components/Button';
 import { PageContainer } from '@/components/PageContainer';
 
 function errorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.status === 429) return 'Too many attempts. Try again later.';
-  if (err instanceof ApiError && err.status === 401) return 'Incorrect email or password.';
+  if (err instanceof ApiError && err.status === 409) {
+    return 'An account with this email already has a password set. Try logging in, or use "Forgot your password?" instead.';
+  }
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
-// GitHub issue #683 (Phase 48, D104) — password login is now the primary
-// flow (the old magic-link-only page moved to /login/magic-link, still
-// reachable as a secondary option below). Same post-login hard-navigation
-// discipline as /auth/verify — NavBar only checks session at mount.
-export default function LoginPage() {
+// GitHub issue #683 (Phase 48, D104) — password registration. Auto-logs
+// in on success (same as the API itself does — see
+// CandidateAuthController.register()'s own comment), so this hard-
+// navigates home exactly like /login does.
+export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -25,9 +26,13 @@ export default function LoginPage() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (password.length < 12) {
+      setError('Password must be at least 12 characters.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await api.candidateLogin(email, password);
+      await api.registerCandidate(email, password);
       window.location.href = '/';
     } catch (err) {
       setError(errorMessage(err));
@@ -38,7 +43,7 @@ export default function LoginPage() {
   return (
     <PageContainer>
       <header>
-        <h1 className="text-2xl font-semibold">Log in</h1>
+        <h1 className="text-2xl font-semibold">Create an account</h1>
       </header>
 
       {error && (
@@ -66,35 +71,23 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="rounded-md border border-gray-300 px-2 py-1 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
-            autoComplete="current-password"
+            autoComplete="new-password"
+            minLength={12}
             required
           />
         </label>
+        <p className="text-xs text-gray-500">At least 12 characters.</p>
         <Button type="submit" disabled={submitting}>
-          {submitting ? 'Logging in…' : 'Log in'}
+          {submitting ? 'Creating account…' : 'Create account'}
         </Button>
       </form>
 
-      <div className="flex flex-col gap-1 text-sm">
-        <Link
-          href="/login/forgot-password"
-          className="text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-        >
-          Forgot your password?
-        </Link>
-        <Link
-          href="/register"
-          className="text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-        >
-          New here? Create an account
-        </Link>
-        <Link
-          href="/login/magic-link"
-          className="text-gray-500 underline transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-        >
-          Or log in with a one-time email link instead
-        </Link>
-      </div>
+      <Link
+        href="/login"
+        className="text-sm text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+      >
+        Already have an account? Log in
+      </Link>
     </PageContainer>
   );
 }

@@ -650,6 +650,32 @@ export const api = {
   verifyMagicLink: (token: string) =>
     request<{ status: string }>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
 
+  // GitHub issue #683 (Phase 48, D104) — password auth, now the primary
+  // /login flow; the magic link above moved to a secondary page.
+  registerCandidate: (email: string, password: string) =>
+    request<{ status: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  candidateLogin: (email: string, password: string) =>
+    request<{ status: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  requestPasswordReset: (email: string) =>
+    request<{ status: string }>('/auth/request-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  confirmPasswordReset: (token: string, newPassword: string) =>
+    request<{ status: string }>('/auth/confirm-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
+
   candidateLogout: () => request<{ status: string }>('/auth/logout', { method: 'POST' }),
 
   getCandidateSession: () => request<CandidateSession>('/auth/me'),
