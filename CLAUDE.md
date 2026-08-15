@@ -181,8 +181,9 @@ post per phase — this file no longer inlines that running history.
   fully done too, blog included (issues #686-#694 plus #711, epic #685
   closed) — one open follow-up, #729, tracks #688's candidate-facing
   rejection-reason surfacing (email, `/me`) that never shipped in this
-  pass. Phases 50 (Company Creation Request Lifecycle, epic #695) and 51
-  (Staff/Admin/Moderator Notification Platform, epic #700) are planned
+  pass. Phase 50 (Company Creation Request Lifecycle) is fully done too,
+  blog included (issues #696-#699, epic #695 closed). Phase 51
+  (Staff/Admin/Moderator Notification Platform, epic #700) is planned
   but not yet implemented — next up.
 
 ## Open decisions still to make

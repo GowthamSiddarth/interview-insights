@@ -647,3 +647,16 @@ D99's parked "candidate-communication-loop" idea.
 7. [Issue #691 — Surface prior-submission history in the moderator queue UI](phase-49-resubmission-loop-rejection-feedback/issue-691-prior-submission-history-ui/README.md)
 8. [Issue #692 — Publish a resubmission-ack event on `reenqueue()`](phase-49-resubmission-loop-rejection-feedback/issue-692-resubmission-ack-event/README.md)
 9. [Issue #693 — Move `EditThrottleService` off in-memory storage](phase-49-resubmission-loop-rejection-feedback/issue-693-edit-throttle-postgres/README.md)
+
+## Phase 50 — Company Creation Request Lifecycle
+
+See `docs/ROADMAP.md` Phase 50 and `docs/DECISIONS.md` D104/D107. Filed
+from the same audit: a rejected company creation request permanently
+occupied its slug with no recovery path, and generated zero notification
+on submit/approve/reject. Scoped to a pragmatic partial-unique-index fix
+rather than a full `CompanyCreationRequest`/`Company` entity split — D104
+covers why.
+
+1. [Issue #696 — `candidateId` FK on `Company` + partial unique index on `slug`](phase-50-company-creation-request-lifecycle/issue-696-candidate-id-partial-slug-unique/README.md)
+2. [Issue #697 — PATCH edit endpoint for a candidate's own company request](phase-50-company-creation-request-lifecycle/issue-697-company-patch-edit-endpoint/README.md)
+3. [Issue #698 — `company.created.v1`/`company.status_changed.v1` events + `notification-service` consumption](phase-50-company-creation-request-lifecycle/issue-698-company-events-notification-consumption/README.md)
