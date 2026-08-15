@@ -4,7 +4,10 @@ import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { hashEmail } from './email-hash.util';
 import { encryptEmail } from './email-encryption.util';
 
-function getEmailHashSecret(): string {
+// Exported so CandidateAuthService (GitHub issue #680, Phase 48) can hash
+// an email to the same emailHash this service upserts candidates by,
+// without duplicating the env-var-read logic.
+export function getEmailHashSecret(): string {
   const secret = process.env.EMAIL_HASH_SECRET;
   if (!secret) {
     throw new Error('EMAIL_HASH_SECRET must be set to hash candidate emails.');
@@ -14,7 +17,7 @@ function getEmailHashSecret(): string {
 
 // GitHub issue #335, D74 — distinct from EMAIL_HASH_SECRET on purpose;
 // see email-encryption.util.ts's own comment.
-function getEmailEncryptionKey(): string {
+export function getEmailEncryptionKey(): string {
   const key = process.env.EMAIL_ENCRYPTION_KEY;
   if (!key) {
     throw new Error('EMAIL_ENCRYPTION_KEY must be set to store a candidate email notification-service can use.');

@@ -33,17 +33,24 @@ export class CandidateJwtStrategy extends PassportStrategy(Strategy, 'candidate-
   // guard, before any route handler runs. One extra DB round trip per
   // authenticated request — an accepted trade-off, decided during the
   // brainstorm, not a performance oversight.
+  //
+  // GitHub issue #679/#682 (Phase 48, D104): also re-checks tokenVersion
+  // against the DB's current value on every request — same "re-check
+  // rather than trust the token's own claims" pattern AdminJwtStrategy
+  // uses for isActive/role. A password reset (#682) bumps tokenVersion,
+  // which invalidates every JWT issued before that point on its very
+  // next use, without needing a server-side token blocklist.
   async validate(payload: CandidateSessionPayload): Promise<CandidateSessionPayload> {
     const candidate = await this.prisma.candidate.findUnique({
       where: { id: payload.candidateId },
     });
-    if (!candidate) {
+    if (!candidate || candidate.tokenVersion !== payload.tokenVersion) {
       throw new UnauthorizedException();
     }
     // Narrowed back down to just the session payload, not whatever else
     // jwt.sign() adds (iat/exp) — same fix admin-auth's AdminJwtStrategy
     // needed once something (GET /auth/admin/me) actually read this value
     // end to end instead of only checking pass/fail.
-    return { candidateId: payload.candidateId };
+    return { candidateId: payload.candidateId, tokenVersion: payload.tokenVersion };
   }
 }

@@ -21,24 +21,25 @@ describe('CandidateJwtStrategy', () => {
     );
   });
 
-  it('passes the session payload through when the candidate still exists', async () => {
+  it('passes the session payload through when the candidate still exists and tokenVersion matches', async () => {
     process.env.CANDIDATE_JWT_SECRET = 'test-secret';
-    prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1' });
+    prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', tokenVersion: 0 });
     const strategy = new CandidateJwtStrategy(prisma as unknown as PrismaService);
 
-    await expect(strategy.validate({ candidateId: 'candidate-1' })).resolves.toEqual({
+    await expect(strategy.validate({ candidateId: 'candidate-1', tokenVersion: 0 })).resolves.toEqual({
       candidateId: 'candidate-1',
+      tokenVersion: 0,
     });
     expect(prisma.candidate.findUnique).toHaveBeenCalledWith({ where: { id: 'candidate-1' } });
   });
 
-  it('strips jwt.sign()-added claims like iat/exp, keeping only candidateId', async () => {
+  it('strips jwt.sign()-added claims like iat/exp, keeping only candidateId/tokenVersion', async () => {
     process.env.CANDIDATE_JWT_SECRET = 'test-secret';
-    prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1' });
+    prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', tokenVersion: 0 });
     const strategy = new CandidateJwtStrategy(prisma as unknown as PrismaService);
-    const decoded = { candidateId: 'candidate-1', iat: 1700000000, exp: 1700003600 };
+    const decoded = { candidateId: 'candidate-1', tokenVersion: 0, iat: 1700000000, exp: 1700003600 };
 
-    await expect(strategy.validate(decoded)).resolves.toEqual({ candidateId: 'candidate-1' });
+    await expect(strategy.validate(decoded)).resolves.toEqual({ candidateId: 'candidate-1', tokenVersion: 0 });
   });
 
   // GitHub issue #151: a stale token (e.g. copied, or a second device)
@@ -49,7 +50,21 @@ describe('CandidateJwtStrategy', () => {
     prisma.candidate.findUnique.mockResolvedValue(null);
     const strategy = new CandidateJwtStrategy(prisma as unknown as PrismaService);
 
-    await expect(strategy.validate({ candidateId: 'candidate-1' })).rejects.toThrow(
+    await expect(strategy.validate({ candidateId: 'candidate-1', tokenVersion: 0 })).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  // GitHub issue #679/#682 (Phase 48, D104): a password reset bumps
+  // tokenVersion, which must invalidate every JWT issued before that
+  // point on its very next use — proven here directly, ahead of #682
+  // actually wiring up the bump itself.
+  it('throws UnauthorizedException when the token\'s tokenVersion is stale (invalidated by a password reset)', async () => {
+    process.env.CANDIDATE_JWT_SECRET = 'test-secret';
+    prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1', tokenVersion: 1 });
+    const strategy = new CandidateJwtStrategy(prisma as unknown as PrismaService);
+
+    await expect(strategy.validate({ candidateId: 'candidate-1', tokenVersion: 0 })).rejects.toThrow(
       UnauthorizedException,
     );
   });
