@@ -260,3 +260,77 @@ describe('Candidate password registration (e2e)', () => {
     expect(candidateIdFromRegister).toBe(candidateIdFromMagicLink);
   }, 15000);
 });
+
+// GitHub issue #681 (Phase 48, D104) — password login, against real Postgres.
+describe('Candidate password login (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    app = await bootApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
+  const server = () => request(app.getHttpServer());
+  const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
+
+  async function register(email: string, password: string): Promise<void> {
+    await server().post('/auth/register').send({ email, password }).expect(201);
+  }
+
+  async function requestMagicLinkToken(email: string): Promise<string> {
+    await server().post('/auth/request-link').send({ email }).expect(200);
+    const message = await waitForMailpitMessage(email);
+    const full = await getMailpitMessage(message.ID);
+    const token = /token=([0-9a-f]{64})/.exec(full.Text)?.[1];
+    if (!token) throw new Error(`No token found in the email sent to ${email}`);
+    return token;
+  }
+
+  it('logs in with the correct password and starts a session', async () => {
+    const email = uniqueEmail();
+    await register(email, 'a-strong-password');
+
+    const res = await server().post('/auth/login').send({ email, password: 'a-strong-password' }).expect(200);
+    expect(body<StatusBody>(res)).toEqual({ status: 'ok' });
+
+    const cookies = res.headers['set-cookie'] as unknown as string[];
+    const sessionCookie = cookies.find((c) => c.startsWith('candidate_session='));
+    expect(sessionCookie).toBeDefined();
+
+    const meRes = await server().get('/auth/me').set('Cookie', sessionCookie ?? '').expect(200);
+    expect(typeof body<{ candidateId: string }>(meRes).candidateId).toBe('string');
+  }, 15000);
+
+  it('rejects an incorrect password with 401', async () => {
+    const email = uniqueEmail();
+    await register(email, 'a-strong-password');
+
+    await server().post('/auth/login').send({ email, password: 'wrong-password' }).expect(401);
+  }, 15000);
+
+  it('rejects an unknown email with 401', async () => {
+    await server().post('/auth/login').send({ email: uniqueEmail(), password: 'whatever' }).expect(401);
+  });
+
+  it('rejects a magic-link-only candidate who has never set a password', async () => {
+    const email = uniqueEmail();
+    const token = await requestMagicLinkToken(email);
+    await server().get(`/auth/verify?token=${token}`).expect(200);
+
+    await server().post('/auth/login').send({ email, password: 'whatever' }).expect(401);
+  }, 15000);
+
+  it('rate-limits the login endpoint after repeated attempts', async () => {
+    const email = uniqueEmail();
+    await register(email, 'a-strong-password');
+
+    for (let i = 0; i < 5; i++) {
+      await server().post('/auth/login').send({ email, password: 'wrong-password' }).expect(401);
+    }
+    await server().post('/auth/login').send({ email, password: 'a-strong-password' }).expect(429);
+  }, 20000);
+});

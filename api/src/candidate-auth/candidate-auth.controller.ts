@@ -2,9 +2,11 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res, Use
 import { Request, Response } from 'express';
 import { getSessionCookieOptions } from '../common/session-cookie-options.util';
 import { CandidateAuthService, CandidateSessionPayload } from './candidate-auth.service';
+import { CandidateLoginDto } from './dto/candidate-login.dto';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { RequestLinkDto } from './dto/request-link.dto';
 import { VerifyMagicLinkDto } from './dto/verify-magic-link.dto';
+import { CandidateLoginThrottleGuard } from './candidate-login-throttle.guard';
 import { CandidateJwtAuthGuard } from './guards/candidate-jwt-auth.guard';
 import { MagicLinkThrottleGuard } from './magic-link-throttle.guard';
 import { CANDIDATE_SESSION_COOKIE } from './strategies/candidate-jwt.strategy';
@@ -71,6 +73,19 @@ export class CandidateAuthController {
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() dto: RegisterCandidateDto, @Res({ passthrough: true }) res: Response) {
     const session = await this.candidateAuthService.register(dto.email, dto.password);
+    this.issueSession(session, res);
+    return { status: 'ok' };
+  }
+
+  // GitHub issue #681 (Phase 48, D104) — password login, mirroring
+  // AdminAuthController.login(): CandidateLoginThrottleGuard runs first
+  // (array order) so a throttled IP never reaches the bcrypt.compare()
+  // call inside CandidateAuthService.login().
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(CandidateLoginThrottleGuard)
+  async login(@Body() dto: CandidateLoginDto, @Res({ passthrough: true }) res: Response) {
+    const session = await this.candidateAuthService.login(dto.email, dto.password);
     this.issueSession(session, res);
     return { status: 'ok' };
   }
