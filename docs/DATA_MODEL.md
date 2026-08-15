@@ -31,10 +31,12 @@ versioned migration file.
 |---|---|---|
 | id | uuid PK | |
 | name | text | |
-| slug | text | unique, for URLs |
+| slug | text | for URLs. **Not** a plain unique column (GitHub issue #696, Phase 50, D104) — a Postgres partial unique index instead, scoped to `WHERE status IN ('pending', 'approved')`, so a rejected request no longer permanently occupies its slug. Prisma's schema DSL can't express a partial index, so this constraint exists only in the hand-authored migration, not as a matching `@@unique` in `schema.prisma` |
 | industry | text | nullable |
 | size_bucket | text | enum-like: `startup`, `mid`, `large`, `enterprise` |
 | logo_url | text | nullable |
+| status | text | enum-like (`ModerationStatus`, shared with round_ratings/recruiter_ratings/overall_reviews) — moderation gate, GitHub issue #369 |
+| candidate_id | uuid FK → candidates | nullable (a seed/admin-created company has no requester). `ON DELETE SET NULL`, unlike every other candidate-owned FK in this schema — a company is shared platform data other candidates' rows may already reference, so a GDPR erasure of the requester anonymizes this reference rather than being blocked by it or cascading into deleting the company (GitHub issue #696) |
 | created_at | timestamptz | default now() |
 
 ### `candidates`

@@ -191,6 +191,44 @@ describe('Company moderation gate (e2e)', () => {
 
       expect(body<ErrorBody>(res).message).not.toMatch(/pending review/);
     });
+
+    // GitHub issue #696 (Phase 50, D104) — the whole point of the
+    // partial-unique-index migration: a rejected request no longer
+    // permanently occupies its slug.
+    it('allows a resubmission with the same slug once the original request was rejected', async () => {
+      const slug = `dup-rejected-${unique()}`;
+      const company = await createPendingCompany(app, candidateCookie, { name: 'Dup Co', slug });
+      const adminCookie = await loginAsAdmin(app);
+      const entryId = await findCompanyQueueEntryId(app, adminCookie, company.id);
+      await server()
+        .post(`/moderation/queue/${entryId}/reject`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+
+      const res = await server()
+        .post('/companies')
+        .set('Cookie', candidateCookie)
+        .send({ name: 'Dup Co', slug, sizeBucket: 'mid' })
+        .expect(201);
+
+      expect(body<{ id: string; slug: string }>(res).slug).toBe(slug);
+
+      // A *second* rejected row sharing the same slug — proves the
+      // partial index really doesn't constrain rejected rows at all, not
+      // just that one resubmission happened to slip through once.
+      const second = await findCompanyQueueEntryId(app, adminCookie, body<{ id: string }>(res).id);
+      await server()
+        .post(`/moderation/queue/${second}/reject`)
+        .set('Cookie', adminCookie)
+        .send({})
+        .expect(201);
+      await server()
+        .post('/companies')
+        .set('Cookie', candidateCookie)
+        .send({ name: 'Dup Co', slug, sizeBucket: 'mid' })
+        .expect(201);
+    });
   });
 
   it('rejects an unauthenticated company creation request', async () => {

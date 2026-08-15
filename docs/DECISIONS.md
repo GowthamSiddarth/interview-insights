@@ -5393,6 +5393,40 @@ worth designing in one pass rather than per-service.
 
 ---
 
+### D107 — `companies.slug`'s uniqueness moves to a Postgres partial index, not a schema-level `@@unique` (GitHub issue #696, Phase 50)
+
+**Context:** Phase 50 (#695, D104) needed a rejected company-creation
+request to stop permanently occupying its slug — two rejected requests
+for "Acme Corp" should both be able to use `acme-corp`, while a
+still-`pending`/`approved` one still can't collide with either status.
+The natural expression is a partial (filtered) unique index —
+`CREATE UNIQUE INDEX ... ON companies(slug) WHERE status IN ('pending', 'approved')`
+— but Prisma's schema DSL has no `where` clause for `@@unique`/`@@index`
+as of the version this project runs (6.19.3); the closest built-in
+feature (`extendedIndexes`) covers index *types* (e.g. GIN), not
+filtered/partial indexes.
+
+**Decision:** Drop `@unique` from `Company.slug` in `schema.prisma`
+entirely and create the partial index only in the hand-authored
+`migration.sql` — the same "raw SQL is the source of truth for whatever
+Prisma's migration engine can't express" precedent this project already
+established for `pg_trgm` similarity queries (D64) and every other
+hand-authored migration. `schema.prisma` carries an explanatory comment
+at the field so a future reader isn't surprised that a column with no
+`@unique` attribute still has real uniqueness behavior at the database
+level. The practical cost: `prisma.company.findUnique({ where: { slug } })`
+is no longer valid Prisma Client usage (only `@unique`/`@id` fields are
+allowed in `findUnique`'s `where`) — every call site switched to
+`findFirst()` with an explicit `status` filter instead
+(`CompaniesService.create()`'s own pending-duplicate check).
+
+**Revisit when:** Prisma ships native partial-index support in the
+schema DSL — at that point this could become a real `@@unique(..., where: ...)`
+(or equivalent) and the explanatory comment/`findFirst()` workaround
+could be reverted.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
