@@ -91,6 +91,9 @@ model Candidate {
   overallReviews     OverallReview[]
   verificationTokens CandidateVerificationToken[]
   passwordResetTokens CandidatePasswordResetToken[]
+  // GitHub issue #693 (Phase 49, D104) — at most one row per candidate
+  // (@id on candidateId below), not one row per edit attempt.
+  editThrottleState  EditThrottleState?
 
   @@map("candidates")
 }
@@ -737,4 +740,26 @@ model NotificationLog {
   // candidate per round).
   @@unique([entityType, entityId, eventType, moderationQueueEntryId], name: "notification_log_dedup_key")
   @@map("notification_log")
+}
+
+// GitHub issue #693 (Phase 49, D104) — Postgres-backed replacement for
+// EditThrottleService's old in-memory IpThrottle core, which reset on
+// restart and wouldn't coordinate across replicas once `api` scales
+// horizontally (each pod would otherwise get its own independent
+// 5-per-hour bucket, silently multiplying the effective limit by the
+// replica count). One row per candidate (not per attempt) — a running
+// counter reset each time its window expires, the same shape IpThrottle's
+// in-memory Map already used, just durable and shared now. See
+// EditThrottleService.recordAttemptIfAllowed() for the atomic
+// increment-if-under-cap update this enables (same
+// updateMany-with-a-count-check shape as ModerationService.review()'s own
+// TOCTOU fix, #674/#675).
+model EditThrottleState {
+  candidateId String   @id @map("candidate_id") @db.Uuid
+  windowStart DateTime @map("window_start") @db.Timestamptz
+  count       Int      @default(1)
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@map("edit_throttle_state")
 }

@@ -11,27 +11,24 @@ function contextWithCandidate(candidateId: string): ExecutionContext {
 }
 
 describe('EditThrottleGuard', () => {
-  it('allows a request and records an attempt when not blocked', () => {
+  it('allows a request when the throttle service allows the attempt', async () => {
     const editThrottleService = {
-      isBlocked: jest.fn().mockReturnValue(false),
-      recordAttempt: jest.fn(),
+      recordAttemptIfAllowed: jest.fn().mockResolvedValue(true),
     };
     const guard = new EditThrottleGuard(editThrottleService as unknown as EditThrottleService);
 
-    const result = guard.canActivate(contextWithCandidate('candidate-1'));
+    const result = await guard.canActivate(contextWithCandidate('candidate-1'));
 
     expect(result).toBe(true);
-    expect(editThrottleService.recordAttempt).toHaveBeenCalledWith('candidate-1');
+    expect(editThrottleService.recordAttemptIfAllowed).toHaveBeenCalledWith('candidate-1');
   });
 
-  it('throws 429 and never records a further attempt when already blocked', () => {
+  it('throws 429 when the throttle service blocks the attempt', async () => {
     const editThrottleService = {
-      isBlocked: jest.fn().mockReturnValue(true),
-      recordAttempt: jest.fn(),
+      recordAttemptIfAllowed: jest.fn().mockResolvedValue(false),
     };
     const guard = new EditThrottleGuard(editThrottleService as unknown as EditThrottleService);
 
-    expect(() => guard.canActivate(contextWithCandidate('candidate-1'))).toThrow(HttpException);
-    expect(editThrottleService.recordAttempt).not.toHaveBeenCalled();
+    await expect(guard.canActivate(contextWithCandidate('candidate-1'))).rejects.toThrow(HttpException);
   });
 });

@@ -386,5 +386,51 @@ describe('Update/Delete under moderation-safe rules (e2e)', () => {
         .send({ ...roundRatingPayload, difficulty: 3 })
         .expect(429);
     }, 30000);
+
+    // GitHub issue #693 (Phase 49, D104) — the acceptance criterion the
+    // Postgres migration exists to satisfy: two independent NestJS
+    // instances (simulating two `api` replicas), sharing only the same
+    // Postgres, must still enforce one combined 5-per-hour cap — not one
+    // 5-per-hour bucket per instance (10 total), which the old in-memory
+    // IpThrottle core would have allowed.
+    it('shares throttle state across two concurrent api instances, not one bucket per instance', async () => {
+      const secondModuleFixture: TestingModule = await Test.createTestingModule({
+        imports: [AppModule],
+      }).compile();
+      const secondApp = secondModuleFixture.createNestApplication();
+      secondApp.useGlobalPipes(
+        new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      );
+      secondApp.useGlobalFilters(new PrismaExceptionFilter());
+      secondApp.use(cookieParser());
+      await secondApp.init();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
+      const secondServer = () => request(secondApp.getHttpServer());
+
+      try {
+        const { cookie, roundId, ratingId } = await createRoundRating();
+
+        // 5 edits allowed per window total, alternating between the two
+        // instances — must all still succeed if the cap is shared.
+        for (let i = 0; i < 5; i++) {
+          const s = i % 2 === 0 ? server() : secondServer();
+          await s
+            .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+            .set('Cookie', cookie)
+            .send({ ...roundRatingPayload, difficulty: (i % 5) + 1 })
+            .expect(200);
+        }
+
+        // The 6th, on whichever instance didn't handle the 5th, must
+        // still 429 — proves the count is shared, not per-process.
+        await secondServer()
+          .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+          .set('Cookie', cookie)
+          .send({ ...roundRatingPayload, difficulty: 3 })
+          .expect(429);
+      } finally {
+        await secondApp.close();
+      }
+    }, 30000);
   });
 });
