@@ -216,7 +216,15 @@ message, so one consumer's processing never affects another's; real LLM
 triage as of #340).
 `moderation.*.status_changed.v1` (the approved/rejected notification) is
 consumed by the same `notification-service` consumer as of GitHub issue
-#336.
+#336. As of GitHub issue #705 (Phase 51, D104), the same consumer also
+subscribes to all five `staff.account.*.v1` topics and sends one fixed
+template per event type, addressed directly to `event.email` — the
+affected account's own address is already on the event, so this is the
+only event family here that never queries Prisma for a recipient at
+all. `moderation.queue.sla_warning.v1`/an *unclaimed*
+`moderation.queue.sla_breach.v1` are the other two additions this same
+consumer resolves via `StaffNotificationRecipientsService` (#703)
+instead — see that service's own section above.
 `moderation.*.verdict_computed.v1` is consumed by `api` as of GitHub
 issue #340 — its first-ever event consumer (`VerdictConsumerService`,
 own consumer group `api`), which writes `moderationVerdict` and, when

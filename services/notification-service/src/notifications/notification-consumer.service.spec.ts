@@ -14,6 +14,9 @@ import { CompanyCreatedEventV1 } from '../events/schemas/company-created.event';
 import { CompanyStatusChangedEventV1 } from '../events/schemas/company-status-changed.event';
 import { ModerationQueueSlaBreachEventV1 } from '../events/schemas/moderation-queue-sla-breach.event';
 import { ModerationQueueSlaWarningEventV1 } from '../events/schemas/moderation-queue-sla-warning.event';
+import { StaffAccountCreatedEventV1 } from '../events/schemas/staff-account-created.event';
+import { StaffAccountRoleChangedEventV1 } from '../events/schemas/staff-account-role-changed.event';
+import { StaffAccountDeactivatedEventV1 } from '../events/schemas/staff-account-deactivated.event';
 import { StaffNotificationRecipientsService } from './staff-notification-recipients.service';
 
 const ENCRYPTION_KEY = 'a'.repeat(64);
@@ -79,6 +82,41 @@ describe('NotificationConsumerService', () => {
     entityType: 'round_rating',
     entityId: 'rating-1',
     slaDeadline: '2026-08-16T00:00:00.000Z',
+  };
+
+  // GitHub issue #705 (Phase 51, D104).
+  const staffAccountCreatedEvent: StaffAccountCreatedEventV1 = {
+    eventType: 'staff.account.created',
+    eventVersion: 1,
+    occurredAt: '2026-08-15T00:00:00.000Z',
+    moderatorId: 'mod-new',
+    email: 'new-staff@example.com',
+    role: 'moderator',
+    actorId: 'mod-actor',
+    temporaryPassword: 'temp-pw-123',
+    actionId: 'action-1',
+  };
+
+  const staffAccountRoleChangedEvent: StaffAccountRoleChangedEventV1 = {
+    eventType: 'staff.account.role_changed',
+    eventVersion: 1,
+    occurredAt: '2026-08-15T00:00:00.000Z',
+    moderatorId: 'mod-1',
+    email: 'staff@example.com',
+    oldRole: 'staff',
+    newRole: 'moderator',
+    actorId: 'mod-actor',
+    actionId: 'action-2',
+  };
+
+  const staffAccountDeactivatedEvent: StaffAccountDeactivatedEventV1 = {
+    eventType: 'staff.account.deactivated',
+    eventVersion: 1,
+    occurredAt: '2026-08-15T00:00:00.000Z',
+    moderatorId: 'mod-1',
+    email: 'staff@example.com',
+    actorId: 'mod-actor',
+    actionId: 'action-3',
   };
 
   const statusChangedEvent = (newStatus: 'approved' | 'rejected' | 'flagged'): RoundRatingStatusChangedEventV1 => ({
@@ -710,6 +748,94 @@ describe('NotificationConsumerService', () => {
       await service.processEvent(slaWarningEvent);
 
       expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // GitHub issue #705 (Phase 51, D104).
+  describe('processEvent — staff.account.*', () => {
+    it('sends the account-created email straight to event.email, carrying the temporary password', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(staffAccountCreatedEvent);
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'new-staff@example.com',
+          subject: 'Your staff account has been created',
+        }),
+      );
+      const [[sendCall]] = mailService.send.mock.calls as [[{ text: string }]];
+      expect(sendCall.text).toContain('temp-pw-123');
+      expect(prisma.notificationLog.create).toHaveBeenCalledWith({
+        data: {
+          entityType: 'staff_account',
+          entityId: 'mod-new',
+          eventType: 'staff.account.created',
+          moderationQueueEntryId: 'action-1',
+        },
+      });
+    });
+
+    it('sends the role-changed email mentioning both the old and new role', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(staffAccountRoleChangedEvent);
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'staff@example.com', subject: 'Your staff account role has been changed to moderator' }),
+      );
+      const [[sendCall]] = mailService.send.mock.calls as [[{ text: string }]];
+      expect(sendCall.text).toContain('staff');
+      expect(sendCall.text).toContain('moderator');
+    });
+
+    it('sends the deactivated email', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(staffAccountDeactivatedEvent);
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'staff@example.com', subject: 'Your staff account has been deactivated' }),
+      );
+    });
+
+    it('never queries Candidate or Moderator — the recipient email is already on the event', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent(staffAccountCreatedEvent);
+
+      expect(prisma.candidate.findUnique).not.toHaveBeenCalled();
+      expect(prisma.moderator.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('never sends twice for the same action — idempotent against redelivery', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue({ id: 'log-1' });
+
+      await service.processEvent(staffAccountCreatedEvent);
+
+      expect(mailService.send).not.toHaveBeenCalled();
+      expect(prisma.notificationLog.create).not.toHaveBeenCalled();
+    });
+
+    // GitHub issue #701's own reasoning: several staff.account.* event
+    // types can repeat on the same moderatorId (unlike create()), so
+    // each occurrence's own actionId must key its own dedup row.
+    it("keys a second role_changed action on the same moderator by its own actionId, not colliding with the first's", async () => {
+      prisma.notificationLog.findUnique.mockImplementation(
+        ({ where }: { where: { notification_log_dedup_key: { moderationQueueEntryId: string } } }) =>
+          Promise.resolve(where.notification_log_dedup_key.moderationQueueEntryId === 'action-2' ? { id: 'log-1' } : null),
+      );
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent({ ...staffAccountRoleChangedEvent, actionId: 'action-2-again', newRole: 'admin' });
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: 'Your staff account role has been changed to admin' }),
+      );
     });
   });
 
