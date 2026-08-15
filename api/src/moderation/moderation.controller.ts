@@ -10,6 +10,7 @@ import { PermissionsGuard } from '../admin-auth/guards/permissions.guard';
 import { AdminSessionPayload } from '../admin-auth/admin-auth.service';
 import { PERMISSIONS } from '../admin-auth/permissions';
 import { RequirePermission } from '../admin-auth/require-permission.decorator';
+import { EscalatedEntryGuard } from './guards/escalated-entry.guard';
 
 // Internal/admin surface — gated on a valid admin_session cookie (GitHub
 // issue #159, Phase 18). Every route 401s without one. Base path is
@@ -52,14 +53,23 @@ export class ModerationController {
     return this.moderationService.search(query.q, query.category);
   }
 
+  // GitHub issue #689 (Phase 49, D104) — EscalatedEntryGuard runs after
+  // PermissionsGuard's base moderator-and-up check: a plain moderator
+  // still needs MODERATION_QUEUE_APPROVE/REJECT to reach this route at
+  // all, but an escalated entry additionally requires the admin role
+  // specifically. Not applied to flag() — flagging isn't a terminal
+  // resolution, and #689's cap only gates who may resolve an escalated
+  // entry, not who may claim/release/flag it.
   @Post('queue/:id/approve')
   @RequirePermission(PERMISSIONS.MODERATION_QUEUE_APPROVE)
+  @UseGuards(EscalatedEntryGuard)
   approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerationActionDto) {
     return this.moderationService.approve(id, dto);
   }
 
   @Post('queue/:id/reject')
   @RequirePermission(PERMISSIONS.MODERATION_QUEUE_REJECT)
+  @UseGuards(EscalatedEntryGuard)
   reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerationActionDto) {
     return this.moderationService.reject(id, dto);
   }

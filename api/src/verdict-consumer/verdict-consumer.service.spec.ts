@@ -159,6 +159,18 @@ describe('VerdictConsumerService', () => {
 
       expect(moderationService.approveWithAudit).not.toHaveBeenCalled();
     });
+
+    // GitHub issue #689 (Phase 49, D104) — a resubmission past the
+    // lifetime cap needs a human admin's judgment, not another
+    // automated pass.
+    it('leaves the entity advisory-only (never throws) when the queue entry is escalated', async () => {
+      prisma.moderationQueueEntry.findFirst.mockResolvedValue({ id: 'queue-entry-1', escalated: true });
+      const service = buildService();
+
+      await expect(service.processEvent(roundRatingEvent({ autoApprovalEligible: true }))).resolves.toBeUndefined();
+
+      expect(moderationService.approveWithAudit).not.toHaveBeenCalled();
+    });
   });
 
   describe('stalled escalation (GitHub issue #442, D71, ported from review-analyzer via #340)', () => {
