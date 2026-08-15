@@ -15,6 +15,12 @@ describe('CandidateAuthService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
+    candidatePasswordResetToken: {
+      updateMany: jest.Mock;
+      create: jest.Mock;
+      findUnique: jest.Mock;
+      update: jest.Mock;
+    };
     candidate: {
       update: jest.Mock;
       findUniqueOrThrow: jest.Mock;
@@ -38,6 +44,12 @@ describe('CandidateAuthService', () => {
       candidateVerificationToken: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         create: jest.fn().mockResolvedValue({ id: 'token-row-1' }),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      candidatePasswordResetToken: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn().mockResolvedValue({ id: 'reset-token-row-1' }),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -258,6 +270,99 @@ describe('CandidateAuthService', () => {
       await expect(service.login('candidate@example.com', 'wrong-password')).rejects.toThrow(
         'Invalid email or password.',
       );
+    });
+  });
+
+  // GitHub issue #682 (Phase 48, D104) — forgot-password flow.
+  describe('requestPasswordReset', () => {
+    it('supersedes any prior reset token, issues a new one, and emails it', async () => {
+      prisma.candidate.findUnique.mockResolvedValue({ id: 'candidate-1' });
+
+      await service.requestPasswordReset('candidate@example.com');
+
+      expect(prisma.candidatePasswordResetToken.updateMany).toHaveBeenCalledWith({
+        where: { candidateId: 'candidate-1', consumedAt: null },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+        data: { consumedAt: expect.any(Date) },
+      });
+      expect(prisma.candidatePasswordResetToken.create).toHaveBeenCalledWith({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.objectContaining() is typed `any` by @types/jest
+        data: expect.objectContaining({ candidateId: 'candidate-1' }),
+      });
+      expect(mailService.send).toHaveBeenCalledWith(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.stringContaining() is typed `any` by @types/jest
+        expect.objectContaining({ to: 'candidate@example.com', subject: expect.stringContaining('Reset') }),
+      );
+    });
+
+    it('silently no-ops for an unknown email, without issuing a token or sending mail', async () => {
+      prisma.candidate.findUnique.mockResolvedValue(null);
+
+      await service.requestPasswordReset('unknown@example.com');
+
+      expect(prisma.candidatePasswordResetToken.create).not.toHaveBeenCalled();
+      expect(mailService.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('confirmPasswordReset', () => {
+    it('throws NotFoundException for an unknown token', async () => {
+      prisma.candidatePasswordResetToken.findUnique.mockResolvedValue(null);
+      await expect(service.confirmPasswordReset('unknown', 'a-new-strong-password')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws ConflictException for an already-consumed token', async () => {
+      prisma.candidatePasswordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-token-row-1',
+        candidateId: 'candidate-1',
+        consumedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60000),
+      });
+      await expect(service.confirmPasswordReset('used', 'a-new-strong-password')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('throws GoneException for an expired token', async () => {
+      prisma.candidatePasswordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-token-row-1',
+        candidateId: 'candidate-1',
+        consumedAt: null,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      await expect(service.confirmPasswordReset('expired', 'a-new-strong-password')).rejects.toThrow(
+        GoneException,
+      );
+    });
+
+    it('consumes the token, hashes the new password, and bumps tokenVersion to invalidate existing sessions', async () => {
+      prisma.candidatePasswordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-token-row-1',
+        candidateId: 'candidate-1',
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60000),
+      });
+      prisma.candidate.update.mockResolvedValue({ id: 'candidate-1', tokenVersion: 3 });
+
+      const result = await service.confirmPasswordReset('valid-token', 'a-new-strong-password');
+
+      expect(prisma.candidatePasswordResetToken.update).toHaveBeenCalledWith({
+        where: { id: 'reset-token-row-1' },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() is typed `any` by @types/jest
+        data: { consumedAt: expect.any(Date) },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- jest.Mock's .mock.calls is typed `any[]`
+      const updateArgs = prisma.candidate.update.mock.calls[0][0] as {
+        where: { id: string };
+        data: { passwordHash: string; passwordSetAt: Date; tokenVersion: { increment: number } };
+      };
+      expect(updateArgs.where).toEqual({ id: 'candidate-1' });
+      expect(updateArgs.data.passwordHash).not.toBe('a-new-strong-password');
+      expect(updateArgs.data.passwordSetAt).toBeInstanceOf(Date);
+      expect(updateArgs.data.tokenVersion).toEqual({ increment: 1 });
+      expect(result).toEqual({ candidateId: 'candidate-1', tokenVersion: 3 });
     });
   });
 

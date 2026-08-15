@@ -145,6 +145,76 @@ export class CandidateAuthService {
     return { candidateId: candidate.id, tokenVersion: candidate.tokenVersion };
   }
 
+  // GitHub issue #682 (Phase 48, D104) — forgot-password flow, first
+  // half. Never throws on an unknown email, same enumeration-safety
+  // reasoning as requestLink() — the controller returns the same
+  // { status: 'ok' } either way. Works even for a candidate who has
+  // never set a password (magic-link-only) — completing the flow just
+  // means they now have one, same as register() attaching a password to
+  // an existing account.
+  async requestPasswordReset(email: string): Promise<void> {
+    const emailHash = hashEmail(email, getEmailHashSecret());
+    const candidate = await this.prisma.candidate.findUnique({ where: { emailHash } });
+    if (!candidate) return;
+
+    const { token, tokenHash } = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Only the most recently requested reset should be valid.
+      await tx.candidatePasswordResetToken.updateMany({
+        where: { candidateId: candidate.id, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+      await tx.candidatePasswordResetToken.create({
+        data: { candidateId: candidate.id, tokenHash, expiresAt },
+      });
+    });
+
+    const resetUrl = `${process.env.CORS_ORIGIN ?? 'http://localhost:3000'}/auth/reset-password?token=${token}`;
+    await this.mailService.send({
+      to: email,
+      subject: 'Reset your Interview Insights password',
+      text: `Click to choose a new password: ${resetUrl}\n\nThis link expires in 15 minutes and can only be used once. If you didn't request this, you can safely ignore this email.`,
+      html: `<p><a href="${resetUrl}">Click to choose a new password</a>.</p><p>This link expires in 15 minutes and can only be used once. If you didn't request this, you can safely ignore this email.</p>`,
+    });
+  }
+
+  // GitHub issue #682, second half. Bumps tokenVersion — the whole point
+  // of that column (see CandidateSessionPayload's own comment above) —
+  // so every session issued before this reset is invalidated on its very
+  // next request, not just the password itself changing. Auto-issues a
+  // fresh session on success, same as register()/verify(): the candidate
+  // just proved control of the token *and* chose a valid new password.
+  async confirmPasswordReset(token: string, newPassword: string): Promise<CandidateSessionPayload> {
+    const tokenHash = hashVerificationToken(token);
+    const record = await this.prisma.candidatePasswordResetToken.findUnique({ where: { tokenHash } });
+
+    if (!record) {
+      throw new NotFoundException('Password reset link not found.');
+    }
+    if (record.consumedAt) {
+      throw new ConflictException('This password reset link has already been used.');
+    }
+    if (record.expiresAt < new Date()) {
+      throw new GoneException('This password reset link has expired.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST);
+    const candidate = await this.prisma.$transaction(async (tx) => {
+      await tx.candidatePasswordResetToken.update({
+        where: { id: record.id },
+        data: { consumedAt: new Date() },
+      });
+      return tx.candidate.update({
+        where: { id: record.candidateId },
+        data: { passwordHash, passwordSetAt: new Date(), tokenVersion: { increment: 1 } },
+      });
+    });
+
+    return { candidateId: candidate.id, tokenVersion: candidate.tokenVersion };
+  }
+
   issueToken(payload: CandidateSessionPayload): string {
     return this.jwtService.sign(payload);
   }

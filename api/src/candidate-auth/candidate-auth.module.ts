@@ -11,6 +11,8 @@ import { CandidateLoginThrottleService } from './candidate-login-throttle.servic
 import { CandidateJwtAuthGuard } from './guards/candidate-jwt-auth.guard';
 import { MagicLinkThrottleGuard } from './magic-link-throttle.guard';
 import { MagicLinkThrottleService } from './magic-link-throttle.service';
+import { PasswordResetThrottleGuard } from './password-reset-throttle.guard';
+import { PasswordResetThrottleService } from './password-reset-throttle.service';
 import { CandidateJwtStrategy } from './strategies/candidate-jwt.strategy';
 
 @Module({
@@ -36,6 +38,8 @@ import { CandidateJwtStrategy } from './strategies/candidate-jwt.strategy';
     MagicLinkThrottleGuard,
     CandidateLoginThrottleService,
     CandidateLoginThrottleGuard,
+    PasswordResetThrottleService,
+    PasswordResetThrottleGuard,
     CandidateJwtAuthGuard,
   ],
   // CandidateJwtAuthGuard is exported so issue #146's write-path modules

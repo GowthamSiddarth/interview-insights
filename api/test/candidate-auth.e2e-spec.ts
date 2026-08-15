@@ -334,3 +334,95 @@ describe('Candidate password login (e2e)', () => {
     await server().post('/auth/login').send({ email, password: 'a-strong-password' }).expect(429);
   }, 20000);
 });
+
+// GitHub issue #682 (Phase 48, D104) — forgot-password flow, against real
+// Postgres + Mailpit.
+describe('Candidate password reset (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    app = await bootApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- getHttpServer()'s return type doesn't line up with supertest's App type
+  const server = () => request(app.getHttpServer());
+  const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
+
+  async function register(email: string, password: string): Promise<void> {
+    await server().post('/auth/register').send({ email, password }).expect(201);
+  }
+
+  async function requestResetToken(email: string): Promise<string> {
+    await server().post('/auth/request-password-reset').send({ email }).expect(200);
+    const message = await waitForMailpitMessage(email);
+    const full = await getMailpitMessage(message.ID);
+    const token = /token=([0-9a-f]{64})/.exec(full.Text)?.[1];
+    if (!token) throw new Error(`No password reset token found in the email sent to ${email}`);
+    return token;
+  }
+
+  it('request-password-reset always returns the same shape, whether or not the email is known', async () => {
+    const res = await server().post('/auth/request-password-reset').send({ email: uniqueEmail() }).expect(200);
+    expect(body<StatusBody>(res)).toEqual({ status: 'ok' });
+  });
+
+  it('resetting the password starts a session, and the old password no longer works', async () => {
+    const email = uniqueEmail();
+    await register(email, 'the-original-password');
+    const token = await requestResetToken(email);
+
+    const confirmRes = await server()
+      .post('/auth/confirm-password-reset')
+      .send({ token, newPassword: 'a-brand-new-password' })
+      .expect(200);
+    expect(body<StatusBody>(confirmRes)).toEqual({ status: 'ok' });
+    const cookies = confirmRes.headers['set-cookie'] as unknown as string[];
+    expect(cookies.find((c) => c.startsWith('candidate_session='))).toBeDefined();
+
+    await server().post('/auth/login').send({ email, password: 'the-original-password' }).expect(401);
+    await server().post('/auth/login').send({ email, password: 'a-brand-new-password' }).expect(200);
+  }, 15000);
+
+  it('invalidates the session that was active before the reset', async () => {
+    const email = uniqueEmail();
+    await register(email, 'the-original-password');
+    const loginRes = await server()
+      .post('/auth/login')
+      .send({ email, password: 'the-original-password' })
+      .expect(200);
+    const oldCookies = loginRes.headers['set-cookie'] as unknown as string[];
+    const oldSessionCookie = oldCookies.find((c) => c.startsWith('candidate_session='));
+
+    const token = await requestResetToken(email);
+    await server().post('/auth/confirm-password-reset').send({ token, newPassword: 'a-brand-new-password' }).expect(200);
+
+    await server().get('/auth/me').set('Cookie', oldSessionCookie ?? '').expect(401);
+  }, 15000);
+
+  it('rejects reusing an already-consumed reset token', async () => {
+    const email = uniqueEmail();
+    await register(email, 'the-original-password');
+    const token = await requestResetToken(email);
+
+    await server().post('/auth/confirm-password-reset').send({ token, newPassword: 'a-brand-new-password' }).expect(200);
+    await server().post('/auth/confirm-password-reset').send({ token, newPassword: 'yet-another-password' }).expect(409);
+  }, 15000);
+
+  it('rejects an unknown token', async () => {
+    await server()
+      .post('/auth/confirm-password-reset')
+      .send({ token: 'a'.repeat(64), newPassword: 'a-brand-new-password' })
+      .expect(404);
+  });
+
+  it('rate-limits the request-password-reset endpoint after repeated attempts', async () => {
+    for (let i = 0; i < 5; i++) {
+      await server().post('/auth/request-password-reset').send({ email: uniqueEmail() }).expect(200);
+    }
+    await server().post('/auth/request-password-reset').send({ email: uniqueEmail() }).expect(429);
+  }, 20000);
+});
