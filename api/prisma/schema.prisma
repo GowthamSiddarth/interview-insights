@@ -530,6 +530,16 @@ model ModerationQueueEntry {
   flagReason  ModerationFlagReason? @map("flag_reason")
   reviewedBy  String?               @map("reviewed_by")
   reviewedAt  DateTime?             @map("reviewed_at") @db.Timestamptz
+  // GitHub issue #691 (Phase 49, D104) — the actual verdict reached for
+  // this row, distinct from the entity's own ModerationStatus: recorded
+  // once at review() time and never touched again, so a superseded
+  // (reviewedAt-set) row keeps an accurate trail of what was decided even
+  // after the entity itself has since been edited/resubmitted and its own
+  // status has moved on. Reuses the ModerationStatus enum rather than a
+  // new one — only ever populated with 'approved'/'rejected'/'flagged'
+  // here, never 'pending'/'permanently_rejected'. Nullable because rows
+  // written before this migration have no value to backfill.
+  decision    ModerationStatus?     @map("decision")
   // GitHub issue #688 (Phase 49, D104) — only ever set alongside a
   // 'rejected' decision (ModerationService.review() only writes these
   // when ModerationActionDto carries them, which reject() alone accepts

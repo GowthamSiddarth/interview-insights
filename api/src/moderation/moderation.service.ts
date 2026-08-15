@@ -119,6 +119,26 @@ interface RawQueueEntry {
   createdAt: Date;
 }
 
+// GitHub issue #691 (Phase 49, D104) — one historical (already-reviewed)
+// queue entry for the same entityType/entityId as a still-pending entry
+// currently in the queue. Deliberately a narrower shape than
+// ModerationQueueEntry — a moderator reviewing prior history needs the
+// verdict/reason/reviewer, not the full re-enriched entity payload (the
+// current entity already carries whatever content is live today).
+export interface ModerationQueuePriorReview {
+  id: string;
+  // Null only for a row reviewed before #691 shipped this column — no
+  // backfill exists for those, so this stays honestly "unknown" rather
+  // than guessing from flagReason/rejectionReasonCategory, both of which
+  // can be stale or ambiguous on their own (see the schema comment on
+  // ModerationQueueEntry.decision).
+  decision: ModerationStatus | null;
+  reviewedAt: Date;
+  reviewedBy: string | null;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
+}
+
 // GitHub issue #315 (Phase 29) — every field a candidate could have
 // submitted for this entity, not just a "highlights" subset. `processId`
 // exists purely so listPending() can group entries by submission; it's
@@ -181,6 +201,11 @@ export interface ModerationQueueEntry {
   claimedBy: { id: string; username: string } | null;
   createdAt: Date;
   entity: ModerationQueueEntity | null;
+  // GitHub issue #691 (Phase 49, D104) — every reviewed queue entry this
+  // entity has ever had, most recent first. Empty for a first-time
+  // submission (the common case) — enrichEntries() only ever attaches a
+  // non-empty array once a resubmission has actually happened.
+  priorReviews: ModerationQueuePriorReview[];
 }
 
 // GitHub issue #315 (Phase 29) — one group per InterviewProcess, mirroring
@@ -561,15 +586,15 @@ export class ModerationService {
     // leaving them one click away from review()'s own "Record not found."
     // crash): remove the stale queue entry and its search-index document,
     // and exclude it from the returned entries entirely.
-    const enriched: ModerationQueueEntry[] = [];
     const orphaned: RawQueueEntry[] = [];
+    const surviving: Array<{ entry: RawQueueEntry; entity: ModerationQueueEntity | null }> = [];
     for (const entry of entries) {
       const entity = entityById.get(entry.entityId) ?? null;
       if (entity === null && fetchSucceeded[entry.entityType]) {
         orphaned.push(entry);
         continue;
       }
-      enriched.push({ ...entry, entity });
+      surviving.push({ entry, entity });
     }
 
     if (orphaned.length > 0) {
@@ -580,7 +605,64 @@ export class ModerationService {
       await Promise.all(orphaned.map((e) => this.removeFromSearchIndex(e.entityType, e.entityId)));
     }
 
-    return enriched;
+    // GitHub issue #691 (Phase 49, D104) — batched once for every
+    // surviving entry rather than per-entry, same OR-of-refs shape
+    // resolveEntityRefsForCompany() already uses.
+    const priorReviewsByKey = await this.fetchPriorReviews(surviving.map((s) => s.entry));
+
+    return surviving.map(({ entry, entity }) => ({
+      ...entry,
+      entity,
+      priorReviews: priorReviewsByKey.get(`${entry.entityType}:${entry.entityId}`) ?? [],
+    }));
+  }
+
+  // GitHub issue #691 (Phase 49, D104) — every already-reviewed
+  // moderation_queue row sharing an entityType/entityId with one of the
+  // given (currently-pending) entries. reviewedAt: { not: null } alone is
+  // enough to exclude each given entry from its own results, since every
+  // caller of enrichEntries() only ever passes still-unreviewed entries
+  // (listPending()/search() both filter to reviewedAt: null upfront) — no
+  // separate `id: { notIn: ... }` exclusion needed.
+  private async fetchPriorReviews(
+    entries: RawQueueEntry[],
+  ): Promise<Map<string, ModerationQueuePriorReview[]>> {
+    const byKey = new Map<string, ModerationQueuePriorReview[]>();
+    if (entries.length === 0) return byKey;
+
+    const rows = await this.prisma.moderationQueueEntry.findMany({
+      where: {
+        reviewedAt: { not: null },
+        OR: entries.map((e) => ({ entityType: e.entityType, entityId: e.entityId })),
+      },
+      orderBy: { reviewedAt: 'desc' },
+      select: {
+        id: true,
+        entityType: true,
+        entityId: true,
+        decision: true,
+        reviewedAt: true,
+        reviewedBy: true,
+        rejectionReasonCategory: true,
+        reviewNote: true,
+      },
+    });
+
+    for (const row of rows) {
+      const key = `${row.entityType}:${row.entityId}`;
+      const list = byKey.get(key) ?? [];
+      list.push({
+        id: row.id,
+        decision: row.decision,
+        // Safe: the where clause above guarantees reviewedAt is set.
+        reviewedAt: row.reviewedAt as Date,
+        reviewedBy: row.reviewedBy,
+        rejectionReasonCategory: row.rejectionReasonCategory,
+        reviewNote: row.reviewNote,
+      });
+      byKey.set(key, list);
+    }
+    return byKey;
   }
 
   approve(id: string, dto: ModerationActionDto) {
@@ -753,6 +835,12 @@ export class ModerationService {
           reviewedAt: new Date(),
           reviewedBy: dto.reviewedBy,
           flagReason,
+          // GitHub issue #691 (Phase 49, D104) — the actual verdict
+          // ('approved'/'rejected'/'flagged'), not entityStatus (which
+          // can instead be 'permanently_rejected' — see this method's own
+          // comment above). Recorded so a later resubmission's prior-
+          // history view can show what really happened here.
+          decision,
           // GitHub issue #688 (Phase 49, D104) — persisted whenever the
           // caller provides them, regardless of decision (reject() is
           // the only caller that gives rejectionReasonCategory real
