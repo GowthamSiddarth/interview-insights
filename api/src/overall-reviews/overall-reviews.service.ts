@@ -63,6 +63,12 @@ export class OverallReviewsService {
     if (review.candidateId !== candidateId) {
       throw new ForbiddenException('You can only edit your own review.');
     }
+    // GitHub issue #690 (Phase 49, D104) — terminal: an admin's rejection
+    // of an already-escalated entry (#689) closes the resubmission loop
+    // for good, not just until the next edit.
+    if (review.status === 'permanently_rejected') {
+      throw new ForbiddenException('This review has been permanently rejected and can no longer be edited.');
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // moderationVerdict reset to null: a stale verdict against the

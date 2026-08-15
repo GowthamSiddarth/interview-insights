@@ -162,6 +162,21 @@ describe('OverallReviewsService', () => {
       );
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
+
+    // GitHub issue #690 (Phase 49, D104).
+    it('rejects an edit to a permanently_rejected review, even from the owning candidate', async () => {
+      prisma.overallReview.findFirstOrThrow.mockResolvedValue({
+        id: 'review-1',
+        processId: 'process-1',
+        candidateId: 'candidate-1',
+        status: 'permanently_rejected',
+      });
+
+      await expect(service.update('process-1', 'candidate-1', dto)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('remove', () => {
