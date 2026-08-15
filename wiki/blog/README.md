@@ -613,3 +613,16 @@ concurrent moderator actions on the same queue entry both commit.
 1. [Issue #674 — Fix the TOCTOU race in `ModerationService.review()`](phase-47-moderation-queue-correctness-hardening/issue-674-review-toctou-fix/README.md)
 2. [Issue #675 — Fix the same TOCTOU race in `claim()`/`release()`](phase-47-moderation-queue-correctness-hardening/issue-675-claim-release-toctou-fix/README.md)
 3. [Issue #676 — Real-Postgres regression coverage for concurrent moderation actions](phase-47-moderation-queue-correctness-hardening/issue-676-concurrent-regression-tests/README.md)
+
+## Phase 48 — Candidate Password Authentication
+
+See `docs/ROADMAP.md` Phase 48 and `docs/DECISIONS.md` D104. Candidates
+were the only actor left on magic-link-only auth; this brings them to
+parity with admin-auth's password + bcrypt pattern and makes it the
+primary `/login` flow, with the magic link demoted to a secondary option.
+
+1. [Issue #679 — Candidate schema migration for password auth](phase-48-candidate-password-authentication/issue-679-candidate-schema-migration/README.md)
+2. [Issue #680 — Password registration + verification email](phase-48-candidate-password-authentication/issue-680-register-verification-email/README.md)
+3. [Issue #681 — Password login + `CandidateLoginThrottleGuard`](phase-48-candidate-password-authentication/issue-681-login-throttle/README.md)
+4. [Issue #682 — Password reset](phase-48-candidate-password-authentication/issue-682-password-reset/README.md)
+5. [Issue #683 — Retire magic-link as primary login; update the frontend](phase-48-candidate-password-authentication/issue-683-retire-magic-link-frontend/README.md)
