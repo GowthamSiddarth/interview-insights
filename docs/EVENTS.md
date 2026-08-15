@@ -79,7 +79,7 @@ version in place.
 
 ## Defined events
 
-Seventeen event types — one `*.created`, one `*.status_changed`, and (GitHub
+Eighteen event types — one `*.created`, one `*.status_changed`, and (GitHub
 issue #340) one `*.verdict_computed` per moderated entity type
 (`round_rating`, `recruiter_rating`, `overall_review`), plus (GitHub
 issue #488) one `moderation.queue.sla_breach.v1`, not scoped to a single
@@ -115,7 +115,16 @@ for a reconciliation-sweep escalation with no verdict at all.
 `moderation.queue.sla_breach.v1` carries `queueEntryId`, the underlying
 `entityType`/`entityId` (for context, not for gating), `slaDeadline`,
 and `claimedById` (nullable — who to notify, resolved by the consumer,
-not baked in as an email address).
+not baked in as an email address). As of GitHub issue #704 (Phase 51,
+D104), `moderation.queue.sla_warning.v1` joins it as an earlier,
+75%-elapsed-still-unclaimed tier — same `queueEntryId`/`entityType`/
+`entityId`/`slaDeadline` shape, minus `claimedById` (this tier only ever
+fires for an unclaimed entry, by definition). Recipients for both are
+resolved by `notification-service` at consume time (never baked into
+the event, same as `claimedById`'s own reasoning) — `sla_warning.v1`
+broadcasts to every active moderator, and an *unclaimed* `sla_breach.v1`
+now escalates to every active admin instead of the pre-#704 silent
+no-op.
 
 As of GitHub issue #701 (Phase 51, D104), five more: one per
 `StaffAccountsService` mutating method (`create`, `updateRole`,
@@ -148,6 +157,7 @@ on the same `moderatorId`.
 | `moderation.company.created.v1` | `CompanyCreatedEventV1` | `api/src/events/schemas/company-created.event.ts` |
 | `moderation.company.status_changed.v1` | `CompanyStatusChangedEventV1` | `api/src/events/schemas/company-status-changed.event.ts` |
 | `moderation.queue.sla_breach.v1` | `ModerationQueueSlaBreachEventV1` | `api/src/events/schemas/moderation-queue-sla-breach.event.ts` |
+| `moderation.queue.sla_warning.v1` | `ModerationQueueSlaWarningEventV1` | `api/src/events/schemas/moderation-queue-sla-warning.event.ts` |
 | `staff.account.created.v1` | `StaffAccountCreatedEventV1` | `api/src/events/schemas/staff-account-created.event.ts` |
 | `staff.account.role_changed.v1` | `StaffAccountRoleChangedEventV1` | `api/src/events/schemas/staff-account-role-changed.event.ts` |
 | `staff.account.deactivated.v1` | `StaffAccountDeactivatedEventV1` | `api/src/events/schemas/staff-account-deactivated.event.ts` |
@@ -180,15 +190,18 @@ Published from:
   (a freshly-computed verdict, off a consumed `*.created` event) and its
   own `ReconciliationSweepService` (a re-triaged stale row, or a
   `stalled: true` escalation when even the retry can't produce one).
-- **`moderation.queue.sla_breach.v1`** — `api`'s own
-  `SlaBreachDetectionService` (`@Cron`, hourly), the first event in this
-  doc not published from a write path. Scans `moderation_queue` directly
-  for `reviewedAt: null` rows past `slaDeadline` that haven't already
-  been notified (`breachNotifiedAt: null`), publishes once per row, then
-  stamps `breachNotifiedAt` regardless of whether the publish actually
-  reached the broker — same best-effort contract as every other event
-  here (D16/D17/D53), just applied to a scheduled scan instead of a
-  request-triggered write.
+- **`moderation.queue.sla_breach.v1`** / **`moderation.queue.sla_warning.v1`**
+  — `api`'s own `SlaBreachDetectionService` (`@Cron`, hourly), the first
+  events in this doc not published from a write path. `sweepBreaches()`
+  scans `moderation_queue` directly for `reviewedAt: null` rows past
+  `slaDeadline` that haven't already been notified
+  (`breachNotifiedAt: null`); `sweepWarnings()` (GitHub issue #704, Phase
+  51, D104) does the same for unclaimed rows at least 75% through their
+  SLA window, not yet warned (`warningNotifiedAt: null`). Each publishes
+  once per row, then stamps its own `*NotifiedAt` column regardless of
+  whether the publish actually reached the broker — same best-effort
+  contract as every other event here (D16/D17/D53), just applied to a
+  scheduled scan instead of a request-triggered write.
 - **`staff.account.*.v1`** — GitHub issue #702 (Phase 51, D104):
   `StaffAccountsService`'s five mutating methods (`create`, `updateRole`,
   `deactivate`, `reactivate`, `resetPassword`), each after its own
