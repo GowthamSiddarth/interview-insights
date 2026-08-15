@@ -660,3 +660,18 @@ covers why.
 1. [Issue #696 — `candidateId` FK on `Company` + partial unique index on `slug`](phase-50-company-creation-request-lifecycle/issue-696-candidate-id-partial-slug-unique/README.md)
 2. [Issue #697 — PATCH edit endpoint for a candidate's own company request](phase-50-company-creation-request-lifecycle/issue-697-company-patch-edit-endpoint/README.md)
 3. [Issue #698 — `company.created.v1`/`company.status_changed.v1` events + `notification-service` consumption](phase-50-company-creation-request-lifecycle/issue-698-company-events-notification-consumption/README.md)
+
+## Phase 51 — Staff/Admin/Moderator Notification Platform
+
+See `docs/ROADMAP.md` Phase 51 and `docs/DECISIONS.md` D104. Filed from
+the same audit: `StaffAccountsService`'s five mutating methods produced
+no email, event, or in-app signal to the affected staff member, and an
+unclaimed SLA breach notified no one at all. Sequenced last in this
+batch so it could reuse Phase 49's event/idempotency conventions rather
+than build a third parallel notification scheme.
+
+1. [Issue #701 — `staff.account.*` event schemas](phase-51-staff-admin-moderator-notification-platform/issue-701-staff-account-event-schemas/README.md)
+2. [Issue #702 — Publish `staff.*` events from `StaffAccountsService`](phase-51-staff-admin-moderator-notification-platform/issue-702-publish-staff-events/README.md)
+3. [Issue #703 — `StaffNotificationRecipientsService`](phase-51-staff-admin-moderator-notification-platform/issue-703-staff-notification-recipients-service/README.md)
+4. [Issue #704 — Tiered SLA escalation](phase-51-staff-admin-moderator-notification-platform/issue-704-tiered-sla-escalation/README.md)
+5. [Issue #705 — `notification-service` consumer extension + templates for `staff.*` events](phase-51-staff-admin-moderator-notification-platform/issue-705-consumer-templates-staff-events/README.md)

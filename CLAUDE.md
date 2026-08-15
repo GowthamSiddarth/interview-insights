@@ -183,8 +183,12 @@ post per phase — this file no longer inlines that running history.
   rejection-reason surfacing (email, `/me`) that never shipped in this
   pass. Phase 50 (Company Creation Request Lifecycle) is fully done too,
   blog included (issues #696-#699, epic #695 closed). Phase 51
-  (Staff/Admin/Moderator Notification Platform, epic #700) is planned
-  but not yet implemented — next up.
+  (Staff/Admin/Moderator Notification Platform) is fully done too, blog
+  included (issues #701-#706, epic #700 closed) — this closes out the
+  Phases 47-51 notification/communication-chain audit (D104); Phase 40
+  (CI Infrastructure: Self-Hosted GitHub Actions Runner) is next up
+  again once Oracle A1.Flex capacity frees up, plus the still-open
+  follow-up #729 from Phase 49.
 
 ## Open decisions still to make
 
