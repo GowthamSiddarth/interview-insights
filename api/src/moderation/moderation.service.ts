@@ -772,7 +772,7 @@ export class ModerationService {
     // after-commit shape as every other side-effect in this method. Only
     // the three rating/review entity types are in scope (see
     // publishStatusChangedEvent's own switch); 'company' is a no-op.
-    await this.publishStatusChangedEvent(entry.entityType, entry.entityId, decision, dto.reviewedBy);
+    await this.publishStatusChangedEvent(entry.entityType, entry.entityId, decision, dto.reviewedBy, id);
 
     return updatedEntry;
   }
@@ -915,6 +915,7 @@ export class ModerationService {
     entityId: string,
     newStatus: ModerationStatus,
     reviewedBy: string | undefined,
+    moderationQueueEntryId: string,
   ): Promise<void> {
     try {
       const occurredAt = new Date().toISOString();
@@ -935,6 +936,7 @@ export class ModerationService {
             previousStatus: 'pending',
             newStatus,
             reviewedBy,
+            moderationQueueEntryId,
           };
           await this.domainEventPublisher.publish(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;
@@ -955,6 +957,7 @@ export class ModerationService {
             previousStatus: 'pending',
             newStatus,
             reviewedBy,
+            moderationQueueEntryId,
           };
           await this.domainEventPublisher.publish(RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;
@@ -975,6 +978,7 @@ export class ModerationService {
             previousStatus: 'pending',
             newStatus,
             reviewedBy,
+            moderationQueueEntryId,
           };
           await this.domainEventPublisher.publish(OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;

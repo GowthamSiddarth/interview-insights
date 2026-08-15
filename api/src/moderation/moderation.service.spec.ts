@@ -1058,6 +1058,11 @@ describe('ModerationService', () => {
           previousStatus: 'pending',
           newStatus: 'approved',
           reviewedBy: 'gowtham',
+          // GitHub issue #686 (Phase 49, D104) — carries the queue entry
+          // that this specific decision was made on, so a later edit's
+          // fresh queue entry (reenqueue()) doesn't get confused with
+          // this one downstream (#687's idempotency key fix).
+          moderationQueueEntryId: 'queue-1',
         }),
         'rating-1',
       );
