@@ -17,6 +17,21 @@ import { PrismaService } from '../src/prisma/prisma.service';
 // real staging/prod infra exists (Phase 8b) — so this script now targets
 // whatever DATABASE_URL points at with no confirmation flag required.
 // Revisit once a real non-dev environment exists to guard against.
+//
+// GitHub issue #664 (Phase 46) — that revisit: the Hetzner pilot (D101/
+// D103) is the first real, reachable non-dev environment this project has
+// had since D96. overlays/hetzner-pilot's ConfigMap (#646) is the only
+// overlay that sets DEPLOYMENT_ENV=hetzner-pilot; dev/staging/prod all
+// leave it unset, so this stays a no-op everywhere except the pilot.
+export function assertSeedingAllowed(): void {
+  if (process.env.DEPLOYMENT_ENV === 'hetzner-pilot') {
+    throw new Error(
+      'Refusing to run: DEPLOYMENT_ENV=hetzner-pilot. seed-demo-data and ' +
+        'seed-demo-data-undo write and delete data via real service calls and ' +
+        'must never run against the pilot\'s real database.',
+    );
+  }
+}
 
 export function parseIntArg(flag: string, fallback: number): number {
   const arg = process.argv.find((a) => a.startsWith(`${flag}=`));
