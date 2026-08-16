@@ -52,8 +52,8 @@ const SEEDER_LABEL = 'seed-demo-data';
 // for why). Re-exported here so existing imports of these from
 // './seed-demo-data' (e.g. scripts/seed-demo-data.spec.ts) keep working
 // unchanged.
-export { parseIntArg, parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
-import { parseIntArg, refreshMaterializedViews } from './seed-cli-utils';
+export { assertSeedingAllowed, parseIntArg, parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
+import { assertSeedingAllowed, parseIntArg, refreshMaterializedViews } from './seed-cli-utils';
 
 export interface Summary {
   companies: number;
@@ -415,6 +415,7 @@ export async function runSeed(services: SeedServices, companyCount: number): Pro
 }
 
 async function main(): Promise<void> {
+  assertSeedingAllowed();
   const companyCount = parseIntArg('--companies', 8);
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });

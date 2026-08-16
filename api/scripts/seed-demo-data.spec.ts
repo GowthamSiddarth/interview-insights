@@ -1,5 +1,6 @@
 import { ModerationFlagReason } from '@prisma/client';
 import {
+  assertSeedingAllowed,
   buildTypeMetadata,
   parseIntArg,
   parseStringArg,
@@ -17,6 +18,31 @@ describe('seed-demo-data', () => {
   afterEach(() => {
     process.argv = originalArgv;
     jest.restoreAllMocks();
+  });
+
+  // GitHub issue #664 (Phase 46) — refuses to run against the Hetzner pilot.
+  describe('assertSeedingAllowed', () => {
+    const originalEnv = process.env.DEPLOYMENT_ENV;
+
+    afterEach(() => {
+      if (originalEnv === undefined) delete process.env.DEPLOYMENT_ENV;
+      else process.env.DEPLOYMENT_ENV = originalEnv;
+    });
+
+    it('does not throw when DEPLOYMENT_ENV is unset', () => {
+      delete process.env.DEPLOYMENT_ENV;
+      expect(() => assertSeedingAllowed()).not.toThrow();
+    });
+
+    it('does not throw for any other DEPLOYMENT_ENV value', () => {
+      process.env.DEPLOYMENT_ENV = 'dev';
+      expect(() => assertSeedingAllowed()).not.toThrow();
+    });
+
+    it('throws when DEPLOYMENT_ENV is hetzner-pilot', () => {
+      process.env.DEPLOYMENT_ENV = 'hetzner-pilot';
+      expect(() => assertSeedingAllowed()).toThrow(/hetzner-pilot/);
+    });
   });
 
   describe('parseIntArg', () => {

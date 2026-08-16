@@ -25,7 +25,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { ModerationService } from '../src/moderation/moderation.service';
 import { CompanySearchService } from '../src/search/company-search.service';
 import { ReviewSearchService } from '../src/search/review-search.service';
-import { parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
+import { assertSeedingAllowed, parseStringArg, refreshMaterializedViews } from './seed-cli-utils';
 import { SeedManifest, deleteManifest, listManifests, readManifest } from './seed-manifest';
 
 type PrismaTransaction = Prisma.TransactionClient;
@@ -185,6 +185,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  assertSeedingAllowed();
   const runId = parseStringArg('--run-id');
   if (!runId) {
     throw new Error(
