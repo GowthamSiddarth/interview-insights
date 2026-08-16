@@ -2425,7 +2425,12 @@ first group.
 - [ ] Install `ingress-nginx` on the k3s cluster, disabling k3s's
       default Traefik (GitHub issue #661) — depends on #645 (k3s
       installed); blocks #646/#648, since `infra/k8s/base/07-ingress.yaml`
-      hardcodes `ingressClassName: nginx`
+      hardcodes `ingressClassName: nginx`. ingress-nginx was archived by
+      its maintainers 2026-03-24 (no further releases/security fixes) —
+      pinned to its final release (Helm chart `4.15.1`, `appVersion`
+      `1.15.1`) for the pilot anyway rather than diverging its ingress
+      tech from every other environment; see D108 for the full tradeoff
+      and the separate Gateway API evaluation follow-up it filed
 - [ ] TLS for the pilot via cert-manager + Let's Encrypt, and flipping
       `COOKIE_SECURE` to `"true"` in the pilot overlay once real HTTPS
       is live (GitHub issue #662) — depends on #658, #659, #661; blocks

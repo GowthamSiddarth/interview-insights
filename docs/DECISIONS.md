@@ -5427,6 +5427,60 @@ could be reverted.
 
 ---
 
+### D108 — ingress-nginx on the Hetzner pilot: pin the final release anyway, evaluate Gateway API separately (GitHub issue #661, Phase 46)
+
+**Context:** Working #661 (install ingress-nginx on the pilot's k3s),
+found that `kubernetes/ingress-nginx` was archived by its own
+maintainers on 2026-03-24 — five months before this Phase 46 planning
+pass, unnoticed until now. Their own retirement notice: "If you are not
+already using ingress-nginx, you should not be deploying it as it is
+not being developed. Instead you should identify a Gateway API
+implementation and use it." No further releases, bugfixes, or security
+patches will ever ship. This project already depends on ingress-nginx
+project-wide — `infra/k8s/base/07-ingress.yaml` hardcodes
+`ingressClassName: nginx`, every `dev`/CI/staging/prod `kind` cluster
+installs it via `bootstrap-kind.sh` (Helm, D19's "Helm for third-party
+infra" precedent, Phase 7 issue #28) — but none of those are reachable
+from the public internet. The Hetzner pilot is the first environment
+this project has ever run that actually is, which changes the real risk
+of "no future CVE fixes" from theoretical to live.
+
+**Decision:** Install it anyway for the pilot, via Helm, pinned to its
+final release — chart `4.15.1` (`appVersion` `1.15.1`) — matching
+`bootstrap-kind.sh`'s existing `controller.hostPort.enabled=true` /
+`controller.service.type=ClusterIP` shape (no kind `extraPortMappings`
+involved here since this is a real VM, not a kind node; hostPort binds
+the controller pod directly to the VM's 80/443 instead). Rejected two
+alternatives:
+
+- **k3s's built-in Traefik for the pilot only** — actively maintained,
+  already present (disabled in #645 per the original plan). Rejected:
+  diverges the pilot's ingress technology from every other environment,
+  and `infra/k8s/base/07-ingress.yaml`'s `ingressClassName: nginx` is
+  shared across all overlays — the pilot overlay would need its own
+  patched copy, a new class of environment-specific drift this project
+  hasn't had before, just to avoid installing something already deployed
+  everywhere else.
+- **Stop and scope a full Gateway API migration first** — the
+  architecturally correct long-term move, but spans `dev`/CI/staging/
+  prod too, not just the pilot; a real planned phase (issues + milestone
+  per CLAUDE.md's process), not a Phase 46 sub-task. Rejected for *now*
+  specifically to avoid blocking #646/#648/#662 on a migration that
+  hasn't been scoped yet — tracked as a real follow-up instead, not
+  dropped.
+
+**Follow-up filed:** GitHub issue #747 (under the Phase 20 ad-hoc-work
+catch-all epic, #214, per CLAUDE.md's "Ad-hoc work" convention — this
+isn't itself Phase 46 scope) — evaluate a project-wide Gateway API
+migration, covering `dev`/CI/staging/prod's `bootstrap-kind.sh` install
+too, not just the pilot.
+
+**Revisit when:** #747's evaluation lands and picks a Gateway API
+implementation, or ingress-nginx's frozen final release accumulates an
+unpatched CVE serious enough to force the pilot off it sooner.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
