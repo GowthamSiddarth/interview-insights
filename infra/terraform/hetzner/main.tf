@@ -3,9 +3,11 @@ resource "hcloud_ssh_key" "deploy" {
   public_key = file(pathexpand(var.ssh_public_key_path))
 }
 
-# Inbound: SSH only. Nothing else is exposed until a real workload
-# (e.g. an ingress) explicitly needs it — same "don't provision what
-# nothing needs yet" instinct as D9.
+# Inbound: SSH, plus HTTP/HTTPS once ingress-nginx (#661) and cert-manager
+# (#662) actually need them to make the pilot reachable — see D103/#659.
+# Nothing beyond these three ports is exposed. Resource address kept as
+# "ssh_only" (now a stale name) rather than renamed, so `terraform apply`
+# is an in-place rule addition, not a destroy/recreate of the firewall.
 resource "hcloud_firewall" "ssh_only" {
   name = "${var.server_name}-fw"
 
@@ -13,6 +15,20 @@ resource "hcloud_firewall" "ssh_only" {
     direction  = "in"
     protocol   = "tcp"
     port       = "22"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "80"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "443"
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 }
