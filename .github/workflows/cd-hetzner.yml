@@ -88,6 +88,16 @@ jobs:
       # logic inline here — 6443 stays closed in the firewall, this is
       # the only path in.
       - name: Open SSH tunnel to the pilot k3s API
+        # HETZNER_VM_IP (a repo *variable*, not a secret — it's a public
+        # IP already resolvable via DNS, nothing sensitive about it):
+        # this job's checkout is fresh every run, with no local Terraform
+        # state (deliberately gitignored, D101) for hetzner-pilot-tunnel.sh
+        # to read the VM's IP from the way an interactive run can. Keep
+        # this in sync if the VM is ever recreated and gets a new IP —
+        # same manual-sync caveat docs/SECRETS.md already notes for
+        # CLOUDFLARE_API_TOKEN's DNS records.
+        env:
+          HETZNER_VM_IP: ${{ vars.HETZNER_VM_IP }}
         run: |
           infra/scripts/hetzner-pilot-tunnel.sh start
           echo "KUBECONFIG=$HOME/.kube/hetzner-pilot-tunnel.yaml" >> "$GITHUB_ENV"

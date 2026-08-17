@@ -337,6 +337,21 @@ no workflow consumes it automatically yet) if the pilot VM is ever
 recreated and gets a new IP, which has already happened once during this
 phase's own work.
 
+### `HETZNER_VM_IP` — a GitHub Actions *variable*, not a secret
+
+GitHub issue #708 — found live, first real `cd-hetzner.yml` run:
+`infra/scripts/hetzner-pilot-tunnel.sh` (#668) discovers the VM's IP via
+`terraform output`, which works interactively (real local state exists)
+but not in a CD job — `actions/checkout@v4` gives it a fresh checkout
+with no `.terraform/` cache or state file (D101, both gitignored). The
+job passes `HETZNER_VM_IP` (`vars.HETZNER_VM_IP`, a plain GitHub Actions
+repo *variable*, not `secrets.*` — it's a public IP already resolvable
+via DNS, nothing sensitive about it) in as an env var, which
+`hetzner-pilot-tunnel.sh`'s `vm_ip()` checks before falling back to
+`terraform output`. **Keep this in sync whenever the VM is recreated and
+gets a new IP** — same manual-sync caveat as `CLOUDFLARE_API_TOKEN`'s
+DNS records above; nothing currently automates either.
+
 ## Adding a new secret
 
 1. **Does it need to exist before any of this project's own NestJS code
