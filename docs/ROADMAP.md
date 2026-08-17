@@ -2354,7 +2354,7 @@ cloud cost. Separate from D11's AWS production target, which this
 doesn't change or supersede. Milestone: "Phase 45 — App-Hosting Pilot
 on Hetzner". Epic: GitHub issue #642.
 
-- [ ] Install k3s on the Hetzner pilot VM (GitHub issue #645)
+- [x] Install k3s on the Hetzner pilot VM (GitHub issue #645)
 - [ ] `overlays/hetzner-pilot` kustomize overlay for `infra/k8s/base`
       (GitHub issue #646) — its Ingress hostnames depend on Phase 46's
       domain-decision and ingress-nginx-on-k3s issues below
@@ -2366,7 +2366,11 @@ on Hetzner". Epic: GitHub issue #642.
       issue once that distinction surfaced. Depends on #647, informs
       #646/#648 (GitHub issue #655, filed 2026-08-14, added to this
       phase after the original planning pass) — its `MAIL_FROM_ADDRESS`
-      depends on Phase 46's domain-decision issue below
+      depends on Phase 46's domain-decision issue below. Domain-
+      independent half done: SMTP auth support (`MAIL_SMTP_USER`/
+      `MAIL_SMTP_PASSWORD`) landed in both `api`/`notification-service`'s
+      mail transporters, Brevo picked as the relay — still open until
+      `MAIL_FROM_ADDRESS` and the overlay wiring (#646) land
 - [ ] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
       end (GitHub issue #648) — blocked on Phase 46's domain, firewall,
       image-registry, ingress-nginx, and TLS issues: there's no reachable
@@ -2410,19 +2414,21 @@ first group.
       at the Phase 44 VM's IP (GitHub issue #658) — blocks the Ingress
       hostnames in #646, TLS issuance below, and `MAIL_FROM_ADDRESS` in
       #655
-- [ ] Open ports 80/443 in the Hetzner Cloud Firewall via Terraform
+- [x] Open ports 80/443 in the Hetzner Cloud Firewall via Terraform
       (GitHub issue #659) — `infra/terraform/hetzner/main.tf`'s
       `hcloud_firewall.ssh_only` (Phase 44) currently allows only port
       22; blocks TLS issuance below and #648's reachability check
-- [ ] Container image delivery path to the pilot VM — registry
+- [x] Container image delivery path to the pilot VM — registry
       push/pull, since `cd.yml`'s `kind load image-archive` only works
       because CD and the target cluster are the same machine today
       (GitHub issue #660) — blocks #648. Also documents the new GHCR
       PAT this introduces in `docs/SECRETS.md`'s inventory table (used
       both by the runner for `docker push` and as the pilot's
       `imagePullSecret`) — no secret this project provisions should be
-      missing from that inventory, per CLAUDE.md's hard constraint #6
-- [ ] Install `ingress-nginx` on the k3s cluster, disabling k3s's
+      missing from that inventory, per CLAUDE.md's hard constraint #6.
+      Proven live: pushed a test image to GHCR, `ghcr-pull-secret`
+      created on the pilot, a real pod pulled it successfully
+- [x] Install `ingress-nginx` on the k3s cluster, disabling k3s's
       default Traefik (GitHub issue #661) — depends on #645 (k3s
       installed); blocks #646/#648, since `infra/k8s/base/07-ingress.yaml`
       hardcodes `ingressClassName: nginx`. ingress-nginx was archived by
@@ -2454,15 +2460,19 @@ first group.
 
 - [ ] Backup strategy for the pilot's Postgres data, with a proven
       restore path (GitHub issue #663) — no hard blocker, but should
-      land before #648 starts creating real-shaped data
-- [ ] Guardrail against running `seed-demo-data`/`seed-demo-data-undo`
+      land before #648 starts creating real-shaped data. Backup/restore
+      scripts merged and cron-armed on the VM; still open because the
+      restore path itself can't be proven live until #648 actually
+      deploys Postgres to the pilot — `663-verify-restore-path.sh` is
+      ready to run the moment that happens
+- [x] Guardrail against running `seed-demo-data`/`seed-demo-data-undo`
       against the pilot (GitHub issue #664) — should land before #648
       first runs with real intent
-- [ ] k3s upgrade/patch cadence for the pilot VM (GitHub issue #666) —
+- [x] k3s upgrade/patch cadence for the pilot VM (GitHub issue #666) —
       informs #649
-- [ ] Disk-usage monitoring for the pilot VM, mirroring the CI runner's
+- [x] Disk-usage monitoring for the pilot VM, mirroring the CI runner's
       D85/D86/D87 lesson (GitHub issue #667)
-- [ ] kubeconfig and access control for the pilot cluster — who can
+- [x] kubeconfig and access control for the pilot cluster — who can
       `kubectl` against it, from where (GitHub issue #668) — informs
       #649
 - [ ] Engineering blog (last) (GitHub issue #669)
