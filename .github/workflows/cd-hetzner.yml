@@ -1,0 +1,229 @@
+name: CD (Hetzner pilot)
+
+# GitHub issue #708 (Phase 46, D105) — a second CD workflow alongside
+# cd.yml (kind/local target), not a replacement. Deploys
+# infra/k8s/overlays/hetzner-pilot to the real, publicly-reachable
+# Hetzner VM instead of the local kind cluster.
+#
+# workflow_dispatch, not an automatic push trigger like cd.yml — a
+# deliberate choice: this is the only environment this project has ever
+# run that's actually on the public internet, with a single replica per
+# service and no staging buffer in front of it. Automate the trigger
+# later once the pilot's proven stable, if that's ever actually wanted;
+# starting manual matches this whole phase's own pattern (staging cert
+# before production, live verification before trusting each step).
+on:
+  workflow_dispatch:
+
+# A second run cancelling a real, in-progress deploy could leave the
+# pilot in a torn state (secrets provisioned, overlay half-applied) —
+# unlike cd.yml's disposable local kind cluster, let an in-flight deploy
+# to the real pilot finish before starting another.
+concurrency:
+  group: cd-hetzner
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Same runner as cd.yml (this project's one self-hosted macOS box) —
+    # it already has podman, the hetzner-vm SSH key (#645/#659/#660/#662
+    # were all run from here), and infra/scripts/hetzner-pilot-tunnel.sh
+    # (#668).
+    runs-on: [self-hosted, macOS, local-kind]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same disk-pressure lesson as cd.yml (D85/D86/D87) — same runner,
+      # same shared disk, same failure mode if skipped.
+      - name: Pre-flight disk usage gate
+        run: |
+          USAGE=$(df -P / | awk 'NR==2 { gsub("%", "", $5); print $5 }')
+          echo "host disk usage: ${USAGE}%"
+          if [ "$USAGE" -ge 85 ]; then
+            echo "::error::Disk at ${USAGE}% (>= 85%) - prune before deploying. See wiki/deployment-guide.md section 11.4, or run infra/scripts/disk-health-check.sh run."
+            exit 1
+          fi
+
+      - name: Determine image tag
+        id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        env:
+          GHCR_PAT: ${{ secrets.HETZNER_GHCR_PAT }}
+        run: printf '%s' "$GHCR_PAT" | podman login ghcr.io -u GowthamSiddarth --password-stdin
+
+      - name: Build & push api image
+        run: |
+          IMG="ghcr.io/gowthamsiddarth/interview-insights-api:${{ steps.tag.outputs.tag }}"
+          podman build -t "$IMG" -f api/Dockerfile --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} api
+          podman push -q "$IMG"
+
+      - name: Build & push web image
+        # NEXT_PUBLIC_API_URL is baked in at build time (web/Dockerfile) —
+        # this is a genuinely different build than dev's/staging's/prod's
+        # own, not a re-tag, same reasoning overlays/staging's own
+        # kustomization.yaml already documents for itself.
+        run: |
+          IMG="ghcr.io/gowthamsiddarth/interview-insights-web:${{ steps.tag.outputs.tag }}"
+          podman build -t "$IMG" -f web/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.interviewinsights.fyi web
+          podman push -q "$IMG"
+
+      - name: Build & push notification-service image
+        run: |
+          IMG="ghcr.io/gowthamsiddarth/interview-insights-notification-service:${{ steps.tag.outputs.tag }}"
+          podman build -t "$IMG" -f services/notification-service/Dockerfile \
+            --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} services/notification-service
+          podman push -q "$IMG"
+
+      - name: Build & push review-analyzer image
+        run: |
+          IMG="ghcr.io/gowthamsiddarth/interview-insights-review-analyzer:${{ steps.tag.outputs.tag }}"
+          podman build -t "$IMG" -f services/review-analyzer/Dockerfile \
+            --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} services/review-analyzer
+          podman push -q "$IMG"
+
+      # #668's tunnel script, reused rather than duplicating SSH-tunnel
+      # logic inline here — 6443 stays closed in the firewall, this is
+      # the only path in.
+      - name: Open SSH tunnel to the pilot k3s API
+        run: |
+          infra/scripts/hetzner-pilot-tunnel.sh start
+          echo "KUBECONFIG=$HOME/.kube/hetzner-pilot-tunnel.yaml" >> "$GITHUB_ENV"
+
+      - name: Wait for the tunnel to be usable
+        run: |
+          for i in $(seq 1 15); do
+            kubectl get nodes >/dev/null 2>&1 && break
+            sleep 2
+          done
+          kubectl get nodes
+
+      - name: Ensure namespace exists
+        run: kubectl apply -f infra/k8s/base/00-namespace.yaml
+
+      - name: Provision Postgres credentials secret
+        # Same #568 empty-value guard as cd.yml's own equivalent step.
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.HETZNER_POSTGRES_PASSWORD }}
+        run: |
+          if [ -z "$POSTGRES_PASSWORD" ]; then
+            echo "::error::HETZNER_POSTGRES_PASSWORD resolved empty - refusing to overwrite postgres-credentials. Re-run if it was just rotated mid-flight."
+            exit 1
+          fi
+          kubectl create secret generic postgres-credentials \
+            --namespace interview-insights \
+            --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Provision api-secrets
+        env:
+          DATABASE_URL: ${{ secrets.HETZNER_DATABASE_URL }}
+          EMAIL_HASH_SECRET: ${{ secrets.HETZNER_EMAIL_HASH_SECRET }}
+          EMAIL_ENCRYPTION_KEY: ${{ secrets.HETZNER_EMAIL_ENCRYPTION_KEY }}
+          CANDIDATE_JWT_SECRET: ${{ secrets.HETZNER_CANDIDATE_JWT_SECRET }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.HETZNER_ADMIN_PASSWORD_HASH }}
+          ADMIN_JWT_SECRET: ${{ secrets.HETZNER_ADMIN_JWT_SECRET }}
+          MAIL_SMTP_PASSWORD: ${{ secrets.HETZNER_MAIL_SMTP_PASSWORD }}
+        run: |
+          kubectl create secret generic api-secrets \
+            --namespace interview-insights \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=EMAIL_HASH_SECRET="$EMAIL_HASH_SECRET" \
+            --from-literal=EMAIL_ENCRYPTION_KEY="$EMAIL_ENCRYPTION_KEY" \
+            --from-literal=CANDIDATE_JWT_SECRET="$CANDIDATE_JWT_SECRET" \
+            --from-literal=ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
+            --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
+            --from-literal=MAIL_SMTP_PASSWORD="$MAIL_SMTP_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Provision notification-service-secrets
+        env:
+          DATABASE_URL: ${{ secrets.HETZNER_DATABASE_URL }}
+          EMAIL_ENCRYPTION_KEY: ${{ secrets.HETZNER_EMAIL_ENCRYPTION_KEY }}
+          MAIL_SMTP_PASSWORD: ${{ secrets.HETZNER_MAIL_SMTP_PASSWORD }}
+        run: |
+          kubectl create secret generic notification-service-secrets \
+            --namespace interview-insights \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=EMAIL_ENCRYPTION_KEY="$EMAIL_ENCRYPTION_KEY" \
+            --from-literal=MAIL_SMTP_PASSWORD="$MAIL_SMTP_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Provision review-analyzer-secrets
+        # ANTHROPIC_API_KEY is genuinely optional (docs/SECRETS.md's
+        # "absent, not empty" rule) — an unset repo secret just deploys
+        # with AI moderation triage disabled, same as cd.yml's own
+        # equivalent step.
+        env:
+          DATABASE_URL: ${{ secrets.HETZNER_DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.HETZNER_ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            kubectl create secret generic review-analyzer-secrets \
+              --namespace interview-insights \
+              --from-literal=DATABASE_URL="$DATABASE_URL" \
+              --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+              --dry-run=client -o yaml | kubectl apply -f -
+          else
+            kubectl create secret generic review-analyzer-secrets \
+              --namespace interview-insights \
+              --from-literal=DATABASE_URL="$DATABASE_URL" \
+              --dry-run=client -o yaml | kubectl apply -f -
+          fi
+
+      - name: Provision ghcr-pull-secret
+        env:
+          GHCR_PAT: ${{ secrets.HETZNER_GHCR_PAT }}
+        run: |
+          kubectl create secret docker-registry ghcr-pull-secret \
+            --namespace interview-insights \
+            --docker-server=ghcr.io \
+            --docker-username=GowthamSiddarth \
+            --docker-password="$GHCR_PAT" \
+            --docker-email=unused@example.com \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Set this run's image tags
+        # Mutates the checked-out copy only — never committed back. The
+        # placeholder in git is never what actually gets deployed.
+        run: |
+          sed -i '' "s/PILOT_IMAGE_TAG_PLACEHOLDER/${{ steps.tag.outputs.tag }}/g" \
+            infra/k8s/overlays/hetzner-pilot/kustomization.yaml
+
+      - name: Apply the hetzner-pilot overlay
+        run: kubectl apply -k infra/k8s/overlays/hetzner-pilot
+
+      - name: Roll out api
+        run: |
+          kubectl -n interview-insights rollout restart deployment/api
+          kubectl -n interview-insights rollout status deployment/api --timeout=120s
+
+      - name: Roll out web
+        run: |
+          kubectl -n interview-insights rollout restart deployment/web
+          kubectl -n interview-insights rollout status deployment/web --timeout=120s
+
+      - name: Roll out notification-service
+        run: |
+          kubectl -n interview-insights rollout restart deployment/notification-service
+          kubectl -n interview-insights rollout status deployment/notification-service --timeout=120s
+
+      - name: Roll out review-analyzer
+        run: |
+          kubectl -n interview-insights rollout restart deployment/review-analyzer
+          kubectl -n interview-insights rollout status deployment/review-analyzer --timeout=120s
+
+      # Same D85/D90 lesson as cd.yml's own equivalent step — this run
+      # left its own dangling GHCR-tagged layers behind, separate from
+      # cd.yml's :k8s-tagged ones.
+      - name: Prune stale Podman artifacts
+        if: always()
+        run: |
+          podman image prune -f
+          podman system prune -f --filter until=6h
+
+      - name: Close the SSH tunnel
+        if: always()
+        run: infra/scripts/hetzner-pilot-tunnel.sh stop

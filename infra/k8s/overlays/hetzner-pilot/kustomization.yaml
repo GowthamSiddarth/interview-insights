@@ -1,0 +1,124 @@
+# GitHub issue #646 (Phase 46) — the Hetzner pilot: a real, reachable
+# instance of the full stack, not a local `kind` cluster. Builds on
+# everything Phase 46's earlier issues already proved live: k3s (#645),
+# the firewall (#659), ingress-nginx pinned to its final release since
+# it's archived upstream (#661, D108), GHCR image delivery (#660), DNS
+# for interviewinsights.fyi (#658), and a real trusted Let's Encrypt
+# cert (#662).
+#
+# No `namespace:` override, unlike overlays/staging|prod — this is a
+# separate cluster entirely (not sharing one with dev/staging/prod's
+# local kind clusters), so there's no collision risk reusing base's own
+# `interview-insights` namespace name. #660/#662's own verification
+# already provisioned ghcr-pull-secret/interview-insights-tls into
+# exactly that namespace — reusing the name means this overlay picks
+# those up directly rather than needing them re-created under a
+# different name.
+#
+# No LocalStack: unlike overlays/dev, this kustomization does NOT add
+# ../../base/localstack as a resource — D102's Pattern B (every secret
+# provisioned directly, no Secrets Manager emulation) applies here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: hetzner-pilot
+    includeSelectors: false
+
+# GitHub issue #708 — cd-hetzner.yml sets the real tag (a git SHA) via
+# `sed` on a checked-out copy of this file before `kubectl apply -k`,
+# never committed back. The placeholder here is never deployed as-is.
+images:
+  - name: interview-insights-api
+    newName: ghcr.io/gowthamsiddarth/interview-insights-api
+    newTag: PILOT_IMAGE_TAG_PLACEHOLDER
+  - name: interview-insights-web
+    newName: ghcr.io/gowthamsiddarth/interview-insights-web
+    newTag: PILOT_IMAGE_TAG_PLACEHOLDER
+  - name: interview-insights-notification-service
+    newName: ghcr.io/gowthamsiddarth/interview-insights-notification-service
+    newTag: PILOT_IMAGE_TAG_PLACEHOLDER
+  - name: interview-insights-review-analyzer
+    newName: ghcr.io/gowthamsiddarth/interview-insights-review-analyzer
+    newTag: PILOT_IMAGE_TAG_PLACEHOLDER
+
+patches:
+  - path: api-config-patch.yaml
+  - path: notification-service-config-patch.yaml
+  - path: mailpit-delete.yaml
+
+  # Every Deployment pulling from GHCR needs the pull secret #660
+  # already provisioned (ghcr-pull-secret, in this same namespace).
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: ghcr-pull-secret
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          secretRef:
+            name: api-secrets
+  - target:
+      kind: Deployment
+      name: web
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: ghcr-pull-secret
+  - target:
+      kind: Deployment
+      name: notification-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: ghcr-pull-secret
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          secretRef:
+            name: notification-service-secrets
+  - target:
+      kind: Deployment
+      name: review-analyzer
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: ghcr-pull-secret
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          secretRef:
+            name: review-analyzer-secrets
+
+  # Real hostnames (#658) + the real cert #662 already issued into
+  # interview-insights-tls — rule 0 is web, rule 1 is api (matches
+  # infra/k8s/base/07-ingress.yaml's declared order, same convention
+  # overlays/staging|prod already use).
+  - target:
+      kind: Ingress
+      name: interview-insights
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.interviewinsights.fyi
+      - op: replace
+        path: /spec/rules/1/host
+        value: api.interviewinsights.fyi
+      - op: add
+        path: /spec/tls
+        value:
+          - hosts:
+              - app.interviewinsights.fyi
+              - api.interviewinsights.fyi
+            secretName: interview-insights-tls

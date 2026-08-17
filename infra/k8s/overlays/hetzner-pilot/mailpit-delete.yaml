@@ -1,0 +1,19 @@
+# GitHub issue #646 (Phase 46) — Mailpit is a local-only catcher (D29)
+# that would silently swallow every email on a pilot meant to be
+# actually reachable (#655); the pilot uses Brevo instead (see
+# api-config-patch.yaml/notification-service-config-patch.yaml). Removes
+# base's Mailpit Service+Deployment entirely rather than leaving an
+# unused pod running.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: interview-insights
+$patch: delete
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: interview-insights
+$patch: delete

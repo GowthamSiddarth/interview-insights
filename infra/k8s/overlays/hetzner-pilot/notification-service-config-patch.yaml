@@ -1,0 +1,14 @@
+# Strategic-merge patch (GitHub issue #646, Phase 46) — same real-relay
+# values as this overlay's api-config-patch.yaml; see that file's
+# comment for why MAIL_SMTP_USER is here (non-secret) rather than in
+# notification-service-secrets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: interview-insights
+data:
+  MAIL_SMTP_HOST: smtp-relay.brevo.com
+  MAIL_SMTP_PORT: "587"
+  MAIL_SMTP_USER: gothsiddu@gmail.com
+  MAIL_FROM_ADDRESS: noreply@interviewinsights.fyi
