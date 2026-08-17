@@ -1,0 +1,18 @@
+# GitHub issue #662 (Phase 46) — standalone Certificate for both pilot
+# hostnames, issued via the production issuer. See this directory's
+# README for why this is standalone rather than ingress-shim-annotation
+# driven, and why #646's eventual Ingress should reference
+# `interview-insights-tls` directly instead of re-triggering issuance.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: interview-insights-pilot
+  namespace: interview-insights
+spec:
+  secretName: interview-insights-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - app.interviewinsights.fyi
+    - api.interviewinsights.fyi
