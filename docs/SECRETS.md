@@ -321,6 +321,22 @@ pod readiness + 0 restarts is the same externally-observable proof
 used elsewhere. A pilot-specific verify script, if one turns out to be
 worth writing, belongs to #648 (deploy/verify), not this issue.
 
+### `CLOUDFLARE_API_TOKEN` — a provisioning credential, not an app secret
+
+GitHub issue #658 (Phase 46) — the pilot's domain (`interviewinsights.fyi`)
+is registered on Cloudflare, which is also its DNS provider. A GitHub
+Actions repo secret (`CLOUDFLARE_API_TOKEN`, scoped to just this zone via
+Cloudflare's "Edit zone DNS" token template) manages the `app.`/`api.`
+A records pointing at the pilot VM's IP. This isn't a Pattern A/B app
+secret like everything else in this doc — no pod ever reads it, it's a
+provisioning-time credential in the same category as `HCLOUD_TOKEN`
+(`infra/terraform/hetzner/README.md`) — kept as a GitHub Actions secret
+rather than purely an operator-local env var, unlike `HCLOUD_TOKEN`,
+specifically so DNS can be re-synced (via a script, run by the operator —
+no workflow consumes it automatically yet) if the pilot VM is ever
+recreated and gets a new IP, which has already happened once during this
+phase's own work.
+
 ## Adding a new secret
 
 1. **Does it need to exist before any of this project's own NestJS code
