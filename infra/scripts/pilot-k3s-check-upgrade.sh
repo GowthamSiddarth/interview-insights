@@ -21,16 +21,17 @@ STATUS_FILE=/var/log/k3s-upgrade-check-status
 LOG_TAG=k3s-upgrade-check
 
 CURRENT=$(k3s --version | head -1 | awk '{print $3}')
-# curl | sed rather than curl | grep -o | cut: with `pipefail` set, grep -o
-# finding no match exits 1 and kills the whole script via `set -e` *before*
-# reaching the "couldn't determine latest" guard below — happened for real
-# on the first live run, tracing back to the API response having a space
-# after the colon (`"latest": "..."`) that the no-space grep pattern
-# didn't tolerate. `RAW=... || true` plus a single whitespace-tolerant sed
-# means a curl failure or an unexpected response shape both fall through
-# to the guard instead of aborting before it.
-RAW=$(curl -sf https://update.k3s.io/v1-release/channels/stable || true)
-LATEST=$(printf '%s' "$RAW" | sed -n 's/.*"latest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+# update.k3s.io/v1-release/channels/<channel> is NOT a JSON API — verified
+# with a raw curl -D-, not assumed: it's a plain HTTP 302 redirect straight
+# to the GitHub release tag (e.g. https://github.com/k3s-io/k3s/releases/tag/v1.36.3+k3s1).
+# An earlier version of this script guessed a JSON body shape instead
+# (from a paraphrased fetch that followed the redirect and summarized the
+# resulting GitHub HTML page as if it were the API response) and failed
+# silently against the real thing on its first live run. `-o /dev/null -w
+# '%{redirect_url}'` reads the Location header directly without following
+# it; the version is just the last path segment.
+REDIRECT_URL=$(curl -sf -o /dev/null -w '%{redirect_url}' https://update.k3s.io/v1-release/channels/stable || true)
+LATEST="${REDIRECT_URL##*/}"
 
 if [ -z "$LATEST" ]; then
   logger -t "$LOG_TAG" "could not reach/parse update.k3s.io, skipping this check"
