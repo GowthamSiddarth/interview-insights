@@ -269,16 +269,26 @@ created.
 | Secret (k8s Secret name) | Pattern | Consumed by | Env var(s) | Sourced from (GitHub Actions repo secret, post-#708) |
 |---|---|---|---|---|
 | `postgres-credentials` | B (D77/D105) | Postgres's own container | `POSTGRES_PASSWORD` | `HETZNER_POSTGRES_PASSWORD` |
-| `api-secrets` | B (D105) | `api` | `DATABASE_URL`, `EMAIL_HASH_SECRET`, `EMAIL_ENCRYPTION_KEY`, `CANDIDATE_JWT_SECRET`, `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET` | `HETZNER_DATABASE_URL`, `HETZNER_EMAIL_HASH_SECRET`, `HETZNER_EMAIL_ENCRYPTION_KEY`, `HETZNER_CANDIDATE_JWT_SECRET`, `HETZNER_ADMIN_PASSWORD_HASH`, `HETZNER_ADMIN_JWT_SECRET` |
-| `notification-service-secrets` | B (D105) | `notification-service` | `DATABASE_URL`, `EMAIL_ENCRYPTION_KEY` | (same `HETZNER_DATABASE_URL`/`HETZNER_EMAIL_ENCRYPTION_KEY` as above) |
+| `api-secrets` | B (D105) | `api` | `DATABASE_URL`, `EMAIL_HASH_SECRET`, `EMAIL_ENCRYPTION_KEY`, `CANDIDATE_JWT_SECRET`, `ADMIN_PASSWORD_HASH`, `ADMIN_JWT_SECRET`, `MAIL_SMTP_PASSWORD` (new — #655) | `HETZNER_DATABASE_URL`, `HETZNER_EMAIL_HASH_SECRET`, `HETZNER_EMAIL_ENCRYPTION_KEY`, `HETZNER_CANDIDATE_JWT_SECRET`, `HETZNER_ADMIN_PASSWORD_HASH`, `HETZNER_ADMIN_JWT_SECRET`, `HETZNER_MAIL_SMTP_PASSWORD` |
+| `notification-service-secrets` | B (D105) | `notification-service` | `DATABASE_URL`, `EMAIL_ENCRYPTION_KEY`, `MAIL_SMTP_PASSWORD` (new — #655) | (same `HETZNER_DATABASE_URL`/`HETZNER_EMAIL_ENCRYPTION_KEY`/`HETZNER_MAIL_SMTP_PASSWORD` as above) |
 | `review-analyzer-secrets` | B (D105) | `review-analyzer` | `DATABASE_URL`, `ANTHROPIC_API_KEY` (optional — omit `--from-literal` for it entirely when not configured, same "absent, not empty" rule as the gotcha below) | `HETZNER_DATABASE_URL`, `HETZNER_ANTHROPIC_API_KEY` (optional) |
 | `ghcr-pull-secret` | B (D105, new — #660) | k3s node, via each Deployment's `imagePullSecrets` | n/a — a `kubernetes.io/dockerconfigjson`, not a literal env var | `HETZNER_GHCR_PAT` (also used directly by the self-hosted runner for `docker login ghcr.io` on the push side) |
 
 Same 7 logical values as the Pattern-A table above (`anthropic-api-key`
-included), plus the new GHCR pull secret #660 introduces — distributed
-across five k8s Secrets instead of via Secrets Manager, grouped by
-consuming service instead of one entry per value, since there's no
-per-secret IAM role to scope here.
+included), plus the new GHCR pull secret #660 introduces and the new
+`MAIL_SMTP_PASSWORD` #655 introduces — distributed across five k8s
+Secrets instead of via Secrets Manager, grouped by consuming service
+instead of one entry per value, since there's no per-secret IAM role to
+scope here.
+
+**`MAIL_SMTP_USER` is deliberately not in this table** — it's the
+Brevo account login (an email address), not a credential, same
+non-secret status this repo already gives `POSTGRES_USER`/
+`POSTGRES_DB` (`infra/k8s/base/01-postgres-config.yaml`'s own comment).
+It belongs in `overlays/hetzner-pilot`'s ConfigMap patch (#646's job),
+not a Secret. `MAIL_SMTP_PASSWORD` (the actual Brevo SMTP key) is the
+one real credential and follows the same Pattern B path as everything
+else here.
 
 **`DATABASE_URL` must be built by hand from the same
 `POSTGRES_PASSWORD`** used for `postgres-credentials`, percent-encoded
