@@ -1,0 +1,23 @@
+# Strategic-merge patch (GitHub issue #646, Phase 46) — real values for
+# the pilot's actual domain (interviewinsights.fyi, #658) and its real
+# SMTP relay (Brevo, #655), replacing base's .local/Mailpit defaults.
+# COOKIE_SECURE flips to "true" now that #662 proved real HTTPS works.
+#
+# MAIL_SMTP_USER is Brevo's login (an email address) — not a credential,
+# same non-secret status as 01-postgres-config.yaml's POSTGRES_USER (see
+# docs/SECRETS.md's own note). MAIL_SMTP_PASSWORD (the real credential)
+# comes from the api-secrets Secret instead — see deployment-patches.yaml
+# in this overlay.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: interview-insights
+data:
+  CORS_ORIGIN: https://app.interviewinsights.fyi
+  COOKIE_SECURE: "true"
+  COOKIE_DOMAIN: .interviewinsights.fyi
+  MAIL_SMTP_HOST: smtp-relay.brevo.com
+  MAIL_SMTP_PORT: "587"
+  MAIL_SMTP_USER: gothsiddu@gmail.com
+  MAIL_FROM_ADDRESS: noreply@interviewinsights.fyi
