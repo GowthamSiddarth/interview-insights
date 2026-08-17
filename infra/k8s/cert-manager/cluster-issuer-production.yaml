@@ -1,0 +1,18 @@
+# GitHub issue #662 (Phase 46) — the real Let's Encrypt issuer. Only
+# used after `cluster-issuer-staging.yaml` proved the HTTP-01 challenge
+# flow works, to avoid burning production's real rate limits
+# (50 certs/registered domain/week) on a first-time setup.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: gothsiddu@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-production-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
