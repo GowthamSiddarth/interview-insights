@@ -188,7 +188,17 @@ post per phase — this file no longer inlines that running history.
   Phases 47-51 notification/communication-chain audit (D104); Phase 40
   (CI Infrastructure: Self-Hosted GitHub Actions Runner) is next up
   again once Oracle A1.Flex capacity frees up, plus the still-open
-  follow-up #729 from Phase 49.
+  follow-up #729 from Phase 49. Phase 45/46 (Hetzner pilot app-hosting +
+  reachability) picked up 2026-08-16: k3s (#645), the firewall (#659),
+  ingress-nginx pinned to its final release since it's now archived
+  upstream (#661, D108), GHCR image delivery (#660), Postgres backups
+  (#663, code merged — live restore-proof still pending #648), the
+  seed-data guardrail (#664), disk monitoring (#667), k3s upgrade
+  cadence (#666), kubeconfig/SSH-tunnel access (#668), and SMTP auth
+  support for Brevo (#655's domain-independent half) are all done. Next
+  up once the domain (#658) is bought: DNS (#6) → TLS (#662) →
+  `cd-hetzner.yml` (#708) → the pilot overlay (#646) → the actual deploy
+  (#648).
 
 ## Open decisions still to make
 
