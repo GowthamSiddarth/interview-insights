@@ -41,6 +41,16 @@ SSH_PATH="$(command -v ssh)"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 vm_ip() {
+  # HETZNER_VM_IP override exists for cd-hetzner.yml (GitHub issue #708):
+  # a CI job's checkout is fresh every run — no .terraform/ cache, no
+  # state file (both deliberately gitignored, D101's local-state-only
+  # design) — so `terraform output` has nothing to read there. Interactive
+  # use (this project's actual operator, with real local state) is
+  # unaffected; this env var is normally unset outside CI.
+  if [ -n "${HETZNER_VM_IP:-}" ]; then
+    echo "$HETZNER_VM_IP"
+    return
+  fi
   (cd "$REPO_ROOT/infra/terraform/hetzner" && terraform output -raw server_ipv4)
 }
 
