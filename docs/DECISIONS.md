@@ -5481,6 +5481,69 @@ unpatched CVE serious enough to force the pilot off it sooner.
 
 ---
 
+### D109 — Hetzner pilot VM moves from x86_64 (CX33) to ARM64 (CAX21), eliminating cross-arch QEMU emulation (GitHub issue #708, Phase 46)
+
+**Context:** the first real `cd-hetzner.yml` run (after fixing #757's
+`HETZNER_VM_IP` gap and #758's missing `--platform` flag) got every
+image building and pushing, but every app pod crash-looped on the VM
+with `exec format error` — the self-hosted CD runner (this project's own
+Mac, Apple Silicon/arm64) had silently built arm64 images for an x86_64
+target. Adding `--platform linux/amd64` (cross-arch QEMU emulation,
+confirmed working via a plain `alpine uname -m` smoke test) fixed
+`api`/`notification-service`/`review-analyzer` — but `web`'s Next.js
+production build reliably segfaulted partway through (`qemu: uncaught
+target signal 11`), specifically in SWC (Next.js's native Rust
+compiler). Not fixable from the application side — tried, in order:
+
+- `--cpus=1` (CPU time quota): delayed the crash to a later build phase
+  ("Collecting page data" instead of "Creating an optimized production
+  build"), didn't prevent it.
+- `--cpuset-cpus=0` (core pinning): no effect — Node's `os.cpus()` still
+  reported all 5 host cores regardless, since it reads `/proc/cpuinfo`
+  directly rather than respecting cgroup/cpuset restrictions on this
+  system.
+- `experimental.cpus: 1` in `next.config.mjs` (Next.js's own worker-pool
+  size control, independent of OS-reported core count): no improvement,
+  crashed even sooner.
+- A `.babelrc` forcing Babel instead of SWC (sidesteps the native Rust
+  binary entirely): blocked outright — `next/font` (used in
+  `layout.tsx`) hard-requires SWC, Next.js refuses to build.
+
+Every workaround verified live against a locally reproduced crash
+(`podman build --platform linux/amd64` against `web/Dockerfile`) before
+being ruled out — not guessed and shipped blind.
+
+**Decision:** migrate the pilot VM to CAX21 (Ampere ARM64, same 4 vCPU/
+8 GB/80 GB spec as CX33, ~€12.49/mo vs. CX33's ~$9.99/mo — confirmed
+available in `nbg1` via the live Hetzner API, not assumed) — matching
+the CD runner's own native architecture eliminates cross-arch emulation
+for image builds entirely, not just for this one bug. `cd-hetzner.yml`'s
+four `podman build` steps target `--platform linux/arm64` explicitly
+(not relying on podman's host-arch default, even though it happens to
+match now).
+
+**Rejected alternatives:**
+- **Keep chasing a QEMU-level fix** (patching podman machine's bundled
+  QEMU version, more build-flag permutations) — podman machine's VM
+  runs immutable Fedora CoreOS, making a targeted QEMU upgrade its own
+  multi-step investigation with no confirmed payoff; every application-
+  level lever already tried failed or dead-ended.
+- **Add a GitHub-hosted runner just for `web`'s build** (native amd64,
+  no emulation) — reintroduces the exact GitHub Actions billing
+  exposure Phase 40's whole self-hosted-runner effort exists to avoid,
+  for one job step.
+
+**Cost accepted:** ~$2.50/mo more than CX33 — negligible against the
+reliability gained (this bug would recur on every single future deploy
+otherwise) and still solidly within D101's "genuinely cheap" pilot
+framing.
+
+**Revisit when:** Hetzner ever prices CAX out of `nbg1`/`fsn1`/`hel1`, or
+the self-hosted runner itself is ever replaced with an x86_64 machine
+(at which point CX + native amd64 builds would be the better fit again).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
