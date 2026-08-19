@@ -90,6 +90,17 @@ write_plist() {
 refresh_kubeconfig() {
   local ip="$1"
   mkdir -p "$HOME/.kube"
+  # StrictHostKeyChecking=accept-new only auto-trusts a host with NO
+  # existing known_hosts entry — it still refuses a *different* cached
+  # key for the same IP, the same MITM-protection behavior as strict
+  # mode. If the VM is ever destroyed and recreated (as it genuinely has
+  # been, more than once, during Phase 46 — D109/D110), it gets a new
+  # SSH host key at the same IP, and every ssh call here failed outright
+  # with "Host key verification failed" until this was purged first —
+  # found live via a real cd-hetzner.yml run, not assumed. Safe to trust
+  # the new key unconditionally: this project provisioned the VM itself
+  # via Terraform moments (or, worst case, one deploy cycle) earlier.
+  ssh-keygen -R "$ip" >/dev/null 2>&1 || true
   ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes \
     -i "$SSH_KEY" "${ADMIN_USER}@${ip}" 'sudo cat /etc/rancher/k3s/k3s.yaml' \
     | sed "s/${ip//./\\.}/127.0.0.1/" > "$KCFG"
