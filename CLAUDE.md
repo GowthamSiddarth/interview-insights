@@ -189,16 +189,27 @@ post per phase — this file no longer inlines that running history.
   (CI Infrastructure: Self-Hosted GitHub Actions Runner) is next up
   again once Oracle A1.Flex capacity frees up, plus the still-open
   follow-up #729 from Phase 49. Phase 45/46 (Hetzner pilot app-hosting +
-  reachability) picked up 2026-08-16: k3s (#645), the firewall (#659),
-  ingress-nginx pinned to its final release since it's now archived
-  upstream (#661, D108), GHCR image delivery (#660), Postgres backups
-  (#663, code merged — live restore-proof still pending #648), the
-  seed-data guardrail (#664), disk monitoring (#667), k3s upgrade
-  cadence (#666), kubeconfig/SSH-tunnel access (#668), and SMTP auth
-  support for Brevo (#655's domain-independent half) are all done. Next
-  up once the domain (#658) is bought: DNS (#6) → TLS (#662) →
-  `cd-hetzner.yml` (#708) → the pilot overlay (#646) → the actual deploy
-  (#648).
+  reachability) picked up 2026-08-16 and is now fully live: k3s (#645),
+  the firewall (#659), ingress-nginx pinned to its final release since
+  it's now archived upstream (#661, D108), GHCR image delivery (#660),
+  the domain (interviewinsights.fyi) + DNS (#658), real trusted TLS via
+  cert-manager (#662), `cd-hetzner.yml` (#708) — including a mid-flight
+  ARM64 migration attempt that was tried and reverted the same day once
+  CAX21 turned out unavailable in `nbg1` (D109/D110) — the pilot
+  overlay (#646), real SMTP via Brevo (#655), Postgres backups (#663),
+  the seed-data guardrail (#664), disk monitoring (#667), k3s upgrade
+  cadence (#666), and kubeconfig/SSH-tunnel access (#668) are all done.
+  The actual deploy (#648) is live and independently verified —
+  `https://app.interviewinsights.fyi` and
+  `https://api.interviewinsights.fyi/health` both return real `200`s
+  from outside the cluster, real trusted TLS. One more real bug found
+  and fixed along the way: `web`'s Next.js/SWC image build reliably
+  segfaulted under the self-hosted runner's cross-arch QEMU emulation —
+  fixed (D111, #761) by building `web` on a native GitHub-hosted runner
+  instead. Only Phase 45/46 items left: the runbook (#649) and both
+  phases' engineering blogs (#650/#669, written last, once everything
+  else is merged) — plus #663's live restore-path proof, runnable now
+  that Postgres actually exists on the pilot.
 
 ## Open decisions still to make
 
