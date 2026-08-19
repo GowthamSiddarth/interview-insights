@@ -2355,33 +2355,28 @@ doesn't change or supersede. Milestone: "Phase 45 — App-Hosting Pilot
 on Hetzner". Epic: GitHub issue #642.
 
 - [x] Install k3s on the Hetzner pilot VM (GitHub issue #645)
-- [ ] `overlays/hetzner-pilot` kustomize overlay for `infra/k8s/base`
-      (GitHub issue #646) — its Ingress hostnames depend on Phase 46's
-      domain-decision and ingress-nginx-on-k3s issues below
+- [x] `overlays/hetzner-pilot` kustomize overlay for `infra/k8s/base`
+      (GitHub issue #646) — real hostnames, real TLS, GHCR images, no
+      Mailpit, no LocalStack
 - [x] Secrets for the pilot environment — no LocalStack, real values,
       never committed (GitHub issue #647)
-- [ ] Real SMTP relay, replacing Mailpit — Mailpit is a local-only
+- [x] Real SMTP relay, replacing Mailpit — Mailpit is a local-only
       catcher (D29) that would silently swallow every email on a pilot
       meant to be actually reachable; scoped out of #647 into its own
-      issue once that distinction surfaced. Depends on #647, informs
-      #646/#648 (GitHub issue #655, filed 2026-08-14, added to this
-      phase after the original planning pass) — its `MAIL_FROM_ADDRESS`
-      depends on Phase 46's domain-decision issue below. Domain-
-      independent half done: SMTP auth support (`MAIL_SMTP_USER`/
-      `MAIL_SMTP_PASSWORD`) landed in both `api`/`notification-service`'s
-      mail transporters, Brevo picked as the relay — still open until
-      `MAIL_FROM_ADDRESS` and the overlay wiring (#646) land
-- [ ] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
-      end (GitHub issue #648) — blocked on Phase 46's domain, firewall,
-      image-registry, ingress-nginx, and TLS issues: there's no reachable
-      HTTPS endpoint to smoke-test against without them. Domain/firewall/
-      registry/ingress-nginx/TLS all landed (#658/#659/#660/#661/#662);
-      the actual `cd-hetzner.yml` run surfaced two more real blockers
-      before this can close: `HETZNER_VM_IP` missing from the CI
-      checkout (fixed) and the `web` image failing to build under this
-      runner's cross-arch QEMU emulation — see D109/D110, tracked
-      separately as GitHub issue #761 and fixed by D111 (a GitHub-hosted
-      job builds `web` natively instead)
+      issue once that distinction surfaced (GitHub issue #655) — SMTP
+      auth support (`MAIL_SMTP_USER`/`MAIL_SMTP_PASSWORD`) landed in both
+      `api`/`notification-service`'s mail transporters, Brevo picked as
+      the relay, `MAIL_FROM_ADDRESS` and the overlay wiring (#646) live
+- [x] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
+      end (GitHub issue #648) — live and independently verified:
+      `https://app.interviewinsights.fyi` and
+      `https://api.interviewinsights.fyi/health` both return real `200`s
+      from outside the cluster entirely, real trusted TLS. Two real bugs
+      surfaced and fixed along the way: `HETZNER_VM_IP` missing from the
+      CI checkout, and the `web` image failing to build under this
+      runner's cross-arch QEMU emulation — see D109/D110/D111 (GitHub
+      issue #761, its own fix: `web` now builds on a native GitHub-hosted
+      runner instead of emulating)
 - [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
       issue #649)
 - [ ] Engineering blog (last) (GitHub issue #650)
@@ -2452,16 +2447,18 @@ first group.
       the runbook, or a future CD job (GitHub issue #665) — depends on
       #660 if a CD job is chosen; informs #649 and #708. Resolved
       2026-08-14: CD job, via #708
-- [ ] Build `cd-hetzner.yml` — push images to GHCR, deploy
+- [x] Build `cd-hetzner.yml` — push images to GHCR, deploy
       `overlays/hetzner-pilot` to the Hetzner k3s cluster, **and
       provision every Hetzner-pilot secret itself** from GitHub Actions
       repo secrets (GitHub issue #708) — a second CD workflow alongside
-      the existing `cd.yml` (kind/local target), not a replacement;
-      depends on #660 (GHCR chosen as the image delivery path),
-      #661/#662 (ingress-nginx/TLS live, so there's a real endpoint to
-      smoke-test against), and #665 resolving to "CD job"; blocks #648.
+      the existing `cd.yml` (kind/local target), not a replacement.
       See D105 — supersedes D102's manual/out-of-band secret sourcing
-      for this environment now that a CD workflow actually reaches it
+      for this environment now that a CD workflow actually reaches it.
+      `web`'s image build moved to a GitHub-hosted `ubuntu-latest` job
+      (D111, GitHub issue #761) — genuinely native x86_64, sidesteps the
+      QEMU/SWC segfault the self-hosted runner's emulation hit; the other
+      three images still build on the self-hosted runner under emulation,
+      which works fine for them
 
 ### Track B — operational hardening (non-blocking)
 
