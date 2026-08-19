@@ -602,6 +602,23 @@ issues are done — this phase's blog is complete.
 2. [Issue #643 — Run terraform apply; verify SSH hardening on the Hetzner VM](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-643-terraform-apply-ssh-hardening-verification/README.md)
 3. [Issue #651 — Decision record (D101): Hetzner Cloud as a parallel low-cost provisioning path](phase-44-hetzner-cloud-account-setup-hardened-vm-provisioning/issue-651-decision-record-d101-hetzner-parallel-path/README.md)
 
+## Phase 45 — App-Hosting Pilot on Hetzner
+
+See `docs/ROADMAP.md` Phase 45. Deploys this repo's existing
+`infra/k8s/base` manifests as a real, reachable instance of the full
+stack on Phase 44's Hetzner VM — live at `interviewinsights.fyi`.
+Several of this phase's own issues couldn't fully close until Phase 46
+resolved its own blocking issues (domain, TLS, image delivery) despite
+the lower phase number; see Phase 44's own intro for the precedent.
+All six issues are done — this phase's blog is complete.
+
+1. [Issue #645 — Install k3s on the Hetzner pilot VM](phase-45-app-hosting-pilot-hetzner/issue-645-install-k3s/README.md)
+2. [Issue #646 — `overlays/hetzner-pilot` kustomize overlay](phase-45-app-hosting-pilot-hetzner/issue-646-hetzner-pilot-overlay/README.md)
+3. [Issue #647 — Secrets for the pilot environment (D102, Pattern B)](phase-45-app-hosting-pilot-hetzner/issue-647-pilot-secrets-pattern-b/README.md)
+4. [Issue #655 — Real SMTP relay, replacing Mailpit (Brevo)](phase-45-app-hosting-pilot-hetzner/issue-655-real-smtp-relay-brevo/README.md)
+5. [Issue #648 — Deploy `overlays/hetzner-pilot`; verify full-stack health end to end](phase-45-app-hosting-pilot-hetzner/issue-648-deploy-verify-full-stack-health/README.md)
+6. [Issue #649 — Runbook: Hetzner pilot deploy, recovery, and teardown](phase-45-app-hosting-pilot-hetzner/issue-649-deploy-recovery-teardown-runbook/README.md)
+
 ## Phase 47 — Moderation Queue Correctness Hardening
 
 See `docs/ROADMAP.md` Phase 47 and `docs/DECISIONS.md` D104. Filed from

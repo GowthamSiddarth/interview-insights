@@ -2379,14 +2379,16 @@ on Hetzner". Epic: GitHub issue #642.
       runner instead of emulating)
 - [x] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
       issue #649) — `wiki/deployment-guide.md` section 12
-- [ ] Engineering blog (last) (GitHub issue #650)
+- [x] Engineering blog (last) (GitHub issue #650) — one post per issue
+      under `wiki/blog/phase-45-app-hosting-pilot-hetzner/`
 
 **Note:** despite the lower phase number, several of this phase's
-issues (#646/#655/#648 above) cannot fully close until Phase 46 below
-resolves its blocking issues — Phase 46 was filed after gaps surfaced
-during #647's own work, same "discovered after the original planning
-pass" situation as #655. Same precedent as Phase 44/45's own
-out-of-strict-order relationship (see Phase 44's intro).
+issues (#646/#655/#648) couldn't fully close until Phase 46 below
+resolved its own blocking issues — Phase 46 was filed after gaps
+surfaced during #647's own work, same "discovered after the original
+planning pass" situation as #655. Same precedent as Phase 44/45's own
+out-of-strict-order relationship (see Phase 44's intro). All resolved
+as of 2026-08-19 — Phase 45 is fully done, blog included.
 
 ## Phase 46 — Hetzner Pilot: Reachability & Operational Hardening
 
