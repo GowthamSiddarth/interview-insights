@@ -619,6 +619,32 @@ All six issues are done — this phase's blog is complete.
 5. [Issue #648 — Deploy `overlays/hetzner-pilot`; verify full-stack health end to end](phase-45-app-hosting-pilot-hetzner/issue-648-deploy-verify-full-stack-health/README.md)
 6. [Issue #649 — Runbook: Hetzner pilot deploy, recovery, and teardown](phase-45-app-hosting-pilot-hetzner/issue-649-deploy-recovery-teardown-runbook/README.md)
 
+## Phase 46 — Hetzner Pilot: Reachability & Operational Hardening
+
+See `docs/ROADMAP.md` Phase 46 and `docs/DECISIONS.md` D103/D108/D109/
+D110/D111. Surfaced while working #647 (Phase 45): getting `api`/`web`
+actually reachable over the real internet needs a domain, an open
+firewall, TLS, a way for images to reach a VM that isn't the CI
+runner's own machine, and operational safeguards `dev`/`staging`/`prod`
+never needed. Despite the lower phase number, several of Phase 45's own
+issues couldn't fully close until this phase's own issues resolved
+theirs — see Phase 44's intro for the precedent. All thirteen issues
+are done — this phase's blog is complete.
+
+1. [Issue #658 — Decide the pilot's public domain and create DNS records](phase-46-hetzner-pilot-reachability-operational-hardening/issue-658-domain-dns/README.md)
+2. [Issue #659 — Open ports 80/443 in the Hetzner Cloud Firewall](phase-46-hetzner-pilot-reachability-operational-hardening/issue-659-firewall-ports/README.md)
+3. [Issue #660 — Container image delivery path to the pilot VM (GHCR)](phase-46-hetzner-pilot-reachability-operational-hardening/issue-660-image-delivery-ghcr/README.md)
+4. [Issue #661 — Install `ingress-nginx` on the k3s cluster (D108)](phase-46-hetzner-pilot-reachability-operational-hardening/issue-661-ingress-nginx/README.md)
+5. [Issue #662 — TLS via cert-manager + Let's Encrypt](phase-46-hetzner-pilot-reachability-operational-hardening/issue-662-tls-cert-manager/README.md)
+6. [Issue #665 — Decide the deploy pipeline to the pilot](phase-46-hetzner-pilot-reachability-operational-hardening/issue-665-deploy-pipeline-decision/README.md)
+7. [Issue #708 — Build `cd-hetzner.yml` (D105)](phase-46-hetzner-pilot-reachability-operational-hardening/issue-708-cd-hetzner-workflow/README.md)
+8. [Issue #761 — `web` image build segfaults under QEMU cross-arch emulation (D109/D110/D111)](phase-46-hetzner-pilot-reachability-operational-hardening/issue-761-web-github-hosted-builder/README.md)
+9. [Issue #663 — Postgres backup strategy, with a proven restore path](phase-46-hetzner-pilot-reachability-operational-hardening/issue-663-postgres-backup-restore/README.md)
+10. [Issue #664 — Guardrail against `seed-demo-data`/`seed-demo-data-undo` on the pilot](phase-46-hetzner-pilot-reachability-operational-hardening/issue-664-seed-guardrail/README.md)
+11. [Issue #666 — k3s upgrade/patch cadence for the pilot VM](phase-46-hetzner-pilot-reachability-operational-hardening/issue-666-k3s-upgrade-cadence/README.md)
+12. [Issue #667 — Disk-usage monitoring for the pilot VM](phase-46-hetzner-pilot-reachability-operational-hardening/issue-667-disk-monitoring/README.md)
+13. [Issue #668 — Kubeconfig and access control for the pilot cluster](phase-46-hetzner-pilot-reachability-operational-hardening/issue-668-kubeconfig-access/README.md)
+
 ## Phase 47 — Moderation Queue Correctness Hardening
 
 See `docs/ROADMAP.md` Phase 47 and `docs/DECISIONS.md` D104. Filed from
