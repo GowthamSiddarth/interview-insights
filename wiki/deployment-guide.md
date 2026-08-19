@@ -1606,3 +1606,330 @@ kubectl -n interview-insights delete pod -l app=review-analyzer
 
 Verify the real fix, not a lucky single request — repeat step 1 above
 5-10x and confirm every attempt is fast, not just the first.
+
+## 12. Hetzner pilot: deploy, recovery, and teardown (GitHub issue #649, Phase 45/46)
+
+A materially different target from every section above: a real Hetzner
+Cloud VM (`infra/terraform/hetzner/`), not local `kind`; secrets
+provisioned from GitHub Actions repo secrets (D105), not LocalStack;
+access via an SSH tunnel (`infra/scripts/hetzner-pilot-tunnel.sh`,
+#668), not a bare local `kubectl`; a second CD workflow
+(`.github/workflows/cd-hetzner.yml`, #708), not `cd.yml`. Live at
+`https://app.interviewinsights.fyi` / `https://api.interviewinsights.fyi`
+as of Phase 46's own deploy (#648).
+
+### 12.1 Access model
+
+The pilot's k3s API server (6443) is deliberately **not** open in the
+Cloud Firewall (`infra/terraform/hetzner/main.tf`'s
+`hcloud_firewall.ssh_only` — despite the name, it also carries 80/443 as
+of #659) — SSH as the `deploy` user is the only path in, so holding
+`~/.ssh/hetzner-vm`'s private key *is* the access control (#668). No
+separate RBAC; single-operator scale.
+
+```bash
+# Start the tunnel (launchd-managed — survives shell teardown, same
+# reasoning as section 1's dev-port-forwards.sh)
+infra/scripts/hetzner-pilot-tunnel.sh start
+
+# Now usable:
+KUBECONFIG=~/.kube/hetzner-pilot-tunnel.yaml kubectl get nodes
+KUBECONFIG=~/.kube/hetzner-pilot-tunnel.yaml kubectl -n interview-insights get pods -o wide
+
+infra/scripts/hetzner-pilot-tunnel.sh status
+infra/scripts/hetzner-pilot-tunnel.sh stop     # when done — don't leave it open
+```
+
+### 12.2 Deploying
+
+`cd-hetzner.yml` is `workflow_dispatch`-only, not automatic on push —
+deliberate: this is the only environment this project has ever run
+that's actually on the public internet, single replica per service, no
+staging buffer in front of it.
+
+```bash
+gh workflow run cd-hetzner.yml --ref main
+
+# Poll for the run to register before watching (a `gh run watch` called
+# immediately after can race and report "no runs found" — the dispatch
+# hasn't shown up in the API yet):
+RUN_ID=""
+for i in $(seq 1 15); do
+  RUN_ID=$(gh run list --workflow=cd-hetzner.yml --limit 1 --json databaseId,createdAt \
+    -q 'sort_by(.createdAt)[-1].databaseId' 2>/dev/null || true)
+  [ -n "$RUN_ID" ] && break
+  sleep 2
+done
+gh run watch "$RUN_ID" --exit-status
+```
+
+Two jobs: `build-web-image` (GitHub-hosted `ubuntu-latest`, native
+x86_64 — see 12.9's first gotcha for why) builds and pushes only the
+`web` image; `deploy` (the self-hosted runner) builds the other three
+under cross-arch emulation (works fine for them), provisions every
+`HETZNER_*` secret (12.5), applies `overlays/hetzner-pilot`, rolls out
+all four Deployments.
+
+### 12.3 Verifying a deploy actually succeeded
+
+`kubectl rollout status` passing is necessary but not sufficient —
+confirm the site is actually reachable, from outside the cluster
+entirely, with a real trusted TLS handshake, not `-k`/`--insecure`:
+
+```bash
+curl -s -o /dev/null -w "app: HTTP %{http_code}\n" https://app.interviewinsights.fyi/
+curl -s -o /dev/null -w "api health: HTTP %{http_code}\n" https://api.interviewinsights.fyi/health
+
+# Confirm the cert itself, not just that *something* answered:
+curl -v https://app.interviewinsights.fyi/ 2>&1 | grep -E "SSL certificate verify|issuer:|subject:"
+```
+
+### 12.4 Recovery from VM loss or recreation
+
+**Real incident this section is written from** (D109/D110, 2026-08-19):
+an in-place ARM64 migration attempt destroyed the VM, the recreation
+failed (`cax21` turned out unavailable in `nbg1` — see D110), and the
+VM was restored via a plain `terraform apply -var="server_type=cx33"`
+— which brings back the VM but **not** anything that was installed on
+top of it. k3s, ingress-nginx, cert-manager, and the TLS cert all had
+to be reprovisioned from scratch. If the VM is ever lost or recreated
+for any reason, re-run in **this exact order** (later steps depend on
+earlier ones):
+
+```bash
+# 1. Confirm/restore the VM itself
+cd infra/terraform/hetzner
+export HCLOUD_TOKEN="..."   # Hetzner Cloud Console > Security > API Tokens
+terraform plan -out=tfplan
+terraform apply tfplan
+terraform output -raw server_ipv4   # note this — compare against the DNS records below
+cd -
+
+# 2. If the IP changed: update DNS (Cloudflare) and the HETZNER_VM_IP
+#    GitHub Actions variable — cd-hetzner.yml's own checkout has no
+#    local Terraform state to read the IP from (D101's local-state-only
+#    design), so this variable is its only source of truth.
+gh variable set HETZNER_VM_IP --body "<new-ip>" --repo GowthamSiddarth/interview-insights
+# Then update the A records for app./api.interviewinsights.fyi via the
+# Cloudflare API (token scoped to just this zone) or dashboard.
+
+# 3. k3s (auto-detects arch; Traefik disabled — ingress-nginx replaces it)
+ssh -i ~/.ssh/hetzner-vm -o StrictHostKeyChecking=accept-new deploy@<vm-ip> \
+  'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --write-kubeconfig-mode 644" sh -'
+
+# 4. ingress-nginx — pinned to its final release (archived upstream,
+#    D108), via Helm, hostPort 80/443:
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> '
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  command -v helm >/dev/null || curl -sfL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+  helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --version 4.15.1 \
+    --namespace ingress-nginx --create-namespace \
+    --set controller.hostPort.enabled=true \
+    --set controller.service.type=ClusterIP \
+    --set controller.nodeSelector."kubernetes\.io/os"=linux
+'
+
+# 5. Namespace + GHCR pull secret (needed before cert-manager's
+#    Certificate, which lives in this namespace)
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> '
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  kubectl create namespace interview-insights --dry-run=client -o yaml | kubectl apply -f -
+'
+# ghcr-pull-secret itself gets (re-)created automatically by the next
+# cd-hetzner.yml run (12.2) — no need to provision it by hand here.
+
+# 6. cert-manager + both ClusterIssuers + the real cert — see
+#    infra/k8s/cert-manager/README.md for why this is a standalone
+#    Certificate, not ingress-shim. Staging first, to prove the HTTP-01
+#    flow without touching production's real rate limit:
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> '
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  helm repo add jetstack https://charts.jetstack.io
+  helm upgrade --install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace --set crds.enabled=true
+'
+scp -i ~/.ssh/hetzner-vm infra/k8s/cert-manager/*.yaml deploy@<vm-ip>:/tmp/
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> '
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  kubectl apply -f /tmp/cluster-issuer-staging.yaml -f /tmp/cluster-issuer-production.yaml
+  kubectl apply -f /tmp/certificate.yaml
+  kubectl -n interview-insights wait --for=condition=Ready certificate/interview-insights-pilot --timeout=180s
+'
+
+# 7. Re-arm the operational crons (12.6/12.7) — see those sections
+
+# 8. Redeploy the app itself (12.2)
+gh workflow run cd-hetzner.yml --ref main
+```
+
+### 12.5 Secrets
+
+Every pilot secret is Pattern B (D102), sourced from GitHub Actions
+repo secrets (D105) and provisioned fresh by `cd-hetzner.yml` on every
+run — nothing persists as a manually-`kubectl create`d Secret between
+deploys. Full inventory in `docs/SECRETS.md`'s "Hetzner pilot" section;
+the `HETZNER_*` names:
+
+| Repo secret | Feeds |
+|---|---|
+| `HETZNER_POSTGRES_PASSWORD` | `postgres-credentials` |
+| `HETZNER_DATABASE_URL` | `api-secrets`, `notification-service-secrets`, `review-analyzer-secrets` |
+| `HETZNER_EMAIL_HASH_SECRET` | `api-secrets` |
+| `HETZNER_EMAIL_ENCRYPTION_KEY` | `api-secrets`, `notification-service-secrets` |
+| `HETZNER_CANDIDATE_JWT_SECRET` | `api-secrets` |
+| `HETZNER_ADMIN_PASSWORD_HASH` | `api-secrets` |
+| `HETZNER_ADMIN_JWT_SECRET` | `api-secrets` |
+| `HETZNER_MAIL_SMTP_PASSWORD` | `api-secrets`, `notification-service-secrets` (Brevo SMTP key) |
+| `HETZNER_ANTHROPIC_API_KEY` | `review-analyzer-secrets` (optional — omitted entirely when unset) |
+| `HETZNER_GHCR_PAT` | `ghcr-pull-secret`, and `docker`/`podman login ghcr.io` in both CD jobs |
+
+Rotate any of these the same way as setting them initially —
+`gh secret set HETZNER_<NAME>` — then re-run `cd-hetzner.yml` (12.2) to
+pick it up; nothing needs a manual `kubectl` step.
+
+`DATABASE_URL` must be percent-encoded (D92, same gotcha as LocalStack's
+own seeding) and use the *same* password as `HETZNER_POSTGRES_PASSWORD`
+— they're independent secrets that have to agree by construction:
+
+```bash
+python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' '<password>'
+```
+
+`MAIL_SMTP_USER` (Brevo's login) is **not** a secret — it's a plain env
+var in `overlays/hetzner-pilot/api-config-patch.yaml`, same non-secret
+status as `POSTGRES_USER`.
+
+### 12.6 Postgres backup & restore (GitHub issue #663)
+
+`infra/scripts/pilot-pg-backup.sh`/`pilot-pg-restore.sh` run *on the
+VM*, installed at `/usr/local/bin/`. Nightly cron (03:00), `pg_dump
+--clean --if-exists` via `kubectl exec` (no credential needed — local
+unix socket trust, same as the StatefulSet's own `pg_isready` probes),
+gzipped, rotated to the newest 7.
+
+```bash
+# (Re-)install after a VM recreation (12.4 step 7):
+scp -i ~/.ssh/hetzner-vm infra/scripts/pilot-pg-backup.sh infra/scripts/pilot-pg-restore.sh deploy@<vm-ip>:/tmp/
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> '
+  sudo mv /tmp/pilot-pg-backup.sh /tmp/pilot-pg-restore.sh /usr/local/bin/
+  sudo chmod +x /usr/local/bin/pilot-pg-backup.sh /usr/local/bin/pilot-pg-restore.sh
+  echo "0 3 * * * root /usr/local/bin/pilot-pg-backup.sh >> /var/log/pilot-pg-backup.log 2>&1" \
+    | sudo tee /etc/cron.d/pilot-pg-backup
+'
+
+# Manual backup right now:
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> 'sudo /usr/local/bin/pilot-pg-backup.sh'
+
+# List available dumps:
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> 'ls -lh /var/backups/postgres/'
+
+# Restore (confirms before overwriting):
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> \
+  'sudo /usr/local/bin/pilot-pg-restore.sh /var/backups/postgres/<file>.sql.gz'
+```
+
+### 12.7 k3s upgrade cadence (GitHub issue #666)
+
+Weekly (Mondays 09:00) check-only cron against `update.k3s.io`'s stable
+channel — **not** an auto-upgrade: single-node cluster, so an
+unattended restart of the only replica is a real risk, not just noise.
+The actual upgrade is separate and manual.
+
+```bash
+# (Re-)install after a VM recreation:
+scp -i ~/.ssh/hetzner-vm infra/scripts/pilot-k3s-check-upgrade.sh infra/scripts/pilot-k3s-upgrade.sh deploy@<vm-ip>:/tmp/
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> '
+  sudo mv /tmp/pilot-k3s-check-upgrade.sh /tmp/pilot-k3s-upgrade.sh /usr/local/bin/
+  sudo chmod +x /usr/local/bin/pilot-k3s-check-upgrade.sh /usr/local/bin/pilot-k3s-upgrade.sh
+  echo "0 9 * * 1 root /usr/local/bin/pilot-k3s-check-upgrade.sh" \
+    | sudo tee /etc/cron.d/pilot-k3s-check-upgrade
+'
+
+# Check right now:
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> 'sudo /usr/local/bin/pilot-k3s-check-upgrade.sh'
+
+# Apply an upgrade (manual, confirms before running — brief downtime):
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> 'sudo /usr/local/bin/pilot-k3s-upgrade.sh'
+```
+
+### 12.8 Disk monitoring
+
+Baked into `infra/terraform/hetzner/cloud-init.yaml.tpl` — self-installs
+on first boot (daily 08:00 cron, same graduated prevent/warn shape as
+the self-hosted runner's own D87 job, adapted for k3s/containerd and no
+GUI to notify from). No action needed unless the VM was provisioned
+from an older version of that template; check with:
+
+```bash
+ssh -i ~/.ssh/hetzner-vm deploy@<vm-ip> 'cat /etc/cron.d/disk-health-check; tail /var/log/disk-health-check-status'
+```
+
+### 12.9 Known gotchas
+
+**`web`'s image build segfaults under cross-arch QEMU emulation**
+(D109/D111, GitHub issue #761) — this self-hosted runner is Apple
+Silicon (arm64), the pilot VM is x86_64. `api`/`notification-service`/
+`review-analyzer` build fine emulated; `web`'s Next.js/SWC compilation
+reliably crashed (`qemu: uncaught target signal 11`) regardless of
+CPU-count, thread-count, or memory tuning (all tried and ruled out live
+— see D109/D111 for the full trail). Fixed by building `web` on a
+separate, genuinely native GitHub-hosted `ubuntu-latest` job instead
+(12.2) — not tunable from application code, don't re-attempt QEMU-level
+workarounds without new evidence.
+
+**SSH host key changes whenever the VM is destroyed/recreated** — a new
+VM at the same IP gets a genuinely new SSH host key, which
+`StrictHostKeyChecking=accept-new` alone does *not* auto-resolve (it
+only trusts hosts with **no** existing `known_hosts` entry — a
+*different* cached key still gets refused, same as strict mode).
+`hetzner-pilot-tunnel.sh` handles this itself (`ssh-keygen -R`
+before connecting) as of the fix that shipped alongside this runbook;
+if working outside that script, purge manually first:
+`ssh-keygen -R <vm-ip>`.
+
+**`kuberc: ... permission denied` noise on every `kubectl`/`helm`
+command run over SSH** — harmless. `kubectl` looks for an optional
+`~/.kube/kuberc` preferences file that doesn't exist on this VM; every
+actual operation still succeeds. Safe to ignore.
+
+**Helm commands fail with `permission denied` on `~/.config/helm/...`
+after using `sudo -E helm ...` once** — `sudo -E` preserves `$HOME`
+while running as root, so Helm writes its config as root under the
+`deploy` user's own home directory. Every script in this runbook runs
+`helm` as plain `deploy` (the kubeconfig is world-readable at
+`/etc/rancher/k3s/k3s.yaml` — no `sudo` needed for `kubectl`/`helm`).
+If this happens, fix ownership once: `sudo chown -R deploy:deploy
+~/.config ~/.cache` on the VM.
+
+**A running `git checkout <branch>` from an earlier handoff script's own
+PR-opening step can leave your shell on a stale branch** — several
+scripts in this project's history (e.g. `662-cert-manager-tls.sh`'s own
+docs-PR step) do `git checkout -b <branch>` as part of shipping their
+own code changes, and don't return to `main` afterward. Always confirm
+`git branch --show-current` is `main` (and `git pull`ed) before assuming
+a file on disk reflects the latest merged state.
+
+### 12.10 Tearing down
+
+Distinct from section 9 (that section is `kind`-only). This is real,
+billed infrastructure — confirm before running:
+
+```bash
+cd infra/terraform/hetzner
+export HCLOUD_TOKEN="..."
+terraform destroy
+```
+
+**Left dangling, not cleaned up by `terraform destroy`** — deal with
+these separately if a teardown is meant to be permanent, not just a
+pause:
+- DNS records (`app.`/`api.interviewinsights.fyi`) still point at the
+  now-nonexistent IP — remove via Cloudflare, or leave them if the pilot
+  will come back at a fresh IP later (update, don't remove, in that case)
+- Every `HETZNER_*` GitHub Actions repo secret and the `HETZNER_VM_IP`
+  variable — harmless to leave set (unused, not billed), but rotate/
+  remove for real if the pilot is gone for good
+- `docker`/`podman` images already pushed to GHCR — GHCR storage is
+  billed separately from the VM; prune old tags if this becomes a real
+  cost, not before
