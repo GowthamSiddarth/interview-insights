@@ -321,6 +321,25 @@ as a "cross-referenced" timeline event on the issue, not a real linked/
 closing PR — worth double-checking on anything that looks unlinked
 rather than assuming the keyword was used.
 
+**The inverse mistake is just as real: the literal text "closes #N"
+anywhere in a PR body auto-closes that issue, even inside a sentence
+explicitly saying it *shouldn't* close yet.** Hit live (2026-08-17,
+Phase 46, #663): a PR body's test-plan section explained "`... that run
+is what actually closes #663, not this PR`" — meant as a plain-English
+negation — but GitHub's closing-keyword parser is a dumb regex match,
+not language-aware; it saw "closes #663" and closed the issue 2 seconds
+after the PR merged, silently, with no comment. Not caught for two days,
+until the issue's own `closedAt` timestamp didn't line up with when its
+actual completing work happened. **When a PR body needs to reference an
+issue number *without* triggering a close (explaining what still blocks
+it, deferring to a future PR, etc.), avoid the word "closes" (or
+"fixes"/"resolves") immediately before a `#<number>` anywhere in the
+body — rephrase ("the fix for this lands in a follow-up," "tracked by,"
+"see") rather than trusting sentence structure to save you.** Verify any
+issue you expect to still be open really is, via `gh issue view <n>
+--json state,closedAt`, rather than assuming a PR merge without an
+intentional closing keyword left it alone.
+
 **Root cause of the board-hygiene rule getting silently violated, found
 2026-07-23:** individual issues/PRs kept reappearing on the board after
 every archive pass, even with the "only epics" convention followed to
