@@ -53,21 +53,19 @@ jobs:
           GHCR_PAT: ${{ secrets.HETZNER_GHCR_PAT }}
         run: printf '%s' "$GHCR_PAT" | podman login ghcr.io -u GowthamSiddarth --password-stdin
 
-      # --platform linux/arm64 on every build below, explicit rather than
-      # relying on podman's host-arch default (even though it happens to
-      # match now — explicit survives the runner's arch ever changing).
-      # This project's Hetzner pilot VM moved from x86_64 (CX33) to
-      # arm64 (CAX21) specifically so this runner (Apple Silicon) never
-      # needs cross-arch QEMU emulation to build for it — an earlier
-      # amd64-targeted attempt reliably segfaulted building `web`'s
-      # Next.js/SWC compilation under emulation (see infra/terraform/
-      # hetzner/variables.tf's server_type comment and D109 for the full
-      # debugging trail). Postgres/OpenSearch/Redpanda are unaffected
-      # either way — pre-built public multi-arch images, not built here.
+      # --platform linux/amd64 on every build below: this runner is Apple
+      # Silicon (arm64), the Hetzner VM is x86_64 (D110 — D109's ARM64
+      # migration was reverted once CAX21 turned out unavailable in
+      # nbg1, only in US datacenters). Cross-arch emulation confirmed
+      # working for a plain image (`podman run --rm --platform linux/amd64
+      # alpine uname -m` -> x86_64), and works for this project's own
+      # api/notification-service/review-analyzer images. Postgres/
+      # OpenSearch/Redpanda are unaffected either way — pre-built public
+      # multi-arch images, not built here.
       - name: Build & push api image
         run: |
           IMG="ghcr.io/gowthamsiddarth/interview-insights-api:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/arm64 -t "$IMG" -f api/Dockerfile --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} api
+          podman build --platform linux/amd64 -t "$IMG" -f api/Dockerfile --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} api
           podman push -q "$IMG"
 
       - name: Build & push web image
@@ -75,23 +73,36 @@ jobs:
         # this is a genuinely different build than dev's/staging's/prod's
         # own, not a re-tag, same reasoning overlays/staging's own
         # kustomization.yaml already documents for itself.
+        #
+        # KNOWN ISSUE (D109/D110): this specific build reproducibly
+        # segfaults under this runner's QEMU cross-arch emulation
+        # (`qemu: uncaught target signal 11`, inside SWC — Next.js's
+        # native Rust compiler — partway through `next build`). Every
+        # application-level workaround tried failed (CPU/thread-count
+        # tuning; a Babel fallback is blocked outright by `next/font`
+        # requiring SWC) — see D109 for the full trail. A VM-architecture
+        # fix (ARM64) was attempted and reverted (D110) since Hetzner's
+        # ARM64 line isn't actually available in this pilot's EU
+        # datacenter. Unresolved as of D110 — #648 cannot fully deploy
+        # `web` until this is fixed by some other means (e.g. a
+        # dedicated native-arch builder, or a genuine QEMU/SWC-level fix).
         run: |
           IMG="ghcr.io/gowthamsiddarth/interview-insights-web:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/arm64 -t "$IMG" -f web/Dockerfile \
+          podman build --platform linux/amd64 -t "$IMG" -f web/Dockerfile \
             --build-arg NEXT_PUBLIC_API_URL=https://api.interviewinsights.fyi web
           podman push -q "$IMG"
 
       - name: Build & push notification-service image
         run: |
           IMG="ghcr.io/gowthamsiddarth/interview-insights-notification-service:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/arm64 -t "$IMG" -f services/notification-service/Dockerfile \
+          podman build --platform linux/amd64 -t "$IMG" -f services/notification-service/Dockerfile \
             --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} services/notification-service
           podman push -q "$IMG"
 
       - name: Build & push review-analyzer image
         run: |
           IMG="ghcr.io/gowthamsiddarth/interview-insights-review-analyzer:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/arm64 -t "$IMG" -f services/review-analyzer/Dockerfile \
+          podman build --platform linux/amd64 -t "$IMG" -f services/review-analyzer/Dockerfile \
             --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} services/review-analyzer
           podman push -q "$IMG"
 

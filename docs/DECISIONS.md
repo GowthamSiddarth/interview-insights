@@ -5481,7 +5481,7 @@ unpatched CVE serious enough to force the pilot off it sooner.
 
 ---
 
-### D109 — Hetzner pilot VM moves from x86_64 (CX33) to ARM64 (CAX21), eliminating cross-arch QEMU emulation (GitHub issue #708, Phase 46)
+### D109 — Hetzner pilot VM moves from x86_64 (CX33) to ARM64 (CAX21), eliminating cross-arch QEMU emulation (GitHub issue #708, Phase 46) — SUPERSEDED by D110
 
 **Context:** the first real `cd-hetzner.yml` run (after fixing #757's
 `HETZNER_VM_IP` gap and #758's missing `--platform` flag) got every
@@ -5541,6 +5541,67 @@ framing.
 **Revisit when:** Hetzner ever prices CAX out of `nbg1`/`fsn1`/`hel1`, or
 the self-hosted runner itself is ever replaced with an x86_64 machine
 (at which point CX + native amd64 builds would be the better fit again).
+
+**Superseded by D110** the same day — CAX21 turned out unavailable in
+`nbg1` at actual apply time, despite being listed with `nbg1` pricing.
+
+---
+
+### D110 — D109's ARM64 migration reverted: CAX21 isn't actually available in Nuremberg (GitHub issue #708, Phase 46)
+
+**Context:** running D109's own migration script
+(`terraform apply -replace=hcloud_server.this` after switching
+`server_type` to `cax21`), the VM was destroyed successfully but
+recreation failed: `Error: unsupported location for server type
+(invalid_input)`. D109's own "confirmed available in `nbg1` via the live
+Hetzner API" check was real but incomplete — it queried
+`/v1/server_types`, which lists a server type's *global* price entries
+(the same response shape D101 originally used to compare CX pricing
+across `nbg1`/`ash`/`hil`), not *per-datacenter* stock. A server type
+can carry a priced entry for a location without actually being
+provisionable there right now. The correct check —
+`/v1/datacenters`, cross-referencing each datacenter's
+`server_types.available` list against `cax21`'s own numeric ID — found
+`cax21` only actually available in `ash-dc1` (Ashburn) and `hil-dc1`
+(Hillsboro), not `nbg1-dc3`/`fsn1-dc14`/`hel1-dc2` despite all three
+carrying a listed `cax21` price.
+
+With the VM already destroyed and the pilot fully down, the VM was
+restored first (`terraform apply -var="server_type=cx33"`, no `-replace`
+needed since `cx33` was never destroyed from Terraform's perspective —
+only the ARM64 recreation attempt had failed) — same IP
+(`46.225.180.185`) as before, so no DNS/`HETZNER_VM_IP` update was
+needed for the restore itself.
+
+**Decision:** stay on CX33/x86_64/`nbg1`, not follow CAX21 to a US
+datacenter. Presented as a real choice, not decided unilaterally — given
+the option to move the whole pilot to `ash`/`hil` for genuine ARM64
+availability (with its own not-yet-confirmed CAX21-in-ash/hil pricing to
+check, and a latency-profile change for a pilot meant to be reachable by
+real users), the call was to revert cleanly instead: D109's core
+motivation (eliminate the CD runner's QEMU/SWC segfault) doesn't
+outweigh moving the pilot to a different continent on top of a
+same-day scramble.
+
+**Consequence, left genuinely unresolved:** `cd-hetzner.yml`'s `web`
+image build reverted to `--platform linux/amd64` (matching the restored
+x86_64 VM) — which still hits the exact QEMU/SWC segfault D109
+documented in full. `#648` cannot fully deploy `web` until this is
+fixed by some other means. Options not yet pursued: a genuinely
+different QEMU/podman-machine version, a dedicated native-x86_64 builder
+for just this one image, or upstream SWC/QEMU fixes landing over time.
+
+**Process lesson:** "does the API list a price for this location" and
+"is this actually provisionable in this location right now" are two
+different questions for Hetzner Cloud — verify the second one
+specifically (`/v1/datacenters`, not `/v1/server_types`) before trusting
+any future server-type-availability claim for this project, not just
+this one.
+
+**Revisit when:** a fix for the `web` build's QEMU/SWC segfault is found
+(application-level or infrastructure-level), or moving to `ash`/`hil`
+for real ARM64 becomes worth reconsidering with its own dedicated
+pricing/latency evaluation, not decided under active-outage pressure.
 
 ---
 
