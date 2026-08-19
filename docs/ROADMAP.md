@@ -2374,7 +2374,14 @@ on Hetzner". Epic: GitHub issue #642.
 - [ ] Deploy `overlays/hetzner-pilot`; verify full-stack health end to
       end (GitHub issue #648) — blocked on Phase 46's domain, firewall,
       image-registry, ingress-nginx, and TLS issues: there's no reachable
-      HTTPS endpoint to smoke-test against without them
+      HTTPS endpoint to smoke-test against without them. Domain/firewall/
+      registry/ingress-nginx/TLS all landed (#658/#659/#660/#661/#662);
+      the actual `cd-hetzner.yml` run surfaced two more real blockers
+      before this can close: `HETZNER_VM_IP` missing from the CI
+      checkout (fixed) and the `web` image failing to build under this
+      runner's cross-arch QEMU emulation — see D109/D110, tracked
+      separately as GitHub issue #761 since it's its own real bug, not
+      solved by #708 alone
 - [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
       issue #649)
 - [ ] Engineering blog (last) (GitHub issue #650)
