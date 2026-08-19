@@ -2466,16 +2466,15 @@ first group.
 
 ### Track B — operational hardening (non-blocking)
 
-- [ ] Backup strategy for the pilot's Postgres data, with a proven
-      restore path (GitHub issue #663) — no hard blocker, but should
-      land before #648 starts creating real-shaped data. Backup/restore
-      scripts merged and cron-armed on the VM; #648 has now deployed
-      Postgres to the pilot, so `663-verify-restore-path.sh` (the actual
-      live proof) is runnable, but hasn't been run yet — genuinely still
-      open, not just unchecked: got accidentally auto-closed by a PR
+- [x] Backup strategy for the pilot's Postgres data, with a proven
+      restore path (GitHub issue #663) — the real restore-path proof
+      ran live against the pilot's actual Postgres once #648 deployed
+      it: a marker row survived a full backup -> delete -> restore
+      round-trip. Got accidentally auto-closed once already by a PR
       body's own negated "closes #663" phrasing (see
-      `wiki/github-project-setup.md`'s closing-keyword gotchas), caught
-      and reopened once the mismatch surfaced
+      `wiki/github-project-setup.md`'s closing-keyword gotchas) before
+      the real proof had run — reopened, then closed for real once it
+      did
 - [x] Guardrail against running `seed-demo-data`/`seed-demo-data-undo`
       against the pilot (GitHub issue #664) — should land before #648
       first runs with real intent
@@ -2486,7 +2485,8 @@ first group.
 - [x] kubeconfig and access control for the pilot cluster — who can
       `kubectl` against it, from where (GitHub issue #668) — informs
       #649
-- [ ] Engineering blog (last) (GitHub issue #669)
+- [x] Engineering blog (last) (GitHub issue #669) — one post per issue
+      under `wiki/blog/phase-46-hetzner-pilot-reachability-operational-hardening/`
 
 ## Phase 47 — Moderation Queue Correctness Hardening
 
