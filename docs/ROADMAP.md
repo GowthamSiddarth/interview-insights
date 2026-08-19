@@ -2377,8 +2377,8 @@ on Hetzner". Epic: GitHub issue #642.
       runner's cross-arch QEMU emulation — see D109/D110/D111 (GitHub
       issue #761, its own fix: `web` now builds on a native GitHub-hosted
       runner instead of emulating)
-- [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
-      issue #649)
+- [x] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
+      issue #649) — `wiki/deployment-guide.md` section 12
 - [ ] Engineering blog (last) (GitHub issue #650)
 
 **Note:** despite the lower phase number, several of this phase's
