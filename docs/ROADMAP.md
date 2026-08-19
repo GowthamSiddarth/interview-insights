@@ -2380,8 +2380,8 @@ on Hetzner". Epic: GitHub issue #642.
       before this can close: `HETZNER_VM_IP` missing from the CI
       checkout (fixed) and the `web` image failing to build under this
       runner's cross-arch QEMU emulation — see D109/D110, tracked
-      separately as GitHub issue #761 since it's its own real bug, not
-      solved by #708 alone
+      separately as GitHub issue #761 and fixed by D111 (a GitHub-hosted
+      job builds `web` natively instead)
 - [ ] Runbook: Hetzner pilot deploy, recovery, and teardown (GitHub
       issue #649)
 - [ ] Engineering blog (last) (GitHub issue #650)

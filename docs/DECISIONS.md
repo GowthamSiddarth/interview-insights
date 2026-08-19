@@ -5605,6 +5605,62 @@ pricing/latency evaluation, not decided under active-outage pressure.
 
 ---
 
+### D111 — `web`'s image build moves to a GitHub-hosted runner, resolving the QEMU/SWC segfault (GitHub issue #761, Phase 46)
+
+**Context:** #761 tracked the unresolved `web`-build segfault D109/D110
+left behind. Tried one more application-level lever before reaching for
+infrastructure: memory pressure. Live-monitored the podman machine's
+`free -m` output during a reproduction — free memory dropped steadily
+the whole build (1.4 GB → 375 MB right before the crash), a real
+correlation worth testing. Bumped the podman machine from 8 GB to 12 GB
+and re-ran: the build got further (compilation itself now succeeded in
+49s, versus crashing mid-compile before) but still segfaulted at the
+next phase ("Collecting page data") with memory usage never exceeding
+~2 GB the whole time — nowhere near exhausted. This disproves memory
+exhaustion as the root cause: more headroom shifted *when* the crash
+happens, not *whether* it happens, the same pattern `--cpus=1` (D109)
+already showed. Consistent with a genuine timing/race-condition bug in
+QEMU's TCG (its JIT) under SWC's heavy multi-threaded native code — not
+something tunable from the application or VM-resourcing side. (Podman
+machine reverted back to 8 GB after this test — not kept, since it
+didn't fix anything and this project's Mac is also the interactive dev
+machine.)
+
+**Decision:** build `web`'s image on a GitHub-hosted `ubuntu-latest`
+runner (genuinely native x86_64 — no emulation, nothing to segfault),
+via a new `build-web-image` job in `cd-hetzner.yml`, ahead of (`needs:`)
+the existing self-hosted `deploy` job. `api`/`notification-service`/
+`review-analyzer` stay on the self-hosted runner under emulation — this
+still works fine for them, matching D109's own finding that only `web`'s
+heavier SWC compilation ever triggered the bug. Plain `docker` on the
+new job (ubuntu-latest ships it preinstalled), not `podman` — not worth
+introducing podman for one job when this project's only other
+GitHub-hosted-adjacent precedent (`ci.yml`) doesn't use it either.
+
+**Why GitHub-hosted doesn't reopen D82's concern:** D82 adopted a
+self-hosted runner for two reasons — a billing gate from *automatic,
+per-push* CI minutes, and a private-repo security posture (self-hosted
+runners must never be exposed to fork-originated PR workflow runs).
+Neither applies here: `cd-hetzner.yml` only runs on manual
+`workflow_dispatch` (rare, deliberate — see the workflow's own top
+comment), so this adds an occasional single-image build's worth of
+GitHub-hosted minutes, not recurring per-push cost; and this repo is
+private with no external contributors, so there's no fork-PR attack
+surface to begin with, self-hosted or not.
+
+**Rejected:** moving the whole pilot to `ash`/`hil` for real ARM64
+(D110 already declined this once; still true that it wasn't evaluated
+under fair conditions — the fix found here makes that evaluation
+unnecessary rather than deferred).
+
+**Revisit when:** upstream QEMU/SWC fixes make cross-arch emulation
+reliable for this build too (at which point the extra job could be
+removed for simplicity), or `cd-hetzner.yml`'s trigger ever becomes
+automatic (at which point GitHub-hosted minutes usage should be
+re-evaluated against D82's original billing-gate concern).
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.
