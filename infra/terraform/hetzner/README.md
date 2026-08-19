@@ -5,26 +5,30 @@ to issue #501 (Oracle Cloud A1.Flex), which is blocked on Oracle's
 "out of host capacity" queue. This doesn't replace that effort — it
 unblocks work now without waiting on it.
 
-Default spec: CAX21 (4 vCPU / 8 GB / 80 GB, Ampere ARM64), Nuremberg
-(`nbg1`), Ubuntu 24.04 — **~€12.49/mo**. Override any of it via `-var`
-or a local (gitignored) `.tfvars` file — see `variables.tf`.
-
-**Why ARM64 (CAX), not x86_64 (CX):** originally CX33 (x86_64,
-~$9.99/mo) — switched in Phase 46 (#708) once cross-arch QEMU emulation
-turned out to reliably segfault building the `web` image's Next.js/SWC
-compilation on this project's self-hosted CD runner (an Apple Silicon
-Mac). Matching the VM's architecture to the runner's own eliminates
-that emulation dependency entirely. See `variables.tf`'s own comment for
-the full debugging trail before landing on this fix.
+Default spec: CX33 (4 vCPU / 8 GB / 80 GB), Nuremberg (`nbg1`), Ubuntu
+24.04 — **~$9.99/mo**. Override any of it via `-var` or a local
+(gitignored) `.tfvars` file — see `variables.tf`.
 
 **Why Nuremberg, not a US location:** Hetzner's cheap Shared Resources /
-Cost-Optimized tier (the CX line, x86_64) is only sold in EU/Singapore
-locations — CAX (ARM64) pricing is uniform across fsn1/hel1/nbg1, this
-caveat is specifically a CX-line thing. Ashburn/Hillsboro (US) still
-only expose the pricier Regular Performance / General Purpose CX tiers
-for x86_64 — worth revisiting deliberately if this box ever needs to be
-latency-local to US end users; not worth it for its current job (CI
-runner / provisioning pilot).
+Cost-Optimized tier (the CX line) is only sold in EU/Singapore locations.
+Ashburn/Hillsboro (US) only expose the pricier Regular Performance /
+General Purpose tiers — the same 4 vCPU / 8 GB spec runs **~$41.99/mo**
+in Ashburn, roughly 4x. Worth revisiting deliberately if this box ever
+needs to be latency-local to US end users; not worth it for its current
+job (CI runner / provisioning pilot).
+
+**ARM64 (CAX21) was tried and reverted (D109/D110):** briefly switched
+to CAX21 to eliminate cross-arch QEMU emulation for the CD runner's
+(Apple Silicon) image builds, which reliably segfaulted building the
+`web` image's Next.js/SWC compilation. Reverted once a live `terraform
+apply` against `nbg1` failed with "unsupported location for server
+type" — CAX21's listed pricing for nbg1/fsn1/hel1 doesn't mean it's
+actually deployable there; per-datacenter availability (checked live via
+the Hetzner API, not assumed) found it only in `ash-dc1`/`hil-dc1` (US),
+which D110 chose not to move the pilot to rather than accept the
+latency/pricing tradeoff blind. See `docs/DECISIONS.md` D109/D110 for
+the full trail — including every application-level QEMU workaround
+tried before reaching for a VM-architecture change in the first place.
 
 ## Credentials
 

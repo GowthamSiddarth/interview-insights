@@ -5,9 +5,9 @@ variable "server_name" {
 }
 
 variable "server_type" {
-  description = "Hetzner Cloud server type (spec). CAX21 = 4 vCPU / 8 GB / 80 GB, Ampere ARM64 (~€12.49/mo in nbg1/fsn1/hel1) — switched from CX33 (x86_64, same spec, ~$9.99/mo) in Phase 46 (#708): the self-hosted CD runner (this project's own Mac, Apple Silicon/arm64) had no way to build the web image for x86_64 without cross-arch QEMU emulation, which reliably segfaulted on Next.js's SWC compiler (a native Rust binary) partway through `next build` — not fixable from the application side (tried CPU/thread-count tuning, a Babel fallback; the latter is blocked outright by `next/font` requiring SWC). Matching the VM's architecture to the runner's eliminates emulation entirely for every future deploy, not just this one. NOTE: CX33's own EU/Singapore-only Cost-Optimized-tier caveat doesn't apply here — CAX line pricing is uniform across fsn1/hel1/nbg1."
+  description = "Hetzner Cloud server type (spec). CX33 = 4 vCPU / 8 GB / 80 GB, Shared Resources / Cost-Optimized tier ($9.99/mo). NOTE: this tier is only available in EU/Singapore locations — US locations (ash/hil) only expose the pricier Regular Performance / General Purpose tiers, roughly 4x the cost for the same spec. D109 (Phase 46, #708) briefly switched this to CAX21 (ARM64) to eliminate cross-arch QEMU emulation for the CD runner's image builds, then reverted (D110) once a live apply against nbg1 failed with \"unsupported location for server type\" — the CAX line's own listed pricing for nbg1/fsn1/hel1 does not mean current stock there; a real per-datacenter availability check (not just a server-type pricing check) found CAX21 only actually deployable in ash-dc1/hil-dc1 (US), which D110 chose not to move the pilot to. See D110 for the full reasoning."
   type        = string
-  default     = "cax21"
+  default     = "cx33"
 }
 
 variable "location" {
