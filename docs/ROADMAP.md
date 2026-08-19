@@ -2412,10 +2412,10 @@ first group.
 
 ### Track A — critical path to reachability
 
-- [ ] Decide the pilot's public domain and create DNS records pointing
-      at the Phase 44 VM's IP (GitHub issue #658) — blocks the Ingress
-      hostnames in #646, TLS issuance below, and `MAIL_FROM_ADDRESS` in
-      #655
+- [x] Decide the pilot's public domain and create DNS records pointing
+      at the Phase 44 VM's IP (GitHub issue #658) — `interviewinsights.fyi`
+      via Cloudflare Registrar; `app.`/`api.` A records live and confirmed
+      resolving to the pilot's IP from both 1.1.1.1 and 8.8.8.8
 - [x] Open ports 80/443 in the Hetzner Cloud Firewall via Terraform
       (GitHub issue #659) — `infra/terraform/hetzner/main.tf`'s
       `hcloud_firewall.ssh_only` (Phase 44) currently allows only port
@@ -2439,13 +2439,15 @@ first group.
       `1.15.1`) for the pilot anyway rather than diverging its ingress
       tech from every other environment; see D108 for the full tradeoff
       and the separate Gateway API evaluation follow-up it filed
-- [ ] TLS for the pilot via cert-manager + Let's Encrypt, and flipping
+- [x] TLS for the pilot via cert-manager + Let's Encrypt, and flipping
       `COOKIE_SECURE` to `"true"` in the pilot overlay once real HTTPS
-      is live (GitHub issue #662) — depends on #658, #659, #661; blocks
-      #648's smoke test
-- [ ] Decide and document the deploy pipeline to the pilot — manual via
-      the runbook, or a future CD job (GitHub issue #665) — depends on
-      #660 if a CD job is chosen; informs #649 and #708. Resolved
+      is live (GitHub issue #662) — staging cert proved the HTTP-01 flow
+      first, then the real production cert issued and independently
+      verified (`curl` from outside the cluster, real trusted handshake,
+      no `-k`); reissued a second time after the D109/D110 VM-recreation
+      incident, same live-verified result both times
+- [x] Decide and document the deploy pipeline to the pilot — manual via
+      the runbook, or a future CD job (GitHub issue #665) — resolved
       2026-08-14: CD job, via #708
 - [x] Build `cd-hetzner.yml` — push images to GHCR, deploy
       `overlays/hetzner-pilot` to the Hetzner k3s cluster, **and
@@ -2465,10 +2467,13 @@ first group.
 - [ ] Backup strategy for the pilot's Postgres data, with a proven
       restore path (GitHub issue #663) — no hard blocker, but should
       land before #648 starts creating real-shaped data. Backup/restore
-      scripts merged and cron-armed on the VM; still open because the
-      restore path itself can't be proven live until #648 actually
-      deploys Postgres to the pilot — `663-verify-restore-path.sh` is
-      ready to run the moment that happens
+      scripts merged and cron-armed on the VM; #648 has now deployed
+      Postgres to the pilot, so `663-verify-restore-path.sh` (the actual
+      live proof) is runnable, but hasn't been run yet — genuinely still
+      open, not just unchecked: got accidentally auto-closed by a PR
+      body's own negated "closes #663" phrasing (see
+      `wiki/github-project-setup.md`'s closing-keyword gotchas), caught
+      and reopened once the mismatch surfaced
 - [x] Guardrail against running `seed-demo-data`/`seed-demo-data-undo`
       against the pilot (GitHub issue #664) — should land before #648
       first runs with real intent
