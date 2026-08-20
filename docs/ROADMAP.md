@@ -2838,19 +2838,21 @@ Epic: GitHub issue #811.
 
 Ordered by dependency:
 
-- [ ] Round title/description fields have no "don't include real names"
+- [x] Round title/description fields have no "don't include real names"
       warning (GitHub issue #812)
-- [ ] No type-level guard against a future interviewer-name leak in
+- [x] No type-level guard against a future interviewer-name leak in
       frontend types (GitHub issue #813)
-- [ ] Round-type-specific fields have no required-field enforcement
-      client-side (GitHub issue #814)
-- [ ] Confirm COOKIE_SECURE=true is set now that Hetzner TLS is live
-      (GitHub issue #815)
-- [ ] Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build
-      time (GitHub issue #816)
-- [ ] Failed round-type field-options fetch silently drops fields
+- [x] Round-type-specific fields have no required-field enforcement
+      client-side (GitHub issue #814) — confirmed the backend treats
+      every field as genuinely optional; documented instead of adding a
+      client-side requirement that would mismatch backend behavior
+- [x] Confirm COOKIE_SECURE=true is set now that Hetzner TLS is live
+      (GitHub issue #815) — confirmed already correct
+- [x] Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build
+      time (GitHub issue #816) — confirmed already correct
+- [x] Failed round-type field-options fetch silently drops fields
       instead of blocking the wizard (GitHub issue #817)
-- [ ] Document that rating-input min/max attributes are cosmetic, not
+- [x] Document that rating-input min/max attributes are cosmetic, not
       enforcement (GitHub issue #818)
 - [ ] Engineering blog (last) (GitHub issue #819)
 

@@ -250,6 +250,12 @@ function WizardContent() {
   const [activeDraft, setActiveDraft] = useState<ProcessDraft | null>(null);
   const [activeStepId, setActiveStepId] = useState<string>('process');
   const [fieldOptions, setFieldOptions] = useState<RoundTypeFieldOptions | null>(null);
+  // GitHub issue #817 (Phase 56) — distinct from fieldOptions being null
+  // during normal loading: a failed fetch silently dropped every round-
+  // type-specific field with no indication why, since RoundStepForm just
+  // saw an empty `fields` array either way. Threaded down so the round
+  // step form can flag it inline instead.
+  const [fieldOptionsFailed, setFieldOptionsFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<SubmissionSummary | null>(null);
@@ -281,11 +287,19 @@ function WizardContent() {
   // "add round" menu and every round step's type_metadata fields, so
   // there's nothing to hardcode here as new round types/fields are added
   // server-side.
-  useEffect(() => {
+  function loadFieldOptions() {
+    setFieldOptionsFailed(false);
     api
       .getRoundTypeFieldOptions()
       .then(setFieldOptions)
-      .catch((err: unknown) => setError(errorMessage(err)));
+      .catch((err: unknown) => {
+        setError(errorMessage(err));
+        setFieldOptionsFailed(true);
+      });
+  }
+
+  useEffect(() => {
+    loadFieldOptions();
   }, []);
 
   function handleStartDraft(company: { id: string; name: string; slug: string }) {
@@ -572,6 +586,8 @@ function WizardContent() {
                 <RoundStepForm
                   step={activeRoundStep}
                   fieldOptions={fieldOptions}
+                  fieldOptionsFailed={fieldOptionsFailed}
+                  onRetryFieldOptions={loadFieldOptions}
                   onChange={(round) => persist(updateRoundStep(activeDraft, activeRoundStep.clientId, round))}
                   onRemove={() => handleRemoveRound(activeRoundStep.clientId)}
                 />
