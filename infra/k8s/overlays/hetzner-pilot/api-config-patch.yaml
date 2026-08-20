@@ -2,6 +2,7 @@
 # the pilot's actual domain (interviewinsights.fyi, #658) and its real
 # SMTP relay (Brevo, #655), replacing base's .local/Mailpit defaults.
 # COOKIE_SECURE flips to "true" now that #662 proved real HTTPS works.
+# Re-confirmed correct by GitHub issue #815 (Phase 56) — still "true" here.
 #
 # MAIL_SMTP_USER is Brevo's login (an email address) — not a credential,
 # same non-secret status as 01-postgres-config.yaml's POSTGRES_USER (see

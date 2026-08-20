@@ -26,6 +26,11 @@ const TECHNICAL_DEPTH_TOOLTIP =
 interface RoundStepFormProps {
   step: DraftRoundStep;
   fieldOptions: RoundTypeFieldOptions | null;
+  // GitHub issue #817 (Phase 56) — distinct from fieldOptions being null
+  // during normal loading. Both optional so existing callers/tests that
+  // don't care about this failure path keep working unchanged.
+  fieldOptionsFailed?: boolean;
+  onRetryFieldOptions?: () => void;
   onChange: (round: DraftRound) => void;
   onRemove: () => void;
 }
@@ -34,7 +39,14 @@ interface RoundStepFormProps {
 // round can exist with no rating yet, mirroring the schema's own
 // tolerance for that state (issue #260) — the checkbox below is the only
 // thing that decides whether `rating` is present at all in the draft.
-export function RoundStepForm({ step, fieldOptions, onChange, onRemove }: RoundStepFormProps) {
+export function RoundStepForm({
+  step,
+  fieldOptions,
+  fieldOptionsFailed,
+  onRetryFieldOptions,
+  onChange,
+  onRemove,
+}: RoundStepFormProps) {
   const { round } = step;
   const fields = fieldOptions?.[round.roundType]?.fields ?? [];
 
@@ -76,7 +88,36 @@ export function RoundStepForm({ step, fieldOptions, onChange, onRemove }: RoundS
           onChange={(e) => update({ description: e.target.value || undefined })}
           className={inputClass}
         />
+        {/* GitHub issue #812 (Phase 56) — this content is shown publicly
+            and, unlike a rating's freeText, isn't moderation-gated at all
+            (see the sibling security-phase issue #775), so the nudge
+            against real names matters here even more than on the
+            recruiter-identifier field above. */}
+        <span className="text-xs text-gray-500">
+          Please don&apos;t include interviewer names here — describe the round itself, not who ran it.
+        </span>
       </label>
+
+      {/* GitHub issue #817 (Phase 56) — a failed field-options fetch used
+          to silently drop this whole section with no indication why
+          (fields.length === 0 either way, same as a round type that
+          genuinely has no type_metadata fields). Flag it explicitly
+          instead, with a retry, rather than letting the candidate submit
+          unaware that round-type-specific detail never had a chance to
+          render. */}
+      {fieldOptionsFailed && (
+        <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
+          <p className="text-amber-900 dark:text-amber-200">
+            Round-specific details couldn&apos;t load, so they aren&apos;t shown for this round. Your
+            other answers are unaffected.
+          </p>
+          {onRetryFieldOptions && (
+            <Button type="button" variant="neutral" onClick={onRetryFieldOptions} className="self-start">
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
 
       {fields.length > 0 && (
         <div className="flex flex-col gap-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -100,6 +141,13 @@ export function RoundStepForm({ step, fieldOptions, onChange, onRemove }: RoundS
 
       {round.rating && (
         <div className="flex flex-col gap-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          {/* GitHub issue #818 (Phase 56) — min/max below are cosmetic
+              only: these inputs never sit inside a submitted <form> (the
+              wizard's own "Submit" is a type="button" handler, not a
+              native submit), so the browser's native min/max validation
+              never actually runs. draft-store.ts's validateDraft() is the
+              real, working enforcement — don't remove it on the
+              assumption these HTML attributes are doing the job. */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {RATING_FIELDS.map((field) => (
               <label key={field} className="flex flex-col text-sm capitalize">
