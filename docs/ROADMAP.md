@@ -2666,3 +2666,228 @@ Ordered by dependency:
 - [x] notification-service consumer extension + templates for `staff.*`
       events (GitHub issue #705) — depends on #702, #703
 - [x] Engineering blog (last) (GitHub issue #706)
+
+## Phase 52 — Security & Access-Control Hardening
+
+Filed 2026-08-20, surfaced by a six-domain pre-launch audit (security,
+data integrity, business logic, infrastructure, frontend, code quality)
+commissioned ahead of the lean launch — six parallel specialist passes
+against the whole stack. The security pass found two endpoints
+(`rounds`, `recruiter-interactions`) with no auth guard and no ownership
+check at all, unlike every sibling write endpoint — `rounds` isn't even
+covered by `moderation_queue`, so unauthenticated free text could reach
+a public process page with zero review. It also found the IP-based
+throttle guards effectively collapse to one shared bucket behind
+ingress-nginx (no `trust proxy`), and no security headers (`helmet`)
+anywhere. All six of CLAUDE.md's hard constraints were separately
+verified as genuinely enforced in code, not just documented. Milestone:
+"Phase 52 — Security & Access-Control Hardening". Epic: GitHub issue
+#774.
+
+Ordered by dependency — each issue only depends on ones above it in this
+list unless noted otherwise:
+
+- [ ] No auth guard on round creation lets anyone inject unmoderated
+      content (GitHub issue #775)
+- [ ] No auth guard on recruiter-interaction creation, same gap as round
+      creation (GitHub issue #776) — same fix pattern as #775
+- [ ] IP-based throttles collapse to one shared bucket behind ingress,
+      missing trust proxy (GitHub issue #777)
+- [ ] Add helmet security headers to api, notification-service, and
+      review-analyzer (GitHub issue #778)
+- [ ] Prisma exception filter can leak internal detail on unmapped error
+      codes (GitHub issue #779)
+- [ ] CORS/cookie config has no boot-time assertion for
+      COOKIE_SECURE/CORS_ORIGIN (GitHub issue #780)
+- [ ] Raw SQL identifier interpolation in fraud-checks is an
+      injection-shaped pattern (GitHub issue #781)
+- [ ] verdict-consumer doesn't schema-validate Kafka event payloads
+      (GitHub issue #782)
+- [ ] Staff email has no documented PII-handling rationale, unlike
+      candidate email (GitHub issue #783)
+- [ ] Local dev EMAIL_ENCRYPTION_KEY is a low-entropy hand-typed
+      placeholder (GitHub issue #784)
+- [ ] Engineering blog (last) (GitHub issue #785)
+
+## Phase 53 — Data Integrity, Consistency & Documentation Reconciliation
+
+Filed 2026-08-20, from the same audit: the data-integrity pass found
+that the three analytics materialized views
+(`company_round_type_aggregates`, `company_recruiter_aggregates`,
+`company_overall_aggregates`) are never refreshed in production — the
+only `REFRESH MATERIALIZED VIEW` call anywhere in the repo is inside a
+manual dev/demo seeding script, so the analytics dashboard has been
+frozen at last manual seed since the app went live. It also found GDPR
+erasure (`MeService.eraseMe()`) FK-violates for any candidate who ever
+reset a password or edited a submission, and that `CompaniesService.
+create()` is the one write path not wrapped in the same transaction as
+its moderation enqueue. Separately, three independent audit passes
+(data integrity, business logic, frontend) each re-derived on their own
+that `docs/ARCHITECTURE.md`'s "Known gaps" section is stale — it still
+claims `RecruiterInteraction`/`RecruiterRating`/`OverallReview` have no
+write path, when all three have been fully built since Phase 14. This
+phase folds that reconciliation in alongside the data-integrity fixes
+rather than spinning up a seventh epic for four documentation-only
+issues. Milestone: "Phase 53 — Data Integrity, Consistency &
+Documentation Reconciliation". Epic: GitHub issue #786.
+
+Ordered by dependency:
+
+- [ ] Analytics materialized views are never refreshed in production
+      (GitHub issue #787)
+- [ ] GDPR erasure (eraseMe) FK-violates for candidates with
+      password-reset or edit-throttle rows (GitHub issue #788)
+- [ ] Company creation isn't transactional with its moderation enqueue
+      (GitHub issue #789)
+- [ ] Fraud-check rate limit is a TOCTOU race (GitHub issue #790)
+- [ ] docs/ARCHITECTURE.md's recruiter/overall-review "zero write path"
+      claim is stale (GitHub issue #791)
+- [ ] docs/DATA_MODEL.md lists GDPR erasure as an open decision though
+      it's implemented (GitHub issue #792) — update once #788 lands
+- [ ] docs/DATA_MODEL.md's moderation_queue.entity_type list is missing
+      'company' (GitHub issue #793)
+- [ ] docs/DATA_MODEL.md's round-type registry table is missing
+      tech_screening (GitHub issue #794)
+- [ ] Engineering blog (last) (GitHub issue #795)
+
+## Phase 54 — Business-Process Closed-Loop Fixes
+
+Filed 2026-08-20, from the same audit: the business-logic pass traced
+every major process (submission, moderation, company creation, staff
+lifecycle, resubmission, verification, fraud flagging, GDPR erasure,
+bulk submission) end to end through actual code, looking for dead ends.
+Most are genuinely closed loops. The exceptions: SLA breach/warning
+notifications are one-shot with no "resolved" signal once a breached
+item is finally handled, `candidates.verification_status`'s
+`document_verified` value is schema-ready but structurally unreachable
+(no document-upload flow exists anywhere), and `staff_audit_log` is
+written on every staff mutation but never surfaced in any UI or read
+endpoint. A fourth finding from this pass — rejected candidates never
+learn why — was already filed as issue #729 (under Phase 49's epic)
+before this audit ran; it's related to this phase's scope but stays
+under its original epic/milestone rather than being re-parented, per
+GitHub's one-parent-per-sub-issue limit. Milestone: "Phase 54 —
+Business-Process Closed-Loop Fixes". Epic: GitHub issue #796.
+
+Ordered by dependency:
+
+- [ ] SLA breach/warning notifications never signal resolution (GitHub
+      issue #797)
+- [ ] candidates.verification_status.document_verified is a dead enum
+      value (GitHub issue #798)
+- [ ] staff_audit_log is written but never surfaced in any UI or read
+      endpoint (GitHub issue #799)
+- [ ] Engineering blog (last) (GitHub issue #800) — also covers #729
+      once it lands, since it's the fourth finding from this same audit
+      pass
+- Related, tracked separately: rejected candidates are never told why
+  (GitHub issue #729, Phase 49's epic #685)
+
+## Phase 55 — Infrastructure, CI/CD & Secrets Hardening
+
+Filed 2026-08-20, from the same audit: the infra pass found that three
+of the four Dockerfiles (`web`, `notification-service`,
+`review-analyzer`) have no `.dockerignore` — the exact bug issue #450
+already fixed for `api/`, never applied to the siblings — so a real
+local `.env` in the build context can get baked straight into a pushed
+GHCR image layer. It also found `.env.example` files and both LocalStack
+seed scripts ship a real, working 32-byte AES-256 key for
+`EMAIL_ENCRYPTION_KEY`, a literal violation of CLAUDE.md hard constraint
+#6's "never a real or plausible-looking value," plus missing k8s
+`securityContext`/non-root containers and an unverified Postgres
+restore path (#663). Everything else checked (firewall, TLS, CI-runner
+fork-PR exposure, network exposure) came back clean. Milestone: "Phase
+55 — Infrastructure, CI/CD & Secrets Hardening". Epic: GitHub issue
+#801.
+
+Ordered by dependency:
+
+- [ ] Add .dockerignore to web/, notification-service/, and
+      review-analyzer/ Dockerfiles (GitHub issue #802)
+- [ ] .env.example and LocalStack seed scripts ship a real, working
+      encryption key (GitHub issue #803)
+- [ ] Add permissions: block to all GitHub Actions workflows (GitHub
+      issue #804)
+- [ ] Containers run as root everywhere — no non-root USER or
+      securityContext (GitHub issue #805)
+- [ ] Postgres backups have no off-VM copy and restore is unverified
+      (GitHub issue #806) — closes out #663's outstanding restore-path
+      proof
+- [ ] Pin the LocalStack image off :latest (GitHub issue #807)
+- [ ] Pin third-party GitHub Actions to commit SHAs on
+      credential-bearing workflows (GitHub issue #808)
+- [ ] GHCR PAT is reused for both push and pull-secret roles (GitHub
+      issue #809)
+- [ ] Engineering blog (last) (GitHub issue #810)
+
+## Phase 56 — Frontend & UX Hardening
+
+Filed 2026-08-20, from the same audit: the frontend pass confirmed a
+strong baseline (httpOnly session cookies, no exploitable
+`dangerouslySetInnerHTML`, client-side authorization gates genuinely
+backed by server-side `PermissionsGuard` checks) but found the round
+title/description free-text fields carry no "don't include real names"
+warning — unlike the recruiter-identifier field, which explicitly warns
+against it — a real gap against CLAUDE.md hard constraint #1 given
+those fields aren't even moderation-gated (see Phase 52's #775). It also
+found no type-level guard against a future interviewer-identity leak
+into shared frontend types, plus a handful of smaller validation and
+error-handling edges. Milestone: "Phase 56 — Frontend & UX Hardening".
+Epic: GitHub issue #811.
+
+Ordered by dependency:
+
+- [ ] Round title/description fields have no "don't include real names"
+      warning (GitHub issue #812)
+- [ ] No type-level guard against a future interviewer-name leak in
+      frontend types (GitHub issue #813)
+- [ ] Round-type-specific fields have no required-field enforcement
+      client-side (GitHub issue #814)
+- [ ] Confirm COOKIE_SECURE=true is set now that Hetzner TLS is live
+      (GitHub issue #815)
+- [ ] Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build
+      time (GitHub issue #816)
+- [ ] Failed round-type field-options fetch silently drops fields
+      instead of blocking the wizard (GitHub issue #817)
+- [ ] Document that rating-input min/max attributes are cosmetic, not
+      enforcement (GitHub issue #818)
+- [ ] Engineering blog (last) (GitHub issue #819)
+
+## Phase 57 — Code Quality & Performance Hardening
+
+Filed 2026-08-20, from the same audit: the code-quality pass found the
+codebase's baseline unusually high for how quickly it was built (strong
+test coverage, no dead code, no N+1 query patterns found anywhere in
+scope) — but found all three Kafka consumers
+(`verdict-consumer`, `notification-consumer`, `analysis-consumer`) catch
+processing errors and log "will be retried on redelivery" without ever
+rethrowing or disabling kafkajs's default autocommit, so a transient
+failure is silently and permanently dropped, not actually retried. It
+also found `GET /companies` has no pagination (the sibling `findTop()`
+was already fixed for the same reason after a live complaint, #415) and
+several smaller pagination/error-message/timeout gaps. Milestone: "Phase
+57 — Code Quality & Performance Hardening". Epic: GitHub issue #820.
+
+Ordered by dependency:
+
+- [ ] Kafka consumers silently drop messages on transient failure
+      despite "retried on redelivery" comments (GitHub issue #821)
+- [ ] GET /companies (findAll) has no pagination (GitHub issue #822)
+- [ ] GET /moderation/queue has no pagination (GitHub issue #823)
+- [ ] findApprovedReviews loads all rows then paginates in application
+      memory (GitHub issue #824)
+- [ ] Company search silently truncates to 10 results with no size/from
+      control (GitHub issue #825)
+- [ ] Unique-constraint errors leak raw column/constraint names to the
+      client (GitHub issue #826)
+- [ ] AI-triage transient failures are indistinguishable from "not
+      configured" (GitHub issue #827) — pairs with #821's retry fix
+- [ ] PATCH /companies/:id requires the full payload instead of true
+      partial update (GitHub issue #828)
+- [ ] Bulk submission transaction has no explicit timeout override
+      (GitHub issue #829)
+- [ ] IP throttle state is in-memory and single-instance only (GitHub
+      issue #830)
+- [ ] MailService and PrismaService have no dedicated unit tests
+      (GitHub issue #831)
+- [ ] Engineering blog (last) (GitHub issue #832)
