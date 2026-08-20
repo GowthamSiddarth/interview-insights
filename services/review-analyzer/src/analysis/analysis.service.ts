@@ -22,6 +22,21 @@ export interface VerdictResult {
   model: string;
 }
 
+// GitHub issue #827 (Phase 57) — 5xx, 429, and connection/timeout errors are
+// the same class the Anthropic SDK itself already retries before giving up
+// (`APIConnectionError` covers both plain connection failures and
+// `APIConnectionTimeoutError`; `status` is undefined for those and set for
+// every `APIError` subclass, including `RateLimitError` (429) and
+// `InternalServerError` (5xx)) — everything else (auth, bad request, parse
+// failure, missing entity) is terminal and won't resolve on its own.
+function isRetryableApiError(err: unknown): boolean {
+  if (err instanceof Anthropic.APIConnectionError) return true;
+  if (err instanceof Anthropic.APIError) {
+    return err.status === 429 || (typeof err.status === 'number' && err.status >= 500);
+  }
+  return false;
+}
+
 const SYSTEM_PROMPT = `You are a content-moderation triage assistant for an interview-experience review platform. Candidates submit ratings of individual interview rounds, recruiter interactions, and an overall process summary. You give a human moderator a second opinion on one submitted piece of content — you never approve or reject anything yourself, and your output is advisory only.
 
 Look for: spam or nonsense text; a specific interviewer or recruiter named or otherwise identifiable by name (this platform never shows real names publicly, only generated labels like "Interviewer A" — flag any text that would defeat that); harassment or abusive language; and text that directly contradicts its own numeric scores (e.g. a 5-out-of-5 difficulty score paired with text calling the round "trivial").
@@ -51,6 +66,19 @@ export class AnalysisService {
   // (a fast create-then-delete race), or the LLM call/parse failed — every
   // failure is caught and logged, never thrown, same best-effort shape
   // AiModerationService's computeAndStoreVerdict() had.
+  //
+  // GitHub issue #827 (Phase 57) — this catch used to log every failure
+  // mode identically. The Anthropic SDK's own client already retries
+  // retryable errors (429/5xx/timeouts/connection resets — see its
+  // `maxRetries` default) internally before ever throwing here, so by the
+  // time an error reaches this catch, a transient blip has already had a
+  // shot at self-healing. What's still missing is *distinguishability* in
+  // the log: isRetryableApiError() below separates "the retries were
+  // exhausted, this may well recover on the next submission" from every
+  // other failure (parse error, missing entity, malformed response) so an
+  // operator can tell a traffic-spike-driven burst of retryable errors
+  // apart from "the feature silently switched off" without waiting for
+  // ReconciliationSweepService's 24h sweep to say more.
   async computeVerdict(entityType: TriageableEntityType, entityId: string): Promise<VerdictResult | null> {
     if (!this.client) return null; // feature disabled — no ANTHROPIC_API_KEY configured
 
@@ -59,11 +87,16 @@ export class AnalysisService {
       if (!content) return null;
 
       return await this.requestVerdict(content);
-    } catch (err) {
-      this.logger.error(
-        `AI moderation triage failed for ${entityType} ${entityId}`,
-        err instanceof Error ? err.stack : err,
-      );
+    } catch (err: unknown) {
+      const stack = err instanceof Error ? err.stack : err;
+      if (isRetryableApiError(err)) {
+        this.logger.warn(
+          `AI moderation triage hit a retryable API error for ${entityType} ${entityId} (already retried internally by the SDK) — likely transient; ReconciliationSweepService's 24h sweep will re-triage if it doesn't recover on its own`,
+          stack,
+        );
+      } else {
+        this.logger.error(`AI moderation triage failed for ${entityType} ${entityId}`, stack);
+      }
       return null;
     }
   }

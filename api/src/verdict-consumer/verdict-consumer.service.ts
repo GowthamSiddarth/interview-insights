@@ -174,6 +174,12 @@ export class VerdictConsumerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // Never throws — a malformed event or a transient failure anywhere in
+  // this pipeline is caught and logged here, not left to kafkajs's default
+  // retry-and-eventually-crash behavior, which would otherwise turn one
+  // bad message into the whole consumer loop stalling. Same shape as
+  // notification-service's/review-analyzer's own handleMessage() (GitHub
+  // issue #821, Phase 57).
   private async handleMessage({ topic, message }: EachMessagePayload): Promise<void> {
     if (!message.value) return;
 
@@ -191,8 +197,16 @@ export class VerdictConsumerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.processEvent(event);
     } catch (err) {
+      // GitHub issue #821 (Phase 57) — this comment used to say "will be
+      // retried on redelivery," which was never true given the "never
+      // throws" design above. A dropped verdict_computed event here just
+      // means this row's moderationVerdict stays null permanently — safe
+      // degradation, not lost data: the moderation page already renders
+      // null as "analysis pending" rather than conflating it with "no
+      // concerns found," and every row is human-reviewed regardless of
+      // whether an AI verdict ever arrives (CLAUDE.md hard constraint #2).
       this.logger.error(
-        `Failed to process "${event.eventType}" event for entity ${entityIdFor(event)} — will be retried on redelivery`,
+        `Failed to process "${event.eventType}" event for entity ${entityIdFor(event)} — not retried; moderationVerdict stays null (rendered as "analysis pending")`,
         err instanceof Error ? err.stack : err,
       );
     }

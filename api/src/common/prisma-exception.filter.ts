@@ -26,12 +26,18 @@ export class PrismaExceptionFilter implements ExceptionFilter {
   private mapException(exception: Prisma.PrismaClientKnownRequestError) {
     switch (exception.code) {
       case 'P2002': {
+        // GitHub issue #826 (Phase 57) — target is the raw Postgres/Prisma
+        // constraint or column name (e.g. "companies_slug_pending_approved_key"),
+        // an internal implementation detail, not something a caller should
+        // ever see verbatim. Logged server-side for debugging; the
+        // client-facing message stays fixed and generic rather than
+        // trying to maintain an allow-list mapping every current (and
+        // future) constraint to a friendly field name.
         const target = (exception.meta?.target as string[] | undefined)?.join(', ');
-        return new ConflictException(
-          target
-            ? `A record with this ${target} already exists.`
-            : 'A record with these values already exists.',
-        );
+        if (target) {
+          this.logger.debug(`P2002 unique constraint violated: ${target}`);
+        }
+        return new ConflictException('A record with these values already exists.');
       }
       case 'P2003':
         return new UnprocessableEntityException(

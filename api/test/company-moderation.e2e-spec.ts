@@ -78,7 +78,7 @@ describe('Company moderation gate (e2e)', () => {
     await server().get(`/companies/${company.id}/analytics`).expect(404);
 
     const list = await server().get('/companies').expect(200);
-    expect(body<CompanyBody[]>(list).some((c) => c.id === company.id)).toBe(false);
+    expect(body<{ items: CompanyBody[] }>(list).items.some((c) => c.id === company.id)).toBe(false);
   });
 
   it('rejects creating an interview process against a pending company (single and bulk endpoints)', async () => {
@@ -120,7 +120,7 @@ describe('Company moderation gate (e2e)', () => {
     await server().get(`/companies/${company.id}/reviews`).expect(200);
     await server().get(`/companies/${company.id}/analytics`).expect(200);
     const list = await server().get('/companies').expect(200);
-    expect(body<CompanyBody[]>(list).some((c) => c.id === company.id)).toBe(true);
+    expect(body<{ items: CompanyBody[] }>(list).items.some((c) => c.id === company.id)).toBe(true);
 
     // Also now a valid target for process creation.
     await server()
@@ -324,6 +324,31 @@ describe('Company moderation gate (e2e)', () => {
         .patch(`/companies/${company.id}`)
         .send({ name: 'New Name', slug: company.slug, sizeBucket: 'mid' })
         .expect(401);
+    });
+
+    // GitHub issue #828 (Phase 57) — a true partial update: sending only
+    // `industry` must leave name/slug/sizeBucket untouched, not reject
+    // outright for omitting them.
+    it('a true partial update: sending only industry leaves the other fields untouched', async () => {
+      const slug = `edit-partial-${unique()}`;
+      const company = await createPendingCompany(app, candidateCookie, {
+        name: 'Old Name',
+        slug,
+        sizeBucket: 'mid',
+      });
+
+      const res = await server()
+        .patch(`/companies/${company.id}`)
+        .set('Cookie', candidateCookie)
+        .send({ industry: 'fintech' })
+        .expect(200);
+
+      expect(body<{ name: string; slug: string; sizeBucket: string; industry: string | null }>(res)).toMatchObject({
+        name: 'Old Name',
+        slug,
+        sizeBucket: 'mid',
+        industry: 'fintech',
+      });
     });
   });
 });

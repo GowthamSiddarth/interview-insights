@@ -12,7 +12,9 @@ export interface IpThrottleOptions {
 // Same known limitation as fraud-checks.service.ts's full-table-scan
 // check (D13): fine for today's single-instance deployment, resets on
 // restart, wouldn't coordinate across replicas — revisit if this ever
-// runs multi-replica.
+// runs multi-replica. Re-confirmed by the 2026-08-20 pre-launch audit
+// (GitHub issue #830, Phase 57): no action needed pre-launch given the
+// current single-instance deployment, closed as documentation-only.
 export class IpThrottle {
   private readonly attempts = new Map<string, { count: number; windowStart: number }>();
 

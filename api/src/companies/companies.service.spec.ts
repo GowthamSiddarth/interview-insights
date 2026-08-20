@@ -13,6 +13,7 @@ describe('CompaniesService', () => {
       findFirst: jest.Mock;
       findFirstOrThrow: jest.Mock;
       findMany: jest.Mock;
+      count: jest.Mock;
     };
     roundRating: { count: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
@@ -44,6 +45,7 @@ describe('CompaniesService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         findFirstOrThrow: jest.fn().mockResolvedValue(createdCompany),
         findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
       },
       roundRating: {
         count: jest.fn().mockResolvedValue(0),
@@ -202,6 +204,29 @@ describe('CompaniesService', () => {
 
       expect(prisma.company.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { status: 'approved' } }),
+      );
+    });
+
+    // GitHub issue #822 (Phase 57) — this used to be a fully unbounded
+    // query, same shape #415 already fixed for the sibling findTop().
+    it('paginates with skip/take and returns total/page/pageSize alongside items', async () => {
+      prisma.company.findMany.mockResolvedValue([createdCompany]);
+      prisma.company.count.mockResolvedValue(37);
+
+      const result = await service.findAll(2, 10);
+
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 10, take: 10 }),
+      );
+      expect(prisma.company.count).toHaveBeenCalledWith({ where: { status: 'approved' } });
+      expect(result).toEqual({ items: [createdCompany], total: 37, page: 2, pageSize: 10 });
+    });
+
+    it('defaults to page 1, pageSize 200 when called with no arguments', async () => {
+      await service.findAll();
+
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 200 }),
       );
     });
   });

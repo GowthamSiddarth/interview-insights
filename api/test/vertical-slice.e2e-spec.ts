@@ -92,7 +92,7 @@ describe('Vertical slice (e2e)', () => {
       .get('/companies')
       .expect(200)
       .expect((res: request.Response) => {
-        expect(body<CompanyBody[]>(res).some((c) => c.id === companyId)).toBe(true);
+        expect(body<{ items: CompanyBody[] }>(res).items.some((c) => c.id === companyId)).toBe(true);
       });
 
     await server()

@@ -560,8 +560,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// GitHub issue #822 (Phase 57) — GET /companies is paginated now, same
+// shape as CompanyReviewsPage.
+export interface CompaniesPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: Company[];
+}
+
 export const api = {
-  listCompanies: () => request<Company[]>('/companies'),
+  // No query params when called with no arguments — relies on the
+  // backend's own ListCompaniesQueryDto defaults (page 1, pageSize 200),
+  // high enough that the one real consumer (the moderation queue's
+  // company filter dropdown) still sees "effectively all of them" in one
+  // call without needing a paginated UI of its own.
+  listCompanies: (page?: number, pageSize?: number) =>
+    request<CompaniesPage>(
+      page !== undefined || pageSize !== undefined
+        ? `/companies?page=${page ?? 1}&pageSize=${pageSize ?? 200}`
+        : '/companies',
+    ),
 
   // GitHub issue #415 — backs the landing page's quick-select grid,
   // capped server-side (5, random for now) rather than listCompanies()

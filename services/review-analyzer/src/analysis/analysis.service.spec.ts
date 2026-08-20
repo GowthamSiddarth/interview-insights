@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+import Anthropic from '@anthropic-ai/sdk';
 import { AnalysisService } from './analysis.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -394,6 +396,63 @@ describe('AnalysisService', () => {
     anthropicClient.messages.create.mockRejectedValue(new Error('network error'));
 
     await expect(buildService().computeVerdict('round_rating', 'rating-1')).resolves.toBeNull();
+  });
+
+  // GitHub issue #827 (Phase 57) — retryable (429/5xx/connection) errors are
+  // still swallowed to null, same as every other failure mode (nothing
+  // downstream should behave differently), but they're logged at a
+  // distinct severity so an operator can tell "the SDK's own retries were
+  // exhausted, this may self-heal" apart from a terminal failure.
+  describe('retryable-vs-terminal error logging (GitHub issue #827)', () => {
+    function mockRating(): void {
+      prisma.roundRating.findUnique.mockResolvedValue({
+        id: 'rating-1',
+        difficulty: 3,
+        fluency: 4,
+        clarity: 5,
+        focus: 4,
+        technicalDepth: null,
+        freeText: 'x',
+        round: { roundType: 'coding', typeMetadata: null },
+      });
+    }
+
+    it.each([
+      ['a 429 rate-limit error', new Anthropic.RateLimitError(429, {}, 'rate limited', new Headers())],
+      ['a 500 internal-server error', new Anthropic.InternalServerError(500, {}, 'internal error', new Headers())],
+      [
+        'a connection error',
+        new Anthropic.APIConnectionError({ message: 'connection reset' }),
+      ],
+    ])('logs %s as a warning, not an error, and still returns null', async (_label, err) => {
+      mockRating();
+      anthropicClient.messages.create.mockRejectedValue(err);
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      const result = await buildService().computeVerdict('round_rating', 'rating-1');
+
+      expect(result).toBeNull();
+      expect(warnSpy).toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('logs a terminal error (e.g. a 400 bad request) as an error, not a warning', async () => {
+      mockRating();
+      anthropicClient.messages.create.mockRejectedValue(new Anthropic.BadRequestError(400, {}, 'bad request', new Headers()));
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      const result = await buildService().computeVerdict('round_rating', 'rating-1');
+
+      expect(result).toBeNull();
+      expect(errorSpy).toHaveBeenCalled();
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
   });
 
   it('returns null (surfaced as a caught, logged failure) when ANTHROPIC_MODEL is unset', async () => {

@@ -28,12 +28,23 @@ describe('PrismaExceptionFilter', () => {
     filter = new PrismaExceptionFilter();
   });
 
-  it('maps P2002 to a 409 naming the conflicting field', () => {
+  // GitHub issue #826 (Phase 57) — the raw constraint/column name must
+  // never reach the client, only a fixed generic message.
+  it('maps P2002 to a fixed generic 409, never echoing the raw constraint/column name', () => {
     const { host, response } = makeHost();
-    filter.catch(makePrismaError('P2002', { target: ['slug'] }), host);
+    filter.catch(makePrismaError('P2002', { target: ['companies_slug_pending_approved_key'] }), host);
 
-    const expected = new ConflictException('A record with this slug already exists.');
+    const expected = new ConflictException('A record with these values already exists.');
     expect(response.status).toHaveBeenCalledWith(expected.getStatus());
+    expect(response.json).toHaveBeenCalledWith(expected.getResponse());
+    expect(JSON.stringify(response.json.mock.calls[0])).not.toContain('companies_slug_pending_approved_key');
+  });
+
+  it('maps P2002 to the same fixed message even with no target at all', () => {
+    const { host, response } = makeHost();
+    filter.catch(makePrismaError('P2002'), host);
+
+    const expected = new ConflictException('A record with these values already exists.');
     expect(response.json).toHaveBeenCalledWith(expected.getResponse());
   });
 

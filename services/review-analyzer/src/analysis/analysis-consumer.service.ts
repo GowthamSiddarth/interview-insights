@@ -146,8 +146,17 @@ export class AnalysisConsumerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.processEvent(event);
     } catch (err) {
+      // GitHub issue #821 (Phase 57) — this comment used to say "will be
+      // retried on redelivery," which was never true: this handler never
+      // rethrows (see this method's own top comment for why), so kafkajs's
+      // autocommit always advances past this message regardless of this
+      // catch block. The real backstop is ReconciliationSweepService's 24h
+      // sweep, which re-triages any row still sitting at
+      // moderationVerdict: null — a dropped event here just means that
+      // sweep (not this consumer) ends up computing the verdict instead,
+      // later.
       this.logger.error(
-        `Failed to process "${event.eventType}" event for entity ${entityIdFor(event)} — will be retried on redelivery`,
+        `Failed to process "${event.eventType}" event for entity ${entityIdFor(event)} — not retried; ReconciliationSweepService's 24h sweep is the backstop for a dropped event`,
         err instanceof Error ? err.stack : err,
       );
     }

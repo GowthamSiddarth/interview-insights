@@ -173,7 +173,7 @@ function mockFetch() {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) });
     }
     if (url.endsWith('/companies') && method === 'GET') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(companiesMock) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: companiesMock, total: companiesMock.length, page: 1, pageSize: 200 }) });
     }
     if (url.includes('/moderation/queue') && !url.includes('/moderation/queue/') && method === 'GET') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
@@ -403,7 +403,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'mod-me', username: 'admin', role: 'admin' }) });
       }
       if (url.endsWith('/companies') && method === 'GET') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(companiesMock) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: companiesMock, total: companiesMock.length, page: 1, pageSize: 200 }) });
       }
       if (url.includes('/moderation/queue') && !url.includes('/moderation/queue/') && method === 'GET') {
         return Promise.resolve({
@@ -576,9 +576,18 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
   });
 
   it('shows the empty state when the queue is clear, distinct from loading', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
+    // GitHub issue #822 (Phase 57) — GET /companies now returns a
+    // paginated { items, total, page, pageSize } shape, not a bare array;
+    // this blanket mock previously served [] for every URL alike.
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/companies')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 200 }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }) as jest.Mock;
 
     render(<ModerationPage />);
@@ -826,7 +835,7 @@ describe('ModerationPage (Phase 14 issue #128; session gating Phase 18 issue #16
           });
         }
         if (url.endsWith('/companies') && method === 'GET') {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(companiesMock) });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: companiesMock, total: companiesMock.length, page: 1, pageSize: 200 }) });
         }
         if (url.includes('/moderation/queue') && !url.includes('/moderation/queue/') && method === 'GET') {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(queueGroups) });
