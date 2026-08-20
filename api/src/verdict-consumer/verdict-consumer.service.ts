@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { Consumer, EachMessagePayload } from 'kafkajs';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { ModerationEntityType, Prisma } from '@prisma/client';
 import { EVENT_CONSUMER } from '../events/redpanda-client.provider';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +19,12 @@ import {
   OVERALL_REVIEW_VERDICT_COMPUTED_V1_TOPIC,
   OverallReviewVerdictComputedEventV1,
 } from '../events/schemas/overall-review-verdict-computed.event';
+import {
+  BaseVerdictComputedEventDto,
+  OverallReviewVerdictComputedEventDto,
+  RecruiterRatingVerdictComputedEventDto,
+  RoundRatingVerdictComputedEventDto,
+} from './dto/verdict-computed-event.dto';
 
 type VerdictComputedEvent =
   | RoundRatingVerdictComputedEventV1
@@ -37,6 +45,14 @@ const TOPICS_BY_EVENT_TYPE = new Set<string>([
   'moderation.overall_review.verdict_computed',
 ]);
 
+// GitHub issue #782 (Phase 52) — one DTO class per eventType, dispatched
+// on the same discriminant TOPICS_BY_EVENT_TYPE already checks.
+const DTO_BY_EVENT_TYPE = {
+  'moderation.round_rating.verdict_computed': RoundRatingVerdictComputedEventDto,
+  'moderation.recruiter_rating.verdict_computed': RecruiterRatingVerdictComputedEventDto,
+  'moderation.overall_review.verdict_computed': OverallReviewVerdictComputedEventDto,
+} as const;
+
 const RECONNECT_INTERVAL_MS = 30_000;
 
 // GitHub issue #440 (Phase 39, D71) — same fixed system-actor label
@@ -46,6 +62,28 @@ export const AUTO_APPROVAL_SYSTEM_ACTOR = 'system:ai-auto-approval';
 // (now in review-analyzer, GitHub issue #340) used to carry when escalating
 // a stalled row directly; this is the one place that still calls flag().
 export const RECONCILIATION_SWEEP_SYSTEM_ACTOR = 'system:ai-reconciliation-sweep';
+
+// GitHub issue #782 (Phase 52) — exported (not a class method) so it's
+// unit-testable in isolation, same reasoning as entityTypeFor/entityIdFor
+// below. Validates the parsed JSON against the DTO matching its eventType
+// before it's trusted anywhere downstream (a Prisma update, moderation
+// approval/flag) — see verdict-computed-event.dto.ts for what's checked.
+export function parseVerdictComputedEvent(raw: string): VerdictComputedEvent {
+  const parsed = JSON.parse(raw) as { eventType?: unknown };
+  const eventType = parsed.eventType;
+  if (typeof eventType !== 'string' || !TOPICS_BY_EVENT_TYPE.has(eventType)) {
+    throw new Error(`Unrecognized eventType "${String(eventType)}"`);
+  }
+
+  const dtoClass = DTO_BY_EVENT_TYPE[eventType as keyof typeof DTO_BY_EVENT_TYPE] as new () =>
+    BaseVerdictComputedEventDto;
+  const instance = plainToInstance(dtoClass, parsed);
+  const errors = validateSync(instance);
+  if (errors.length > 0) {
+    throw new Error(`Event failed schema validation: ${errors.map((e) => e.toString()).join('; ')}`);
+  }
+  return instance as unknown as VerdictComputedEvent;
+}
 
 function entityTypeFor(event: VerdictComputedEvent): TriageableEntityType {
   switch (event.eventType) {
@@ -147,7 +185,7 @@ export class VerdictConsumerService implements OnModuleInit, OnModuleDestroy {
 
     let event: VerdictComputedEvent;
     try {
-      event = this.parseEvent(message.value.toString());
+      event = parseVerdictComputedEvent(message.value.toString());
     } catch (err) {
       this.logger.error(
         `Malformed event on topic "${topic}" — skipping (offset still advances; a malformed message can never become well-formed on redelivery)`,
@@ -172,14 +210,6 @@ export class VerdictConsumerService implements OnModuleInit, OnModuleDestroy {
         err instanceof Error ? err.stack : err,
       );
     }
-  }
-
-  private parseEvent(raw: string): VerdictComputedEvent {
-    const event = JSON.parse(raw) as VerdictComputedEvent;
-    if (!TOPICS_BY_EVENT_TYPE.has(event.eventType)) {
-      throw new Error(`Unrecognized eventType "${String(event.eventType)}"`);
-    }
-    return event;
   }
 
   // Public — the actual per-event handling, deliberately separate from

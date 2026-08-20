@@ -2687,25 +2687,25 @@ verified as genuinely enforced in code, not just documented. Milestone:
 Ordered by dependency — each issue only depends on ones above it in this
 list unless noted otherwise:
 
-- [ ] No auth guard on round creation lets anyone inject unmoderated
+- [x] No auth guard on round creation lets anyone inject unmoderated
       content (GitHub issue #775)
-- [ ] No auth guard on recruiter-interaction creation, same gap as round
+- [x] No auth guard on recruiter-interaction creation, same gap as round
       creation (GitHub issue #776) — same fix pattern as #775
-- [ ] IP-based throttles collapse to one shared bucket behind ingress,
+- [x] IP-based throttles collapse to one shared bucket behind ingress,
       missing trust proxy (GitHub issue #777)
-- [ ] Add helmet security headers to api, notification-service, and
+- [x] Add helmet security headers to api, notification-service, and
       review-analyzer (GitHub issue #778)
-- [ ] Prisma exception filter can leak internal detail on unmapped error
+- [x] Prisma exception filter can leak internal detail on unmapped error
       codes (GitHub issue #779)
-- [ ] CORS/cookie config has no boot-time assertion for
+- [x] CORS/cookie config has no boot-time assertion for
       COOKIE_SECURE/CORS_ORIGIN (GitHub issue #780)
-- [ ] Raw SQL identifier interpolation in fraud-checks is an
+- [x] Raw SQL identifier interpolation in fraud-checks is an
       injection-shaped pattern (GitHub issue #781)
-- [ ] verdict-consumer doesn't schema-validate Kafka event payloads
+- [x] verdict-consumer doesn't schema-validate Kafka event payloads
       (GitHub issue #782)
-- [ ] Staff email has no documented PII-handling rationale, unlike
+- [x] Staff email has no documented PII-handling rationale, unlike
       candidate email (GitHub issue #783)
-- [ ] Local dev EMAIL_ENCRYPTION_KEY is a low-entropy hand-typed
+- [x] Local dev EMAIL_ENCRYPTION_KEY is a low-entropy hand-typed
       placeholder (GitHub issue #784)
 - [ ] Engineering blog (last) (GitHub issue #785)
 
@@ -2733,20 +2733,21 @@ Documentation Reconciliation". Epic: GitHub issue #786.
 
 Ordered by dependency:
 
-- [ ] Analytics materialized views are never refreshed in production
+- [x] Analytics materialized views are never refreshed in production
       (GitHub issue #787)
-- [ ] GDPR erasure (eraseMe) FK-violates for candidates with
+- [x] GDPR erasure (eraseMe) FK-violates for candidates with
       password-reset or edit-throttle rows (GitHub issue #788)
-- [ ] Company creation isn't transactional with its moderation enqueue
+- [x] Company creation isn't transactional with its moderation enqueue
       (GitHub issue #789)
-- [ ] Fraud-check rate limit is a TOCTOU race (GitHub issue #790)
-- [ ] docs/ARCHITECTURE.md's recruiter/overall-review "zero write path"
+- [x] Fraud-check rate limit is a TOCTOU race (GitHub issue #790) —
+      deliberately deferred, not fixed; documented in code + D-log why
+- [x] docs/ARCHITECTURE.md's recruiter/overall-review "zero write path"
       claim is stale (GitHub issue #791)
-- [ ] docs/DATA_MODEL.md lists GDPR erasure as an open decision though
+- [x] docs/DATA_MODEL.md lists GDPR erasure as an open decision though
       it's implemented (GitHub issue #792) — update once #788 lands
-- [ ] docs/DATA_MODEL.md's moderation_queue.entity_type list is missing
+- [x] docs/DATA_MODEL.md's moderation_queue.entity_type list is missing
       'company' (GitHub issue #793)
-- [ ] docs/DATA_MODEL.md's round-type registry table is missing
+- [x] docs/DATA_MODEL.md's round-type registry table is missing
       tech_screening (GitHub issue #794)
 - [ ] Engineering blog (last) (GitHub issue #795)
 
@@ -2771,11 +2772,11 @@ Business-Process Closed-Loop Fixes". Epic: GitHub issue #796.
 
 Ordered by dependency:
 
-- [ ] SLA breach/warning notifications never signal resolution (GitHub
+- [x] SLA breach/warning notifications never signal resolution (GitHub
       issue #797)
-- [ ] candidates.verification_status.document_verified is a dead enum
+- [x] candidates.verification_status.document_verified is a dead enum
       value (GitHub issue #798)
-- [ ] staff_audit_log is written but never surfaced in any UI or read
+- [x] staff_audit_log is written but never surfaced in any UI or read
       endpoint (GitHub issue #799)
 - [ ] Engineering blog (last) (GitHub issue #800) — also covers #729
       once it lands, since it's the fourth finding from this same audit
@@ -2837,19 +2838,21 @@ Epic: GitHub issue #811.
 
 Ordered by dependency:
 
-- [ ] Round title/description fields have no "don't include real names"
+- [x] Round title/description fields have no "don't include real names"
       warning (GitHub issue #812)
-- [ ] No type-level guard against a future interviewer-name leak in
+- [x] No type-level guard against a future interviewer-name leak in
       frontend types (GitHub issue #813)
-- [ ] Round-type-specific fields have no required-field enforcement
-      client-side (GitHub issue #814)
-- [ ] Confirm COOKIE_SECURE=true is set now that Hetzner TLS is live
-      (GitHub issue #815)
-- [ ] Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build
-      time (GitHub issue #816)
-- [ ] Failed round-type field-options fetch silently drops fields
+- [x] Round-type-specific fields have no required-field enforcement
+      client-side (GitHub issue #814) — confirmed the backend treats
+      every field as genuinely optional; documented instead of adding a
+      client-side requirement that would mismatch backend behavior
+- [x] Confirm COOKIE_SECURE=true is set now that Hetzner TLS is live
+      (GitHub issue #815) — confirmed already correct
+- [x] Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build
+      time (GitHub issue #816) — confirmed already correct
+- [x] Failed round-type field-options fetch silently drops fields
       instead of blocking the wizard (GitHub issue #817)
-- [ ] Document that rating-input min/max attributes are cosmetic, not
+- [x] Document that rating-input min/max attributes are cosmetic, not
       enforcement (GitHub issue #818)
 - [ ] Engineering blog (last) (GitHub issue #819)
 

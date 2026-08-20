@@ -71,10 +71,13 @@ model Company {
   @@map("companies")
 }
 
+// GitHub issue #798 (Phase 54) — document_verified was dropped: schema-
+// ready but structurally unreachable, no document-upload/review flow
+// exists anywhere in this codebase. Add it back if that flow is ever
+// actually scoped.
 enum VerificationStatus {
   unverified
   email_verified
-  document_verified
 }
 
 model Candidate {

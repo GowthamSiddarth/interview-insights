@@ -81,8 +81,25 @@ describe('CompaniesService', () => {
       expect(prisma.company.create).toHaveBeenCalledWith({
         data: { ...dto, candidateId: 'candidate-1' },
       });
-      expect(moderationService.enqueue).toHaveBeenCalledWith('company', createdCompany.id);
+      expect(moderationService.enqueue).toHaveBeenCalledWith('company', createdCompany.id, prisma);
       expect(result).toEqual(createdCompany);
+    });
+
+    // GitHub issue #789 (Phase 53, D12) — the create + enqueue must
+    // commit or fail together, same as update() three lines below it.
+    it('wraps the create and its moderation enqueue in a single transaction', async () => {
+      await service.create(dto, 'candidate-1');
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('never enqueues (and the transaction never commits a create) when a pending duplicate already exists', async () => {
+      prisma.company.findFirst.mockResolvedValue({ ...createdCompany, status: 'pending' });
+
+      await expect(service.create(dto, 'candidate-1')).rejects.toThrow(ConflictException);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(moderationService.enqueue).not.toHaveBeenCalled();
     });
 
     // GitHub issue #698 (Phase 50, D104).

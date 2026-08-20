@@ -267,17 +267,6 @@ interview-insights/
 
 ## Known gaps (surfaced, not yet acted on)
 
-- **`RecruiterInteraction`/`RecruiterRating`/`OverallReview` have zero
-  write path.** The schema and migrations have existed since Phase 1,
-  but no controller anywhere creates one, `ModerationService` explicitly
-  throws `NotImplementedException` for either type, and the two
-  corresponding materialized views (`company_recruiter_aggregates`,
-  `company_overall_aggregates`) are permanently empty — not "below the
-  shrinkage floor," genuinely zero rows possible. The analytics
-  dashboard's "recruiter experience" and "overall experience" sections
-  will show "Not enough reviews yet" indefinitely until this is built.
-  This is a real, sizeable feature gap — building it out is a scoped
-  decision for a future planning pass, not something implied by this doc.
 - **Fraud/spam volume growth** — the moderation service will need real ML
   scoring (not just rules) once volume grows; revisit as a dedicated
   workstream, don't bolt it onto the write path later.

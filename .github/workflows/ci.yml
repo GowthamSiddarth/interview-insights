@@ -91,6 +91,10 @@ jobs:
       ADMIN_EMAIL: admin@interview-insights.local
       CANDIDATE_JWT_SECRET: ci-test-candidate-jwt-secret
       CORS_ORIGIN: http://localhost:3000
+      # GitHub issue #780 (Phase 52) — getSessionCookieOptions() hard-fails
+      # at boot if this isn't explicitly "true"/"false"; CI runs over plain
+      # HTTP, same as every local dev environment.
+      COOKIE_SECURE: "false"
     defaults:
       run:
         working-directory: api

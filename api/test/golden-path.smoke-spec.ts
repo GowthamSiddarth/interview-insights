@@ -177,6 +177,7 @@ describe('Full golden path (e2e smoke test)', () => {
     for (let i = 0; i < 3; i++) {
       const roundRes = await server()
         .post(`/processes/${processIdA}/rounds`)
+        .set('Cookie', candidateA.cookie)
         .send({ sequenceNumber: i + 1, title: `Technical Round ${i + 1}`, roundType: 'coding' })
         .expect(201);
       const roundId = body<RoundBody>(roundRes).id;
@@ -195,6 +196,7 @@ describe('Full golden path (e2e smoke test)', () => {
   it('4. submits a recruiter interaction + rating for candidate A', async () => {
     const interactionRes = await server()
       .post(`/processes/${processIdA}/recruiter-interactions`)
+      .set('Cookie', candidateA.cookie)
       .send({ recruiterIdentifier: sharedRecruiterIdentifier })
       .expect(201);
     recruiterInteractionIdA = body<InteractionBody>(interactionRes).id;
@@ -291,6 +293,7 @@ describe('Full golden path (e2e smoke test)', () => {
 
     const interactionRes = await server()
       .post(`/processes/${processIdB}/recruiter-interactions`)
+      .set('Cookie', candidateB.cookie)
       .send({ recruiterIdentifier: sharedRecruiterIdentifier })
       .expect(201);
     interactionIdB = body<InteractionBody>(interactionRes).id;

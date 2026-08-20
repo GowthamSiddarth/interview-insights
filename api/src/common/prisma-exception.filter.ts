@@ -3,6 +3,7 @@ import {
   Catch,
   ConflictException,
   ExceptionFilter,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnprocessableEntityException,
@@ -44,8 +45,17 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         );
       case 'P2025':
         return new NotFoundException('Record not found.');
+      // GitHub issue #779 (Phase 52) — every other known Prisma error code
+      // (constraint names, column names, raw driver detail can end up in
+      // exception.message) previously re-threw straight to Nest's default
+      // handler, which echoes exception.message verbatim to the client.
+      // Log the real error server-side, return a fixed generic message.
       default:
-        throw exception;
+        this.logger.error(
+          `Unmapped Prisma error code ${exception.code}: ${exception.message}`,
+          exception.stack,
+        );
+        return new InternalServerErrorException('An unexpected error occurred.');
     }
   }
 }

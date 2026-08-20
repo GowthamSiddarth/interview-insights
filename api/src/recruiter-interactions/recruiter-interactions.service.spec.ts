@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ForbiddenException } from '@nestjs/common';
 import { RecruiterInteractionsService } from './recruiter-interactions.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecruitersService } from '../recruiters/recruiters.service';
@@ -15,7 +16,9 @@ describe('RecruiterInteractionsService', () => {
   beforeEach(async () => {
     prisma = {
       interviewProcess: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ companyId: 'company-1' }),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ companyId: 'company-1', candidateId: 'candidate-1' }),
       },
       recruiterInteraction: {
         create: jest.fn().mockResolvedValue({ id: 'interaction-1' }),
@@ -36,11 +39,11 @@ describe('RecruiterInteractionsService', () => {
   });
 
   it('resolves the recruiter via the process company before creating the interaction', async () => {
-    await service.create('process-1', { recruiterIdentifier: 'jane@example.com' });
+    await service.create('process-1', 'candidate-1', { recruiterIdentifier: 'jane@example.com' });
 
     expect(prisma.interviewProcess.findUniqueOrThrow).toHaveBeenCalledWith({
       where: { id: 'process-1' },
-      select: { companyId: true },
+      select: { companyId: true, candidateId: true },
     });
     expect(recruitersService.findOrCreate).toHaveBeenCalledWith(
       'company-1',
@@ -50,11 +53,21 @@ describe('RecruiterInteractionsService', () => {
   });
 
   it('creates the interaction against the resolved recruiter and process', async () => {
-    const result = await service.create('process-1', { recruiterIdentifier: 'jane@example.com' });
+    const result = await service.create('process-1', 'candidate-1', {
+      recruiterIdentifier: 'jane@example.com',
+    });
 
     expect(prisma.recruiterInteraction.create).toHaveBeenCalledWith({
       data: { processId: 'process-1', recruiterId: 'recruiter-1' },
     });
     expect(result).toEqual({ id: 'interaction-1' });
+  });
+
+  it('rejects a caller who does not own the process', async () => {
+    await expect(
+      service.create('process-1', 'someone-else', { recruiterIdentifier: 'jane@example.com' }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(recruitersService.findOrCreate).not.toHaveBeenCalled();
+    expect(prisma.recruiterInteraction.create).not.toHaveBeenCalled();
   });
 });

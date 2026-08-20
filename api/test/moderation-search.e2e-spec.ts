@@ -84,6 +84,7 @@ describe('Moderation search (e2e)', () => {
     const processId = body<ProcessBody>(processRes).id;
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Screen', roundType: 'coding' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;
@@ -212,6 +213,7 @@ describe('Moderation search (e2e)', () => {
     const processId = body<ProcessBody>(processRes).id;
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Screen', roundType: 'coding' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;

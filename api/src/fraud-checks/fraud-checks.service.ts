@@ -19,20 +19,6 @@ function normalizeFreeText(freeText: string): string {
   return freeText.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-interface SimilarityTableConfig {
-  table: string;
-  column: string;
-}
-
-const SIMILARITY_TABLE_BY_ENTITY_TYPE: Record<
-  Exclude<ModerationEntityType, 'company'>,
-  SimilarityTableConfig
-> = {
-  round_rating: { table: 'round_ratings', column: 'free_text' },
-  recruiter_rating: { table: 'recruiter_ratings', column: 'free_text' },
-  overall_review: { table: 'overall_reviews', column: 'review_text' },
-};
-
 // Pre-write signal only — never blocks a write outright. A write that trips
 // a check still gets created as `pending` like every other rating (CLAUDE.md
 // hard constraint #2 says "every review/rating write" starts pending, no
@@ -52,6 +38,16 @@ export class FraudChecksService {
   // recruiter rating, or overall review), since the signal being measured
   // — "is this candidate creating an excessive number of submissions" —
   // doesn't depend on entity type at all.
+  //
+  // GitHub issue #790 (Phase 53) — this plain COUNT(*) under READ
+  // COMMITTED is a TOCTOU race: two concurrent submissions can both read
+  // a stale count and exceed the threshold without either ever tripping
+  // the flag. Deliberately left as is — this only ever gates a
+  // `flagReason` annotation, never a hard block (D13), so the worst case
+  // is a missed flag on a human reviewer's radar, not a security or data
+  // integrity issue. If tightened later, use the same atomic
+  // updateMany-with-a-WHERE-clause pattern review()'s reviewedAt race fix
+  // already established (GitHub issue #674) for the identical race class.
   async checkRateLimit(candidateId: string, tx: PrismaTransaction = this.prisma): Promise<boolean> {
     const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
     const count = await tx.interviewProcess.count({
@@ -78,25 +74,54 @@ export class FraudChecksService {
     if (entityType === 'company') return false;
 
     const normalized = normalizeFreeText(freeText);
-    const { table, column } = SIMILARITY_TABLE_BY_ENTITY_TYPE[entityType];
-    return this.hasSimilarExistingText(tx, table, column, normalized);
+    return this.hasSimilarExistingText(tx, entityType, normalized);
   }
 
+  // GitHub issue #781 (Phase 52) — a literal query per entity type, no
+  // string interpolation of a table/column name into raw SQL at all
+  // (the previous Prisma.raw(`"${table}"`) approach was safe only because
+  // its inputs came from a fixed internal map, but the pattern itself was
+  // injection-shaped and a landmine for a future change that widens what
+  // feeds it). `entityType` itself is a validated Prisma enum, and
+  // `normalizedFreeText` is always passed as a real bound parameter, never
+  // interpolated.
   private async hasSimilarExistingText(
     tx: PrismaTransaction,
-    table: string,
-    column: string,
+    entityType: Exclude<ModerationEntityType, 'company'>,
     normalizedFreeText: string,
   ): Promise<boolean> {
-    const rows = await tx.$queryRaw<{ found: boolean }[]>(Prisma.sql`
-      SELECT EXISTS (
-        SELECT 1
-        FROM ${Prisma.raw(`"${table}"`)}
-        WHERE ${Prisma.raw(`"${column}"`)} IS NOT NULL
-          AND similarity(lower(${Prisma.raw(`"${column}"`)}), ${normalizedFreeText}) > ${DUPLICATE_SIMILARITY_THRESHOLD}
-      ) AS "found"
-    `);
-    return rows[0]?.found ?? false;
+    switch (entityType) {
+      case 'round_rating': {
+        const rows = await tx.$queryRaw<{ found: boolean }[]>(Prisma.sql`
+          SELECT EXISTS (
+            SELECT 1 FROM "round_ratings"
+            WHERE "free_text" IS NOT NULL
+              AND similarity(lower("free_text"), ${normalizedFreeText}) > ${DUPLICATE_SIMILARITY_THRESHOLD}
+          ) AS "found"
+        `);
+        return rows[0]?.found ?? false;
+      }
+      case 'recruiter_rating': {
+        const rows = await tx.$queryRaw<{ found: boolean }[]>(Prisma.sql`
+          SELECT EXISTS (
+            SELECT 1 FROM "recruiter_ratings"
+            WHERE "free_text" IS NOT NULL
+              AND similarity(lower("free_text"), ${normalizedFreeText}) > ${DUPLICATE_SIMILARITY_THRESHOLD}
+          ) AS "found"
+        `);
+        return rows[0]?.found ?? false;
+      }
+      case 'overall_review': {
+        const rows = await tx.$queryRaw<{ found: boolean }[]>(Prisma.sql`
+          SELECT EXISTS (
+            SELECT 1 FROM "overall_reviews"
+            WHERE "review_text" IS NOT NULL
+              AND similarity(lower("review_text"), ${normalizedFreeText}) > ${DUPLICATE_SIMILARITY_THRESHOLD}
+          ) AS "found"
+        `);
+        return rows[0]?.found ?? false;
+      }
+    }
   }
 
   // Only one flagReason fits per moderation_queue row, so if multiple

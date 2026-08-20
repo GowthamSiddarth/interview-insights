@@ -100,6 +100,7 @@ describe('Delete empty process (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;
@@ -114,6 +115,7 @@ describe('Delete empty process (e2e)', () => {
     const { cookie, processId } = await createEmptyProcess();
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;

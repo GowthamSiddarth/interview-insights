@@ -94,6 +94,7 @@ describe('Review search (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Round 1', roundType })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;

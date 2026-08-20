@@ -116,10 +116,11 @@ describe('Round-type registry (e2e)', () => {
 
   describe('POST /processes/:processId/rounds — type_metadata validation', () => {
     it('round-trips valid coding type_metadata (controlled + free-text fields)', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       const createRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Technical Screen',
@@ -144,10 +145,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('round-trips a leadership round using the newly-added principlesAsked field', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       const createRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Leadership Round',
@@ -161,10 +163,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('round-trips a tech_screening round using its own screeningFormat/topicsCovered fields (GitHub issue #284)', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       const createRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Recruiter Tech Screen',
@@ -182,10 +185,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('rejects an inactive tech_screening controlled-vocabulary value', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Recruiter Tech Screen',
@@ -196,10 +200,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('rejects a controlled-vocabulary value that is not currently active', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Technical Screen',
@@ -210,10 +215,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('rejects a type_metadata key that is not part of this round type\'s schema', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Behavioral Round',
@@ -224,10 +230,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('accepts a round with no title at all (GitHub issue #287 — optional)', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       const createRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({ sequenceNumber: 1, roundType: 'coding' })
         .expect(201);
       const createdId = body<RoundBody>(createRes).id;
@@ -239,10 +246,11 @@ describe('Round-type registry (e2e)', () => {
     });
 
     it('accepts an `other` round with only its free-text notes field', async () => {
-      const { processId } = await createProcess();
+      const { cookie, processId } = await createProcess();
 
       await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({
           sequenceNumber: 1,
           title: 'Unusual Round',

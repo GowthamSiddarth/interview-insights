@@ -1,3 +1,11 @@
+// GitHub issue #816 (Phase 56) — confirmed: Next.js bakes NEXT_PUBLIC_*
+// vars in at build time, not deploy time, so the localhost fallback below
+// only ever matters for local dev. Every real image build sets this
+// explicitly via --build-arg: cd-hetzner.yml's build-web-image job passes
+// https://api.interviewinsights.fyi; dev/staging/prod overlays each pass
+// their own host through web/Dockerfile's ARG the same way (see
+// overlays/staging/kustomization.yaml's own comment on why each
+// environment needs its own image build, not a re-tag).
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export interface Candidate {
@@ -97,6 +105,17 @@ export interface OverallReview {
 
 // The `entity` payload GET /moderation/queue attaches to each entry —
 // shape varies by entityType; only the fields the moderation page needs.
+//
+// GitHub issue #813 (Phase 56) — GUARD, don't skip reading this before
+// adding a field here: CLAUDE.md hard constraint #1 forbids exposing a
+// real interviewer/recruiter identity anywhere a candidate or moderator
+// can read it publicly. Nothing today enforces that at the type level —
+// the frontend is compliant only because it happens to only ever render
+// a generated label (recruiterLabel below), never a raw name. If a
+// future backend change starts returning a raw interviewer/recruiter
+// name into this shape, nothing here will catch it. Any new field that
+// could carry interviewer/recruiter identity must be named and commented
+// the same way recruiterLabel is — "*Label", generated, never raw.
 export interface ModerationQueueEntity {
   processId: string;
   companyName: string;
@@ -114,8 +133,9 @@ export interface ModerationQueueEntity {
   clarity?: number;
   focus?: number;
   technicalDepth?: number | null;
-  // recruiter_rating — recruiterLabel is the generated label, never a
-  // real name (CLAUDE.md hard constraint #1)
+  // recruiter_rating — recruiterLabel is a generated label ("Recruiter
+  // A"), never a real name (CLAUDE.md hard constraint #1) — see this
+  // interface's own top-of-file guard comment.
   recruiterLabel?: string;
   reachability?: number;
   responsiveness?: number;
@@ -325,6 +345,14 @@ export interface ReviewSearchFilters {
 // registry, consumed by the wizard's flashcard step forms (issue #254)
 // instead of hardcoding round-type-specific fields. `options` is present
 // only for controlled-single/controlled-multi fields, never for text.
+//
+// GitHub issue #814 (Phase 56) — confirmed against the backend
+// (RoundTypeFieldOptionsService.validateTypeMetadata()): every field
+// here is genuinely optional server-side, by design — `typeMetadata`
+// itself can be entirely absent, and any individual key within it can be
+// omitted too. Deliberately no `required` flag on this type — adding
+// client-side required-field enforcement here would mismatch (and
+// wrongly block) what the backend actually accepts.
 export interface RoundTypeFieldDef {
   key: string;
   kind: 'text' | 'controlled-single' | 'controlled-multi';
@@ -420,6 +448,20 @@ export interface StaffAccount {
 
 export interface StaffAccountCreated extends StaffAccount {
   password: string;
+}
+
+// GitHub issue #799 (Phase 54) — GET /admin/staff/audit-log, the read
+// side of every staff mutation StaffAuditLogService.record() already
+// durably logs.
+export interface StaffAuditLogEntry {
+  id: string;
+  actorId: string;
+  actorUsername: string;
+  targetId: string;
+  targetUsername: string;
+  action: string;
+  detail: unknown;
+  createdAt: string;
 }
 
 export interface CandidateSession {
@@ -868,6 +910,9 @@ export const api = {
   // admin:staff:manage only; every call here 403s for a moderator/staff
   // session, same as the backend guard.
   listStaffAccounts: () => request<StaffAccount[]>('/admin/staff'),
+
+  // GitHub issue #799 (Phase 54).
+  listStaffAuditLog: () => request<StaffAuditLogEntry[]>('/admin/staff/audit-log'),
 
   createStaffAccount: (input: { username: string; email: string; role: StaffRole }) =>
     request<StaffAccountCreated>('/admin/staff', {

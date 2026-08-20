@@ -66,8 +66,16 @@ describe('PrismaExceptionFilter', () => {
     expect(response.json).toHaveBeenCalledWith(expected.getResponse());
   });
 
-  it('rethrows any other code, unhandled here', () => {
-    const { host } = makeHost();
-    expect(() => filter.catch(makePrismaError('P2034'), host)).toThrow();
+  // GitHub issue #779 (Phase 52) — every other code used to re-throw
+  // straight to Nest's default handler, which echoes exception.message.
+  it('maps every other code to a fixed generic 500, never echoing exception.message', () => {
+    const { host, response } = makeHost();
+    filter.catch(makePrismaError('P2034', { some: 'internal detail' }), host);
+
+    expect(response.status).toHaveBeenCalledWith(500);
+    const [[body]] = response.json.mock.calls as [[{ message: string }]];
+    expect(body.message).toBe('An unexpected error occurred.');
+    expect(JSON.stringify(body)).not.toContain('Simulated Prisma error');
+    expect(JSON.stringify(body)).not.toContain('internal detail');
   });
 });
