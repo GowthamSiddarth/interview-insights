@@ -136,6 +136,7 @@ strings with no admin-managed vocabulary:
 | `case_study` | `frameworksUsed`: controlled-multi, `industryContext`: text |
 | `assessment` | `assessmentFormat`: controlled-single, `skillsAssessed`: controlled-multi |
 | `take_home` | `projectType`: controlled-single, `technologiesUsed`: controlled-multi |
+| `tech_screening` | `screeningFormat`: controlled-single, `topicsCovered`: controlled-multi |
 | `other` | `notes`: text — deliberately no controlled field, it's the catch-all round type by definition |
 
 ```json
@@ -291,7 +292,7 @@ Generic moderation record referencing any of the rating/review tables above.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| entity_type | text | `round_rating`, `recruiter_rating`, `overall_review` |
+| entity_type | text | `round_rating`, `recruiter_rating`, `overall_review`, `company` (added by GitHub issue #369, Phase 35 — company creation requests go through the same queue. It's the one type review-analyzer's AI auto-approval never triages — no `company-created` event schema exists on its consumer side — so a `company` entry is always resolved by a human moderator, never `AiAutoApprovalAudit`) |
 | entity_id | uuid | |
 | flag_reason | text | nullable — `spam_pattern`, `rate_limit`, `duplicate`, `manual_report` |
 | reviewed_by | text | nullable — moderator id/system |
@@ -377,7 +378,11 @@ Write migrations in this order — later tables depend on earlier ones:
 
 ## Open decisions to make before implementation
 
-- Retention/deletion policy for `moderation_queue` entries and rejected content
-  (GDPR erasure requests will need a defined path).
+- Retention/deletion policy for `moderation_queue` entries and rejected
+  content that a candidate never explicitly erases (how long does
+  rejected/flagged content stick around on its own?). GDPR erasure
+  itself is no longer open — `DELETE /me` (GitHub issue #151,
+  `MeService.eraseMe()`) is fully implemented, per-candidate, real
+  deletion (not anonymization); see GitHub issue #792 (Phase 53).
 - Exact value of `k` in the shrinkage formula once you have enough real
   reviews to tune it against.

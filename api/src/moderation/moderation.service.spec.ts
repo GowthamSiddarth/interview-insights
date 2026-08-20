@@ -103,6 +103,7 @@ describe('ModerationService', () => {
     };
     aiAutoApprovalAudit: { create: jest.Mock };
     $transaction: jest.Mock;
+    $executeRawUnsafe: jest.Mock;
   };
   let reviewSearchService: { indexReview: jest.Mock };
   let companySearchService: { indexCompany: jest.Mock };
@@ -151,6 +152,7 @@ describe('ModerationService', () => {
       },
       aiAutoApprovalAudit: { create: jest.fn().mockResolvedValue(undefined) },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
     };
     reviewSearchService = { indexReview: jest.fn().mockResolvedValue(undefined) };
     companySearchService = { indexCompany: jest.fn().mockResolvedValue(undefined) };
@@ -922,7 +924,25 @@ describe('ModerationService', () => {
       await expect(service.approve('queue-1', {})).resolves.toBeDefined();
     });
 
-    it('reject() flips the round rating to rejected and does not index it', async () => {
+    // GitHub issue #787 (Phase 53, D15 revisit).
+    it('approve() refreshes the matching analytics materialized view', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approve('queue-1', {});
+
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+        'REFRESH MATERIALIZED VIEW CONCURRENTLY "company_round_type_aggregates"',
+      );
+    });
+
+    it('approve() still succeeds even if the materialized view refresh fails', async () => {
+      mockPendingRoundRatingEntry();
+      prisma.$executeRawUnsafe.mockRejectedValue(new Error('view refresh failed'));
+
+      await expect(service.approve('queue-1', {})).resolves.toBeDefined();
+    });
+
+    it('reject() flips the round rating to rejected, does not index it, and does not refresh the analytics view', async () => {
       mockPendingRoundRatingEntry();
 
       await service.reject('queue-1', {});
@@ -932,6 +952,7 @@ describe('ModerationService', () => {
         data: { status: 'rejected' },
       });
       expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
+      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
     });
 
     // GitHub issue #690 (Phase 49, D104).
@@ -1104,7 +1125,7 @@ describe('ModerationService', () => {
       });
     }
 
-    it('approve() flips a recruiter rating to approved and does not attempt search indexing', async () => {
+    it('approve() flips a recruiter rating to approved, does not attempt search indexing, and refreshes the recruiter analytics view', async () => {
       mockPendingRecruiterRatingEntry();
 
       await service.approve('queue-2', { reviewedBy: 'gowtham' });
@@ -1114,6 +1135,9 @@ describe('ModerationService', () => {
         data: { status: 'approved' },
       });
       expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+        'REFRESH MATERIALIZED VIEW CONCURRENTLY "company_recruiter_aggregates"',
+      );
     });
 
     it('reject() flips a recruiter rating to rejected', async () => {
@@ -1138,7 +1162,7 @@ describe('ModerationService', () => {
       });
     }
 
-    it('approve() flips an overall review to approved and does not attempt search indexing', async () => {
+    it('approve() flips an overall review to approved, does not attempt search indexing, and refreshes the overall-review analytics view', async () => {
       mockPendingOverallReviewEntry();
 
       await service.approve('queue-3', { reviewedBy: 'gowtham' });
@@ -1148,6 +1172,9 @@ describe('ModerationService', () => {
         data: { status: 'approved' },
       });
       expect(reviewSearchService.indexReview).not.toHaveBeenCalled();
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+        'REFRESH MATERIALIZED VIEW CONCURRENTLY "company_overall_aggregates"',
+      );
     });
 
     it('reject() flips an overall review to rejected', async () => {
@@ -1202,6 +1229,16 @@ describe('ModerationService', () => {
       companySearchService.indexCompany.mockRejectedValue(new Error('OpenSearch unreachable'));
 
       await expect(service.approve('queue-4', {})).resolves.toBeDefined();
+    });
+
+    // GitHub issue #787 (Phase 53) — 'company' has no aggregate
+    // materialized view of its own.
+    it('approve() on a company does not attempt to refresh any analytics view', async () => {
+      mockPendingCompanyEntry();
+
+      await service.approve('queue-4', { reviewedBy: 'gowtham' });
+
+      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
     });
 
     it('reject() flips a company to rejected and never indexes it', async () => {

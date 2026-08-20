@@ -44,8 +44,18 @@ export class CompaniesService {
       );
     }
 
-    const company = await this.prisma.company.create({ data: { ...dto, candidateId } });
-    await this.moderationService.enqueue('company', company.id);
+    // GitHub issue #789 (Phase 53, D12) — the write and its moderation
+    // enqueue must commit or fail together, same as every other write
+    // path (and this method's own update() three lines below) — a crash
+    // between two separate calls used to leave a company permanently
+    // stuck at status: pending with no moderation_queue entry: invisible,
+    // unapprovable, and not caught by the existing orphan self-heal
+    // (which only cleans up the reverse case).
+    const company = await this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({ data: { ...dto, candidateId } });
+      await this.moderationService.enqueue('company', company.id, tx);
+      return company;
+    });
     // GitHub issue #370 — after commit, best-effort, same D16/D17 shape.
     await this.moderationService.indexForSearch('company', company.id);
     // GitHub issue #698 (Phase 50, D104) — domain event, after commit,

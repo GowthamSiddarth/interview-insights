@@ -164,11 +164,15 @@ export class MeService {
   // RoundRating/RecruiterRating/OverallReview (reference Candidate,
   // Round/RecruiterInteraction) first, then Round/RecruiterInteraction
   // (reference InterviewProcess), then InterviewProcess itself
-  // (references Candidate), then CandidateVerificationToken, then
-  // Candidate last. moderation_queue has no FK (docs/DATA_MODEL.md) —
-  // cleaned up via entityId lists gathered up front, same idea as
-  // issue #150's removeQueueEntries(), just batched by array here
-  // instead of one entity at a time.
+  // (references Candidate), then CandidateVerificationToken/
+  // CandidatePasswordResetToken/EditThrottleState (GitHub issue #788,
+  // Phase 53 — both ON DELETE RESTRICT against Candidate, previously
+  // missing here entirely: any candidate who ever reset a password or
+  // made any edit got a 500 instead of erasure), then Candidate last.
+  // moderation_queue has no FK (docs/DATA_MODEL.md) — cleaned up via
+  // entityId lists gathered up front, same idea as issue #150's
+  // removeQueueEntries(), just batched by array here instead of one
+  // entity at a time.
   async eraseMe(candidateId: string): Promise<void> {
     const [roundRatings, recruiterRatings, overallReviews, processes] = await Promise.all([
       this.prisma.roundRating.findMany({ where: { candidateId }, select: { id: true, status: true } }),
@@ -202,6 +206,8 @@ export class MeService {
 
       await tx.interviewProcess.deleteMany({ where: { candidateId } });
       await tx.candidateVerificationToken.deleteMany({ where: { candidateId } });
+      await tx.candidatePasswordResetToken.deleteMany({ where: { candidateId } });
+      await tx.editThrottleState.deleteMany({ where: { candidateId } });
       await tx.candidate.delete({ where: { id: candidateId } });
     });
 
