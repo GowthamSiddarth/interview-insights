@@ -7,6 +7,18 @@ import { RecruitersService } from '../recruiters/recruiters.service';
 import { RoundTypeFieldOptionsService } from '../round-type-registry/round-type-field-options.service';
 import { CreateBulkProcessDto } from './dto/create-bulk-process.dto';
 
+// GitHub issue #829 (Phase 57) — this transaction runs create()'s round and
+// recruiter-interaction loops sequentially, each doing at least one fraud
+// check (a real, awaited query — see this class's own top comment on why
+// sequential creation is required for in-transaction duplicate-text
+// detection to work at all), well within reach of Prisma's 5s default
+// interactive-transaction timeout for a large-but-real submission (a
+// candidate backfilling a whole multi-round loop after the fact isn't rare
+// — see the wizard this endpoint backs). No hard cap exists on rounds/
+// recruiterInteractions array length (CreateBulkProcessDto), so this is
+// sized generously rather than tuned to today's typical loop size.
+const BULK_SUBMISSION_TRANSACTION_TIMEOUT_MS = 20_000;
+
 // GitHub issue #251 (Phase 25) — the backend counterpart Phase 26's
 // client-side draft wizard needs before it can submit anything for real.
 // Existing per-entity endpoints stay unchanged; this is a new path, not a
@@ -128,7 +140,7 @@ export class BulkProcessSubmissionService {
       }
 
       return process;
-    });
+    }, { timeout: BULK_SUBMISSION_TRANSACTION_TIMEOUT_MS });
 
     // GitHub issue #332 (Phase 30, D53) — same *.created event every
     // incremental submission publishes, best-effort. review-analyzer picks

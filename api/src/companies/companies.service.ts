@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { ModerationService } from '../moderation/moderation.service';
 
 @Injectable()
@@ -66,7 +67,7 @@ export class CompaniesService {
   // status short of that; a non-owner (or an unattributed, e.g.
   // seed/admin-created, company with no candidateId at all) always gets
   // the same 403.
-  async update(id: string, candidateId: string, dto: CreateCompanyDto) {
+  async update(id: string, candidateId: string, dto: UpdateCompanyDto) {
     const company = await this.prisma.company.findFirstOrThrow({ where: { id } });
     if (company.candidateId !== candidateId) {
       throw new ForbiddenException('You can only edit your own company request.');
@@ -93,11 +94,24 @@ export class CompaniesService {
     return updated;
   }
 
-  findAll() {
-    return this.prisma.company.findMany({
-      where: { status: 'approved' },
-      orderBy: { createdAt: 'desc' },
-    });
+  // GitHub issue #822 (Phase 57) — this ran an unbounded query, the same
+  // shape #415 already fixed for the sibling findTop() below after a
+  // live complaint. Paginated the same way findApprovedReviews() already
+  // is; the one real consumer today (the moderation queue's company
+  // filter dropdown) requests a large-enough pageSize to still see
+  // "effectively all of them" in one call.
+  async findAll(page = 1, pageSize = 200) {
+    const where = { status: 'approved' } as const;
+    const [items, total] = await Promise.all([
+      this.prisma.company.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.company.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   // GitHub issue #415 — backs the landing page's quick-select company
@@ -147,6 +161,22 @@ export class CompaniesService {
   // profile page listing a company's reviews is a source-of-truth read,
   // not a search. Never includes candidateId or any interviewer identity
   // (hard constraint #1).
+  //
+  // GitHub issue #824 (Phase 57) — every approved rating for the company
+  // is loaded and grouped in application memory before the requested page
+  // is sliced off, so a popular company pays the full query/serialization/
+  // grouping cost on every page, not just page 1 — an acknowledged
+  // tradeoff, deliberately not fixed here. Pushing LIMIT/OFFSET to
+  // Postgres directly isn't a small change: the grouping is by process,
+  // not by row (same reasoning #315 already established for the
+  // moderation queue), so a naive row-level LIMIT/OFFSET would risk
+  // splitting one submission's rounds across a page boundary — the exact
+  // bug #347 fixed. Correctly fixing this needs either a window-function
+  // query (rank groups, then filter) or a precomputed materialized view
+  // like the aggregation layer already uses elsewhere — both real,
+  // separate pieces of work. Revisit once a specific company's review
+  // volume makes this measurably slow, per this file's own established
+  // "fine at today's volume" precedent (see findAll()/findTop() above).
   async findApprovedReviews(companyId: string, page: number, pageSize: number) {
     // 404 (not an empty page) for a company that doesn't exist or isn't
     // approved yet — a pending/rejected company's reviews endpoint must

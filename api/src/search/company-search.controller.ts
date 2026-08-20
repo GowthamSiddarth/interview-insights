@@ -8,6 +8,6 @@ export class CompanySearchController {
 
   @Get()
   search(@Query() query: SearchCompaniesQueryDto) {
-    return this.companySearchService.search(query.q);
+    return this.companySearchService.search(query.q, query.size, query.from);
   }
 }

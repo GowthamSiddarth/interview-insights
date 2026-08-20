@@ -744,7 +744,7 @@ describe('Moderation (e2e)', () => {
         .expect(201);
 
       const publicCompanies = await server().get('/companies').expect(200);
-      expect(body<Array<{ id: string }>>(publicCompanies).map((c) => c.id)).toContain(company.id);
+      expect(body<{ items: Array<{ id: string }> }>(publicCompanies).items.map((c) => c.id)).toContain(company.id);
     });
 
     it('rejecting a pending company keeps it out of the public list', async () => {
@@ -762,7 +762,7 @@ describe('Moderation (e2e)', () => {
         .expect(201);
 
       const publicCompanies = await server().get('/companies').expect(200);
-      expect(body<Array<{ id: string }>>(publicCompanies).map((c) => c.id)).not.toContain(company.id);
+      expect(body<{ items: Array<{ id: string }> }>(publicCompanies).items.map((c) => c.id)).not.toContain(company.id);
     });
   });
 

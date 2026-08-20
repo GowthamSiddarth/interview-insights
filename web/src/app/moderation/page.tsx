@@ -443,7 +443,10 @@ export default function ModerationPage() {
 
   useEffect(() => {
     if (!sessionChecked) return;
-    api.listCompanies().then(setCompanies).catch(() => undefined);
+    // GitHub issue #822 (Phase 57) — GET /companies is paginated now;
+    // this filter dropdown wants "effectively all of them" in one call,
+    // which the default pageSize (200) already covers.
+    api.listCompanies().then((page) => setCompanies(page.items)).catch(() => undefined);
   }, [sessionChecked]);
 
   useEffect(() => {

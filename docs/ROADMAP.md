@@ -2870,24 +2870,49 @@ several smaller pagination/error-message/timeout gaps. Milestone: "Phase
 
 Ordered by dependency:
 
-- [ ] Kafka consumers silently drop messages on transient failure
-      despite "retried on redelivery" comments (GitHub issue #821)
-- [ ] GET /companies (findAll) has no pagination (GitHub issue #822)
-- [ ] GET /moderation/queue has no pagination (GitHub issue #823)
+- [x] Kafka consumers silently drop messages on transient failure
+      despite "retried on redelivery" comments (GitHub issue #821) — the
+      "never rethrow" behavior itself was already a deliberate,
+      already-reasoned design decision (avoids one poison-pill message
+      stalling a whole partition); the real bug was the misleading
+      comment, fixed in all three consumers to accurately describe the
+      "dropped, reconciliation sweep is the real backstop" reality.
+- [x] GET /companies (findAll) has no pagination (GitHub issue #822) —
+      real `page`/`pageSize` pagination (default 1/200, max 200).
+- [x] GET /moderation/queue has no pagination (GitHub issue #823) — a
+      bounded cap (`take: 500`) rather than full pagination, given the
+      existing by-InterviewProcess grouping constraint (#315); documented
+      tradeoff in `moderation.service.ts`.
 - [ ] findApprovedReviews loads all rows then paginates in application
-      memory (GitHub issue #824)
-- [ ] Company search silently truncates to 10 results with no size/from
-      control (GitHub issue #825)
-- [ ] Unique-constraint errors leak raw column/constraint names to the
-      client (GitHub issue #826)
-- [ ] AI-triage transient failures are indistinguishable from "not
-      configured" (GitHub issue #827) — pairs with #821's retry fix
-- [ ] PATCH /companies/:id requires the full payload instead of true
-      partial update (GitHub issue #828)
-- [ ] Bulk submission transaction has no explicit timeout override
-      (GitHub issue #829)
-- [ ] IP throttle state is in-memory and single-instance only (GitHub
-      issue #830)
-- [ ] MailService and PrismaService have no dedicated unit tests
-      (GitHub issue #831)
+      memory (GitHub issue #824) — deliberately deferred, not fixed: a
+      correct fix needs a window-function query or a precomputed
+      materialized view (same grouping constraint #315/#823 hit), real
+      separate work: documented in `companies.service.ts` with a revisit
+      trigger (once a specific company's review volume makes this
+      measurably slow), left open rather than closed.
+- [x] Company search silently truncates to 10 results with no size/from
+      control (GitHub issue #825) — `size`/`from` query params (default
+      10/0, max size 50).
+- [x] Unique-constraint errors leak raw column/constraint names to the
+      client (GitHub issue #826) — P2002 `target` now logged
+      server-side only; the client gets a fixed generic message.
+- [x] AI-triage transient failures are indistinguishable from "not
+      configured" (GitHub issue #827) — pairs with #821's retry fix.
+      The Anthropic SDK already retries 429/5xx/connection errors
+      internally before throwing; the real gap was log
+      distinguishability, fixed by logging retryable-vs-terminal errors
+      at different severities in `analysis.service.ts`.
+- [x] PATCH /companies/:id requires the full payload instead of true
+      partial update (GitHub issue #828) — new `UpdateCompanyDto` with
+      every field optional.
+- [x] Bulk submission transaction has no explicit timeout override
+      (GitHub issue #829) — explicit 20s timeout passed to `$transaction()`.
+- [x] IP throttle state is in-memory and single-instance only (GitHub
+      issue #830) — no code change: confirmed as an accepted, already-
+      documented tradeoff for the current single-instance deployment,
+      closed as documentation-only per the issue's own recommendation.
+- [x] MailService and PrismaService have no dedicated unit tests
+      (GitHub issue #831) — added for notification-service's
+      `MailService`/`mail-transporter.provider.ts` and `PrismaService`
+      in all three services (api, notification-service, review-analyzer).
 - [ ] Engineering blog (last) (GitHub issue #832)

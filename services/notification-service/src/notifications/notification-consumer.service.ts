@@ -421,8 +421,19 @@ export class NotificationConsumerService implements OnModuleInit, OnModuleDestro
     try {
       await this.processEvent(event);
     } catch (err) {
+      // GitHub issue #821 (Phase 57) — this comment used to say "will be
+      // retried on redelivery," which was never true: this handler never
+      // rethrows (see this method's own top comment for why), so kafkajs's
+      // autocommit always advances past this message regardless of this
+      // catch block. Unlike review-analyzer's own consumer, there's no
+      // sweep that re-sends a missed notification — a dropped event here
+      // means that one email is genuinely never sent. Accepted (GitHub
+      // issue #335's own acceptance criteria): the underlying write this
+      // notification is *about* is already durably committed to Postgres
+      // regardless, so the worst case is a missed convenience email, not
+      // lost data.
       this.logger.error(
-        `Failed to process "${event.eventType}" event for entity ${entityIdFor(event)} — will be retried on redelivery`,
+        `Failed to process "${event.eventType}" event for entity ${entityIdFor(event)} — not retried; this notification will not be sent`,
         err instanceof Error ? err.stack : err,
       );
     }

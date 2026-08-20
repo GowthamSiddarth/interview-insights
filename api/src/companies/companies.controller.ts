@@ -5,6 +5,8 @@ import { EditThrottleGuard } from '../common/edit-throttle.guard';
 import { CompanyCreationThrottleGuard } from './company-creation-throttle.guard';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
+import { ListCompaniesQueryDto } from './dto/list-companies-query.dto';
 import { ListCompanyReviewsQueryDto } from './dto/list-company-reviews-query.dto';
 
 @Controller('companies')
@@ -31,15 +33,15 @@ export class CompaniesController {
   @UseGuards(CandidateJwtAuthGuard, EditThrottleGuard)
   update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CreateCompanyDto,
+    @Body() dto: UpdateCompanyDto,
     @CurrentCandidateId() candidateId: string,
   ) {
     return this.companiesService.update(id, candidateId, dto);
   }
 
   @Get()
-  findAll() {
-    return this.companiesService.findAll();
+  findAll(@Query() query: ListCompaniesQueryDto) {
+    return this.companiesService.findAll(query.page, query.pageSize);
   }
 
   // Two-segment path, so it can't collide with the single-segment ':id'

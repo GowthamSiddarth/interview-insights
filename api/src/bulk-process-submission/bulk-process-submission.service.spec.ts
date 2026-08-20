@@ -76,6 +76,15 @@ describe('BulkProcessSubmissionService', () => {
     expect(result).toEqual({ id: 'process-1' });
   });
 
+  // GitHub issue #829 (Phase 57) — an explicit timeout, generously sized
+  // beyond Prisma's 5s interactive-transaction default, given this
+  // transaction's sequential per-round/per-interaction fraud checks.
+  it('passes an explicit, generous timeout to $transaction (GitHub issue #829)', async () => {
+    await service.create('company-1', 'candidate-1', baseDto);
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 20_000 });
+  });
+
   // GitHub issue #369 (Phase 35) — a pending/rejected company doesn't
   // publicly exist yet; nothing in the payload should get created.
   it('rejects with 404 and creates nothing when the company is not approved', async () => {

@@ -127,5 +127,29 @@ describe('CompanySearchService', () => {
 
       await expect(service.search('nonexistent')).resolves.toEqual([]);
     });
+
+    // GitHub issue #825 (Phase 57) — no size/from control previously,
+    // silently truncating to OpenSearch's implicit 10-hit default.
+    it('defaults to size 10, from 0 when not given', async () => {
+      client.search.mockResolvedValue({ body: { hits: { hits: [] } } });
+
+      await service.search('acme');
+
+      expect(client.search).toHaveBeenCalledWith(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.objectContaining() is typed `any` by @types/jest
+        expect.objectContaining({ body: expect.objectContaining({ size: 10, from: 0 }) }),
+      );
+    });
+
+    it('passes explicit size/from through to OpenSearch', async () => {
+      client.search.mockResolvedValue({ body: { hits: { hits: [] } } });
+
+      await service.search('acme', 25, 50);
+
+      expect(client.search).toHaveBeenCalledWith(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.objectContaining() is typed `any` by @types/jest
+        expect.objectContaining({ body: expect.objectContaining({ size: 25, from: 50 }) }),
+      );
+    });
   });
 });

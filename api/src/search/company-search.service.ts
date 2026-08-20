@@ -96,10 +96,17 @@ export class CompanySearchService implements OnModuleInit {
     }
   }
 
-  async search(query: string): Promise<CompanySearchResult[]> {
+  // GitHub issue #825 (Phase 57) — size/from now passed through
+  // explicitly rather than left to OpenSearch's implicit 10-hit default,
+  // which silently truncated a broad query with no way to page further
+  // or even know more results existed. Defaults match the DTO's own
+  // (size 10, from 0) for any direct caller that doesn't go through it.
+  async search(query: string, size = 10, from = 0): Promise<CompanySearchResult[]> {
     const { body } = await this.client.search({
       index: this.index,
       body: {
+        size,
+        from,
         query: {
           // No fuzziness: AUTO's edit-distance tolerance is meant for
           // typo correction on words, but it also lets two long numeric

@@ -348,9 +348,22 @@ export class ModerationService {
       where.OR = refs;
     }
 
+    // GitHub issue #823 (Phase 57) — "all pending, no filter" was fully
+    // unbounded, compounding with the per-row enrichment work below.
+    // Capped, not fully paginated: entries are grouped by process after
+    // this query (issue #315), and the frontend queue view has no
+    // pagination UI of its own to consume a real page boundary yet — a
+    // bounded take is the proportionate fix until either changes. Ordered
+    // by slaDeadline (most urgent first) either way, so a cap still
+    // surfaces the entries that matter most; a same-submission's rounds
+    // are created together and so share a near-identical slaDeadline, so
+    // a group split across this boundary is a low-probability edge case,
+    // not a designed guarantee.
+    const QUEUE_ENTRY_CAP = 500;
     const entries = await this.prisma.moderationQueueEntry.findMany({
       where,
       orderBy: { slaDeadline: 'asc' },
+      take: QUEUE_ENTRY_CAP,
       include: { claimedBy: { select: { id: true, username: true } } },
     });
     const enrichedEntries = await this.enrichEntries(entries);

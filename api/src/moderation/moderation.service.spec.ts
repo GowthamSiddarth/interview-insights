@@ -314,8 +314,21 @@ describe('ModerationService', () => {
       expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith({
         where: { reviewedAt: null },
         orderBy: { slaDeadline: 'asc' },
+        take: 500,
         include: { claimedBy: { select: { id: true, username: true } } },
       });
+    });
+
+    // GitHub issue #823 (Phase 57) — "all pending, no filter" was
+    // previously fully unbounded.
+    it('caps the query at 500 entries', async () => {
+      prisma.moderationQueueEntry.findMany.mockResolvedValue([]);
+
+      await service.listPending();
+
+      expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 500 }),
+      );
     });
 
     // GitHub issue #522 (Phase 41) — GET /moderation/queue's own filters.
