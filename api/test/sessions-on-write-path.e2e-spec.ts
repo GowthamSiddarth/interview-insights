@@ -25,12 +25,17 @@ function body<T>(res: request.Response): T {
 }
 
 // Proves GitHub issue #146's core acceptance criteria directly, across
-// all four candidateId-bearing write paths (InterviewProcess, RoundRating,
-// RecruiterRating, OverallReview) — each existing feature e2e spec was
-// already updated to authenticate as part of this same issue, but this
-// file is the single place asserting the guarantee itself: unauthenticated
-// writes 401, and a candidate can never write as another (candidateId
-// only ever comes from the session, never the request body).
+// all candidateId-bearing write paths (InterviewProcess, RoundRating,
+// RecruiterRating, OverallReview, bulk process submission) — each existing
+// feature e2e spec was already updated to authenticate as part of this
+// same issue, but this file is the single place asserting the guarantee
+// itself: unauthenticated writes 401, and a candidate can never write as
+// another (candidateId only ever comes from the session, never the
+// request body). GitHub issues #775/#776 (Phase 52, D112) later added the
+// same session requirement to Round/RecruiterInteraction creation too —
+// those two have no candidateId column of their own, so their guarantee
+// is checked transitively through the parent process's candidateId
+// instead, covered separately below.
 describe('Sessions on the write path (e2e)', () => {
   let app: INestApplication;
 
@@ -77,6 +82,7 @@ describe('Sessions on the write path (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;
@@ -117,6 +123,7 @@ describe('Sessions on the write path (e2e)', () => {
 
       const interactionRes = await server()
         .post(`/processes/${processId}/recruiter-interactions`)
+        .set('Cookie', cookie)
         .send({ recruiterIdentifier: `recruiter-${Date.now()}@example.com` })
         .expect(201);
       const interactionId = body<InteractionBody>(interactionRes).id;
@@ -149,6 +156,45 @@ describe('Sessions on the write path (e2e)', () => {
       await server()
         .post(`/companies/${companyId}/processes/bulk`)
         .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(401);
+    }, 15000);
+
+    // GitHub issues #775/#776 (Phase 52, D112).
+    it('POST /processes/:processId/rounds', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const { id: companyId } = await createApprovedCompany(app, cookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', cookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const processId = body<ProcessBody>(processRes).id;
+
+      await server()
+        .post(`/processes/${processId}/rounds`)
+        .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+        .expect(401);
+    }, 15000);
+
+    it('POST /processes/:processId/recruiter-interactions', async () => {
+      const { cookie } = await loginAsCandidate(app, uniqueEmail());
+      const { id: companyId } = await createApprovedCompany(app, cookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', cookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const processId = body<ProcessBody>(processRes).id;
+
+      await server()
+        .post(`/processes/${processId}/recruiter-interactions`)
+        .send({ recruiterIdentifier: `recruiter-${Date.now()}@example.com` })
         .expect(401);
     }, 15000);
   });
@@ -186,6 +232,51 @@ describe('Sessions on the write path (e2e)', () => {
         .send({ difficulty: 3, fluency: 5, clarity: 5, focus: 4 })
         .expect(201);
       expect(body<EntityWithCandidateId>(ratingRes).candidateId).toBe(ownCandidateId);
+    }, 15000);
+
+    // GitHub issues #775/#776 (Phase 52, D112) — Round/RecruiterInteraction
+    // have no candidateId column of their own, so this is the ownership
+    // check that stands in for the candidateId-injection tests above.
+    it('a candidate cannot add a round to another candidate\'s process', async () => {
+      const { cookie: ownerCookie } = await loginAsCandidate(app, uniqueEmail());
+      const { id: companyId } = await createApprovedCompany(app, ownerCookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', ownerCookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const processId = body<ProcessBody>(processRes).id;
+
+      const { cookie: intruderCookie } = await loginAsCandidate(app, uniqueEmail());
+      await server()
+        .post(`/processes/${processId}/rounds`)
+        .set('Cookie', intruderCookie)
+        .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+        .expect(403);
+    }, 15000);
+
+    it('a candidate cannot add a recruiter interaction to another candidate\'s process', async () => {
+      const { cookie: ownerCookie } = await loginAsCandidate(app, uniqueEmail());
+      const { id: companyId } = await createApprovedCompany(app, ownerCookie, {
+        name: 'Acme Corp',
+        slug: uniqueSlug(),
+      });
+      const processRes = await server()
+        .post(`/companies/${companyId}/processes`)
+        .set('Cookie', ownerCookie)
+        .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+        .expect(201);
+      const processId = body<ProcessBody>(processRes).id;
+
+      const { cookie: intruderCookie } = await loginAsCandidate(app, uniqueEmail());
+      await server()
+        .post(`/processes/${processId}/recruiter-interactions`)
+        .set('Cookie', intruderCookie)
+        .send({ recruiterIdentifier: `recruiter-${Date.now()}@example.com` })
+        .expect(403);
     }, 15000);
   });
 });

@@ -26,7 +26,15 @@ export interface SessionCookieOptions {
 // (D32) the moment anyone used the real Ingress-fronted app instead of
 // local dev servers. COOKIE_DOMAIN widens the cookie to the shared parent
 // domain (e.g. `.interview-insights.local`) so both subdomains can see it.
+// GitHub issue #780 (Phase 52) — COOKIE_SECURE must be explicitly "true"
+// or "false", never silently absent: every real environment (local .env,
+// every k8s overlay's api-config) already sets it outright, so requiring
+// it outright only ever catches a genuinely missing/misconfigured deploy
+// rather than quietly falling back to insecure cookies.
 export function getSessionCookieOptions(): SessionCookieOptions {
+  if (process.env.COOKIE_SECURE !== 'true' && process.env.COOKIE_SECURE !== 'false') {
+    throw new Error('COOKIE_SECURE must be explicitly set to "true" or "false".');
+  }
   return {
     httpOnly: true,
     secure: process.env.COOKIE_SECURE === 'true',

@@ -104,9 +104,14 @@ describe('Fraud checks (e2e)', () => {
     return body<ProcessBody>(processRes).id;
   }
 
-  async function createRound(processId: string, sequenceNumber = 1): Promise<string> {
+  async function createRound(
+    processId: string,
+    candidateCookie: string,
+    sequenceNumber = 1,
+  ): Promise<string> {
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', candidateCookie)
       .send({ sequenceNumber, title: `Round ${sequenceNumber}`, roundType: 'coding' })
       .expect(201);
     return body<RoundBody>(roundRes).id;
@@ -148,6 +153,7 @@ describe('Fraud checks (e2e)', () => {
   ): Promise<{ ratingId: string; queueEntry: QueueEntryBody }> {
     const interactionRes = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', candidateCookie)
       .send({ recruiterIdentifier: `recruiter-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com` })
       .expect(201);
     const interactionId = body<InteractionBody>(interactionRes).id;
@@ -194,15 +200,15 @@ describe('Fraud checks (e2e)', () => {
     // submission count at each rating's creation time is 1, 2, then 3 —
     // not all 3 upfront, which would trip every rating equally.
     const process1 = await createProcess(candidateCookie);
-    const round1 = await createRound(process1);
+    const round1 = await createRound(process1, candidateCookie);
     const first = await submitRoundRating(round1, candidateCookie);
 
     const process2 = await createProcess(candidateCookie);
-    const round2 = await createRound(process2);
+    const round2 = await createRound(process2, candidateCookie);
     const second = await submitRoundRating(round2, candidateCookie);
 
     const process3 = await createProcess(candidateCookie);
-    const round3 = await createRound(process3);
+    const round3 = await createRound(process3, candidateCookie);
     const third = await submitRoundRating(round3, candidateCookie);
 
     expect(first.queueEntry.flagReason).toBeNull();
@@ -215,10 +221,10 @@ describe('Fraud checks (e2e)', () => {
   it('never flags multiple round ratings within a single submission for rate_limit', async () => {
     const candidateCookie = await loginNewCandidate();
     const processId = await createProcess(candidateCookie);
-    const round1 = await createRound(processId, 1);
-    const round2 = await createRound(processId, 2);
-    const round3 = await createRound(processId, 3);
-    const round4 = await createRound(processId, 4);
+    const round1 = await createRound(processId, candidateCookie, 1);
+    const round2 = await createRound(processId, candidateCookie, 2);
+    const round3 = await createRound(processId, candidateCookie, 3);
+    const round4 = await createRound(processId, candidateCookie, 4);
 
     const first = await submitRoundRating(round1, candidateCookie);
     const second = await submitRoundRating(round2, candidateCookie);
@@ -258,8 +264,8 @@ describe('Fraud checks (e2e)', () => {
   it('flags a round rating with duplicate when its free_text matches an existing round rating, but still creates it', async () => {
     const candidateCookieA = await loginNewCandidate();
     const candidateCookieB = await loginNewCandidate();
-    const roundA = await createRound(await createProcess(candidateCookieA));
-    const roundB = await createRound(await createProcess(candidateCookieB));
+    const roundA = await createRound(await createProcess(candidateCookieA), candidateCookieA);
+    const roundB = await createRound(await createProcess(candidateCookieB), candidateCookieB);
 
     const reviewText = uniqueFreeText();
     const first = await submitRoundRating(roundA, candidateCookieA, reviewText);
@@ -306,7 +312,7 @@ describe('Fraud checks (e2e)', () => {
   it('does not flag a duplicate across different entity types', async () => {
     const candidateCookieA = await loginNewCandidate();
     const candidateCookieB = await loginNewCandidate();
-    const roundA = await createRound(await createProcess(candidateCookieA));
+    const roundA = await createRound(await createProcess(candidateCookieA), candidateCookieA);
     const processB = await createProcess(candidateCookieB);
 
     const text = uniqueFreeText();
@@ -329,8 +335,8 @@ describe('Fraud checks (e2e)', () => {
   it('flags a round rating with duplicate when its free_text is a reworded near-duplicate, not an exact match', async () => {
     const candidateCookieA = await loginNewCandidate();
     const candidateCookieB = await loginNewCandidate();
-    const roundA = await createRound(await createProcess(candidateCookieA));
-    const roundB = await createRound(await createProcess(candidateCookieB));
+    const roundA = await createRound(await createProcess(candidateCookieA), candidateCookieA);
+    const roundB = await createRound(await createProcess(candidateCookieB), candidateCookieB);
 
     const core = uniqueFreeText().replace(/\.$/, '');
     const first = await submitRoundRating(
@@ -350,7 +356,7 @@ describe('Fraud checks (e2e)', () => {
 
   it('does not flag distinct free_text submissions', async () => {
     const candidateCookie = await loginNewCandidate();
-    const roundId = await createRound(await createProcess(candidateCookie));
+    const roundId = await createRound(await createProcess(candidateCookie), candidateCookie);
 
     const { queueEntry } = await submitRoundRating(roundId, candidateCookie, uniqueFreeText());
 

@@ -1,12 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { RoundsService } from './rounds.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoundTypeFieldOptionsService } from '../round-type-registry/round-type-field-options.service';
 
 describe('RoundsService', () => {
   let service: RoundsService;
-  let prisma: { round: { create: jest.Mock; findMany: jest.Mock } };
+  let prisma: {
+    round: { create: jest.Mock; findMany: jest.Mock };
+    interviewProcess: { findUniqueOrThrow: jest.Mock };
+  };
   let fieldOptionsService: { validateTypeMetadata: jest.Mock };
 
   beforeEach(async () => {
@@ -14,6 +17,9 @@ describe('RoundsService', () => {
       round: {
         create: jest.fn(),
         findMany: jest.fn(),
+      },
+      interviewProcess: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ candidateId: 'candidate-1' }),
       },
     };
     fieldOptionsService = {
@@ -42,7 +48,7 @@ describe('RoundsService', () => {
     it('validates type_metadata against the registry before writing', async () => {
       prisma.round.create.mockResolvedValue({ id: 'round-1', ...dto });
 
-      await service.create('process-1', dto);
+      await service.create('process-1', 'candidate-1', dto);
 
       expect(fieldOptionsService.validateTypeMetadata).toHaveBeenCalledWith(
         'coding',
@@ -56,7 +62,17 @@ describe('RoundsService', () => {
         new BadRequestException('Invalid value(s)'),
       );
 
-      await expect(service.create('process-1', dto)).rejects.toThrow(BadRequestException);
+      await expect(service.create('process-1', 'candidate-1', dto)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.round.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a caller who does not own the process', async () => {
+      await expect(service.create('process-1', 'someone-else', dto)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(fieldOptionsService.validateTypeMetadata).not.toHaveBeenCalled();
       expect(prisma.round.create).not.toHaveBeenCalled();
     });
   });

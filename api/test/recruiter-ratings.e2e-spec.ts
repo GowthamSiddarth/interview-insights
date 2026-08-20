@@ -37,9 +37,11 @@ function body<T>(res: request.Response): T {
 // issue #125) end to end: RecruiterInteraction/RecruiterRating had schema
 // since Phase 1 but no write path until this issue, and moderation for
 // recruiter_rating threw NotImplementedException until now. Rating
-// creation is candidate-session-gated since GitHub issue #146 — recruiter
-// interaction creation itself stays unauthenticated (it has no candidateId
-// field at all, see docs/DECISIONS.md D30's note on the schema).
+// creation is candidate-session-gated since GitHub issue #146. Interaction
+// creation itself is also session-gated, with ownership checked against
+// the parent process (GitHub issue #776, D112) — it still has no
+// candidateId column of its own (docs/DECISIONS.md D31's schema note
+// still stands), ownership is just checked one level up instead.
 describe('Recruiter interactions + ratings (e2e)', () => {
   let app: INestApplication;
   let adminCookie: string;
@@ -99,6 +101,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
 
     const interactionRes = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', cookie)
       .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
       .expect(201);
     const interactionId = body<InteractionBody>(interactionRes).id;
@@ -125,17 +128,19 @@ describe('Recruiter interactions + ratings (e2e)', () => {
   }
 
   it('submitting a recruiter interaction resolves the same recruiter across the same company', async () => {
-    const { processId } = await createCandidateAndProcess();
+    const { cookie, processId } = await createCandidateAndProcess();
     const identifier = uniqueRecruiterIdentifier();
 
     const first = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', cookie)
       .send({ recruiterIdentifier: identifier })
       .expect(201);
 
     const secondProcessRes = await createCandidateAndProcess();
     const second = await server()
       .post(`/processes/${secondProcessRes.processId}/recruiter-interactions`)
+      .set('Cookie', secondProcessRes.cookie)
       .send({ recruiterIdentifier: identifier })
       .expect(201);
 
@@ -200,18 +205,29 @@ describe('Recruiter interactions + ratings (e2e)', () => {
       .expect(409);
   }, 15000);
 
-  it('returns 404 for a non-existent process when creating an interaction', async () => {
+  it('returns 401 for an unauthenticated request', async () => {
     await server()
       .post('/processes/123e4567-e89b-12d3-a456-426614174000/recruiter-interactions')
+      .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
+      .expect(401);
+  });
+
+  it('returns 404 for a non-existent process when creating an interaction', async () => {
+    const { cookie } = await loginAsCandidate(app, uniqueEmail());
+
+    await server()
+      .post('/processes/123e4567-e89b-12d3-a456-426614174000/recruiter-interactions')
+      .set('Cookie', cookie)
       .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
       .expect(404);
   });
 
   it('rejects an invalid payload', async () => {
-    const { processId } = await createCandidateAndProcess();
+    const { cookie, processId } = await createCandidateAndProcess();
 
     await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', cookie)
       .send({})
       .expect(400);
   }, 15000);
@@ -223,6 +239,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     const { cookie, processId } = await createCandidateAndProcess();
     const interactionRes = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', cookie)
       .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
       .expect(201);
     const interactionId = body<InteractionBody>(interactionRes).id;
@@ -240,6 +257,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     const { cookie, processId } = await createCandidateAndProcess();
     const interactionRes = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', cookie)
       .send({ recruiterIdentifier: uniqueRecruiterIdentifier() })
       .expect(201);
     const interactionId = body<InteractionBody>(interactionRes).id;

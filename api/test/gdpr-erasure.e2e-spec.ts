@@ -119,6 +119,7 @@ describe('GDPR erasure (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;
@@ -133,6 +134,7 @@ describe('GDPR erasure (e2e)', () => {
 
     const interactionRes = await server()
       .post(`/processes/${processId}/recruiter-interactions`)
+      .set('Cookie', cookie)
       .send({ recruiterIdentifier: `recruiter-${unique()}@example.com` })
       .expect(201);
     const interactionId = body<InteractionBody>(interactionRes).id;
@@ -229,6 +231,7 @@ describe('GDPR erasure (e2e)', () => {
     const processIdA = body<ProcessBody>(processA).id;
     const interactionA = await server()
       .post(`/processes/${processIdA}/recruiter-interactions`)
+      .set('Cookie', candidateA.cookie)
       .send({ recruiterIdentifier: sharedIdentifier })
       .expect(201);
     const interactionIdA = body<InteractionBody>(interactionA).id;
@@ -247,6 +250,7 @@ describe('GDPR erasure (e2e)', () => {
     const processIdB = body<ProcessBody>(processB).id;
     const interactionB = await server()
       .post(`/processes/${processIdB}/recruiter-interactions`)
+      .set('Cookie', candidateB.cookie)
       .send({ recruiterIdentifier: sharedIdentifier })
       .expect(201);
     const interactionIdB = body<InteractionBody>(interactionB).id;

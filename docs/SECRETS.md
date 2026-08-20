@@ -54,6 +54,16 @@ hybrid shape exists and isn't just Pattern A.
 | `localstack-credentials` (k8s Secret) | B (chicken-and-egg: needed to start LocalStack itself) | LocalStack's own pod | `LOCALSTACK_AUTH_TOKEN` |
 | `anthropic-credentials` (k8s Secret) | B, root for the hybrid case above (issue #163) | LocalStack's own pod (D78) — never `api`/`review-analyzer` directly | `ANTHROPIC_API_KEY` |
 
+**Staff email has no equivalent secret, deliberately (GitHub issue #783,
+Phase 52):** `moderators.email` is a plain column with no hash/encryption
+counterpart to `email-hash-secret`/`email-encryption-key`. Not an
+oversight — that rigor exists specifically because `Candidate` is an
+external, self-registered, GDPR-erasable data subject (D34 design
+principle 1); a staff row is admin-provisioned only, never self-
+registered, and not a GDPR erasure subject, so there's no equivalent
+principle requiring it. See `docs/DATA_MODEL.md`'s `moderators` table
+entry for the full reasoning.
+
 Nothing else in the deployed system is a secret. `POSTGRES_USER`/
 `POSTGRES_DB` (`postgres-config` ConfigMap), `ADMIN_USERNAME`,
 `ANTHROPIC_MODEL`, `AI_MODERATION_AUTO_APPROVE_THRESHOLD`,

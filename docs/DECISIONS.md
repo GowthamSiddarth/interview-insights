@@ -5661,6 +5661,40 @@ re-evaluated against D82's original billing-gate concern).
 
 ---
 
+### D112 — `Round`/`RecruiterInteraction` creation gain an ownership-checked auth guard, narrowing D31's "no candidateId column, so no guard" reasoning (GitHub issues #775/#776, Phase 52)
+
+**Context:** D31 authenticated every write path with its own `candidateId`
+column — four in total — and left `Round` and `RecruiterInteraction`
+creation unauthenticated because neither table has a `candidateId` column
+of its own (ownership lives one level up, on the parent
+`InterviewProcess`). That was a true statement about the schema but not
+a complete security analysis: the 2026-08-20 pre-launch audit (security
+pass) found both endpoints accept a `processId` from the request path
+with no check that the caller owns it, and — worse for `Round` — the
+created row (free-text `title`/`description`) was never covered by
+`moderation_queue` at all, so unauthenticated content reached public
+process pages with zero review.
+
+**Decision:** Both endpoints now require `CandidateJwtAuthGuard` and
+verify `process.candidateId === callerCandidateId` before creating,
+mirroring `InterviewProcessesService.remove()`'s existing ownership
+check — the same "walk up to the owning `InterviewProcess`" pattern
+D31 itself didn't apply here. `RecruiterInteraction` still has no
+`candidateId` column (D31's schema observation stands); what changed is
+recognizing that ownership can and should be checked transitively
+through `processId`, the same way reads and deletes elsewhere in this
+app already reason about ownership through a parent entity.
+
+**Why this isn't a D31 reversal:** D31's actual rule — "every
+candidateId-bearing write requires a session, sourced only from the
+session" — is untouched; `RoundRating`/`RecruiterRating`/`OverallReview`/
+`InterviewProcess` creation are unaffected. This closes the specific gap
+D31's four-column enumeration missed: a write path can leak unauthorized
+content even without a `candidateId` column of its own, if it attaches to
+someone else's parent entity.
+
+---
+
 ## Still open (revisit when you have more information)
 
 - Exact `k` value for shrinkage scoring — needs real review volume to tune.

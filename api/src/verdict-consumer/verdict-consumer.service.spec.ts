@@ -3,6 +3,7 @@ import {
   VerdictConsumerService,
   AUTO_APPROVAL_SYSTEM_ACTOR,
   RECONCILIATION_SWEEP_SYSTEM_ACTOR,
+  parseVerdictComputedEvent,
 } from './verdict-consumer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
@@ -59,6 +60,91 @@ describe('VerdictConsumerService', () => {
       ...overrides,
     };
   }
+
+  // GitHub issue #782 (Phase 52) — schema validation at the parse
+  // boundary, before anything is trusted downstream. Uses a real UUID for
+  // roundRatingId (unlike roundRatingEvent()'s own 'rating-1' default,
+  // fine for processEvent()'s tests below since those never go through
+  // schema validation) — parseVerdictComputedEvent enforces @IsUUID().
+  const VALID_UUID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+
+  describe('parseVerdictComputedEvent', () => {
+    it('parses a well-formed round_rating verdict event', () => {
+      const event = parseVerdictComputedEvent(
+        JSON.stringify(roundRatingEvent({ roundRatingId: VALID_UUID })),
+      );
+      expect(event).toMatchObject({
+        eventType: 'moderation.round_rating.verdict_computed',
+        roundRatingId: VALID_UUID,
+      });
+    });
+
+    it('rejects an unrecognized eventType', () => {
+      expect(() =>
+        parseVerdictComputedEvent(JSON.stringify(roundRatingEvent({ eventType: 'not.a.real.event' }))),
+      ).toThrow(/Unrecognized eventType/);
+    });
+
+    it('rejects a payload missing a required field', () => {
+      const { autoApprovalEligible: _drop, ...withoutRequiredField } = roundRatingEvent();
+      expect(() => parseVerdictComputedEvent(JSON.stringify(withoutRequiredField))).toThrow(
+        /failed schema validation/,
+      );
+    });
+
+    it('rejects a wrong-typed field (confidence as a string instead of a number)', () => {
+      expect(() =>
+        parseVerdictComputedEvent(JSON.stringify(roundRatingEvent({ confidence: 'high' }))),
+      ).toThrow(/failed schema validation/);
+    });
+
+    it('rejects an id that is not a real UUID', () => {
+      expect(() =>
+        parseVerdictComputedEvent(JSON.stringify(roundRatingEvent({ roundRatingId: 'not-a-uuid' }))),
+      ).toThrow(/failed schema validation/);
+    });
+
+    it('allows verdict/confidence/model/promptContent/responseText to be null', () => {
+      const event = parseVerdictComputedEvent(
+        JSON.stringify(
+          roundRatingEvent({
+            roundRatingId: VALID_UUID,
+            verdict: null,
+            confidence: null,
+            model: null,
+            promptContent: null,
+            responseText: null,
+          }),
+        ),
+      );
+      expect(event.verdict).toBeNull();
+    });
+
+    it('rejects an eventType that does not match its own DTO (cross-type payload)', () => {
+      const mismatched = {
+        ...roundRatingEvent({ roundRatingId: VALID_UUID }),
+        eventType: 'moderation.recruiter_rating.verdict_computed',
+      };
+      expect(() => parseVerdictComputedEvent(JSON.stringify(mismatched))).toThrow(
+        /failed schema validation/,
+      );
+    });
+
+    it('accepts a well-formed stalled event with nullable fields', () => {
+      const event = parseVerdictComputedEvent(
+        JSON.stringify(
+          roundRatingEvent({
+            roundRatingId: VALID_UUID,
+            stalled: true,
+            verdict: null,
+            confidence: null,
+            model: null,
+          }),
+        ),
+      );
+      expect(event.stalled).toBe(true);
+    });
+  });
 
   it('stores the verdict onto the round rating row', async () => {
     const service = buildService();
