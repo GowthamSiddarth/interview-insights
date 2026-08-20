@@ -200,6 +200,23 @@ event-driven refresh (Kafka consumer on approved-rating events) only
 becomes worth it once on-read refresh measurably strains, per the same D9
 reasoning already applied to moderation (D12) and fraud checks (D13).
 
+**Resolved (GitHub issue #787, Phase 53):** issue #9 shipped long ago
+without ever actually wiring a refresh trigger — the 2026-08-20
+pre-launch audit found this still genuinely unresolved, not just
+undocumented, and by then refresh-on-read's own premise no longer held:
+the analytics endpoint is public and unauthenticated, so refreshing
+`CONCURRENTLY` on every page view is both a real latency cost and an
+unauthenticated-traffic-driven load pattern, not the "simplest, correct"
+starting point it looked like in Phase 4. Went with `ModerationService
+.review()` triggering a refresh of just the one matching view
+(`company_round_type_aggregates`/`company_recruiter_aggregates`/
+`company_overall_aggregates`) on approval instead — best-effort,
+after-commit, same D16/D17 shape as this method's other side effects.
+Approval frequency is admin/moderator-driven (naturally low and not
+exploitable via public traffic, unlike refresh-on-read), and refreshing
+only the entity type actually approved avoids the two wasted refreshes
+a blanket "refresh all three" would cost every time.
+
 ---
 
 ### D16 — Company search indexing is synchronous, in-process, and best-effort

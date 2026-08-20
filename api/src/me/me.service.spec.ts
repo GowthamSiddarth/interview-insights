@@ -13,6 +13,8 @@ describe('MeService', () => {
     round: { deleteMany: jest.Mock };
     recruiterInteraction: { deleteMany: jest.Mock };
     candidateVerificationToken: { deleteMany: jest.Mock };
+    candidatePasswordResetToken: { deleteMany: jest.Mock };
+    editThrottleState: { deleteMany: jest.Mock };
     candidate: { delete: jest.Mock };
     moderationQueueEntry: { deleteMany: jest.Mock };
     $transaction: jest.Mock;
@@ -28,6 +30,8 @@ describe('MeService', () => {
       round: { deleteMany: jest.fn() },
       recruiterInteraction: { deleteMany: jest.fn() },
       candidateVerificationToken: { deleteMany: jest.fn() },
+      candidatePasswordResetToken: { deleteMany: jest.fn() },
+      editThrottleState: { deleteMany: jest.fn() },
       candidate: { delete: jest.fn() },
       moderationQueueEntry: { deleteMany: jest.fn() },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
@@ -247,6 +251,16 @@ describe('MeService', () => {
         where: { candidateId: 'candidate-1' },
       });
       expect(prisma.candidateVerificationToken.deleteMany).toHaveBeenCalledWith({
+        where: { candidateId: 'candidate-1' },
+      });
+      // GitHub issue #788 (Phase 53) — both ON DELETE RESTRICT against
+      // Candidate; previously missing entirely, causing a real FK
+      // violation (500) for any candidate who ever reset a password or
+      // made any edit.
+      expect(prisma.candidatePasswordResetToken.deleteMany).toHaveBeenCalledWith({
+        where: { candidateId: 'candidate-1' },
+      });
+      expect(prisma.editThrottleState.deleteMany).toHaveBeenCalledWith({
         where: { candidateId: 'candidate-1' },
       });
       expect(prisma.candidate.delete).toHaveBeenCalledWith({ where: { id: 'candidate-1' } });

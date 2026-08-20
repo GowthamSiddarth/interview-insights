@@ -912,6 +912,16 @@ export class ModerationService {
     if (decision === 'approved' && entry.entityType === 'company') {
       await this.indexApprovedCompany(entry.entityId);
     }
+    // GitHub issue #787 (Phase 53, D15 revisit) — the analytics
+    // materialized views only ever aggregate approved rows, so only an
+    // approval (never a rejection/flag) can change what they'd compute.
+    // Best-effort/after-commit, same shape as every other side-effect in
+    // this method — a failed refresh must never fail the moderation
+    // decision that's already committed; the next approval's refresh (or
+    // the next scheduled one, if this project ever adds one) catches up.
+    if (decision === 'approved') {
+      await this.refreshAnalyticsView(entry.entityType);
+    }
     // GitHub issue #370 (Phase 35) — any resolution (approved, rejected,
     // or flagged) means this entry is no longer part of the *pending*
     // universe the moderator search box covers, regardless of which
@@ -948,6 +958,43 @@ export class ModerationService {
         'Failed to index approved company in OpenSearch',
         err instanceof Error ? err.stack : err,
       );
+    }
+  }
+
+  // GitHub issue #787 (Phase 53) — D15 originally deferred "when to
+  // refresh" to whichever endpoint reads the views, guessing refresh-on-
+  // read as the likely start. That never shipped, and refresh-on-read
+  // would refresh on every public, unauthenticated analytics page view
+  // anyway — a bad fit now that the app is genuinely live. Refreshing
+  // here instead, on approval, is much lower-frequency (admin/moderator-
+  // driven) and matches the entity type actually approved — no wasted
+  // refresh of the other two views. CONCURRENTLY needs the unique index
+  // each view already has (D15) so it never locks out concurrent reads.
+  // 'company' has no aggregate view of its own — nothing to refresh.
+  private async refreshAnalyticsView(entityType: ModerationEntityType): Promise<void> {
+    const viewName = this.analyticsViewFor(entityType);
+    if (!viewName) return;
+
+    try {
+      await this.prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW CONCURRENTLY "${viewName}"`);
+    } catch (err) {
+      this.logger.error(
+        `Failed to refresh materialized view "${viewName}"`,
+        err instanceof Error ? err.stack : err,
+      );
+    }
+  }
+
+  private analyticsViewFor(entityType: ModerationEntityType): string | undefined {
+    switch (entityType) {
+      case 'round_rating':
+        return 'company_round_type_aggregates';
+      case 'recruiter_rating':
+        return 'company_recruiter_aggregates';
+      case 'overall_review':
+        return 'company_overall_aggregates';
+      case 'company':
+        return undefined;
     }
   }
 

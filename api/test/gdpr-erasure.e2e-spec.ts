@@ -216,6 +216,67 @@ describe('GDPR erasure (e2e)', () => {
     await server().get('/me/submissions').set('Cookie', cookie).expect(401);
   }, 15000);
 
+  // GitHub issue #788 (Phase 53) — CandidatePasswordResetToken is
+  // ON DELETE RESTRICT against Candidate; eraseMe() previously never
+  // deleted it first, so any candidate who ever requested a password
+  // reset got a 500 instead of account deletion.
+  it('erases a candidate who has a password-reset token row', async () => {
+    const email = `candidate-${unique()}@example.com`;
+    const { cookie, candidateId } = await loginAsCandidate(app, email);
+
+    await server().post('/auth/request-password-reset').send({ email }).expect(200);
+    expect(
+      await rawPrisma.candidatePasswordResetToken.findMany({ where: { candidateId } }),
+    ).not.toEqual([]);
+
+    await server().delete('/me').set('Cookie', cookie).expect(204);
+
+    expect(await rawPrisma.candidate.findUnique({ where: { id: candidateId } })).toBeNull();
+    expect(
+      await rawPrisma.candidatePasswordResetToken.findMany({ where: { candidateId } }),
+    ).toEqual([]);
+  }, 15000);
+
+  // GitHub issue #788 (Phase 53) — EditThrottleState is likewise
+  // ON DELETE RESTRICT against Candidate; eraseMe() previously never
+  // deleted it either, so any candidate who ever edited a submission at
+  // all (which creates this row on the first edit) got the same 500.
+  it('erases a candidate who has an edit-throttle-state row', async () => {
+    const { cookie, candidateId } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
+    const companyId = await createCompany(cookie);
+
+    const processRes = await server()
+      .post(`/companies/${companyId}/processes`)
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+      .expect(201);
+    const processId = body<ProcessBody>(processRes).id;
+    const roundRes = await server()
+      .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
+      .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+      .expect(201);
+    const roundId = body<RoundBody>(roundRes).id;
+    const ratingRes = await server()
+      .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 3, fluency: 4, clarity: 5, focus: 4 })
+      .expect(201);
+    const ratingId = body<RatingBody>(ratingRes).id;
+
+    await server()
+      .patch(`/rounds/${roundId}/ratings/${ratingId}`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 4, fluency: 4, clarity: 5, focus: 4 })
+      .expect(200);
+    expect(await rawPrisma.editThrottleState.findUnique({ where: { candidateId } })).not.toBeNull();
+
+    await server().delete('/me').set('Cookie', cookie).expect(204);
+
+    expect(await rawPrisma.candidate.findUnique({ where: { id: candidateId } })).toBeNull();
+    expect(await rawPrisma.editThrottleState.findUnique({ where: { candidateId } })).toBeNull();
+  }, 15000);
+
   it('erasing one candidate never touches another candidate sharing the same company Recruiter row', async () => {
     const candidateA = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
     const companyId = await createCompany(candidateA.cookie);

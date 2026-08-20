@@ -52,6 +52,16 @@ export class FraudChecksService {
   // recruiter rating, or overall review), since the signal being measured
   // — "is this candidate creating an excessive number of submissions" —
   // doesn't depend on entity type at all.
+  //
+  // GitHub issue #790 (Phase 53) — this plain COUNT(*) under READ
+  // COMMITTED is a TOCTOU race: two concurrent submissions can both read
+  // a stale count and exceed the threshold without either ever tripping
+  // the flag. Deliberately left as is — this only ever gates a
+  // `flagReason` annotation, never a hard block (D13), so the worst case
+  // is a missed flag on a human reviewer's radar, not a security or data
+  // integrity issue. If tightened later, use the same atomic
+  // updateMany-with-a-WHERE-clause pattern review()'s reviewedAt race fix
+  // already established (GitHub issue #674) for the identical race class.
   async checkRateLimit(candidateId: string, tx: PrismaTransaction = this.prisma): Promise<boolean> {
     const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
     const count = await tx.interviewProcess.count({

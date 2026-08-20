@@ -2733,20 +2733,21 @@ Documentation Reconciliation". Epic: GitHub issue #786.
 
 Ordered by dependency:
 
-- [ ] Analytics materialized views are never refreshed in production
+- [x] Analytics materialized views are never refreshed in production
       (GitHub issue #787)
-- [ ] GDPR erasure (eraseMe) FK-violates for candidates with
+- [x] GDPR erasure (eraseMe) FK-violates for candidates with
       password-reset or edit-throttle rows (GitHub issue #788)
-- [ ] Company creation isn't transactional with its moderation enqueue
+- [x] Company creation isn't transactional with its moderation enqueue
       (GitHub issue #789)
-- [ ] Fraud-check rate limit is a TOCTOU race (GitHub issue #790)
-- [ ] docs/ARCHITECTURE.md's recruiter/overall-review "zero write path"
+- [x] Fraud-check rate limit is a TOCTOU race (GitHub issue #790) —
+      deliberately deferred, not fixed; documented in code + D-log why
+- [x] docs/ARCHITECTURE.md's recruiter/overall-review "zero write path"
       claim is stale (GitHub issue #791)
-- [ ] docs/DATA_MODEL.md lists GDPR erasure as an open decision though
+- [x] docs/DATA_MODEL.md lists GDPR erasure as an open decision though
       it's implemented (GitHub issue #792) — update once #788 lands
-- [ ] docs/DATA_MODEL.md's moderation_queue.entity_type list is missing
+- [x] docs/DATA_MODEL.md's moderation_queue.entity_type list is missing
       'company' (GitHub issue #793)
-- [ ] docs/DATA_MODEL.md's round-type registry table is missing
+- [x] docs/DATA_MODEL.md's round-type registry table is missing
       tech_screening (GitHub issue #794)
 - [ ] Engineering blog (last) (GitHub issue #795)
 
