@@ -55,15 +55,25 @@ urlencode() {
 }
 POSTGRES_PASSWORD_URLENCODED="$(urlencode "${POSTGRES_PASSWORD:-postgres}")"
 DATABASE_URL_VALUE="${SEED_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD_URLENCODED}@postgres:5432/interview_insights?schema=public}"
-EMAIL_HASH_SECRET_VALUE="${SEED_EMAIL_HASH_SECRET:-localstack-seeded-secret-change-me}"
+# GitHub issue #803 (Phase 55) — no dev-only placeholder default here
+# anymore (CLAUDE.md hard constraint #6: a checked-in value that actually
+# functions as a real secret is still a real secret, regardless of how
+# obviously placeholder-labeled its text is). Required, not defaulted,
+# but unlike ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET below this never needs
+# a human to pick a value — bootstrap-kind.sh and cd.yml's "Provision
+# email/candidate secrets" step both generate a real random value
+# themselves (once per cluster, reused on later runs) and pass it
+# through as SEED_*. See wiki/deployment-guide.md 5e for the one manual
+# case (running this script directly, outside either caller).
+EMAIL_HASH_SECRET_VALUE="${SEED_EMAIL_HASH_SECRET:?SEED_EMAIL_HASH_SECRET must be set — see wiki/deployment-guide.md section 5e}"
 # GitHub issue #466 (D76) — the last two secrets api/notification-service
 # still carried as committed plaintext k8s-Secret fallbacks. Must be a
 # 32-byte AES-256 key, hex-encoded (64 hex chars) — see docs/DECISIONS.md
 # D74. EMAIL_ENCRYPTION_KEY is shared with notification-service (same
 # secret ID, read by both services' own IAM roles below) — that service
 # can only decrypt what api encrypted under it.
-EMAIL_ENCRYPTION_KEY_VALUE="${SEED_EMAIL_ENCRYPTION_KEY:-1111111111111111111111111111111111111111111111111111111111111111}"
-CANDIDATE_JWT_SECRET_VALUE="${SEED_CANDIDATE_JWT_SECRET:-localstack-seeded-candidate-jwt-secret-change-me}"
+EMAIL_ENCRYPTION_KEY_VALUE="${SEED_EMAIL_ENCRYPTION_KEY:?SEED_EMAIL_ENCRYPTION_KEY must be set — see wiki/deployment-guide.md section 5e}"
+CANDIDATE_JWT_SECRET_VALUE="${SEED_CANDIDATE_JWT_SECRET:?SEED_CANDIDATE_JWT_SECRET must be set — see wiki/deployment-guide.md section 5e}"
 # GitHub issue #466's own follow-up (D78) — admin-credentials/
 # anthropic-credentials still moved into Secrets Manager too, closing
 # the "stretch work" #466 explicitly deferred. Unlike every secret

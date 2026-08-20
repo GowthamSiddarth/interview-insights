@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
 
+# GitHub issue #804 (Phase 55) — defense-in-depth: GITHUB_TOKEN otherwise
+# defaults to whatever the repo/org setting allows. Nothing in this
+# workflow pushes, comments, or otherwise needs write access.
+permissions:
+  contents: read
+
 jobs:
   api:
     runs-on: ubuntu-latest

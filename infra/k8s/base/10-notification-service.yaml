@@ -43,10 +43,20 @@ spec:
       labels:
         app: notification-service
     spec:
+      # GitHub issue #805 (Phase 55) — matches the Dockerfile's own
+      # `USER node` (uid/gid 1000 in node:22-slim).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
         - name: notification-service
           image: interview-insights-notification-service:k8s
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 3002
           envFrom:

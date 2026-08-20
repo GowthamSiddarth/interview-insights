@@ -12,6 +12,11 @@ name: Self-hosted runner smoke test
 on:
   workflow_dispatch: {}
 
+# GitHub issue #804 (Phase 55) — defense-in-depth: this workflow only
+# ever runs shell commands against a runner, no repo write access needed.
+permissions:
+  contents: read
+
 jobs:
   mac-smoke-test:
     runs-on: [self-hosted, macOS, local-kind]

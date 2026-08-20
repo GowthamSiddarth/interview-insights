@@ -63,9 +63,17 @@ urlencode() {
 }
 POSTGRES_PASSWORD_URLENCODED="$(urlencode "${POSTGRES_PASSWORD:-postgres}")"
 DATABASE_URL_VALUE="postgresql://postgres:${POSTGRES_PASSWORD_URLENCODED}@postgres:5432/interview_insights?schema=public"
-EMAIL_HASH_SECRET_VALUE="localstack-seeded-secret-change-me"
-EMAIL_ENCRYPTION_KEY_VALUE="1111111111111111111111111111111111111111111111111111111111111111"
-CANDIDATE_JWT_SECRET_VALUE="localstack-seeded-candidate-jwt-secret-change-me"
+# GitHub issue #803 (Phase 55) — no hardcoded placeholder here anymore
+# (CLAUDE.md hard constraint #6). Same fix pattern as ADMIN_PASSWORD_HASH/
+# ADMIN_JWT_SECRET/ANTHROPIC_API_KEY above: read the real values from this
+# container's own environment (../08-localstack.yaml's
+# env.valueFrom.secretKeyRef, sourced from the email-secrets Secret
+# bootstrap-kind.sh/cd.yml provision) instead of a hardcoded default —
+# durable across an unplanned restart without silently rotating the key
+# and breaking decryption of already-encrypted candidate emails.
+EMAIL_HASH_SECRET_VALUE="$EMAIL_HASH_SECRET"
+EMAIL_ENCRYPTION_KEY_VALUE="$EMAIL_ENCRYPTION_KEY"
+CANDIDATE_JWT_SECRET_VALUE="$CANDIDATE_JWT_SECRET"
 ADMIN_PASSWORD_HASH_VALUE="$ADMIN_PASSWORD_HASH"
 ADMIN_JWT_SECRET_VALUE="$ADMIN_JWT_SECRET"
 ANTHROPIC_API_KEY_VALUE="$ANTHROPIC_API_KEY"

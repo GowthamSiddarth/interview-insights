@@ -18,9 +18,12 @@ RUN npm run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
-COPY --from=build /app/public ./public
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/.next ./.next
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json ./package.json
+# GitHub issue #805 (Phase 55) — node:22-slim already ships a non-root
+# `node` user (uid/gid 1000); nothing here needs root at runtime.
+USER node
 EXPOSE 3000
 CMD ["npm", "run", "start"]

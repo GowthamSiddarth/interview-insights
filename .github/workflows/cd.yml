@@ -24,7 +24,10 @@ name: CD
 # credentials, never committed to a manifest. ANTHROPIC_API_KEY (GitHub
 # issue #163, now read by review-analyzer per GitHub issue #340/D81) is
 # optional — an unset repo secret just deploys with AI moderation triage
-# disabled.
+# disabled. EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/CANDIDATE_JWT_SECRET
+# (GitHub issue #803, Phase 55) need no repo secret at all — this
+# workflow generates them itself, once per cluster, same as
+# bootstrap-kind.sh's local equivalent.
 on:
   push:
     branches: [main]
@@ -40,6 +43,12 @@ on:
 concurrency:
   group: cd
   cancel-in-progress: true
+
+# GitHub issue #804 (Phase 55) — defense-in-depth: this workflow builds
+# and loads images straight into the local kind cluster, never pushes to
+# a registry, so GITHUB_TOKEN never needs more than read access.
+permissions:
+  contents: read
 
 jobs:
   deploy:
@@ -59,7 +68,11 @@ jobs:
       # to talk to that cluster correctly.
       KIND_EXPERIMENTAL_PROVIDER: podman
     steps:
-      - uses: actions/checkout@v4
+      # GitHub issue #808 (Phase 55) — pinned to the commit SHA v4
+      # currently resolves to, not the floating tag: a credential-bearing
+      # deploy workflow, so a tag-move attack upstream must never silently
+      # pull in new code here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # D35/D43/GitHub issue #530 all trace the same failure back to disk
       # pressure on this persistent runner, discovered previously only
@@ -195,6 +208,46 @@ jobs:
             --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Provision email/candidate secrets
+        # GitHub issue #803 (Phase 55) — replaces a checked-in placeholder
+        # infra/aws/seed-localstack.sh and the init-hook used to hardcode,
+        # a real, working secret committed to the repo (CLAUDE.md hard
+        # constraint #6). Unlike ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET
+        # above (a bcrypt hash this workflow can't generate), these are
+        # plain random strings it can — generated once per cluster, then
+        # reused: reads the existing email-secrets Secret's values back
+        # first (kubectl get, empty output if it doesn't exist yet) rather
+        # than always regenerating, or every redeploy would rotate the
+        # key and break decryption of any candidate email already
+        # encrypted under the old one. Same idempotent pattern
+        # bootstrap-kind.sh's local equivalent uses.
+        run: |
+          EMAIL_HASH_SECRET="$(kubectl get secret email-secrets -n interview-insights \
+            -o jsonpath='{.data.EMAIL_HASH_SECRET}' 2>/dev/null | base64 -d || true)"
+          EMAIL_ENCRYPTION_KEY="$(kubectl get secret email-secrets -n interview-insights \
+            -o jsonpath='{.data.EMAIL_ENCRYPTION_KEY}' 2>/dev/null | base64 -d || true)"
+          CANDIDATE_JWT_SECRET="$(kubectl get secret email-secrets -n interview-insights \
+            -o jsonpath='{.data.CANDIDATE_JWT_SECRET}' 2>/dev/null | base64 -d || true)"
+          EMAIL_HASH_SECRET="${EMAIL_HASH_SECRET:-$(openssl rand -hex 32)}"
+          EMAIL_ENCRYPTION_KEY="${EMAIL_ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+          CANDIDATE_JWT_SECRET="${CANDIDATE_JWT_SECRET:-$(openssl rand -hex 32)}"
+          # Freshly generated here, not a registered repo secret — never
+          # auto-masked in logs unless explicitly requested.
+          echo "::add-mask::$EMAIL_HASH_SECRET"
+          echo "::add-mask::$EMAIL_ENCRYPTION_KEY"
+          echo "::add-mask::$CANDIDATE_JWT_SECRET"
+          kubectl create secret generic email-secrets \
+            --namespace interview-insights \
+            --from-literal=EMAIL_HASH_SECRET="$EMAIL_HASH_SECRET" \
+            --from-literal=EMAIL_ENCRYPTION_KEY="$EMAIL_ENCRYPTION_KEY" \
+            --from-literal=CANDIDATE_JWT_SECRET="$CANDIDATE_JWT_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          {
+            echo "EMAIL_HASH_SECRET=$EMAIL_HASH_SECRET"
+            echo "EMAIL_ENCRYPTION_KEY=$EMAIL_ENCRYPTION_KEY"
+            echo "CANDIDATE_JWT_SECRET=$CANDIDATE_JWT_SECRET"
+          } >> "$GITHUB_ENV"
+
       - name: Provision LocalStack auth token secret
         # Must land before the overlay below creates the LocalStack pod —
         # same order as the manual walkthrough (wiki/deployment-guide.md
@@ -235,6 +288,13 @@ jobs:
           ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
           ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # GitHub issue #803 (Phase 55) — SEED_* env vars, not repo
+          # secrets: sourced from the "Provision email/candidate secrets"
+          # step above via $GITHUB_ENV (same job, so env.* already sees
+          # them), not ${{ secrets.* }}.
+          SEED_EMAIL_HASH_SECRET: ${{ env.EMAIL_HASH_SECRET }}
+          SEED_EMAIL_ENCRYPTION_KEY: ${{ env.EMAIL_ENCRYPTION_KEY }}
+          SEED_CANDIDATE_JWT_SECRET: ${{ env.CANDIDATE_JWT_SECRET }}
         run: |
           kubectl -n interview-insights port-forward svc/localstack 4566:4566 &
           PF_PID=$!
