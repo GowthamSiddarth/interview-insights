@@ -99,7 +99,7 @@ describe('Moderation (e2e)', () => {
   const uniqueSlug = () => `acme-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const uniqueEmail = () => `candidate-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-  async function submitRating(): Promise<{ processId: string; roundId: string; ratingId: string }> {
+  async function submitRating(): Promise<{ cookie: string; processId: string; roundId: string; ratingId: string }> {
     const { cookie } = await loginAsCandidate(app, uniqueEmail());
 
     const { id: companyId } = await createApprovedCompany(app, cookie, {
@@ -140,12 +140,18 @@ describe('Moderation (e2e)', () => {
       .expect(201);
     const ratingId = body<RatingBody>(ratingRes).id;
 
-    return { processId, roundId, ratingId };
+    return { cookie, processId, roundId, ratingId };
   }
 
-  async function submitRatingUnderProcess(processId: string): Promise<{ roundId: string; ratingId: string }> {
-    const { cookie } = await loginAsCandidate(app, uniqueEmail());
-
+  // GitHub issues #775/#776 (Phase 52, D112) — round/rating creation is
+  // ownership-checked now, so this must use the *owning* candidate's
+  // cookie, not a fresh one — a second round on the same process is
+  // still the same candidate's own submission continuing, not a new
+  // candidate's.
+  async function submitRatingUnderProcess(
+    processId: string,
+    cookie: string,
+  ): Promise<{ roundId: string; ratingId: string }> {
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
       .set('Cookie', cookie)
@@ -195,8 +201,8 @@ describe('Moderation (e2e)', () => {
   // InterviewProcess, so a moderator sees one collapsed row per
   // submission rather than one row per round/rating.
   it('groups multiple pending entities from the same process into one queue group', async () => {
-    const { processId, ratingId: ratingId1 } = await submitRating();
-    const { ratingId: ratingId2 } = await submitRatingUnderProcess(processId);
+    const { cookie, processId, ratingId: ratingId1 } = await submitRating();
+    const { ratingId: ratingId2 } = await submitRatingUnderProcess(processId, cookie);
 
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
     const groups = body<QueueGroupBody[]>(queueRes);
@@ -688,7 +694,7 @@ describe('Moderation (e2e)', () => {
         .send({ roleTitle: 'Engineer A', outcome: 'in_progress' })
         .expect(201);
       const processAId = body<ProcessBody>(processARes).id;
-      const { ratingId: ratingIdA } = await submitRatingUnderProcess(processAId);
+      const { ratingId: ratingIdA } = await submitRatingUnderProcess(processAId, cookieA);
 
       const { cookie: cookieB } = await loginAsCandidate(app, uniqueEmail());
       const companyB = await createApprovedCompany(app, cookieB, { name: 'Filter Co B', slug: uniqueSlug() });
@@ -698,7 +704,7 @@ describe('Moderation (e2e)', () => {
         .send({ roleTitle: 'Engineer B', outcome: 'in_progress' })
         .expect(201);
       const processBId = body<ProcessBody>(processBRes).id;
-      const { ratingId: ratingIdB } = await submitRatingUnderProcess(processBId);
+      const { ratingId: ratingIdB } = await submitRatingUnderProcess(processBId, cookieB);
 
       const filteredRes = await server()
         .get('/moderation/queue')
