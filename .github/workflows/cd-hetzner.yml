@@ -62,88 +62,124 @@ jobs:
             --build-arg NEXT_PUBLIC_API_URL=https://api.interviewinsights.fyi web
           docker push "$IMG"
 
-  deploy:
-    needs: build-web-image
-    # Same runner as cd.yml (this project's one self-hosted macOS box) —
-    # it already has podman, the hetzner-vm SSH key (#645/#659/#660/#662
-    # were all run from here), and infra/scripts/hetzner-pilot-tunnel.sh
-    # (#668).
-    runs-on: [self-hosted, macOS, local-kind]
+  # GitHub issue #214 epic (ad-hoc perf follow-up) — api/notification-
+  # service/review-analyzer used to build sequentially inside the
+  # `deploy` job on the one self-hosted Mac runner (~6 min serial,
+  # cross-arch QEMU emulation the whole time). Moved to a 3-way matrix
+  # on ubuntu-latest instead, for two independent reasons: (1)
+  # ubuntu-latest is natively x86_64 — the same architecture as the
+  # Hetzner VM — so these builds need zero cross-arch emulation here,
+  # not just "emulation that happens to work" like the old self-hosted
+  # path; (2) GitHub schedules separate matrix legs on separate
+  # ephemeral runners, so they build genuinely in parallel, unlike a
+  # matrix on the self-hosted runner would (only one machine holds that
+  # runner label, so legs there would just queue behind each other).
+  # Same GitHub-hosted-doesn't-reopen-D82 reasoning as `build-web-image`
+  # (D111) applies identically: workflow_dispatch-only, private repo, no
+  # fork-PR surface. Plain `docker`, not `podman`, matching
+  # `build-web-image`'s own precedent for the same reason (ubuntu-latest
+  # ships Docker preinstalled).
+  build-images:
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: api/Dockerfile
+            context: api
+          - name: notification-service
+            dockerfile: services/notification-service/Dockerfile
+            context: services/notification-service
+          - name: review-analyzer
+            dockerfile: services/review-analyzer/Dockerfile
+            context: services/review-analyzer
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Same disk-pressure lesson as cd.yml (D85/D86/D87) — same runner,
-      # same shared disk, same failure mode if skipped.
-      - name: Pre-flight disk usage gate
-        run: |
-          USAGE=$(df -P / | awk 'NR==2 { gsub("%", "", $5); print $5 }')
-          echo "host disk usage: ${USAGE}%"
-          if [ "$USAGE" -ge 85 ]; then
-            echo "::error::Disk at ${USAGE}% (>= 85%) - prune before deploying. See wiki/deployment-guide.md section 11.4, or run infra/scripts/disk-health-check.sh run."
-            exit 1
-          fi
-
       - name: Determine image tag
         id: tag
-        # Recomputed identically here rather than reused from the
-        # build-web-image job's output — both jobs check out the same
-        # commit (workflow_dispatch), so `git rev-parse --short HEAD` is
-        # deterministically the same value either way; no cross-job
-        # output wiring needed for this one.
         run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         env:
           GHCR_PAT: ${{ secrets.HETZNER_GHCR_PAT }}
-        run: printf '%s' "$GHCR_PAT" | podman login ghcr.io -u GowthamSiddarth --password-stdin
+        run: printf '%s' "$GHCR_PAT" | docker login ghcr.io -u GowthamSiddarth --password-stdin
 
-      # --platform linux/amd64 on every build below: this runner is Apple
-      # Silicon (arm64), the Hetzner VM is x86_64 (D110 — D109's ARM64
-      # migration was reverted once CAX21 turned out unavailable in
-      # nbg1, only in US datacenters). Cross-arch emulation confirmed
-      # working for a plain image (`podman run --rm --platform linux/amd64
-      # alpine uname -m` -> x86_64), and works fine for these three
-      # images — only `web`'s heavier SWC compilation hit the QEMU
-      # segfault (D109/D111), which is why it builds in a separate job
-      # above instead. Postgres/OpenSearch/Redpanda are unaffected either
-      # way — pre-built public multi-arch images, not built here.
-      - name: Build & push api image
+      - name: Build & push ${{ matrix.name }} image
         run: |
-          IMG="ghcr.io/gowthamsiddarth/interview-insights-api:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/amd64 -t "$IMG" -f api/Dockerfile --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} api
-          podman push -q "$IMG"
+          IMG="ghcr.io/gowthamsiddarth/interview-insights-${{ matrix.name }}:${{ steps.tag.outputs.tag }}"
+          docker build -t "$IMG" -f ${{ matrix.dockerfile }} \
+            --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} ${{ matrix.context }}
+          docker push "$IMG"
 
-      - name: Build & push notification-service image
-        run: |
-          IMG="ghcr.io/gowthamsiddarth/interview-insights-notification-service:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/amd64 -t "$IMG" -f services/notification-service/Dockerfile \
-            --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} services/notification-service
-          podman push -q "$IMG"
+  deploy:
+    needs: [build-web-image, build-images]
+    # GitHub issue #214 epic (ad-hoc follow-up) — moved off the
+    # self-hosted Mac entirely, same direction as build-web-image
+    # (D111)/build-images above. The Mac's own involvement in this job
+    # was never about building images (that only ever happened in the
+    # old sequential-build version of this job) — it was the one machine
+    # holding the SSH private key that can reach the pilot's k3s API,
+    # since port 6443 is deliberately closed in the Cloud Firewall
+    # (#659) and SSH is the only path in (#668). That key now lives as
+    # the `HETZNER_SSH_PRIVATE_KEY` repo secret instead (see
+    # docs/SECRETS.md), so this job opens its own SSH tunnel on a
+    # GitHub-hosted runner rather than reusing
+    # infra/scripts/hetzner-pilot-tunnel.sh, which is deliberately
+    # launchd-based (macOS-only, built for the operator's own persistent
+    # local access, #668) — a plain backgrounded `ssh -f -N` is all a
+    # single ephemeral CI job needs, no KeepAlive/relaunch machinery.
+    # The operator's own local tunnel script/access is unaffected by
+    # this change.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Build & push review-analyzer image
-        run: |
-          IMG="ghcr.io/gowthamsiddarth/interview-insights-review-analyzer:${{ steps.tag.outputs.tag }}"
-          podman build --platform linux/amd64 -t "$IMG" -f services/review-analyzer/Dockerfile \
-            --build-arg GIT_SHA=${{ steps.tag.outputs.tag }} services/review-analyzer
-          podman push -q "$IMG"
+      - name: Determine image tag
+        id: tag
+        # Recomputed identically here rather than reused from the
+        # build-web-image/build-images jobs' own outputs — every job
+        # checks out the same commit (workflow_dispatch), so
+        # `git rev-parse --short HEAD` is deterministically the same
+        # value either way; no cross-job output wiring needed for this
+        # one.
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      # #668's tunnel script, reused rather than duplicating SSH-tunnel
-      # logic inline here — 6443 stays closed in the firewall, this is
-      # the only path in.
+      # Inline, not infra/scripts/hetzner-pilot-tunnel.sh (see the job
+      # comment above for why). StrictHostKeyChecking=accept-new needs
+      # no stale-entry purge here (unlike the operator's own script,
+      # #763) — this runner's known_hosts starts empty every run, so
+      # there's never a *different* cached key to conflict with, only
+      # ever a first-time trust decision.
       - name: Open SSH tunnel to the pilot k3s API
-        # HETZNER_VM_IP (a repo *variable*, not a secret — it's a public
-        # IP already resolvable via DNS, nothing sensitive about it):
-        # this job's checkout is fresh every run, with no local Terraform
-        # state (deliberately gitignored, D101) for hetzner-pilot-tunnel.sh
-        # to read the VM's IP from the way an interactive run can. Keep
-        # this in sync if the VM is ever recreated and gets a new IP —
-        # same manual-sync caveat docs/SECRETS.md already notes for
-        # CLOUDFLARE_API_TOKEN's DNS records.
         env:
           HETZNER_VM_IP: ${{ vars.HETZNER_VM_IP }}
+          HETZNER_SSH_PRIVATE_KEY: ${{ secrets.HETZNER_SSH_PRIVATE_KEY }}
         run: |
-          infra/scripts/hetzner-pilot-tunnel.sh start
-          echo "KUBECONFIG=$HOME/.kube/hetzner-pilot-tunnel.yaml" >> "$GITHUB_ENV"
+          if [ -z "$HETZNER_SSH_PRIVATE_KEY" ]; then
+            echo "::error::HETZNER_SSH_PRIVATE_KEY is unset - run: gh secret set HETZNER_SSH_PRIVATE_KEY < ~/.ssh/hetzner-vm (see docs/SECRETS.md)."
+            exit 1
+          fi
+
+          KEY_FILE="$RUNNER_TEMP/hetzner-vm-key"
+          umask 077
+          printf '%s\n' "$HETZNER_SSH_PRIVATE_KEY" > "$KEY_FILE"
+
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i "$KEY_FILE")
+
+          ssh -f -N -o ExitOnForwardFailure=yes "${SSH_OPTS[@]}" \
+            -L 6443:localhost:6443 "deploy@${HETZNER_VM_IP}"
+
+          # Same kubeconfig-fetch this repo's own refresh_kubeconfig()
+          # does (infra/scripts/hetzner-pilot-tunnel.sh) — server IP
+          # rewritten to 127.0.0.1 so the returned kubeconfig talks
+          # through the tunnel above, not the VM's real IP directly
+          # (6443 isn't reachable that way from here either).
+          ssh -o ConnectTimeout=10 "${SSH_OPTS[@]}" "deploy@${HETZNER_VM_IP}" \
+            'sudo cat /etc/rancher/k3s/k3s.yaml' \
+            | sed "s/${HETZNER_VM_IP//./\\.}/127.0.0.1/" > "$RUNNER_TEMP/kubeconfig.yaml"
+          chmod 600 "$RUNNER_TEMP/kubeconfig.yaml"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig.yaml" >> "$GITHUB_ENV"
 
       - name: Wait for the tunnel to be usable
         run: |
@@ -241,8 +277,10 @@ jobs:
       - name: Set this run's image tags
         # Mutates the checked-out copy only — never committed back. The
         # placeholder in git is never what actually gets deployed.
+        # GNU sed (ubuntu-latest), not BSD sed's `-i ''` — this job no
+        # longer runs on the (BSD-sed) self-hosted Mac.
         run: |
-          sed -i '' "s/PILOT_IMAGE_TAG_PLACEHOLDER/${{ steps.tag.outputs.tag }}/g" \
+          sed -i "s/PILOT_IMAGE_TAG_PLACEHOLDER/${{ steps.tag.outputs.tag }}/g" \
             infra/k8s/overlays/hetzner-pilot/kustomization.yaml
 
       - name: Apply the hetzner-pilot overlay
@@ -268,15 +306,10 @@ jobs:
           kubectl -n interview-insights rollout restart deployment/review-analyzer
           kubectl -n interview-insights rollout status deployment/review-analyzer --timeout=120s
 
-      # Same D85/D90 lesson as cd.yml's own equivalent step — this run
-      # left its own dangling GHCR-tagged layers behind, separate from
-      # cd.yml's :k8s-tagged ones.
-      - name: Prune stale Podman artifacts
-        if: always()
-        run: |
-          podman image prune -f
-          podman system prune -f --filter until=6h
-
       - name: Close the SSH tunnel
+        # Best-effort only — this is an ephemeral GitHub-hosted runner,
+        # destroyed at job end either way; this just closes the
+        # forwarded port cleanly rather than leaving it open for the
+        # remaining seconds of the job's teardown.
         if: always()
-        run: infra/scripts/hetzner-pilot-tunnel.sh stop
+        run: pkill -f 'ssh .*-L 6443:localhost:6443' || true
