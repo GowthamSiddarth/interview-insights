@@ -262,7 +262,7 @@ set by never being cleared.
 | id | uuid PK | |
 | username | text | unique |
 | password_hash | text | bcrypt |
-| email | text | breach-notification recipient (GitHub issue #489, Phase 36) |
+| email | text | breach-notification recipient (GitHub issue #489, Phase 36). Plain column, deliberately — GitHub issue #783 (Phase 52) confirmed this isn't an oversight against `candidates.email_hash`/`email_encrypted`'s handling: that rigor exists specifically because `Candidate` is an external, self-registered, GDPR-erasable data subject (D34 design principle 1, "never store raw candidate identity"). A staff row is the opposite on every axis that motivated it — internal, admin-provisioned only (never self-registered), not a GDPR erasure subject — so there's no equivalent principle to apply here. |
 | role | text | `staff` \| `moderator` \| `admin` — defaults to `moderator` for pre-#586 rows |
 | is_active | boolean | default `true`; deactivate rather than delete |
 | created_by_id | uuid FK → moderators, nullable | null for the one root `admin`; always set for tool-created accounts |

@@ -103,6 +103,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
       const processId = body<IdBody>(processRes).id;
       const roundRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({ sequenceNumber: 1, title: 'Tech Screen', roundType: 'coding' })
         .expect(201);
       const roundId = body<IdBody>(roundRes).id;
@@ -203,6 +204,7 @@ describe('Company read paths: slug + reviews (e2e)', () => {
     ] as const) {
       const roundRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', cookie)
         .send({ sequenceNumber: seq, title: `Round ${seq}`, roundType })
         .expect(201);
       const roundId = body<IdBody>(roundRes).id;

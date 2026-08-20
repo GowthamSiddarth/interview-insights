@@ -2687,25 +2687,25 @@ verified as genuinely enforced in code, not just documented. Milestone:
 Ordered by dependency — each issue only depends on ones above it in this
 list unless noted otherwise:
 
-- [ ] No auth guard on round creation lets anyone inject unmoderated
+- [x] No auth guard on round creation lets anyone inject unmoderated
       content (GitHub issue #775)
-- [ ] No auth guard on recruiter-interaction creation, same gap as round
+- [x] No auth guard on recruiter-interaction creation, same gap as round
       creation (GitHub issue #776) — same fix pattern as #775
-- [ ] IP-based throttles collapse to one shared bucket behind ingress,
+- [x] IP-based throttles collapse to one shared bucket behind ingress,
       missing trust proxy (GitHub issue #777)
-- [ ] Add helmet security headers to api, notification-service, and
+- [x] Add helmet security headers to api, notification-service, and
       review-analyzer (GitHub issue #778)
-- [ ] Prisma exception filter can leak internal detail on unmapped error
+- [x] Prisma exception filter can leak internal detail on unmapped error
       codes (GitHub issue #779)
-- [ ] CORS/cookie config has no boot-time assertion for
+- [x] CORS/cookie config has no boot-time assertion for
       COOKIE_SECURE/CORS_ORIGIN (GitHub issue #780)
-- [ ] Raw SQL identifier interpolation in fraud-checks is an
+- [x] Raw SQL identifier interpolation in fraud-checks is an
       injection-shaped pattern (GitHub issue #781)
-- [ ] verdict-consumer doesn't schema-validate Kafka event payloads
+- [x] verdict-consumer doesn't schema-validate Kafka event payloads
       (GitHub issue #782)
-- [ ] Staff email has no documented PII-handling rationale, unlike
+- [x] Staff email has no documented PII-handling rationale, unlike
       candidate email (GitHub issue #783)
-- [ ] Local dev EMAIL_ENCRYPTION_KEY is a low-entropy hand-typed
+- [x] Local dev EMAIL_ENCRYPTION_KEY is a low-entropy hand-typed
       placeholder (GitHub issue #784)
 - [ ] Engineering blog (last) (GitHub issue #785)
 

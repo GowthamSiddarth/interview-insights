@@ -116,6 +116,7 @@ describe('Moderation (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({
         sequenceNumber: 1,
         title: 'Technical Screen',
@@ -147,6 +148,7 @@ describe('Moderation (e2e)', () => {
 
     const roundRes = await server()
       .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
       .send({ sequenceNumber: 2, title: 'Onsite', roundType: 'system_design' })
       .expect(201);
     const roundId = body<RoundBody>(roundRes).id;
@@ -292,6 +294,7 @@ describe('Moderation (e2e)', () => {
       const { id: processId } = body<ProcessBody>(processRes);
       const roundRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', candidateCookie)
         .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
         .expect(201);
       const { id: roundId } = body<RoundBody>(roundRes);
@@ -349,6 +352,7 @@ describe('Moderation (e2e)', () => {
       const { id: processId } = body<ProcessBody>(processRes);
       const roundRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', candidateCookie)
         .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
         .expect(201);
       const { id: roundId } = body<RoundBody>(roundRes);
@@ -422,6 +426,7 @@ describe('Moderation (e2e)', () => {
       const { id: processId } = body<ProcessBody>(processRes);
       const roundRes = await server()
         .post(`/processes/${processId}/rounds`)
+        .set('Cookie', candidateCookie)
         .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
         .expect(201);
       const { id: roundId } = body<RoundBody>(roundRes);

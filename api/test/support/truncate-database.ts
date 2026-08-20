@@ -28,6 +28,8 @@ const TABLES_TO_DELETE_IN_ORDER = [
   'overall_reviews',
   'company_level_mappings',
   'candidate_verification_tokens',
+  'candidate_password_reset_tokens',
+  'edit_throttle_state',
   'rounds',
   'recruiter_interactions',
   'interviewers',

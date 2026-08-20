@@ -15,16 +15,23 @@ describe('getSessionCookieOptions', () => {
     else process.env.COOKIE_DOMAIN = originalDomain;
   });
 
-  it('defaults secure to false when COOKIE_SECURE is unset', () => {
+  // GitHub issue #780 (Phase 52) — no silent default: COOKIE_SECURE must
+  // be explicitly "true" or "false", or boot hard-fails.
+  it('throws when COOKIE_SECURE is unset', () => {
     delete process.env.COOKIE_SECURE;
-    expect(getSessionCookieOptions()).toEqual({ httpOnly: true, secure: false, sameSite: 'lax' });
+    expect(() => getSessionCookieOptions()).toThrow(/COOKIE_SECURE must be explicitly set/);
   });
 
-  it('is not secure for any value other than the exact string "true"', () => {
+  it('throws for any value other than the exact strings "true"/"false"', () => {
     process.env.COOKIE_SECURE = 'TRUE';
-    expect(getSessionCookieOptions().secure).toBe(false);
+    expect(() => getSessionCookieOptions()).toThrow(/COOKIE_SECURE must be explicitly set/);
     process.env.COOKIE_SECURE = '1';
-    expect(getSessionCookieOptions().secure).toBe(false);
+    expect(() => getSessionCookieOptions()).toThrow(/COOKIE_SECURE must be explicitly set/);
+  });
+
+  it('is not secure when COOKIE_SECURE is exactly "false"', () => {
+    process.env.COOKIE_SECURE = 'false';
+    expect(getSessionCookieOptions()).toEqual({ httpOnly: true, secure: false, sameSite: 'lax' });
   });
 
   it('is secure when COOKIE_SECURE is exactly "true"', () => {
@@ -33,16 +40,19 @@ describe('getSessionCookieOptions', () => {
   });
 
   it('defaults domain to undefined (host-only cookie) when COOKIE_DOMAIN is unset', () => {
+    process.env.COOKIE_SECURE = 'false';
     delete process.env.COOKIE_DOMAIN;
     expect(getSessionCookieOptions().domain).toBeUndefined();
   });
 
   it('defaults domain to undefined when COOKIE_DOMAIN is an empty string', () => {
+    process.env.COOKIE_SECURE = 'false';
     process.env.COOKIE_DOMAIN = '';
     expect(getSessionCookieOptions().domain).toBeUndefined();
   });
 
   it('sets domain to the shared parent domain when COOKIE_DOMAIN is set', () => {
+    process.env.COOKIE_SECURE = 'false';
     process.env.COOKIE_DOMAIN = '.interview-insights.local';
     expect(getSessionCookieOptions().domain).toBe('.interview-insights.local');
   });
