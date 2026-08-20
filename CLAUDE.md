@@ -206,10 +206,65 @@ post per phase — this file no longer inlines that running history.
   and fixed along the way: `web`'s Next.js/SWC image build reliably
   segfaulted under the self-hosted runner's cross-arch QEMU emulation —
   fixed (D111, #761) by building `web` on a native GitHub-hosted runner
-  instead. Only Phase 45/46 items left: the runbook (#649) and both
-  phases' engineering blogs (#650/#669, written last, once everything
-  else is merged) — plus #663's live restore-path proof, runnable now
-  that Postgres actually exists on the pilot.
+  instead. Phase 45/46 is now fully closed out: the runbook (#649) and
+  both phases' engineering blogs (#650/#669) are merged. A 2026-08-20
+  six-domain pre-launch audit (security, data integrity, business
+  process, infra/secrets, frontend/UX, code quality) then produced
+  Phases 52-57 (epics #774/#786/#796/#801/#811/#820), planned together
+  in one pass (#833) and implemented immediately after. Phase 52
+  (Security & Access-Control Hardening) is fully done, blog still open
+  (#785) — ownership checks on round/recruiter-interaction creation,
+  `trust proxy`, helmet, boot-time CORS/cookie assertions, a Prisma
+  exception filter default case, fraud-checks' raw-SQL interpolation
+  replaced with literal queries, verdict-consumer event schema
+  validation, staff-email PII rationale documented (issues #775-#784,
+  epic #774 still open pending the blog). Phase 53 (Data Integrity,
+  Consistency & Docs Reconciliation) is fully done, blog still open
+  (#795) — materialized-view refresh on moderation approval, two GDPR
+  erasure FK gaps closed, company creation made transactional with its
+  moderation enqueue, a documented TOCTOU deferral, four stale-docs
+  fixes (issues #787-#794, epic #786 still open). Phase 54
+  (Business-Process Closed-Loop Fixes) is fully done, blog still open
+  (#800) — SLA breach/warning resolution events, a dead
+  `document_verified` enum value removed via migration, the staff
+  audit log surfaced in a real UI (issues #797-#799, epic #796 still
+  open). Phase 55 (Infrastructure, CI/CD & Secrets Hardening, epic
+  #801, blog #810) is fully implemented, tested, and PR'd (#837) but
+  **not yet merged** — GitHub refuses the merge because the `gh` CLI's
+  PAT lacks `workflow` scope,
+  since this phase's diff touches `.github/workflows/*.yml` (adding
+  `permissions: contents: read`, pinning `actions/checkout` to a SHA,
+  auto-generating the new `email-secrets` k8s Secret in `cd.yml`); needs
+  either a manual web-UI merge or a token with `workflow` scope granted.
+  Phase 56 (Frontend & UX Hardening) is fully done, blog still open
+  (#819) — a "don't include real names" wizard caption, a type-level
+  guard comment against a future interviewer-name leak, required-field
+  enforcement documentation, a failed-field-options retry UI, three
+  re-confirmed-correct config/env checks (issues #812-#818, epic #811
+  still open). Phase 57 (Code Quality & Performance Hardening) is fully
+  done, blog still open (#832) — misleading "retried on redelivery"
+  Kafka-consumer comments fixed across all three consumers,
+  `GET /companies` pagination, a bounded cap on
+  `GET /moderation/queue`, OpenSearch search size/from controls, P2002
+  errors no longer leak raw constraint/column names, AI-triage
+  retryable-vs-terminal error logging, a true partial-update DTO for
+  `PATCH /companies/:id`, an explicit bulk-submission transaction
+  timeout, and new unit tests for `MailService`/the mail transporter
+  provider/`PrismaService` (issues #821-#823, #825-#831, epic #820
+  still open) — **#824** (`findApprovedReviews`'s in-memory pagination)
+  is deliberately left open as a documented follow-up, same shape as
+  #729 from Phase 49: a correct fix needs a window-function query or a
+  materialized view, real separate work, revisit once a specific
+  company's review volume makes it measurably slow. Two items from this
+  pass need user input before they can proceed: **#806** (an off-VM
+  Postgres backup destination needs real object-storage credentials and
+  an explicit go-ahead before a live restore drill) and **#809** (a
+  GHCR pull-only PAT needs to be created via GitHub's web UI, which
+  can't be done via `gh`/the API). Once #837 merges and the six blog
+  posts (#785/#795/#800/#810/#819/#832) are written, all six epics
+  close and Phase 40 (CI Infrastructure: Self-Hosted GitHub Actions
+  Runner) is next up again, still blocked on Oracle A1.Flex capacity,
+  plus the still-open follow-ups #729 (Phase 49) and #824 (Phase 57).
 
 ## Open decisions still to make
 
