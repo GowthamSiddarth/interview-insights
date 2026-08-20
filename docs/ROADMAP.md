@@ -797,6 +797,32 @@ milestone grouping changed.
       2026-08-10, after the 20a-20e split above, an exception to this
       epic/milestone's own "stays closed as historical record" note
       (GitHub issue #578, D97)
+- [x] Move `cd-hetzner.yml`'s `deploy` job, and the `api`/
+      `notification-service`/`review-analyzer` image builds still left on
+      the self-hosted Mac after #708/D111, fully off it — the three
+      builds move into a `build-images` matrix job on `ubuntu-latest`
+      (same GitHub-hosted rationale D111 already used for `web`'s build,
+      genuinely native x86_64 and genuinely parallel, vs. ~6 min
+      sequential podman builds under emulation); `deploy` moves to
+      `ubuntu-latest` too, since its only remaining tie to the Mac was
+      holding the SSH private key needed to reach the pilot's k3s API
+      (port 6443 is closed in the firewall, #659; SSH is the only path
+      in, #668) — that key is now the `HETZNER_SSH_PRIVATE_KEY` repo
+      secret (`docs/SECRETS.md`), and `deploy` opens its own ephemeral
+      tunnel instead of reusing the Mac-only `launchd`-based tunnel
+      script (which is untouched, and still what the operator's own
+      manual/interactive cluster access uses). Also fixed a latent
+      `sed -i ''` (BSD-only) bug the runner switch would otherwise have
+      hit on Linux, and dropped two steps that no longer apply off the
+      persistent Mac (the disk-pressure gate, a stale podman-prune
+      step). Full pipeline runtime dropped from ~10m30s to ~3m21s,
+      confirmed live end to end (`https://api.interviewinsights.fyi`
+      still serving real trusted TLS post-deploy) — GitHub Actions run
+      32402977802. `cd-hetzner.yml` no longer depends on the self-hosted
+      Mac being on or reachable at all. Filed and merged against this
+      original epic (#214) rather than one of 20a-20f below, same
+      exception the #578 bullet above already used (GitHub issue #770,
+      PR #771)
 
 ### Phase 20a — CD/Infra Disk & Build Hygiene
 
@@ -2462,7 +2488,10 @@ first group.
       (D111, GitHub issue #761) — genuinely native x86_64, sidesteps the
       QEMU/SWC segfault the self-hosted runner's emulation hit; the other
       three images still build on the self-hosted runner under emulation,
-      which works fine for them
+      which works fine for them — **superseded 2026-08-20, see Phase 20's
+      #770 bullet:** those three also moved off the self-hosted runner,
+      and so did `deploy` itself; `cd-hetzner.yml` no longer touches the
+      Mac at all
 
 ### Track B — operational hardening (non-blocking)
 
