@@ -337,6 +337,43 @@ no workflow consumes it automatically yet) if the pilot VM is ever
 recreated and gets a new IP, which has already happened once during this
 phase's own work.
 
+### `HETZNER_SSH_PRIVATE_KEY` — CI's access credential to the pilot's SSH bastion
+
+GitHub issue #214 epic (ad-hoc follow-up, Phase 46) — the pilot's k3s
+API server (port 6443) is deliberately not opened in the Cloud Firewall
+(#659); the only way to reach it is SSH as the `deploy` user (#668).
+`cd-hetzner.yml`'s `deploy` job used to run on the project's one
+self-hosted Mac specifically because that machine held
+`~/.ssh/hetzner-vm`, the private key for that user — the *only* reason
+that job needed a specific, persistent machine rather than a GitHub-hosted
+one, once image builds moved off it too (see `build-images` above). This
+secret is the same key's contents, uploaded so the `deploy` job can open
+its own SSH tunnel from an ephemeral `ubuntu-latest` runner instead.
+
+Not a Pattern A/B app secret — no pod ever reads it, same
+provisioning-time-credential category as `CLOUDFLARE_API_TOKEN`/
+`HCLOUD_TOKEN` above. Unlike those two, this one *is* a direct-access
+credential to the live cluster (equivalent to `deploy`-user SSH access
+to the VM itself), not a scoped API token — treat rotation and exposure
+here with the same seriousness as `HETZNER_ADMIN_JWT_SECRET`/
+`HETZNER_ADMIN_PASSWORD_HASH`, not as casually as a DNS-only token.
+
+**Provisioning (one-time, manual — same "can't be provisioned by the
+workflow itself" pattern as `LOCALSTACK_AUTH_TOKEN`):**
+```bash
+gh secret set HETZNER_SSH_PRIVATE_KEY --repo GowthamSiddarth/interview-insights < ~/.ssh/hetzner-vm
+```
+The operator's own local key at `~/.ssh/hetzner-vm` and
+`infra/scripts/hetzner-pilot-tunnel.sh` (launchd-based, interactive use)
+are unaffected — this just gives CI its own copy of the same key's
+contents, not a replacement for local access.
+
+**Rotation:** if `~/.ssh/hetzner-vm` is ever rotated (new keypair
+provisioned for the `deploy` user), re-run the `gh secret set` command
+above with the new private key — same "update the repo secret, no
+workflow-side change needed" shape as every other Hetzner secret's
+rotation.
+
 ### `HETZNER_VM_IP` — a GitHub Actions *variable*, not a secret
 
 GitHub issue #708 — found live, first real `cd-hetzner.yml` run:
