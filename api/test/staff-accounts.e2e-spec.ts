@@ -130,6 +130,39 @@ describe('Staff accounts (e2e)', () => {
     expect(loginRes.headers['set-cookie']).toBeDefined();
   });
 
+  // GitHub issue #799 (Phase 54) — the read side of every mutation this
+  // controller's own routes already durably audit.
+  it('surfaces the audit log for a mutating action, most-recent-first, with usernames resolved', async () => {
+    const username = uniqueUsername();
+    const createRes = await server()
+      .post('/admin/staff')
+      .set('Cookie', adminCookie)
+      .send({ username, email: `${username}@example.com`, role: 'moderator' })
+      .expect(201);
+    const created = body<StaffAccountBody>(createRes);
+
+    await server()
+      .patch(`/admin/staff/${created.id}/role`)
+      .set('Cookie', adminCookie)
+      .send({ role: 'staff' })
+      .expect(200);
+
+    const auditRes = await server().get('/admin/staff/audit-log').set('Cookie', adminCookie).expect(200);
+    const entries = body<
+      Array<{ targetId: string; targetUsername: string; action: string; detail: unknown }>
+    >(auditRes);
+    const forThisAccount = entries.filter((e) => e.targetId === created.id);
+
+    // Most-recent-first: the role_changed entry (created second) comes
+    // before account_created (created first).
+    expect(forThisAccount[0]).toMatchObject({ action: 'role_changed', targetUsername: username });
+    expect(forThisAccount[1]).toMatchObject({ action: 'account_created', targetUsername: username });
+  });
+
+  it('rejects an unauthenticated request to the audit log with 401', async () => {
+    await server().get('/admin/staff/audit-log').expect(401);
+  });
+
   it('rejects a duplicate username with 409', async () => {
     const username = uniqueUsername();
     await server()

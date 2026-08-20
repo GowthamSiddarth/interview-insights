@@ -16,6 +16,7 @@ describe('StaffAccountsService', () => {
       findUniqueOrThrow: jest.Mock;
       count: jest.Mock;
     };
+    staffAuditLog: { findMany: jest.Mock };
   };
   let staffAuditLog: { record: jest.Mock };
   let domainEventPublisher: { publish: jest.Mock };
@@ -29,6 +30,7 @@ describe('StaffAccountsService', () => {
         findUniqueOrThrow: jest.fn(),
         count: jest.fn(),
       },
+      staffAuditLog: { findMany: jest.fn() },
     };
     staffAuditLog = { record: jest.fn().mockResolvedValue(undefined) };
     domainEventPublisher = { publish: jest.fn().mockResolvedValue(undefined) };
@@ -49,6 +51,52 @@ describe('StaffAccountsService', () => {
       ];
       expect(call.select.passwordHash).toBeUndefined();
       expect(call.where).toEqual({ createdById: { not: null } });
+    });
+  });
+
+  // GitHub issue #799 (Phase 54).
+  describe('listAuditLog', () => {
+    it('resolves actor/target usernames and orders most-recent-first', async () => {
+      prisma.staffAuditLog.findMany.mockResolvedValue([
+        {
+          id: 'audit-1',
+          actorId: 'mod-1',
+          targetId: 'mod-2',
+          action: 'role_changed',
+          detail: { oldRole: 'staff', newRole: 'moderator' },
+          createdAt: new Date('2026-08-20'),
+          actor: { username: 'admin-a' },
+          target: { username: 'staff-b' },
+        },
+      ]);
+
+      const result = await service.listAuditLog();
+
+      expect(prisma.staffAuditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { createdAt: 'desc' } }) as unknown,
+      );
+      expect(result).toEqual([
+        {
+          id: 'audit-1',
+          actorId: 'mod-1',
+          actorUsername: 'admin-a',
+          targetId: 'mod-2',
+          targetUsername: 'staff-b',
+          action: 'role_changed',
+          detail: { oldRole: 'staff', newRole: 'moderator' },
+          createdAt: new Date('2026-08-20'),
+        },
+      ]);
+    });
+
+    it('caps at the given limit', async () => {
+      prisma.staffAuditLog.findMany.mockResolvedValue([]);
+
+      await service.listAuditLog(50);
+
+      expect(prisma.staffAuditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 50 }) as unknown,
+      );
     });
   });
 

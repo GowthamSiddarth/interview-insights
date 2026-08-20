@@ -209,9 +209,14 @@ export default function StaffAccountsPage() {
             without deleting the account or its history.
           </p>
         </div>
-        <Link href="/moderation" className="text-sm text-indigo-600 underline dark:text-indigo-400">
-          Back to moderation queue
-        </Link>
+        <div className="flex flex-col items-end gap-1 text-sm">
+          <Link href="/moderation/staff/audit-log" className="text-indigo-600 underline dark:text-indigo-400">
+            View audit log
+          </Link>
+          <Link href="/moderation" className="text-indigo-600 underline dark:text-indigo-400">
+            Back to moderation queue
+          </Link>
+        </div>
       </header>
 
       {error && (

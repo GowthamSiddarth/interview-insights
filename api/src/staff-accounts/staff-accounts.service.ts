@@ -53,6 +53,17 @@ export interface StaffAccountSummary {
   createdAt: Date;
 }
 
+export interface StaffAuditLogEntry {
+  id: string;
+  actorId: string;
+  actorUsername: string;
+  targetId: string;
+  targetUsername: string;
+  action: string;
+  detail: unknown;
+  createdAt: Date;
+}
+
 // GitHub issue #589 (Phase 42, D99) — the admin:staff:manage side of the
 // role hierarchy: create/list/update-role/deactivate/reactivate, admin-
 // initiated password reset, every action durably audited via
@@ -102,6 +113,34 @@ export class StaffAccountsService {
       select: STAFF_ACCOUNT_SELECT,
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  // GitHub issue #799 (Phase 54) — staff_audit_log was written on every
+  // mutation in this service (StaffAuditLogService.record()) but had no
+  // read endpoint anywhere, making the whole compliance trail invisible
+  // to the admins it's meant to serve. Most recent first, capped — this
+  // is an operational/compliance view, not a paginated archive; a real
+  // "load more" is future scope if the cap ever matters in practice.
+  async listAuditLog(limit = 200): Promise<StaffAuditLogEntry[]> {
+    const entries = await this.prisma.staffAuditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        actor: { select: { username: true } },
+        target: { select: { username: true } },
+      },
+    });
+
+    return entries.map((entry) => ({
+      id: entry.id,
+      actorId: entry.actorId,
+      actorUsername: entry.actor.username,
+      targetId: entry.targetId,
+      targetUsername: entry.target.username,
+      action: entry.action,
+      detail: entry.detail,
+      createdAt: entry.createdAt,
+    }));
   }
 
   async create(
