@@ -422,6 +422,20 @@ export interface StaffAccountCreated extends StaffAccount {
   password: string;
 }
 
+// GitHub issue #799 (Phase 54) — GET /admin/staff/audit-log, the read
+// side of every staff mutation StaffAuditLogService.record() already
+// durably logs.
+export interface StaffAuditLogEntry {
+  id: string;
+  actorId: string;
+  actorUsername: string;
+  targetId: string;
+  targetUsername: string;
+  action: string;
+  detail: unknown;
+  createdAt: string;
+}
+
 export interface CandidateSession {
   candidateId: string;
 }
@@ -849,6 +863,9 @@ export const api = {
   // admin:staff:manage only; every call here 403s for a moderator/staff
   // session, same as the backend guard.
   listStaffAccounts: () => request<StaffAccount[]>('/admin/staff'),
+
+  // GitHub issue #799 (Phase 54).
+  listStaffAuditLog: () => request<StaffAuditLogEntry[]>('/admin/staff/audit-log'),
 
   createStaffAccount: (input: { username: string; email: string; role: StaffRole }) =>
     request<StaffAccountCreated>('/admin/staff', {

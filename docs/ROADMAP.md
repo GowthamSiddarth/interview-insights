@@ -2772,11 +2772,11 @@ Business-Process Closed-Loop Fixes". Epic: GitHub issue #796.
 
 Ordered by dependency:
 
-- [ ] SLA breach/warning notifications never signal resolution (GitHub
+- [x] SLA breach/warning notifications never signal resolution (GitHub
       issue #797)
-- [ ] candidates.verification_status.document_verified is a dead enum
+- [x] candidates.verification_status.document_verified is a dead enum
       value (GitHub issue #798)
-- [ ] staff_audit_log is written but never surfaced in any UI or read
+- [x] staff_audit_log is written but never surfaced in any UI or read
       endpoint (GitHub issue #799)
 - [ ] Engineering blog (last) (GitHub issue #800) — also covers #729
       once it lands, since it's the fourth finding from this same audit

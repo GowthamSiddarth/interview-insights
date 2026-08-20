@@ -855,7 +855,7 @@ describe('ModerationService', () => {
 
   describe('approve / reject / flag', () => {
     function mockPendingRoundRatingEntry() {
-      mockPendingQueueEntry(prisma, { id: 'queue-1', entityType: 'round_rating', entityId: 'rating-1' });
+      const state = mockPendingQueueEntry(prisma, { id: 'queue-1', entityType: 'round_rating', entityId: 'rating-1' });
       prisma.roundRating.update.mockResolvedValue({ id: 'rating-1', status: 'approved' });
       prisma.roundRating.findUniqueOrThrow.mockResolvedValue({
         id: 'rating-1',
@@ -872,6 +872,7 @@ describe('ModerationService', () => {
           process: { companyId: 'company-1', roleTitle: 'Engineer' },
         },
       });
+      return state;
     }
 
     it('approve() flips the round rating to approved and stamps the queue entry reviewed', async () => {
@@ -1112,6 +1113,58 @@ describe('ModerationService', () => {
       expect(rejected).toHaveLength(1);
       expect(rejected[0].reason).toBeInstanceOf(ConflictException);
       expect(prisma.roundRating.update).toHaveBeenCalledTimes(1);
+    });
+
+    // GitHub issue #797 (Phase 54) — sla_resolved is the resolution-side
+    // counterpart to sla_breach/sla_warning.
+    it('does not publish an sla_resolved event for a normal, never-breached-or-warned resolution', async () => {
+      mockPendingRoundRatingEntry();
+
+      await service.approve('queue-1', {});
+
+      expect(domainEventPublisher.publish).not.toHaveBeenCalledWith(
+        'moderation.queue.sla_resolved.v1',
+        expect.anything() as unknown,
+        expect.anything() as unknown,
+      );
+    });
+
+    it('publishes an sla_resolved event when resolving an entry that had breachNotifiedAt set', async () => {
+      const slaDeadline = new Date(Date.now() - 60 * 60 * 1000);
+      const breachNotifiedAt = new Date(Date.now() - 30 * 60 * 1000);
+      const state = mockPendingRoundRatingEntry();
+      Object.assign(state, { slaDeadline, breachNotifiedAt, warningNotifiedAt: null });
+
+      await service.approve('queue-1', { reviewedBy: 'gowtham' });
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.queue.sla_resolved.v1',
+        expect.objectContaining({
+          eventType: 'moderation.queue.sla_resolved',
+          entityType: 'round_rating',
+          entityId: 'rating-1',
+          decision: 'approved',
+          reviewedBy: 'gowtham',
+          wasBreached: true,
+          wasWarned: false,
+        }),
+        'queue-1',
+      );
+    });
+
+    it('publishes an sla_resolved event when resolving an entry that had only warningNotifiedAt set (never actually breached)', async () => {
+      const slaDeadline = new Date(Date.now() + 60 * 60 * 1000);
+      const warningNotifiedAt = new Date(Date.now() - 5 * 60 * 1000);
+      const state = mockPendingRoundRatingEntry();
+      Object.assign(state, { slaDeadline, breachNotifiedAt: null, warningNotifiedAt });
+
+      await service.reject('queue-1', {});
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.queue.sla_resolved.v1',
+        expect.objectContaining({ decision: 'rejected', wasBreached: false, wasWarned: true }),
+        'queue-1',
+      );
     });
 
     function mockPendingRecruiterRatingEntry() {

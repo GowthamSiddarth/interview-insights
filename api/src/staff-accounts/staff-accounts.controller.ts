@@ -30,6 +30,15 @@ export class StaffAccountsController {
     return this.staffAccountsService.list();
   }
 
+  // GitHub issue #799 (Phase 54) — the read side of every staff mutation
+  // this controller's own routes below already durably audit via
+  // StaffAuditLogService.record().
+  @Get('audit-log')
+  @RequirePermission(PERMISSIONS.STAFF_MANAGE)
+  listAuditLog() {
+    return this.staffAccountsService.listAuditLog();
+  }
+
   // Password is generated server-side (never client-supplied) and returned
   // exactly once in this response — same UX
   // infra/scripts/rotate-admin-credentials.sh already established for the

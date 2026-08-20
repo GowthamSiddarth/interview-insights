@@ -46,6 +46,10 @@ import {
   COMPANY_STATUS_CHANGED_V1_TOPIC,
   CompanyStatusChangedEventV1,
 } from '../events/schemas/company-status-changed.event';
+import {
+  MODERATION_QUEUE_SLA_RESOLVED_V1_TOPIC,
+  ModerationQueueSlaResolvedEventV1,
+} from '../events/schemas/moderation-queue-sla-resolved.event';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import { ModerationFlagDto } from './dto/moderation-flag.dto';
 import { getModerationSlaHours } from './moderation-sla.env';
@@ -934,7 +938,40 @@ export class ModerationService {
     // publishStatusChangedEvent's own switch.
     await this.publishStatusChangedEvent(entry.entityType, entry.entityId, entityStatus, dto.reviewedBy, id);
 
+    // GitHub issue #797 (Phase 54) — the resolution-side counterpart to
+    // sla_breach/sla_warning: both are one-shot notify flags with no
+    // signal for when the item they flagged was finally acted on. Only
+    // published when this resolution is closing out a breach/warning
+    // that was actually flagged — a normal, within-SLA review has
+    // nothing to signal resolution of.
+    if (entry.breachNotifiedAt || entry.warningNotifiedAt) {
+      await this.publishSlaResolvedEvent(entry, decision, dto.reviewedBy ?? null, id);
+    }
+
     return updatedEntry;
+  }
+
+  private async publishSlaResolvedEvent(
+    entry: { entityType: ModerationEntityType; entityId: string; slaDeadline: Date; breachNotifiedAt: Date | null; warningNotifiedAt: Date | null },
+    decision: ModerationDecision,
+    reviewedBy: string | null,
+    queueEntryId: string,
+  ): Promise<void> {
+    const now = new Date();
+    const event: ModerationQueueSlaResolvedEventV1 = {
+      eventType: 'moderation.queue.sla_resolved',
+      eventVersion: 1,
+      occurredAt: now.toISOString(),
+      queueEntryId,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      decision,
+      reviewedBy,
+      wasBreached: Boolean(entry.breachNotifiedAt),
+      wasWarned: Boolean(entry.warningNotifiedAt),
+      resolutionLatencyMs: now.getTime() - entry.slaDeadline.getTime(),
+    };
+    await this.domainEventPublisher.publish(MODERATION_QUEUE_SLA_RESOLVED_V1_TOPIC, event, queueEntryId);
   }
 
   // Logs and degrades to an empty array rather than letting one entity
