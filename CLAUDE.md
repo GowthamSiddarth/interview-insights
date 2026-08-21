@@ -179,16 +179,16 @@ post per phase — this file no longer inlines that running history.
   Authentication) is fully done too, blog included (issues #679-#684,
   epic closed). Phase 49 (Resubmission Loop & Rejection Feedback) is
   fully done too, blog included (issues #686-#694 plus #711, epic #685
-  closed) — one open follow-up, #729, tracks #688's candidate-facing
-  rejection-reason surfacing (email, `/me`) that never shipped in this
-  pass. Phase 50 (Company Creation Request Lifecycle) is fully done too,
+  closed) — its own follow-up, #729 (#688's candidate-facing
+  rejection-reason surfacing that never shipped in this pass), landed
+  later as Phase 54's fourth finding; see that phase's own entry below.
+  Phase 50 (Company Creation Request Lifecycle) is fully done too,
   blog included (issues #696-#699, epic #695 closed). Phase 51
   (Staff/Admin/Moderator Notification Platform) is fully done too, blog
   included (issues #701-#706, epic #700 closed) — this closes out the
   Phases 47-51 notification/communication-chain audit (D104); Phase 40
   (CI Infrastructure: Self-Hosted GitHub Actions Runner) is next up
-  again once Oracle A1.Flex capacity frees up, plus the still-open
-  follow-up #729 from Phase 49. Phase 45/46 (Hetzner pilot app-hosting +
+  again once Oracle A1.Flex capacity frees up. Phase 45/46 (Hetzner pilot app-hosting +
   reachability) picked up 2026-08-16 and is now fully live: k3s (#645),
   the firewall (#659), ingress-nginx pinned to its final release since
   it's now archived upstream (#661, D108), GHCR image delivery (#660),
@@ -211,65 +211,58 @@ post per phase — this file no longer inlines that running history.
   six-domain pre-launch audit (security, data integrity, business
   process, infra/secrets, frontend/UX, code quality) then produced
   Phases 52-57 (epics #774/#786/#796/#801/#811/#820), planned together
-  in one pass (#833) and implemented immediately after. Phase 52
-  (Security & Access-Control Hardening) is fully done, blog still open
-  (#785) — ownership checks on round/recruiter-interaction creation,
+  in one pass (#833) and implemented immediately after — all with
+  engineering blogs written (`wiki/blog/`, one post per issue).
+  Phase 52 (Security & Access-Control Hardening) is fully done and
+  closed — ownership checks on round/recruiter-interaction creation,
   `trust proxy`, helmet, boot-time CORS/cookie assertions, a Prisma
   exception filter default case, fraud-checks' raw-SQL interpolation
   replaced with literal queries, verdict-consumer event schema
-  validation, staff-email PII rationale documented (issues #775-#784,
-  epic #774 still open pending the blog). Phase 53 (Data Integrity,
-  Consistency & Docs Reconciliation) is fully done, blog still open
-  (#795) — materialized-view refresh on moderation approval, two GDPR
-  erasure FK gaps closed, company creation made transactional with its
-  moderation enqueue, a documented TOCTOU deferral, four stale-docs
-  fixes (issues #787-#794, epic #786 still open). Phase 54
-  (Business-Process Closed-Loop Fixes) is fully done, blog still open
-  (#800) — SLA breach/warning resolution events, a dead
-  `document_verified` enum value removed via migration, the staff
-  audit log surfaced in a real UI (issues #797-#799, epic #796 still
-  open). Phase 55 (Infrastructure, CI/CD & Secrets Hardening, epic
-  #801, blog #810) is fully implemented, tested, and PR'd (#837) but
-  **not yet merged** — GitHub refuses the merge because the `gh` CLI's
-  PAT lacks `workflow` scope,
-  since this phase's diff touches `.github/workflows/*.yml` (adding
-  `permissions: contents: read`, pinning `actions/checkout` to a SHA,
-  auto-generating the new `email-secrets` k8s Secret in `cd.yml`); needs
-  either a manual web-UI merge or a token with `workflow` scope granted.
-  Phase 56 (Frontend & UX Hardening) is fully done, blog still open
-  (#819) — a "don't include real names" wizard caption, a type-level
-  guard comment against a future interviewer-name leak, required-field
-  enforcement documentation, a failed-field-options retry UI, three
-  re-confirmed-correct config/env checks (issues #812-#818, epic #811
-  still open). Phase 57 (Code Quality & Performance Hardening) is fully
-  done, blog still open (#832) — misleading "retried on redelivery"
-  Kafka-consumer comments fixed across all three consumers,
-  `GET /companies` pagination, a bounded cap on
-  `GET /moderation/queue`, OpenSearch search size/from controls, P2002
-  errors no longer leak raw constraint/column names, AI-triage
-  retryable-vs-terminal error logging, a true partial-update DTO for
-  `PATCH /companies/:id`, an explicit bulk-submission transaction
-  timeout, new unit tests for `MailService`/the mail transporter
-  provider/`PrismaService`, and (as a follow-up once the rest of the
-  phase had already merged) `findApprovedReviews`'s in-memory
-  pagination replaced with a Postgres-side `GROUP BY`/`MAX(created_at)`
-  ranking query (issues #821-#831, epic #820 still open pending the
-  blog). Phase 55 (Infrastructure, CI/CD & Secrets Hardening, epic
-  #801, blog #810) is fully merged too (#837), including its own
-  follow-up **#809** (a separate `read:packages`-only
-  `HETZNER_GHCR_PULL_PAT` for the cluster's GHCR pull secret, keeping
-  the `write:packages`-scoped `HETZNER_GHCR_PAT` confined to CI). One
-  item from this pass still needs user input: **#806** (an off-VM
-  Postgres backup copy) — deferred by explicit user decision
-  (2026-08-21): nightly local backups at `/var/backups/postgres` stay
-  as the only copy for now, object storage revisited later; still
-  unverified whether the nightly cron is actually running and whether
-  a real restore drill has ever been exercised (documented on the
-  issue, left open). Once the six blog posts
-  (#785/#795/#800/#810/#819/#832) are written, all six epics close and
-  Phase 40 (CI Infrastructure: Self-Hosted GitHub Actions Runner) is
-  next up again, still blocked on Oracle A1.Flex capacity, plus the
-  still-open follow-up #729 (Phase 49).
+  validation, staff-email PII rationale documented (issues #775-#785,
+  epic #774 closed). Phase 53 (Data Integrity, Consistency & Docs
+  Reconciliation) is fully done and closed — materialized-view refresh
+  on moderation approval, two GDPR erasure FK gaps closed, company
+  creation made transactional with its moderation enqueue, a documented
+  TOCTOU deferral, four stale-docs fixes (issues #787-#795, epic #786
+  closed). Phase 54 (Business-Process Closed-Loop Fixes) is fully done
+  and closed — SLA breach/warning resolution events, a dead
+  `document_verified` enum value removed via migration, the staff audit
+  log surfaced in a real UI, plus **#729** (Phase 49's own
+  candidate-facing rejection-reason follow-up, folded in as this
+  phase's fourth finding): `POST /moderation/queue/:id/reject` now
+  requires a `rejectionReasonCategory`, the rejection email includes
+  the human-readable reason, and `/me/submissions` surfaces it (issues
+  #797-#800 + #729, epic #796 closed). Phase 55 (Infrastructure, CI/CD
+  & Secrets Hardening, epic #801) is **the one phase still open** —
+  seven of eight issues shipped and blogged (#802-#805, #807-#809,
+  including #809's own follow-up splitting the GHCR PAT into a
+  `write:packages`-scoped CI-only token and a separate
+  `read:packages`-only `HETZNER_GHCR_PULL_PAT` for the cluster's pull
+  secret) — **#806** (an off-VM Postgres backup copy) remains open,
+  deferred by explicit user decision (2026-08-21): nightly local
+  backups at `/var/backups/postgres` stay as the only copy for now,
+  object storage revisited later; still unverified whether the nightly
+  cron is actually running and whether a real restore drill has ever
+  been exercised (documented on the issue). Phase 56 (Frontend & UX
+  Hardening) is fully done and closed — a "don't include real names"
+  wizard caption, a type-level guard comment against a future
+  interviewer-name leak, required-field enforcement documentation, a
+  failed-field-options retry UI, two re-confirmed-correct config/env
+  checks (issues #812-#819, epic #811 closed). Phase 57 (Code Quality &
+  Performance Hardening) is fully done and closed — misleading "retried
+  on redelivery" Kafka-consumer comments fixed across all three
+  consumers, `GET /companies` pagination, a bounded cap on
+  `GET /moderation/queue`, `findApprovedReviews`'s in-memory pagination
+  replaced with a Postgres-side `GROUP BY`/`MAX(created_at)` ranking
+  query, OpenSearch search size/from controls, P2002 errors no longer
+  leak raw constraint/column names, AI-triage retryable-vs-terminal
+  error logging, a true partial-update DTO for `PATCH /companies/:id`,
+  an explicit bulk-submission transaction timeout, and new unit tests
+  for `MailService`/the mail transporter provider/`PrismaService`
+  (issues #821-#832, epic #820 closed). Once #806 resolves, Phase 55's
+  epic/blog close too and Phase 40 (CI Infrastructure: Self-Hosted
+  GitHub Actions Runner) is next up again, still blocked on Oracle
+  A1.Flex capacity.
 
 ## Open decisions still to make
 
