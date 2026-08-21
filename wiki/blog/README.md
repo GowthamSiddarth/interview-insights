@@ -808,3 +808,25 @@ stay open pending that.
 5. [Issue #807 — LocalStack image pinned off :latest](phase-55-infrastructure-cicd-secrets-hardening/issue-807-pin-localstack-image/README.md)
 6. [Issue #808 — Third-party actions not pinned to commit SHAs](phase-55-infrastructure-cicd-secrets-hardening/issue-808-pin-actions-checkout-sha/README.md)
 7. [Issue #809 — GHCR PAT reused for both push and pull-secret roles](phase-55-infrastructure-cicd-secrets-hardening/issue-809-ghcr-pull-only-pat/README.md)
+
+## Phase 56 — Frontend & UX Hardening
+
+See `docs/ROADMAP.md` Phase 56. Filed from the same audit: the frontend
+pass confirmed a strong baseline (httpOnly session cookies, no
+exploitable `dangerouslySetInnerHTML`, client-side authorization gates
+genuinely backed by server-side `PermissionsGuard` checks) but found
+the round title/description fields carry no "don't include real names"
+warning despite not even being moderation-gated (Phase 52's #775), no
+type-level guard against a future interviewer-identity leak, and a
+failed round-type field-options fetch that silently dropped fields with
+no indication anything went wrong. Two issues (#815/#816) turned out to
+already be correct — confirmed and documented rather than left
+unverified.
+
+1. [Issue #812 — Round title/description have no "don't include real names" warning](phase-56-frontend-ux-hardening/issue-812-round-description-real-names-warning/README.md)
+2. [Issue #813 — No type-level guard against a future interviewer-name leak](phase-56-frontend-ux-hardening/issue-813-type-level-interviewer-name-guard/README.md)
+3. [Issue #814 — No client-side required-field enforcement for round-type fields (confirmed correct)](phase-56-frontend-ux-hardening/issue-814-round-type-fields-optional-confirmed/README.md)
+4. [Issue #815 — Confirm COOKIE_SECURE=true now that Hetzner TLS is live](phase-56-frontend-ux-hardening/issue-815-cookie-secure-confirmed/README.md)
+5. [Issue #816 — Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build time](phase-56-frontend-ux-hardening/issue-816-next-public-api-url-confirmed/README.md)
+6. [Issue #817 — Failed round-type field-options fetch silently drops fields](phase-56-frontend-ux-hardening/issue-817-field-options-fetch-failure-ui/README.md)
+7. [Issue #818 — Rating-input min/max attributes are cosmetic, not enforcement](phase-56-frontend-ux-hardening/issue-818-rating-input-minmax-cosmetic/README.md)
