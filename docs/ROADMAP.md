@@ -2858,7 +2858,7 @@ Ordered by dependency:
       instead of blocking the wizard (GitHub issue #817)
 - [x] Document that rating-input min/max attributes are cosmetic, not
       enforcement (GitHub issue #818)
-- [ ] Engineering blog (last) (GitHub issue #819)
+- [x] Engineering blog (last) (GitHub issue #819)
 
 ## Phase 57 — Code Quality & Performance Hardening
 
