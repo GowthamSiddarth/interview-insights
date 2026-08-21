@@ -1,4 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -172,33 +173,58 @@ export class CompaniesService {
   // not a search. Never includes candidateId or any interviewer identity
   // (hard constraint #1).
   //
-  // GitHub issue #824 (Phase 57) — every approved rating for the company
-  // is loaded and grouped in application memory before the requested page
-  // is sliced off, so a popular company pays the full query/serialization/
-  // grouping cost on every page, not just page 1 — an acknowledged
-  // tradeoff, deliberately not fixed here. Pushing LIMIT/OFFSET to
-  // Postgres directly isn't a small change: the grouping is by process,
-  // not by row (same reasoning #315 already established for the
-  // moderation queue), so a naive row-level LIMIT/OFFSET would risk
-  // splitting one submission's rounds across a page boundary — the exact
-  // bug #347 fixed. Correctly fixing this needs either a window-function
-  // query (rank groups, then filter) or a precomputed materialized view
-  // like the aggregation layer already uses elsewhere — both real,
-  // separate pieces of work. Revisit once a specific company's review
-  // volume makes this measurably slow, per this file's own established
-  // "fine at today's volume" precedent (see findAll()/findTop() above).
+  // GitHub issue #824 (Phase 57) — this used to load every approved
+  // rating for the company and group it in application memory before
+  // slicing off the requested page, so a popular company paid the full
+  // query/serialization/grouping cost on every page, not just page 1.
+  // Pagination now happens at the process level in Postgres itself: a
+  // GROUP BY ranks each InterviewProcess by its most recent approved
+  // rating, and only that page's process ids come back from the first
+  // query — the grouping still can't happen at the row level (same
+  // reasoning #315/#823 already established for the moderation queue,
+  // and the exact bug #347 fixed): a naive row-level LIMIT/OFFSET would
+  // risk splitting one submission's rounds across a page boundary. The
+  // second query then fetches full rating rows for just that page's
+  // (bounded) set of processes, not the company's entire history.
   async findApprovedReviews(companyId: string, page: number, pageSize: number) {
     // 404 (not an empty page) for a company that doesn't exist or isn't
     // approved yet — a pending/rejected company's reviews endpoint must
     // never leak that the company exists at all.
     await this.prisma.company.findFirstOrThrow({ where: { id: companyId, status: 'approved' } });
 
-    // Grouped in application code, same pattern as ModerationService's
-    // Map-keyed grouping (#315) and D13's accepted full-table-scan
-    // tradeoff — fine at today's volume, revisit if a company's review
-    // count ever makes this measurably slow.
+    // Table/column names are literal, never interpolated — only
+    // companyId/pageSize/offset are bound parameters, same
+    // injection-safe shape #781 (Phase 52) already established for this
+    // app's other raw queries.
+    const [totalRows, pageRows] = await Promise.all([
+      this.prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+        SELECT COUNT(DISTINCT r."process_id") AS count
+        FROM "round_ratings" rr
+        JOIN "rounds" r ON r."id" = rr."round_id"
+        JOIN "interview_processes" ip ON ip."id" = r."process_id"
+        WHERE ip."company_id" = ${companyId}::uuid AND rr."status" = 'approved'
+      `),
+      this.prisma.$queryRaw<{ process_id: string }[]>(Prisma.sql`
+        SELECT r."process_id" AS process_id
+        FROM "round_ratings" rr
+        JOIN "rounds" r ON r."id" = rr."round_id"
+        JOIN "interview_processes" ip ON ip."id" = r."process_id"
+        WHERE ip."company_id" = ${companyId}::uuid AND rr."status" = 'approved'
+        GROUP BY r."process_id"
+        ORDER BY MAX(rr."created_at") DESC
+        LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+      `),
+    ]);
+
+    const total = Number(totalRows[0]?.count ?? 0);
+    if (pageRows.length === 0) {
+      return { total, page, pageSize, items: [] };
+    }
+
+    const processIds = pageRows.map((r) => r.process_id);
+
     const ratings = await this.prisma.roundRating.findMany({
-      where: { status: 'approved', round: { process: { companyId } } },
+      where: { status: 'approved', round: { processId: { in: processIds } } },
       orderBy: { createdAt: 'desc' },
       include: {
         round: {
@@ -237,11 +263,14 @@ export class CompaniesService {
       });
     }
 
-    // `ratings` is already createdAt-desc and Map preserves insertion
-    // order, so groups are already ordered by their most-recent rating.
-    const groups = Array.from(groupsByProcess.values());
-    const total = groups.length;
-    const items = groups.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
+    // Re-ordered to match the first query's own MAX(created_at) ranking
+    // — the second query's row-level createdAt-desc order doesn't
+    // guarantee group-level order matches it exactly (a process whose
+    // single most-recent rating is older than another process's
+    // *second*-most-recent rating could otherwise sort later here).
+    const items = processIds
+      .map((id) => groupsByProcess.get(id))
+      .filter((group): group is NonNullable<typeof group> => group !== undefined);
 
     return { total, page, pageSize, items };
   }

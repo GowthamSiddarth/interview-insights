@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { CompaniesService } from './companies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
@@ -17,6 +18,7 @@ describe('CompaniesService', () => {
     };
     roundRating: { count: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
+    $queryRaw: jest.Mock<Promise<unknown[]>, [Prisma.Sql]>;
   };
   let moderationService: {
     enqueue: jest.Mock;
@@ -52,6 +54,9 @@ describe('CompaniesService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+      // Default: no processes found (empty company) — tests that care
+      // about specific pages override this per-call.
+      $queryRaw: jest.fn<Promise<unknown[]>, [Prisma.Sql]>().mockResolvedValue([]),
     };
     moderationService = {
       enqueue: jest.fn().mockResolvedValue(undefined),
@@ -284,6 +289,15 @@ describe('CompaniesService', () => {
   });
 
   describe('findApprovedReviews', () => {
+    // GitHub issue #824 (Phase 57) — pagination now happens at the
+    // process level in Postgres (a GROUP BY ranking query), not by
+    // loading every approved rating into application memory first.
+    function mockProcessPage(count: number, processIds: string[]): void {
+      prisma.$queryRaw
+        .mockResolvedValueOnce([{ count: BigInt(count) }])
+        .mockResolvedValueOnce(processIds.map((process_id) => ({ process_id })));
+    }
+
     it('verifies the company exists and is approved before querying (404 rather than an empty page)', async () => {
       await service.findApprovedReviews('company-1', 1, 10);
 
@@ -292,26 +306,43 @@ describe('CompaniesService', () => {
       });
     });
 
-    it('queries every approved rating for the company, unpaginated at the row level', async () => {
-      await service.findApprovedReviews('company-1', 3, 10);
+    it('ranks and pages InterviewProcesses in Postgres via a GROUP BY, then fetches only that page\'s rating rows', async () => {
+      mockProcessPage(1, ['process-1']);
+      prisma.roundRating.findMany.mockResolvedValue([]);
 
+      await service.findApprovedReviews('company-1', 1, 10);
+
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+      const [countQuery, pageQuery] = prisma.$queryRaw.mock.calls.map((c) => c[0]);
+      expect(countQuery.sql).toContain('"round_ratings"');
+      expect(countQuery.sql).toContain('COUNT(DISTINCT');
+      expect(pageQuery.sql).toContain('GROUP BY');
+      expect(pageQuery.sql).toContain('LIMIT');
+      expect(pageQuery.values).toEqual(['company-1', 10, 0]);
+
+      // Bounded to just this page's process ids — never an unpaginated,
+      // company-wide row scan (the old shape this issue fixed).
       expect(prisma.roundRating.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { status: 'approved', round: { process: { companyId: 'company-1' } } },
-          orderBy: { createdAt: 'desc' },
+          where: { status: 'approved', round: { processId: { in: ['process-1'] } } },
         }),
       );
-      // No skip/take here — pagination now happens after grouping, over
-      // submissions, not raw rows (GitHub issue #347).
-      expect(prisma.roundRating.findMany).not.toHaveBeenCalledWith(
-        expect.objectContaining({ skip: expect.anything() as number }),
-      );
+    });
+
+    it('returns an empty page without querying rating rows at all when the process page is empty', async () => {
+      mockProcessPage(0, []);
+
+      const result = await service.findApprovedReviews('company-1', 1, 10);
+
+      expect(result).toEqual({ total: 0, page: 1, pageSize: 10, items: [] });
+      expect(prisma.roundRating.findMany).not.toHaveBeenCalled();
     });
 
     // GitHub issue #347: a candidate's multi-round submission must appear
     // as one grouped item, not one row per round — the same flat-list
     // problem Phase 29 issue #315 already fixed for the moderation queue.
     it('groups multiple approved ratings from the same process into one item', async () => {
+      mockProcessPage(1, ['process-1']);
       prisma.roundRating.findMany.mockResolvedValue([
         {
           id: 'rating-1',
@@ -361,6 +392,7 @@ describe('CompaniesService', () => {
     });
 
     it('puts ratings from different processes into separate items', async () => {
+      mockProcessPage(2, ['process-1', 'process-2']);
       prisma.roundRating.findMany.mockResolvedValue([
         {
           id: 'rating-1',
@@ -403,7 +435,8 @@ describe('CompaniesService', () => {
     });
 
     it('paginates by submission, not raw row — a page boundary never splits one submission', async () => {
-      prisma.roundRating.findMany.mockResolvedValue([
+      mockProcessPage(2, ['process-1']);
+      prisma.roundRating.findMany.mockResolvedValueOnce([
         {
           id: 'rating-1',
           difficulty: 3,
@@ -426,6 +459,16 @@ describe('CompaniesService', () => {
           createdAt: new Date('2026-01-02'),
           round: { title: 'B', roundType: 'coding', processId: 'process-1', process: { roleTitle: 'Engineer' } },
         },
+      ]);
+
+      const page1 = await service.findApprovedReviews('company-1', 1, 1);
+      expect(page1.total).toBe(2);
+      expect(page1.items).toHaveLength(1);
+      expect(page1.items[0]).toMatchObject({ processId: 'process-1' });
+      expect(page1.items[0].entries).toHaveLength(2);
+
+      mockProcessPage(2, ['process-2']);
+      prisma.roundRating.findMany.mockResolvedValueOnce([
         {
           id: 'rating-3',
           difficulty: 3,
@@ -439,15 +482,54 @@ describe('CompaniesService', () => {
         },
       ]);
 
-      const page1 = await service.findApprovedReviews('company-1', 1, 1);
-      expect(page1.total).toBe(2);
-      expect(page1.items).toHaveLength(1);
-      expect(page1.items[0]).toMatchObject({ processId: 'process-1' });
-      expect(page1.items[0].entries).toHaveLength(2);
-
       const page2 = await service.findApprovedReviews('company-1', 2, 1);
       expect(page2.items).toHaveLength(1);
       expect(page2.items[0]).toMatchObject({ processId: 'process-2' });
+
+      // The second query's LIMIT/OFFSET should reflect page 2 — offset
+      // = (page - 1) * pageSize.
+      const secondPageQuery = prisma.$queryRaw.mock.calls[3][0];
+      expect(secondPageQuery.values).toEqual(['company-1', 1, 1]);
+    });
+
+    // The row-level query (query 2) orders by createdAt across every
+    // process in the page, which doesn't guarantee group-level order
+    // matches query 1's own MAX(created_at) ranking — a process whose
+    // single most-recent rating is older than another process's
+    // *second*-most-recent rating could otherwise sort later. Final
+    // items must follow query 1's process order, not query 2's row order.
+    it('orders items by the ranking query\'s process order, not the row-level query\'s row order', async () => {
+      mockProcessPage(2, ['process-1', 'process-2']);
+      prisma.roundRating.findMany.mockResolvedValue([
+        // process-2's row happens to come back first here even though
+        // process-1 was ranked ahead of it by query 1.
+        {
+          id: 'rating-2',
+          difficulty: 3,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
+          technicalDepth: null,
+          freeText: null,
+          createdAt: new Date('2026-01-05'),
+          round: { title: 'A', roundType: 'coding', processId: 'process-2', process: { roleTitle: 'Manager' } },
+        },
+        {
+          id: 'rating-1',
+          difficulty: 3,
+          fluency: 4,
+          clarity: 4,
+          focus: 4,
+          technicalDepth: null,
+          freeText: null,
+          createdAt: new Date('2026-01-01'),
+          round: { title: 'A', roundType: 'coding', processId: 'process-1', process: { roleTitle: 'Engineer' } },
+        },
+      ]);
+
+      const result = await service.findApprovedReviews('company-1', 1, 10);
+
+      expect(result.items.map((i) => i.processId)).toEqual(['process-1', 'process-2']);
     });
   });
 });

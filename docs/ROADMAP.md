@@ -2888,13 +2888,13 @@ Ordered by dependency:
       bounded cap (`take: 500`) rather than full pagination, given the
       existing by-InterviewProcess grouping constraint (#315); documented
       tradeoff in `moderation.service.ts`.
-- [ ] findApprovedReviews loads all rows then paginates in application
-      memory (GitHub issue #824) — deliberately deferred, not fixed: a
-      correct fix needs a window-function query or a precomputed
-      materialized view (same grouping constraint #315/#823 hit), real
-      separate work: documented in `companies.service.ts` with a revisit
-      trigger (once a specific company's review volume makes this
-      measurably slow), left open rather than closed.
+- [x] findApprovedReviews loads all rows then paginates in application
+      memory (GitHub issue #824) — pagination now happens in Postgres: a
+      `GROUP BY`/`MAX(created_at)` query ranks and pages
+      InterviewProcesses first, then a second query fetches only that
+      page's rating rows, same `Prisma.sql`-parameterized, no-
+      identifier-interpolation shape #781 (Phase 52) already
+      established for this app's other raw queries.
 - [x] Company search silently truncates to 10 results with no size/from
       control (GitHub issue #825) — `size`/`from` query params (default
       10/0, max size 50).

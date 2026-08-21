@@ -249,22 +249,27 @@ post per phase — this file no longer inlines that running history.
   errors no longer leak raw constraint/column names, AI-triage
   retryable-vs-terminal error logging, a true partial-update DTO for
   `PATCH /companies/:id`, an explicit bulk-submission transaction
-  timeout, and new unit tests for `MailService`/the mail transporter
-  provider/`PrismaService` (issues #821-#823, #825-#831, epic #820
-  still open) — **#824** (`findApprovedReviews`'s in-memory pagination)
-  is deliberately left open as a documented follow-up, same shape as
-  #729 from Phase 49: a correct fix needs a window-function query or a
-  materialized view, real separate work, revisit once a specific
-  company's review volume makes it measurably slow. Two items from this
-  pass need user input before they can proceed: **#806** (an off-VM
-  Postgres backup destination needs real object-storage credentials and
-  an explicit go-ahead before a live restore drill) and **#809** (a
-  GHCR pull-only PAT needs to be created via GitHub's web UI, which
-  can't be done via `gh`/the API). Once #837 merges and the six blog
-  posts (#785/#795/#800/#810/#819/#832) are written, all six epics
-  close and Phase 40 (CI Infrastructure: Self-Hosted GitHub Actions
-  Runner) is next up again, still blocked on Oracle A1.Flex capacity,
-  plus the still-open follow-ups #729 (Phase 49) and #824 (Phase 57).
+  timeout, new unit tests for `MailService`/the mail transporter
+  provider/`PrismaService`, and (as a follow-up once the rest of the
+  phase had already merged) `findApprovedReviews`'s in-memory
+  pagination replaced with a Postgres-side `GROUP BY`/`MAX(created_at)`
+  ranking query (issues #821-#831, epic #820 still open pending the
+  blog). Phase 55 (Infrastructure, CI/CD & Secrets Hardening, epic
+  #801, blog #810) is fully merged too (#837), including its own
+  follow-up **#809** (a separate `read:packages`-only
+  `HETZNER_GHCR_PULL_PAT` for the cluster's GHCR pull secret, keeping
+  the `write:packages`-scoped `HETZNER_GHCR_PAT` confined to CI). One
+  item from this pass still needs user input: **#806** (an off-VM
+  Postgres backup copy) — deferred by explicit user decision
+  (2026-08-21): nightly local backups at `/var/backups/postgres` stay
+  as the only copy for now, object storage revisited later; still
+  unverified whether the nightly cron is actually running and whether
+  a real restore drill has ever been exercised (documented on the
+  issue, left open). Once the six blog posts
+  (#785/#795/#800/#810/#819/#832) are written, all six epics close and
+  Phase 40 (CI Infrastructure: Self-Hosted GitHub Actions Runner) is
+  next up again, still blocked on Oracle A1.Flex capacity, plus the
+  still-open follow-up #729 (Phase 49).
 
 ## Open decisions still to make
 
