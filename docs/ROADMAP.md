@@ -2922,4 +2922,4 @@ Ordered by dependency:
       (GitHub issue #831) — added for notification-service's
       `MailService`/`mail-transporter.provider.ts` and `PrismaService`
       in all three services (api, notification-service, review-analyzer).
-- [ ] Engineering blog (last) (GitHub issue #832)
+- [x] Engineering blog (last) (GitHub issue #832)

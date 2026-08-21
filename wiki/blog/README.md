@@ -830,3 +830,30 @@ unverified.
 5. [Issue #816 — Confirm NEXT_PUBLIC_API_URL is a real env var at Hetzner build time](phase-56-frontend-ux-hardening/issue-816-next-public-api-url-confirmed/README.md)
 6. [Issue #817 — Failed round-type field-options fetch silently drops fields](phase-56-frontend-ux-hardening/issue-817-field-options-fetch-failure-ui/README.md)
 7. [Issue #818 — Rating-input min/max attributes are cosmetic, not enforcement](phase-56-frontend-ux-hardening/issue-818-rating-input-minmax-cosmetic/README.md)
+
+## Phase 57 — Code Quality & Performance Hardening
+
+See `docs/ROADMAP.md` Phase 57. Filed from the same audit: the
+code-quality pass found the codebase's baseline unusually high for how
+quickly it was built (strong test coverage, no dead code, no N+1 query
+patterns anywhere in scope) — but found all three Kafka consumers catch
+processing errors and log "will be retried on redelivery" without ever
+rethrowing, so a transient failure is silently and permanently dropped,
+not actually retried (the never-rethrow *design* itself turned out to
+be deliberate and correct — the comment lying about it was the real
+bug). It also found `GET /companies` unpaginated (the sibling
+`findTop()` was already fixed for the same reason after a live
+complaint, #415) and several smaller pagination/error-message/timeout
+gaps.
+
+1. [Issue #821 — Kafka consumers silently drop messages despite "retried on redelivery" comments](phase-57-code-quality-performance-hardening/issue-821-kafka-consumer-misleading-retry-comments/README.md)
+2. [Issue #822 — GET /companies (findAll) has no pagination](phase-57-code-quality-performance-hardening/issue-822-companies-pagination/README.md)
+3. [Issue #823 — GET /moderation/queue has no pagination](phase-57-code-quality-performance-hardening/issue-823-moderation-queue-pagination-cap/README.md)
+4. [Issue #824 — findApprovedReviews loads all rows then paginates in application memory](phase-57-code-quality-performance-hardening/issue-824-review-pagination-postgres-side/README.md)
+5. [Issue #825 — Company search silently truncates to 10 results](phase-57-code-quality-performance-hardening/issue-825-company-search-size-from/README.md)
+6. [Issue #826 — Unique-constraint errors leak raw column/constraint names](phase-57-code-quality-performance-hardening/issue-826-p2002-message-leak/README.md)
+7. [Issue #827 — AI-triage transient failures indistinguishable from "not configured"](phase-57-code-quality-performance-hardening/issue-827-ai-triage-retryable-vs-terminal/README.md)
+8. [Issue #828 — PATCH /companies/:id requires the full payload instead of true partial update](phase-57-code-quality-performance-hardening/issue-828-update-company-partial-dto/README.md)
+9. [Issue #829 — Bulk submission transaction has no explicit timeout override](phase-57-code-quality-performance-hardening/issue-829-bulk-submission-transaction-timeout/README.md)
+10. [Issue #830 — IP throttle state is in-memory and single-instance only (confirmed acceptable)](phase-57-code-quality-performance-hardening/issue-830-ip-throttle-single-instance-confirmed/README.md)
+11. [Issue #831 — MailService and PrismaService have no dedicated unit tests](phase-57-code-quality-performance-hardening/issue-831-mailservice-prismaservice-unit-tests/README.md)
