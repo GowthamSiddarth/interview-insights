@@ -241,9 +241,11 @@ post per phase — this file no longer inlines that running history.
   secret) — **#806** (an off-VM Postgres backup copy) remains open,
   deferred by explicit user decision (2026-08-21): nightly local
   backups at `/var/backups/postgres` stay as the only copy for now,
-  object storage revisited later; still unverified whether the nightly
-  cron is actually running and whether a real restore drill has ever
-  been exercised (documented on the issue). Phase 56 (Frontend & UX
+  object storage revisited later. The nightly cron is now confirmed
+  live (checked 2026-08-21: `/etc/cron.d/pilot-pg-backup` installed,
+  two consecutive successful nightly runs in the log, 4 dumps on disk,
+  rotation healthy) — the one thing still unverified is a real restore
+  drill via `pilot-pg-restore.sh`, never yet exercised. Phase 56 (Frontend & UX
   Hardening) is fully done and closed — a "don't include real names"
   wizard caption, a type-level guard comment against a future
   interviewer-name leak, required-field enforcement documentation, a
