@@ -718,3 +718,28 @@ than build a third parallel notification scheme.
 3. [Issue #703 — `StaffNotificationRecipientsService`](phase-51-staff-admin-moderator-notification-platform/issue-703-staff-notification-recipients-service/README.md)
 4. [Issue #704 — Tiered SLA escalation](phase-51-staff-admin-moderator-notification-platform/issue-704-tiered-sla-escalation/README.md)
 5. [Issue #705 — `notification-service` consumer extension + templates for `staff.*` events](phase-51-staff-admin-moderator-notification-platform/issue-705-consumer-templates-staff-events/README.md)
+
+## Phase 52 — Security & Access-Control Hardening
+
+See `docs/ROADMAP.md` Phase 52 and `docs/DECISIONS.md` D112. Filed
+2026-08-20 from a six-domain pre-launch audit (security, data
+integrity, business logic, infrastructure, frontend, code quality)
+commissioned ahead of the lean launch. The security pass found two
+endpoints (`rounds`, `recruiter-interactions`) with no auth guard or
+ownership check at all — `rounds` isn't even covered by
+`moderation_queue`, so unauthenticated free text could reach a public
+process page with zero review — plus IP-throttle bypass behind
+ingress-nginx, missing security headers, and a handful of smaller
+hardening gaps. All six of CLAUDE.md's hard constraints were separately
+verified as genuinely enforced in code, not just documented.
+
+1. [Issue #775 — No auth guard on round creation](phase-52-security-access-control-hardening/issue-775-round-creation-auth-guard/README.md)
+2. [Issue #776 — No auth guard on recruiter-interaction creation](phase-52-security-access-control-hardening/issue-776-recruiter-interaction-auth-guard/README.md)
+3. [Issue #777 — IP-based throttles collapse behind ingress (missing trust proxy)](phase-52-security-access-control-hardening/issue-777-trust-proxy/README.md)
+4. [Issue #778 — Add helmet security headers](phase-52-security-access-control-hardening/issue-778-helmet-security-headers/README.md)
+5. [Issue #779 — Prisma exception filter can leak internal detail](phase-52-security-access-control-hardening/issue-779-prisma-exception-filter-default-case/README.md)
+6. [Issue #780 — No boot-time assertion for COOKIE_SECURE/CORS_ORIGIN](phase-52-security-access-control-hardening/issue-780-cors-cookie-boot-assertions/README.md)
+7. [Issue #781 — Raw SQL identifier interpolation in fraud-checks](phase-52-security-access-control-hardening/issue-781-fraud-checks-raw-sql-injection-shape/README.md)
+8. [Issue #782 — verdict-consumer doesn't schema-validate Kafka payloads](phase-52-security-access-control-hardening/issue-782-verdict-consumer-schema-validation/README.md)
+9. [Issue #783 — Staff email has no documented PII-handling rationale](phase-52-security-access-control-hardening/issue-783-staff-email-pii-rationale/README.md)
+10. [Issue #784 — Local dev EMAIL_ENCRYPTION_KEY is a low-entropy placeholder](phase-52-security-access-control-hardening/issue-784-dev-encryption-key-entropy/README.md)
