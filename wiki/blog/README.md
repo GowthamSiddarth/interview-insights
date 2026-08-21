@@ -784,3 +784,27 @@ one-parent-per-sub-issue limit, so its post lives here instead.
 2. [Issue #798 — candidates.verification_status.document_verified is a dead enum value](phase-54-business-process-closed-loop-fixes/issue-798-dead-document-verified-enum-value/README.md)
 3. [Issue #799 — staff_audit_log is written but never surfaced](phase-54-business-process-closed-loop-fixes/issue-799-staff-audit-log-surfaced/README.md)
 4. [Issue #729 — Rejected candidates never learn why (Phase 49 follow-up)](phase-54-business-process-closed-loop-fixes/issue-729-candidate-rejection-reason-surfacing/README.md)
+
+## Phase 55 — Infrastructure, CI/CD & Secrets Hardening
+
+See `docs/ROADMAP.md` Phase 55 and `docs/DECISIONS.md` D105. Filed
+from the same audit: the infra pass found three of the four Dockerfiles
+missing a `.dockerignore` (the exact bug #450 already fixed for `api/`,
+never applied to the siblings), a real working secret shipped in
+`.env.example`, no `permissions` block on any workflow, every container
+running as root, a floating `:latest` LocalStack tag, unpinned
+third-party actions on the two credential-bearing deploy workflows, and
+a GHCR PAT doing double duty as both a push credential and the
+cluster's pull secret. **Seven of this phase's eight issues are covered
+below — #806 (an off-VM Postgres backup copy) remains open, deferred by
+an explicit product decision to keep local-only backups for the current
+single-operator pilot for now**, so this phase's epic and blog issue
+stay open pending that.
+
+1. [Issue #802 — Missing .dockerignore on three of four Dockerfiles](phase-55-infrastructure-cicd-secrets-hardening/issue-802-dockerignore-web-notification-review-analyzer/README.md)
+2. [Issue #803 — .env.example and LocalStack seed scripts ship a real, working key](phase-55-infrastructure-cicd-secrets-hardening/issue-803-email-secrets-no-real-default/README.md)
+3. [Issue #804 — No permissions block on any GitHub Actions workflow](phase-55-infrastructure-cicd-secrets-hardening/issue-804-workflow-permissions-block/README.md)
+4. [Issue #805 — Containers run as root everywhere](phase-55-infrastructure-cicd-secrets-hardening/issue-805-non-root-containers/README.md)
+5. [Issue #807 — LocalStack image pinned off :latest](phase-55-infrastructure-cicd-secrets-hardening/issue-807-pin-localstack-image/README.md)
+6. [Issue #808 — Third-party actions not pinned to commit SHAs](phase-55-infrastructure-cicd-secrets-hardening/issue-808-pin-actions-checkout-sha/README.md)
+7. [Issue #809 — GHCR PAT reused for both push and pull-secret roles](phase-55-infrastructure-cicd-secrets-hardening/issue-809-ghcr-pull-only-pat/README.md)
