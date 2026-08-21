@@ -1828,7 +1828,8 @@ the `HETZNER_*` names:
 | `HETZNER_ADMIN_JWT_SECRET` | `api-secrets` |
 | `HETZNER_MAIL_SMTP_PASSWORD` | `api-secrets`, `notification-service-secrets` (Brevo SMTP key) |
 | `HETZNER_ANTHROPIC_API_KEY` | `review-analyzer-secrets` (optional — omitted entirely when unset) |
-| `HETZNER_GHCR_PAT` | `ghcr-pull-secret`, and `docker`/`podman login ghcr.io` in both CD jobs |
+| `HETZNER_GHCR_PAT` | `docker`/`podman login ghcr.io` in both CD jobs (`write:packages`-scoped — never used for the pull secret, GitHub issue #809) |
+| `HETZNER_GHCR_PULL_PAT` | `ghcr-pull-secret` only — `read:packages`-scoped, see below |
 
 Rotate any of these the same way as setting them initially —
 `gh secret set HETZNER_<NAME>` — then re-run `cd-hetzner.yml` (12.2) to
@@ -1845,6 +1846,25 @@ python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe
 `MAIL_SMTP_USER` (Brevo's login) is **not** a secret — it's a plain env
 var in `overlays/hetzner-pilot/api-config-patch.yaml`, same non-secret
 status as `POSTGRES_USER`.
+
+**Creating `HETZNER_GHCR_PULL_PAT` (GitHub issue #809):** GitHub's API
+has no endpoint to mint a classic or fine-grained PAT — this step is
+web-UI-only, and there's no way to script around that.
+
+1. github.com → Settings → Developer settings → Personal access
+   tokens → Tokens (classic) → Generate new token.
+2. Scope: `read:packages` only — nothing else. Not `write:packages`
+   (that's what makes this token different from `HETZNER_GHCR_PAT`),
+   not `repo`, not any other scope.
+3. `gh secret set HETZNER_GHCR_PULL_PAT` (paste the token at the
+   prompt — never pass it as a `--body` CLI argument, which would land
+   in shell history).
+4. Re-run `cd-hetzner.yml` (12.2) to pick it up.
+
+Until this secret is set, the "Provision ghcr-pull-secret" step
+hard-fails the deploy rather than silently falling back to the
+write-scoped `HETZNER_GHCR_PAT` — a silent fallback would defeat the
+whole point of #809.
 
 ### 12.6 Postgres backup & restore (GitHub issue #663)
 

@@ -281,14 +281,26 @@ jobs:
           fi
 
       - name: Provision ghcr-pull-secret
+        # GitHub issue #809 (Phase 55) — this used to reuse HETZNER_GHCR_PAT
+        # (the write:packages-scoped token this job's own "Log in to GHCR"
+        # steps use to push) as the cluster's pull secret too. Anyone who
+        # can read the ghcr-pull-secret k8s Secret then got a token that
+        # can also push/overwrite images, not just pull — wider blast
+        # radius than a pull secret should carry. HETZNER_GHCR_PULL_PAT is
+        # a separate, read:packages-only PAT, used only here; the
+        # write-scoped token never leaves GitHub Actions secrets.
         env:
-          GHCR_PAT: ${{ secrets.HETZNER_GHCR_PAT }}
+          GHCR_PULL_PAT: ${{ secrets.HETZNER_GHCR_PULL_PAT }}
         run: |
+          if [ -z "$GHCR_PULL_PAT" ]; then
+            echo "::error::HETZNER_GHCR_PULL_PAT is not set - see wiki/deployment-guide.md section 12.5 for how to create the read:packages-only PAT (GitHub issue #809)."
+            exit 1
+          fi
           kubectl create secret docker-registry ghcr-pull-secret \
             --namespace interview-insights \
             --docker-server=ghcr.io \
             --docker-username=GowthamSiddarth \
-            --docker-password="$GHCR_PAT" \
+            --docker-password="$GHCR_PULL_PAT" \
             --docker-email=unused@example.com \
             --dry-run=client -o yaml | kubectl apply -f -
 
