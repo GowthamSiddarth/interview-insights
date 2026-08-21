@@ -2777,7 +2777,7 @@ Ordered by dependency:
       value (GitHub issue #798)
 - [x] staff_audit_log is written but never surfaced in any UI or read
       endpoint (GitHub issue #799)
-- [ ] Engineering blog (last) (GitHub issue #800) — also covers #729,
+- [x] Engineering blog (last) (GitHub issue #800) — also covers #729,
       since it's the fourth finding from this same audit pass
 - Related, tracked separately, now done: rejected candidates were
   never told why (GitHub issue #729, Phase 49's epic #685) —

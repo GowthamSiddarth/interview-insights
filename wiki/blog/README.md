@@ -765,3 +765,22 @@ than a seventh epic.
 6. [Issue #792 — GDPR erasure listed as an open decision though it's implemented](phase-53-data-integrity-consistency-documentation-reconciliation/issue-792-data-model-gdpr-open-decision-stale/README.md)
 7. [Issue #793 — moderation_queue.entity_type list missing 'company'](phase-53-data-integrity-consistency-documentation-reconciliation/issue-793-data-model-entity-type-missing-company/README.md)
 8. [Issue #794 — Round-type registry table missing tech_screening](phase-53-data-integrity-consistency-documentation-reconciliation/issue-794-data-model-round-type-registry-missing-tech-screening/README.md)
+
+## Phase 54 — Business-Process Closed-Loop Fixes
+
+See `docs/ROADMAP.md` Phase 54. Filed from the same audit: the
+business-logic pass traced every major process end to end looking for
+dead ends. Most were genuinely closed loops — the exceptions: SLA
+breach/warning notifications were one-shot with no "resolved" signal,
+`document_verified` was a schema-ready but structurally unreachable
+enum value (no document-upload flow exists), and `staff_audit_log` was
+written on every staff mutation but never surfaced anywhere. A fourth
+finding — rejected candidates never learn why — was already filed as
+issue #729 under Phase 49's own epic before this audit ran; related to
+this phase's scope but kept under its original parent per GitHub's
+one-parent-per-sub-issue limit, so its post lives here instead.
+
+1. [Issue #797 — SLA breach/warning notifications never signal resolution](phase-54-business-process-closed-loop-fixes/issue-797-sla-resolved-event/README.md)
+2. [Issue #798 — candidates.verification_status.document_verified is a dead enum value](phase-54-business-process-closed-loop-fixes/issue-798-dead-document-verified-enum-value/README.md)
+3. [Issue #799 — staff_audit_log is written but never surfaced](phase-54-business-process-closed-loop-fixes/issue-799-staff-audit-log-surfaced/README.md)
+4. [Issue #729 — Rejected candidates never learn why (Phase 49 follow-up)](phase-54-business-process-closed-loop-fixes/issue-729-candidate-rejection-reason-surfacing/README.md)
