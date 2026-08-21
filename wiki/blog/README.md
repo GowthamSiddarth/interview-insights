@@ -743,3 +743,25 @@ verified as genuinely enforced in code, not just documented.
 8. [Issue #782 — verdict-consumer doesn't schema-validate Kafka payloads](phase-52-security-access-control-hardening/issue-782-verdict-consumer-schema-validation/README.md)
 9. [Issue #783 — Staff email has no documented PII-handling rationale](phase-52-security-access-control-hardening/issue-783-staff-email-pii-rationale/README.md)
 10. [Issue #784 — Local dev EMAIL_ENCRYPTION_KEY is a low-entropy placeholder](phase-52-security-access-control-hardening/issue-784-dev-encryption-key-entropy/README.md)
+
+## Phase 53 — Data Integrity, Consistency & Documentation Reconciliation
+
+See `docs/ROADMAP.md` Phase 53 and `docs/DECISIONS.md` D15. Filed from
+the same audit: the three analytics materialized views were never
+refreshed in production (D15's original refresh-on-read plan never
+actually shipped), GDPR erasure FK-violated for any candidate who ever
+reset a password or edited a submission, and company creation was the
+one write path not wrapped in the same transaction as its moderation
+enqueue. Three independent audit passes also each re-derived that
+`docs/ARCHITECTURE.md`'s "zero write path" claim for recruiter/overall-
+review was stale — folded in as four documentation-only fixes rather
+than a seventh epic.
+
+1. [Issue #787 — Analytics materialized views never refreshed in production](phase-53-data-integrity-consistency-documentation-reconciliation/issue-787-materialized-view-refresh/README.md)
+2. [Issue #788 — GDPR erasure FK-violates for two candidate tables](phase-53-data-integrity-consistency-documentation-reconciliation/issue-788-gdpr-erasure-fk-fix/README.md)
+3. [Issue #789 — Company creation isn't transactional with its moderation enqueue](phase-53-data-integrity-consistency-documentation-reconciliation/issue-789-company-creation-transactional/README.md)
+4. [Issue #790 — Fraud-check rate limit is a TOCTOU race (deliberately deferred)](phase-53-data-integrity-consistency-documentation-reconciliation/issue-790-fraud-check-toctou-deferred/README.md)
+5. [Issue #791 — Stale "zero write path" claim in docs/ARCHITECTURE.md](phase-53-data-integrity-consistency-documentation-reconciliation/issue-791-architecture-stale-write-path-claim/README.md)
+6. [Issue #792 — GDPR erasure listed as an open decision though it's implemented](phase-53-data-integrity-consistency-documentation-reconciliation/issue-792-data-model-gdpr-open-decision-stale/README.md)
+7. [Issue #793 — moderation_queue.entity_type list missing 'company'](phase-53-data-integrity-consistency-documentation-reconciliation/issue-793-data-model-entity-type-missing-company/README.md)
+8. [Issue #794 — Round-type registry table missing tech_screening](phase-53-data-integrity-consistency-documentation-reconciliation/issue-794-data-model-round-type-registry-missing-tech-screening/README.md)

@@ -2706,7 +2706,7 @@ list unless noted otherwise:
       candidate email (GitHub issue #783)
 - [x] Local dev EMAIL_ENCRYPTION_KEY is a low-entropy hand-typed
       placeholder (GitHub issue #784)
-- [ ] Engineering blog (last) (GitHub issue #785)
+- [x] Engineering blog (last) (GitHub issue #785)
 
 ## Phase 53 — Data Integrity, Consistency & Documentation Reconciliation
 
@@ -2748,7 +2748,7 @@ Ordered by dependency:
       'company' (GitHub issue #793)
 - [x] docs/DATA_MODEL.md's round-type registry table is missing
       tech_screening (GitHub issue #794)
-- [ ] Engineering blog (last) (GitHub issue #795)
+- [x] Engineering blog (last) (GitHub issue #795)
 
 ## Phase 54 — Business-Process Closed-Loop Fixes
 
