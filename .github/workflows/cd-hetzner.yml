@@ -23,6 +23,12 @@ concurrency:
   group: cd-hetzner
   cancel-in-progress: false
 
+# GitHub issue #804 (Phase 55) — defense-in-depth. GHCR auth here goes
+# through the dedicated HETZNER_GHCR_PAT repo secret (docker login), not
+# GITHUB_TOKEN, so this workflow never needs more than read access to it.
+permissions:
+  contents: read
+
 jobs:
   # GitHub issue #761 (D111) — web's Next.js/SWC production build
   # reproducibly segfaults under the self-hosted runner's cross-arch
@@ -40,7 +46,11 @@ jobs:
   build-web-image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # GitHub issue #808 (Phase 55) — pinned to the commit SHA v4
+      # currently resolves to, not the floating tag: a credential-bearing
+      # deploy workflow, so a tag-move attack upstream must never silently
+      # pull in new code here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Determine image tag
         id: tag
@@ -94,7 +104,11 @@ jobs:
             context: services/review-analyzer
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # GitHub issue #808 (Phase 55) — pinned to the commit SHA v4
+      # currently resolves to, not the floating tag: a credential-bearing
+      # deploy workflow, so a tag-move attack upstream must never silently
+      # pull in new code here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Determine image tag
         id: tag
@@ -133,7 +147,11 @@ jobs:
     # this change.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # GitHub issue #808 (Phase 55) — pinned to the commit SHA v4
+      # currently resolves to, not the floating tag: a credential-bearing
+      # deploy workflow, so a tag-move attack upstream must never silently
+      # pull in new code here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Determine image tag
         id: tag

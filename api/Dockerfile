@@ -25,11 +25,14 @@ ENV NODE_ENV=production
 # dev, docker-compose) — deliberately not a required arg.
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY scripts ./scripts
-COPY package.json ./
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/prisma ./prisma
+COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node package.json ./
+# GitHub issue #805 (Phase 55) — node:22-slim already ships a non-root
+# `node` user (uid/gid 1000); nothing here needs root at runtime.
+USER node
 EXPOSE 3001
 # scripts/entrypoint.js runs the LocalStack secrets bootstrap (if
 # SECRETS_SOURCE=localstack) exactly once, then applies pending

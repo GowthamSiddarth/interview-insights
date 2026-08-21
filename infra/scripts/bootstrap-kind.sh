@@ -33,8 +33,10 @@ fi
 
 # GitHub issue #192: the real admin credential is never committed to a
 # manifest — only ever supplied via env var (locally) or a repo secret
-# (CD). No dev-only fallback here on purpose, unlike EMAIL_HASH_SECRET's
-# checked-in placeholder — this Secret's whole point is to not have one.
+# (CD). No dev-only fallback here on purpose: unlike EMAIL_HASH_SECRET/
+# EMAIL_ENCRYPTION_KEY/CANDIDATE_JWT_SECRET below (6b2), this needs a
+# real bcrypt hash a script can't generate on its own, so there's no
+# generate-it-ourselves option here the way there is for those.
 if [ -z "${ADMIN_PASSWORD_HASH:-}" ] || [ -z "${ADMIN_JWT_SECRET:-}" ]; then
   echo "ERROR: ADMIN_PASSWORD_HASH and/or ADMIN_JWT_SECRET is not set." >&2
   echo "See wiki/deployment-guide.md section 5b." >&2
@@ -52,6 +54,18 @@ if [ -z "${POSTGRES_PASSWORD:-}" ]; then
   echo "See wiki/deployment-guide.md section 5b." >&2
   exit 1
 fi
+
+# GitHub issue #803 (Phase 55) — EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/
+# CANDIDATE_JWT_SECRET used to default to a checked-in placeholder inside
+# infra/aws/seed-localstack.sh and infra/k8s/base/localstack/init/seed.sh
+# — a real, working secret committed to the repo, exactly what CLAUDE.md
+# hard constraint #6 forbids. Unlike ADMIN_PASSWORD_HASH/ADMIN_JWT_SECRET
+# above (a bcrypt hash this script can't generate on its own), these are
+# plain random strings it can — auto-generated below, once per cluster
+# (reused on every idempotent re-run against an already-provisioned
+# cluster, read back from the email-secrets k8s Secret's existing value
+# rather than regenerated, or every re-run would rotate the key and break
+# decryption of any candidate email already encrypted under the old one).
 
 echo "== 1. kind cluster =="
 # GitHub issue #540 (D91): `kind get clusters` itself is broken under
@@ -143,6 +157,27 @@ kubectl create secret generic admin-credentials \
   --from-literal=ADMIN_JWT_SECRET="$ADMIN_JWT_SECRET" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+echo "== 6b2. Email/candidate secrets (GitHub issue #803, Phase 55) =="
+# Reuse the existing Secret's values on a re-run against an
+# already-provisioned cluster — see the requirement-check comment above
+# for why regenerating on every re-run would be worse than the
+# checked-in-placeholder problem this replaces.
+EMAIL_HASH_SECRET="$(kubectl get secret email-secrets -n "$NAMESPACE" \
+  -o jsonpath='{.data.EMAIL_HASH_SECRET}' 2>/dev/null | base64 -d || true)"
+EMAIL_ENCRYPTION_KEY="$(kubectl get secret email-secrets -n "$NAMESPACE" \
+  -o jsonpath='{.data.EMAIL_ENCRYPTION_KEY}' 2>/dev/null | base64 -d || true)"
+CANDIDATE_JWT_SECRET="$(kubectl get secret email-secrets -n "$NAMESPACE" \
+  -o jsonpath='{.data.CANDIDATE_JWT_SECRET}' 2>/dev/null | base64 -d || true)"
+EMAIL_HASH_SECRET="${EMAIL_HASH_SECRET:-$(openssl rand -hex 32)}"
+EMAIL_ENCRYPTION_KEY="${EMAIL_ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+CANDIDATE_JWT_SECRET="${CANDIDATE_JWT_SECRET:-$(openssl rand -hex 32)}"
+kubectl create secret generic email-secrets \
+  --namespace "$NAMESPACE" \
+  --from-literal=EMAIL_HASH_SECRET="$EMAIL_HASH_SECRET" \
+  --from-literal=EMAIL_ENCRYPTION_KEY="$EMAIL_ENCRYPTION_KEY" \
+  --from-literal=CANDIDATE_JWT_SECRET="$CANDIDATE_JWT_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo "== 6c. AI moderation secret (GitHub issue #163, D81) =="
 # Genuinely optional, unlike 6b above: an empty ANTHROPIC_API_KEY just
 # leaves review-analyzer's advisory triage disabled (GitHub issue #340
@@ -189,6 +224,9 @@ for i in $(seq 1 15); do
   curl -sf http://localhost:4566/_localstack/health > /dev/null && break
   sleep 2
 done
+SEED_EMAIL_HASH_SECRET="$EMAIL_HASH_SECRET" \
+SEED_EMAIL_ENCRYPTION_KEY="$EMAIL_ENCRYPTION_KEY" \
+SEED_CANDIDATE_JWT_SECRET="$CANDIDATE_JWT_SECRET" \
 "$REPO_ROOT/infra/aws/seed-localstack.sh"
 kill $PF_PID 2>/dev/null || true
 trap - EXIT

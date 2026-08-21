@@ -2803,22 +2803,24 @@ fork-PR exposure, network exposure) came back clean. Milestone: "Phase
 
 Ordered by dependency:
 
-- [ ] Add .dockerignore to web/, notification-service/, and
+- [x] Add .dockerignore to web/, notification-service/, and
       review-analyzer/ Dockerfiles (GitHub issue #802)
-- [ ] .env.example and LocalStack seed scripts ship a real, working
+- [x] .env.example and LocalStack seed scripts ship a real, working
       encryption key (GitHub issue #803)
-- [ ] Add permissions: block to all GitHub Actions workflows (GitHub
+- [x] Add permissions: block to all GitHub Actions workflows (GitHub
       issue #804)
-- [ ] Containers run as root everywhere — no non-root USER or
+- [x] Containers run as root everywhere — no non-root USER or
       securityContext (GitHub issue #805)
 - [ ] Postgres backups have no off-VM copy and restore is unverified
       (GitHub issue #806) — closes out #663's outstanding restore-path
-      proof
-- [ ] Pin the LocalStack image off :latest (GitHub issue #807)
-- [ ] Pin third-party GitHub Actions to commit SHAs on
+      proof — **blocked: needs an off-VM object storage destination +
+      credentials from the project owner**
+- [x] Pin the LocalStack image off :latest (GitHub issue #807)
+- [x] Pin third-party GitHub Actions to commit SHAs on
       credential-bearing workflows (GitHub issue #808)
 - [ ] GHCR PAT is reused for both push and pull-secret roles (GitHub
-      issue #809)
+      issue #809) — **blocked: needs a new read-only GHCR PAT, which
+      only the project owner can create via GitHub's UI**
 - [ ] Engineering blog (last) (GitHub issue #810)
 
 ## Phase 56 — Frontend & UX Hardening

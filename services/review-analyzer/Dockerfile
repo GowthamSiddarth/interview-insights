@@ -23,8 +23,11 @@ ENV NODE_ENV=production
 # and services/notification-service/Dockerfile.
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY package.json ./
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node package.json ./
+# GitHub issue #805 (Phase 55) — node:22-slim already ships a non-root
+# `node` user (uid/gid 1000); nothing here needs root at runtime.
+USER node
 EXPOSE 3003
 CMD ["node", "dist/main.js"]

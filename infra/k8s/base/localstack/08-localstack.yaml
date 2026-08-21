@@ -25,14 +25,11 @@
 # issue #466's own follow-up, D78) exist here for exactly one reason:
 # init/seed.sh (mounted below) needs the *real* values to seed Secrets
 # Manager with on every LocalStack start, including an unplanned
-# restart — it can't hardcode a committed placeholder the way it does
-# for e.g. EMAIL_HASH_SECRET, because ADMIN_PASSWORD_HASH/
-# ADMIN_JWT_SECRET deliberately never have one (same reasoning
-# admin-auth.env.ts's own comment gives). Same admin-credentials/
-# anthropic-credentials Secrets `api` used to read directly — those
-# entries were removed from api's own Deployment (05-api.yaml) once api
-# started fetching these from Secrets Manager instead; LocalStack's pod
-# is now the only consumer of them as k8s Secrets.
+# restart. Same admin-credentials/anthropic-credentials Secrets `api`
+# used to read directly — those entries were removed from api's own
+# Deployment (05-api.yaml) once api started fetching these from Secrets
+# Manager instead; LocalStack's pod is now the only consumer of them as
+# k8s Secrets.
 #
 # POSTGRES_PASSWORD (GitHub issue #563, D94) joined this list for the
 # same reason, replacing init/seed.sh's old hardcoded default-password
@@ -45,6 +42,17 @@
 # postgres-credentials value in here the same way D78 already did for
 # the admin/anthropic secrets closes that gap the same way D78 closed
 # it for those.
+#
+# EMAIL_HASH_SECRET/EMAIL_ENCRYPTION_KEY/CANDIDATE_JWT_SECRET (GitHub
+# issue #803, Phase 55) joined this list too — init/seed.sh used to
+# hardcode a checked-in placeholder for these (the "e.g. EMAIL_HASH_SECRET"
+# this comment used to name as the contrast case), a real, working secret
+# committed to the repo, exactly what CLAUDE.md hard constraint #6
+# forbids. Now wired the same way as the secrets above: real values live
+# only in the email-secrets Secret (bootstrap-kind.sh/cd.yml provision
+# it, generating a random value once per cluster rather than reusing a
+# fixed one — see bootstrap-kind.sh's own comment for why regenerating on
+# every re-run would be worse than the placeholder it replaces).
 apiVersion: v1
 kind: Service
 metadata:
@@ -74,7 +82,10 @@ spec:
     spec:
       containers:
         - name: localstack
-          image: localstack/localstack:latest
+          # GitHub issue #807 (Phase 55) — every other image in this
+          # manifest set is pinned to a specific tag; this was the one
+          # :latest exception.
+          image: localstack/localstack:2026.07.5
           ports:
             - containerPort: 4566
           env:
@@ -105,6 +116,21 @@ spec:
                 secretKeyRef:
                   name: postgres-credentials
                   key: POSTGRES_PASSWORD
+            - name: EMAIL_HASH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: EMAIL_HASH_SECRET
+            - name: EMAIL_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: EMAIL_ENCRYPTION_KEY
+            - name: CANDIDATE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: CANDIDATE_JWT_SECRET
           # No PVC — this is a practice/prototype tool, not a source of
           # truth (unlike postgres/opensearch's StatefulSets); losing its
           # state on pod restart is expected. The init-hook mount below

@@ -1,0 +1,9 @@
+# GitHub issue #802 (Phase 55) — mirrors api/.dockerignore's own fix
+# (issue #450): Dockerfile's `COPY . .` had no .dockerignore, so a real
+# local .env present at build time would get baked into the image layer.
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.log

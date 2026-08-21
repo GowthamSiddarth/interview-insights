@@ -797,6 +797,52 @@ PASSWORD '...'` run directly against the live database first, matching
 whatever the new Secret will hold, before restarting anything that reads
 it.
 
+## 5e. Email/candidate secrets (GitHub issue #803, Phase 55)
+
+`EMAIL_HASH_SECRET`/`EMAIL_ENCRYPTION_KEY`/`CANDIDATE_JWT_SECRET` used to
+default to a checked-in placeholder inside `infra/aws/seed-localstack.sh`
+and `infra/k8s/base/localstack/init/seed.sh` — a real, working secret
+committed to the repo, exactly what CLAUDE.md hard constraint #6
+forbids. Unlike `ADMIN_PASSWORD_HASH`/`ADMIN_JWT_SECRET` (5b) or
+`POSTGRES_PASSWORD` (5d), **you don't need to pick or set anything for
+these** — `bootstrap-kind.sh` and `cd.yml`'s "Provision email/candidate
+secrets" step both generate a real random value themselves the first
+time they run against a cluster, store it in the `email-secrets` Secret,
+and reuse that same value on every later re-run (checked via `kubectl
+get secret email-secrets` first) — regenerating on every run would rotate
+the key and break decryption of any candidate email already encrypted
+under the old one.
+
+**The one manual case:** running `infra/aws/seed-localstack.sh` directly,
+without going through `bootstrap-kind.sh` or `cd.yml` (e.g. the same
+recovery rerun 5d's own port-forward troubleshooting sometimes needs).
+Read the existing values back first, rather than picking new ones:
+
+```bash
+export SEED_EMAIL_HASH_SECRET="$(kubectl get secret email-secrets -n interview-insights \
+  -o jsonpath='{.data.EMAIL_HASH_SECRET}' | base64 -d)"
+export SEED_EMAIL_ENCRYPTION_KEY="$(kubectl get secret email-secrets -n interview-insights \
+  -o jsonpath='{.data.EMAIL_ENCRYPTION_KEY}' | base64 -d)"
+export SEED_CANDIDATE_JWT_SECRET="$(kubectl get secret email-secrets -n interview-insights \
+  -o jsonpath='{.data.CANDIDATE_JWT_SECRET}' | base64 -d)"
+./infra/aws/seed-localstack.sh
+```
+
+If `email-secrets` doesn't exist yet (a genuinely fresh cluster), generate
+real values instead of reusing anything:
+
+```bash
+export SEED_EMAIL_HASH_SECRET="$(openssl rand -hex 32)"
+export SEED_EMAIL_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export SEED_CANDIDATE_JWT_SECRET="$(openssl rand -hex 32)"
+kubectl create secret generic email-secrets \
+  --namespace interview-insights \
+  --from-literal=EMAIL_HASH_SECRET="$SEED_EMAIL_HASH_SECRET" \
+  --from-literal=EMAIL_ENCRYPTION_KEY="$SEED_EMAIL_ENCRYPTION_KEY" \
+  --from-literal=CANDIDATE_JWT_SECRET="$SEED_CANDIDATE_JWT_SECRET"
+./infra/aws/seed-localstack.sh
+```
+
 ## 6. Smoke-testing the whole stack end to end
 
 Whichever environment from sections 1-5 is up, the same golden path
