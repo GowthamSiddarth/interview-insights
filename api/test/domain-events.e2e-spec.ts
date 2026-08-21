@@ -153,7 +153,7 @@ describe('Domain events (e2e, against a real Redpanda broker)', () => {
     const queueRes = await server().get('/moderation/queue').set('Cookie', adminCookie).expect(200);
     const entry = findQueueEntry(body<QueueGroupBody[]>(queueRes), ratingId);
     if (!entry) throw new Error(`No moderation_queue entry found for rating ${ratingId}`);
-    await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({}).expect(201);
+    await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({ rejectionReasonCategory: 'other' }).expect(201);
 
     await server()
       .patch(`/rounds/${roundId}/ratings/${ratingId}`)

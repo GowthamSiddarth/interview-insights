@@ -1,4 +1,4 @@
-import { ModerationStatus } from '@prisma/client';
+import { ModerationRejectionReason, ModerationStatus } from '@prisma/client';
 
 // Versioned event contract — see docs/EVENTS.md. Published from
 // ModerationService.review() once a company-creation request's
@@ -24,4 +24,8 @@ export interface CompanyStatusChangedEventV1 {
   // this event domain from day one, rather than reintroducing the exact
   // bug D104's audit found in the original three entity types.
   moderationQueueEntryId?: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — see
+  // round-rating-status-changed.event.ts's own comment for why.
+  rejectionReasonCategory?: ModerationRejectionReason;
+  reviewNote?: string;
 }

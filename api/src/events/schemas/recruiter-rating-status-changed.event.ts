@@ -1,4 +1,4 @@
-import { ModerationStatus } from '@prisma/client';
+import { ModerationRejectionReason, ModerationStatus } from '@prisma/client';
 
 // Versioned event contract — see docs/EVENTS.md.
 export const RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC = 'moderation.recruiter_rating.status_changed.v1';
@@ -18,4 +18,8 @@ export interface RecruiterRatingStatusChangedEventV1 {
   // .event.ts's own comment for why. Optional, non-breaking addition to
   // the existing v1 contract per docs/EVENTS.md.
   moderationQueueEntryId?: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — see
+  // round-rating-status-changed.event.ts's own comment for why.
+  rejectionReasonCategory?: ModerationRejectionReason;
+  reviewNote?: string;
 }

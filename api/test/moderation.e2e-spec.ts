@@ -248,11 +248,26 @@ describe('Moderation (e2e)', () => {
     await server()
       .post(`/moderation/queue/${entry.id}/reject`)
       .set('Cookie', adminCookie)
-      .send({})
+      .send({ rejectionReasonCategory: 'other' })
       .expect(201);
 
     const publicRatings = await server().get(`/rounds/${roundId}/ratings`).expect(200);
     expect(body<RatingBody[]>(publicRatings).map((r) => r.id)).not.toContain(ratingId);
+  });
+
+  // GitHub issue #729 (follow-up to #688, Phase 49).
+  it('rejects with 400 when no rejectionReasonCategory is given, leaving the entry pending', async () => {
+    const { ratingId } = await submitRating();
+    const entry = await findQueueEntryFor(ratingId);
+
+    await server()
+      .post(`/moderation/queue/${entry.id}/reject`)
+      .set('Cookie', adminCookie)
+      .send({})
+      .expect(400);
+
+    const stillPending = await findQueueEntryFor(ratingId);
+    expect(stillPending.id).toBe(entry.id);
   });
 
   // GitHub issue #688 (Phase 49, D104).
@@ -317,7 +332,7 @@ describe('Moderation (e2e)', () => {
       // priorSubmissionCount 3, crossing it.
       for (let i = 0; i < 3; i++) {
         const entry = await findQueueEntryFor(ratingId);
-        await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({}).expect(201);
+        await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({ rejectionReasonCategory: 'other' }).expect(201);
         await server()
           .patch(`/rounds/${roundId}/ratings/${ratingId}`)
           .set('Cookie', candidateCookie)
@@ -371,7 +386,7 @@ describe('Moderation (e2e)', () => {
 
       for (let i = 0; i < 3; i++) {
         const entry = await findQueueEntryFor(ratingId);
-        await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({}).expect(201);
+        await server().post(`/moderation/queue/${entry.id}/reject`).set('Cookie', adminCookie).send({ rejectionReasonCategory: 'other' }).expect(201);
         await server()
           .patch(`/rounds/${roundId}/ratings/${ratingId}`)
           .set('Cookie', candidateCookie)
@@ -383,7 +398,7 @@ describe('Moderation (e2e)', () => {
       await server()
         .post(`/moderation/queue/${escalatedEntry.id}/reject`)
         .set('Cookie', adminCookie)
-        .send({})
+        .send({ rejectionReasonCategory: 'other' })
         .expect(201);
 
       await server()
@@ -769,7 +784,7 @@ describe('Moderation (e2e)', () => {
       await server()
         .post(`/moderation/queue/${entry.id}/reject`)
         .set('Cookie', adminCookie)
-        .send({})
+        .send({ rejectionReasonCategory: 'other' })
         .expect(201);
 
       const publicCompanies = await server().get('/companies').expect(200);

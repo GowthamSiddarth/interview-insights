@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -694,7 +695,16 @@ export class ModerationService {
     return this.review(id, 'approved', dto);
   }
 
-  reject(id: string, dto: ModerationActionDto) {
+  // GitHub issue #729 (follow-up to #688, Phase 49) — rejectionReasonCategory
+  // is unconditionally `@IsOptional()` on the shared ModerationActionDto
+  // (approve()/flag() must never require it), so this is the one place
+  // rejection specifically enforces it. A candidate-facing rejection with
+  // no stated reason at all defeats the whole point of #688/#729 — the
+  // rejection email and /me both need something to actually show.
+  async reject(id: string, dto: ModerationActionDto) {
+    if (!dto.rejectionReasonCategory) {
+      throw new BadRequestException('rejectionReasonCategory is required when rejecting.');
+    }
     return this.review(id, 'rejected', dto);
   }
 
@@ -949,7 +959,15 @@ export class ModerationService {
     // after-commit shape as every other side-effect in this method. As
     // of GitHub issue #698 (Phase 50), 'company' publishes too — see
     // publishStatusChangedEvent's own switch.
-    await this.publishStatusChangedEvent(entry.entityType, entry.entityId, entityStatus, dto.reviewedBy, id);
+    await this.publishStatusChangedEvent(
+      entry.entityType,
+      entry.entityId,
+      entityStatus,
+      dto.reviewedBy,
+      id,
+      dto.rejectionReasonCategory,
+      dto.reviewNote,
+    );
 
     // GitHub issue #797 (Phase 54) — the resolution-side counterpart to
     // sla_breach/sla_warning: both are one-shot notify flags with no
@@ -1203,6 +1221,13 @@ export class ModerationService {
     newStatus: ModerationStatus,
     reviewedBy: string | undefined,
     moderationQueueEntryId: string,
+    // GitHub issue #729 (follow-up to #688, Phase 49) — only ever set on a
+    // 'rejected'/'permanently_rejected' newStatus (reject() is the only
+    // caller that gives these real meaning), but passed through unguarded
+    // here — undefined on every other decision is exactly the right wire
+    // value, same "harmless when absent" shape reviewedBy already has.
+    rejectionReasonCategory?: ModerationRejectionReason,
+    reviewNote?: string,
   ): Promise<void> {
     try {
       const occurredAt = new Date().toISOString();
@@ -1224,6 +1249,8 @@ export class ModerationService {
             newStatus,
             reviewedBy,
             moderationQueueEntryId,
+            rejectionReasonCategory,
+            reviewNote,
           };
           await this.domainEventPublisher.publish(ROUND_RATING_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;
@@ -1245,6 +1272,8 @@ export class ModerationService {
             newStatus,
             reviewedBy,
             moderationQueueEntryId,
+            rejectionReasonCategory,
+            reviewNote,
           };
           await this.domainEventPublisher.publish(RECRUITER_RATING_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;
@@ -1266,6 +1295,8 @@ export class ModerationService {
             newStatus,
             reviewedBy,
             moderationQueueEntryId,
+            rejectionReasonCategory,
+            reviewNote,
           };
           await this.domainEventPublisher.publish(OVERALL_REVIEW_STATUS_CHANGED_V1_TOPIC, event, r.id);
           return;
@@ -1286,6 +1317,8 @@ export class ModerationService {
             newStatus,
             reviewedBy,
             moderationQueueEntryId,
+            rejectionReasonCategory,
+            reviewNote,
           };
           await this.domainEventPublisher.publish(COMPANY_STATUS_CHANGED_V1_TOPIC, event, c.id);
           return;

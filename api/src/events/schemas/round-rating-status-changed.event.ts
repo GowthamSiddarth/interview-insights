@@ -1,4 +1,4 @@
-import { ModerationStatus } from '@prisma/client';
+import { ModerationRejectionReason, ModerationStatus } from '@prisma/client';
 
 // Versioned event contract — see docs/EVENTS.md. Published from
 // ModerationService.review() once a round rating's moderation decision
@@ -26,4 +26,12 @@ export interface RoundRatingStatusChangedEventV1 {
   // Optional, non-breaking addition to the existing v1 contract per
   // docs/EVENTS.md — no version bump needed.
   moderationQueueEntryId?: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — a moderator's own
+  // stated rejection reason, so the rejection email and /me can show it
+  // instead of a fixed generic message. Only ever set on a
+  // 'rejected'/'permanently_rejected' newStatus (reject() is the only
+  // caller that gives these real meaning) — same optional, non-breaking
+  // addition shape as moderationQueueEntryId above.
+  rejectionReasonCategory?: ModerationRejectionReason;
+  reviewNote?: string;
 }

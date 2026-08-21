@@ -144,7 +144,7 @@ describe('Company moderation gate (e2e)', () => {
     await server()
       .post(`/moderation/queue/${entryId}/reject`)
       .set('Cookie', adminCookie)
-      .send({})
+      .send({ rejectionReasonCategory: 'other' })
       .expect(201);
 
     await server().get('/companies/by-slug/' + company.slug).expect(404);
@@ -203,7 +203,7 @@ describe('Company moderation gate (e2e)', () => {
       await server()
         .post(`/moderation/queue/${entryId}/reject`)
         .set('Cookie', adminCookie)
-        .send({})
+        .send({ rejectionReasonCategory: 'other' })
         .expect(201);
 
       const res = await server()
@@ -221,7 +221,7 @@ describe('Company moderation gate (e2e)', () => {
       await server()
         .post(`/moderation/queue/${second}/reject`)
         .set('Cookie', adminCookie)
-        .send({})
+        .send({ rejectionReasonCategory: 'other' })
         .expect(201);
       await server()
         .post('/companies')
@@ -248,7 +248,7 @@ describe('Company moderation gate (e2e)', () => {
       await server()
         .post(`/moderation/queue/${entryId}/reject`)
         .set('Cookie', adminCookie)
-        .send({})
+        .send({ rejectionReasonCategory: 'other' })
         .expect(201);
 
       const res = await server()

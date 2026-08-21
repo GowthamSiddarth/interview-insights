@@ -1,4 +1,4 @@
-import { ModerationStatus } from '@prisma/client';
+import { ModerationRejectionReason, ModerationStatus } from '@prisma/client';
 
 // Duplicated from api/src/events/schemas/recruiter-rating-status-changed.event.ts
 // — see round-rating-status-changed.event.ts's own comment.
@@ -18,4 +18,8 @@ export interface RecruiterRatingStatusChangedEventV1 {
   // GitHub issue #686 (Phase 49, D104) — see round-rating-status-changed
   // .event.ts's own comment. Optional, non-breaking v1 addition.
   moderationQueueEntryId?: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — see api's own
+  // round-rating-status-changed.event.ts comment for why.
+  rejectionReasonCategory?: ModerationRejectionReason;
+  reviewNote?: string;
 }

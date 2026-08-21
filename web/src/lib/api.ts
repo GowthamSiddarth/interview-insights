@@ -487,6 +487,11 @@ export interface MySubmissionRoundRating {
   technicalDepth: number | null;
   freeText: string | null;
   createdAt: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — the moderator's own
+  // stated reason, when status is 'rejected'/'permanently_rejected'. Null
+  // otherwise, or when the rejection predates #688 (no backfill exists).
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
 }
 
 export interface MySubmissionRecruiterRating {
@@ -499,6 +504,8 @@ export interface MySubmissionRecruiterRating {
   rejectionMessageAuthenticity: number | null;
   freeText: string | null;
   createdAt: string;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
 }
 
 export interface MySubmissionOverallReview {
@@ -508,6 +515,8 @@ export interface MySubmissionOverallReview {
   wouldRecommend: boolean;
   reviewText: string | null;
   createdAt: string;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
 }
 
 export interface MyProcessSubmissions {

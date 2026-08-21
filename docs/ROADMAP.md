@@ -2603,8 +2603,7 @@ Ordered by dependency:
 - [x] Add `rejectionReasonCategory` + `reviewNote` to
       `ModerationActionDto` (GitHub issue #688) — candidate-facing
       surfacing (rejection email, `/me`) and required-when-rejected
-      validation never shipped in this pass; tracked as a follow-up,
-      GitHub issue #729
+      validation shipped as a follow-up, GitHub issue #729
 - [x] Lifetime resubmission cap + escalation to senior-moderator/admin
       queue (GitHub issue #689)
 - [x] New `closed`/`permanently_rejected` terminal status (GitHub issue
@@ -2778,11 +2777,14 @@ Ordered by dependency:
       value (GitHub issue #798)
 - [x] staff_audit_log is written but never surfaced in any UI or read
       endpoint (GitHub issue #799)
-- [ ] Engineering blog (last) (GitHub issue #800) — also covers #729
-      once it lands, since it's the fourth finding from this same audit
-      pass
-- Related, tracked separately: rejected candidates are never told why
-  (GitHub issue #729, Phase 49's epic #685)
+- [ ] Engineering blog (last) (GitHub issue #800) — also covers #729,
+      since it's the fourth finding from this same audit pass
+- Related, tracked separately, now done: rejected candidates were
+  never told why (GitHub issue #729, Phase 49's epic #685) —
+  `POST /moderation/queue/:id/reject` now requires
+  `rejectionReasonCategory`, the rejection email includes the
+  human-readable category/note, and `/me/submissions` surfaces both on
+  a rejected item
 
 ## Phase 55 — Infrastructure, CI/CD & Secrets Hardening
 

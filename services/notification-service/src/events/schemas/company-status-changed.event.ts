@@ -1,4 +1,4 @@
-import { ModerationStatus } from '@prisma/client';
+import { ModerationRejectionReason, ModerationStatus } from '@prisma/client';
 
 // Duplicated from api/src/events/schemas/company-status-changed.event.ts
 // — same duplicate-rather-than-share reasoning as docs/DECISIONS.md D73/D75.
@@ -16,4 +16,8 @@ export interface CompanyStatusChangedEventV1 {
   newStatus: ModerationStatus;
   reviewedBy?: string;
   moderationQueueEntryId?: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — see api's own
+  // round-rating-status-changed.event.ts comment for why.
+  rejectionReasonCategory?: ModerationRejectionReason;
+  reviewNote?: string;
 }

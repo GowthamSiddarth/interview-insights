@@ -16,13 +16,38 @@ import { EmptyState } from '@/components/EmptyState';
 import { PageContainer } from '@/components/PageContainer';
 import { StatusPill } from '@/components/StatusPill';
 import { formatRoundLabel } from '@/lib/format-round-label';
-import { ENTITY_STATUS_TONE } from '@/lib/status';
+import { ENTITY_STATUS_TONE, REJECTION_REASON_LABEL } from '@/lib/status';
 
 const linkClass =
   'text-indigo-600 underline transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300';
 
 function statusLabel(status: keyof typeof ENTITY_STATUS_TONE): string {
   return status[0].toUpperCase() + status.slice(1);
+}
+
+// GitHub issue #729 (follow-up to #688, Phase 49) — #688 only ever landed
+// the backend piece (rejectionReasonCategory/reviewNote persisted on the
+// queue entry); this is the first place a candidate actually sees why
+// their own submission was rejected. Renders nothing for every other
+// status, and nothing at all for a rejection that predates #688 (no
+// backfill exists — category is honestly null, not "other").
+function RejectionReasonNote({
+  rejectionReasonCategory,
+  reviewNote,
+}: {
+  rejectionReasonCategory: keyof typeof REJECTION_REASON_LABEL | null;
+  reviewNote: string | null;
+}) {
+  if (!rejectionReasonCategory && !reviewNote) return null;
+  return (
+    <p className="rounded-md bg-red-50 p-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-200">
+      {rejectionReasonCategory && (
+        <span className="font-medium">{REJECTION_REASON_LABEL[rejectionReasonCategory]}</span>
+      )}
+      {rejectionReasonCategory && reviewNote && ' — '}
+      {reviewNote && <span className="italic">&quot;{reviewNote}&quot;</span>}
+    </p>
+  );
 }
 
 function roundTypeLabel(roundType: string): string {
@@ -158,6 +183,12 @@ function RoundRatingItem({
         {rating.clarity} · focus {rating.focus}
       </p>
       {rating.freeText && <p className="italic">&quot;{rating.freeText}&quot;</p>}
+      {rating.status === 'rejected' && (
+        <RejectionReasonNote
+          rejectionReasonCategory={rating.rejectionReasonCategory}
+          reviewNote={rating.reviewNote}
+        />
+      )}
       {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
       <div className="flex gap-2">
         <Button
@@ -304,6 +335,12 @@ function RecruiterRatingItem({
           ` · rejection message authenticity ${rating.rejectionMessageAuthenticity}`}
       </p>
       {rating.freeText && <p className="italic">&quot;{rating.freeText}&quot;</p>}
+      {rating.status === 'rejected' && (
+        <RejectionReasonNote
+          rejectionReasonCategory={rating.rejectionReasonCategory}
+          reviewNote={rating.reviewNote}
+        />
+      )}
       {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
       <div className="flex gap-2">
         <Button
@@ -437,6 +474,12 @@ function OverallReviewItem({
         {review.wouldRecommend ? 'yes' : 'no'}
       </p>
       {review.reviewText && <p className="italic">&quot;{review.reviewText}&quot;</p>}
+      {review.status === 'rejected' && (
+        <RejectionReasonNote
+          rejectionReasonCategory={review.rejectionReasonCategory}
+          reviewNote={review.reviewNote}
+        />
+      )}
       {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
       <div className="flex gap-2">
         <Button

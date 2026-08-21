@@ -136,7 +136,7 @@ describe('Review search (e2e)', () => {
     await server()
       .post(`/moderation/queue/${entry.id}/reject`)
       .set('Cookie', adminCookie)
-      .send({})
+      .send({ rejectionReasonCategory: 'other' })
       .expect(201);
   }
 

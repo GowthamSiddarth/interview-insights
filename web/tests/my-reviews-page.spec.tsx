@@ -178,6 +178,65 @@ describe('MyReviewsPage (GitHub issue #149)', () => {
     expect(screen.getByText('Pending')).toBeInTheDocument();
   });
 
+  // GitHub issue #729 (follow-up to #688, Phase 49).
+  it('shows the rejection reason and note on a rejected round rating, but not on an approved one', async () => {
+    setLoggedInCookie(true);
+    const user = userEvent.setup();
+    mockSubmissions([
+      {
+        processId: 'process-1',
+        companyId: 'company-1',
+        companyName: 'Acme Corp',
+        companySlug: 'acme-corp',
+        roleTitle: 'Senior Engineer',
+        outcome: 'in_progress',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        roundRatings: [
+          {
+            id: 'rating-1',
+            roundId: 'round-1',
+            roundTitle: 'Technical Screen',
+            roundType: 'coding',
+            status: 'rejected',
+            difficulty: 3,
+            fluency: 4,
+            clarity: 4,
+            focus: 4,
+            technicalDepth: null,
+            freeText: null,
+            createdAt: '2026-01-02T00:00:00.000Z',
+            rejectionReasonCategory: 'identifying_information',
+            reviewNote: 'Named the interviewer directly.',
+          },
+          {
+            id: 'rating-2',
+            roundId: 'round-2',
+            roundTitle: 'Onsite',
+            roundType: 'system_design',
+            status: 'approved',
+            difficulty: 3,
+            fluency: 4,
+            clarity: 4,
+            focus: 4,
+            technicalDepth: null,
+            freeText: null,
+            createdAt: '2026-01-03T00:00:00.000Z',
+            rejectionReasonCategory: null,
+            reviewNote: null,
+          },
+        ],
+        recruiterRatings: [],
+        overallReview: null,
+      },
+    ]);
+    render(<MyReviewsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /View details/ }));
+
+    expect(screen.getByText('Identifying information')).toBeInTheDocument();
+    expect(screen.getByText('"Named the interviewer directly."')).toBeInTheDocument();
+  });
+
   it("shows a process with no ratings yet as a distinct 'nothing submitted' note", async () => {
     setLoggedInCookie(true);
     const user = userEvent.setup();
