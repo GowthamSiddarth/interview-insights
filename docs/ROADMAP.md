@@ -2815,15 +2815,26 @@ Ordered by dependency:
       securityContext (GitHub issue #805)
 - [ ] Postgres backups have no off-VM copy and restore is unverified
       (GitHub issue #806) — closes out #663's outstanding restore-path
-      proof — **blocked: needs an off-VM object storage destination +
-      credentials from the project owner**
+      proof. **Off-VM object storage deferred by explicit product
+      decision (2026-08-21)**: nightly local backups at
+      `/var/backups/postgres` stay as the only copy for the current
+      single-operator pilot; object storage revisited later if it's
+      worth the added credential surface. Nightly cron confirmed live
+      2026-08-21 (`/etc/cron.d/pilot-pg-backup`, two consecutive
+      successful runs, 4 dumps on disk, rotation healthy) — still
+      unverified: a real restore drill via `pilot-pg-restore.sh` has
+      never been exercised. Left open pending that.
 - [x] Pin the LocalStack image off :latest (GitHub issue #807)
 - [x] Pin third-party GitHub Actions to commit SHAs on
       credential-bearing workflows (GitHub issue #808)
-- [ ] GHCR PAT is reused for both push and pull-secret roles (GitHub
-      issue #809) — **blocked: needs a new read-only GHCR PAT, which
-      only the project owner can create via GitHub's UI**
-- [ ] Engineering blog (last) (GitHub issue #810)
+- [x] GHCR PAT is reused for both push and pull-secret roles (GitHub
+      issue #809) — split into a `write:packages`-scoped
+      `HETZNER_GHCR_PAT` (CI push only) and a separate
+      `read:packages`-only `HETZNER_GHCR_PULL_PAT` (the cluster's pull
+      secret)
+- [ ] Engineering blog (last) (GitHub issue #810) — 7 of 8 issues
+      blogged (`wiki/blog/phase-55-infrastructure-cicd-secrets-hardening/`);
+      closes once #806 lands
 
 ## Phase 56 — Frontend & UX Hardening
 
