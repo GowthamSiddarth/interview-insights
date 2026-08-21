@@ -16,7 +16,7 @@ describe('MeService', () => {
     candidatePasswordResetToken: { deleteMany: jest.Mock };
     editThrottleState: { deleteMany: jest.Mock };
     candidate: { delete: jest.Mock };
-    moderationQueueEntry: { deleteMany: jest.Mock };
+    moderationQueueEntry: { deleteMany: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let reviewSearchService: { removeReview: jest.Mock };
@@ -33,7 +33,7 @@ describe('MeService', () => {
       candidatePasswordResetToken: { deleteMany: jest.fn() },
       editThrottleState: { deleteMany: jest.fn() },
       candidate: { delete: jest.fn() },
-      moderationQueueEntry: { deleteMany: jest.fn() },
+      moderationQueueEntry: { deleteMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
     reviewSearchService = { removeReview: jest.fn().mockResolvedValue(undefined) };
@@ -123,6 +123,18 @@ describe('MeService', () => {
         },
       },
     ]);
+    // GitHub issue #729 (follow-up to #688, Phase 49) — only the rejected
+    // overall review has a queue entry with a real reason; a pending or
+    // approved item has nothing to look up, same as the round/recruiter
+    // ratings above never appearing in this mock at all.
+    prisma.moderationQueueEntry.findMany.mockResolvedValue([
+      {
+        entityType: 'overall_review',
+        entityId: 'overall-1',
+        rejectionReasonCategory: 'inaccurate_or_unverifiable',
+        reviewNote: 'Scores contradict the free text.',
+      },
+    ]);
 
     const result = await service.findMySubmissions('candidate-1');
 
@@ -149,6 +161,8 @@ describe('MeService', () => {
             technicalDepth: null,
             freeText: null,
             createdAt: new Date('2026-01-02'),
+            rejectionReasonCategory: null,
+            reviewNote: null,
           },
         ],
         recruiterRatings: [
@@ -162,6 +176,8 @@ describe('MeService', () => {
             rejectionMessageAuthenticity: null,
             freeText: null,
             createdAt: new Date('2026-01-03'),
+            rejectionReasonCategory: null,
+            reviewNote: null,
           },
         ],
         overallReview: {
@@ -171,9 +187,63 @@ describe('MeService', () => {
           wouldRecommend: false,
           reviewText: 'Not great',
           createdAt: new Date('2026-01-04'),
+          rejectionReasonCategory: 'inaccurate_or_unverifiable',
+          reviewNote: 'Scores contradict the free text.',
         },
       },
     ]);
+  });
+
+  // GitHub issue #729 (follow-up to #688, Phase 49).
+  it('looks up rejection reasons with an OR-of-refs query scoped to already-reviewed entries only', async () => {
+    prisma.interviewProcess.findMany.mockResolvedValue([
+      {
+        id: 'process-1',
+        companyId: 'company-1',
+        company: { name: 'Acme Corp', slug: 'acme-corp' },
+        roleTitle: 'Engineer',
+        outcome: 'in_progress',
+        createdAt: new Date('2026-01-01'),
+        rounds: [
+          {
+            id: 'round-1',
+            title: 'Screen',
+            roundType: 'coding',
+            ratings: [
+              {
+                id: 'rating-1',
+                status: 'rejected',
+                difficulty: 3,
+                fluency: 4,
+                clarity: 4,
+                focus: 4,
+                technicalDepth: null,
+                freeText: null,
+                createdAt: new Date('2026-01-02'),
+              },
+            ],
+          },
+        ],
+        recruiterInteractions: [],
+        overallReview: null,
+      },
+    ]);
+
+    await service.findMySubmissions('candidate-1');
+
+    expect(prisma.moderationQueueEntry.findMany).toHaveBeenCalledWith({
+      where: { reviewedAt: { not: null }, OR: [{ entityType: 'round_rating', entityId: 'rating-1' }] },
+      orderBy: { reviewedAt: 'desc' },
+      select: { entityType: true, entityId: true, rejectionReasonCategory: true, reviewNote: true },
+    });
+  });
+
+  it('does not query moderation_queue at all when the candidate has no processes', async () => {
+    prisma.interviewProcess.findMany.mockResolvedValue([]);
+
+    await service.findMySubmissions('candidate-1');
+
+    expect(prisma.moderationQueueEntry.findMany).not.toHaveBeenCalled();
   });
 
   it('omits a round from roundRatings entirely when it has no rating yet', async () => {

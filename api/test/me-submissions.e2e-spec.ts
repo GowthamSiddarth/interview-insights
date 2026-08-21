@@ -28,7 +28,13 @@ interface MySubmissionsEntry {
   processId: string;
   companyId: string;
   roleTitle: string;
-  roundRatings: Array<{ id: string; status: string; roundTitle: string }>;
+  roundRatings: Array<{
+    id: string;
+    status: string;
+    roundTitle: string;
+    rejectionReasonCategory: string | null;
+    reviewNote: string | null;
+  }>;
   recruiterRatings: Array<{ id: string; status: string }>;
   overallReview: { id: string; status: string } | null;
 }
@@ -87,12 +93,15 @@ describe('My submissions (e2e)', () => {
       .expect(201);
   }
 
-  async function reject(entityId: string): Promise<void> {
+  async function reject(
+    entityId: string,
+    dto: { rejectionReasonCategory: string; reviewNote?: string } = { rejectionReasonCategory: 'other' },
+  ): Promise<void> {
     const entry = await findQueueEntryFor(entityId);
     await server()
       .post(`/moderation/queue/${entry.id}/reject`)
       .set('Cookie', adminCookie)
-      .send({})
+      .send(dto)
       .expect(201);
   }
 
@@ -183,6 +192,73 @@ describe('My submissions (e2e)', () => {
     expect(entry.recruiterRatings[0]).toMatchObject({ id: recruiterRatingId, status: 'rejected' });
 
     expect(entry.overallReview).toMatchObject({ id: overallReviewId, status: 'pending' });
+  }, 20000);
+
+  // GitHub issue #729 (follow-up to #688, Phase 49).
+  it('shows the moderator-stated rejection reason on a rejected round rating, but not on a pending one', async () => {
+    const { cookie } = await loginAsCandidate(app, `candidate-${unique()}@example.com`);
+
+    const { id: companyId } = await createApprovedCompany(app, cookie, {
+      name: 'Acme Corp',
+      slug: `acme-${unique()}`,
+    });
+
+    const processRes = await server()
+      .post(`/companies/${companyId}/processes`)
+      .set('Cookie', cookie)
+      .send({ roleTitle: 'Senior Backend Engineer', outcome: 'in_progress' })
+      .expect(201);
+    const processId = body<ProcessBody>(processRes).id;
+
+    const roundRes = await server()
+      .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
+      .send({ sequenceNumber: 1, title: 'Technical Screen', roundType: 'coding' })
+      .expect(201);
+    const roundId = body<RoundBody>(roundRes).id;
+
+    const ratingRes = await server()
+      .post(`/rounds/${roundId}/ratings`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 3, fluency: 4, clarity: 5, focus: 4 })
+      .expect(201);
+    const ratingId = body<{ id: string }>(ratingRes).id;
+
+    const secondRoundRes = await server()
+      .post(`/processes/${processId}/rounds`)
+      .set('Cookie', cookie)
+      .send({ sequenceNumber: 2, title: 'Onsite', roundType: 'system_design' })
+      .expect(201);
+    const secondRoundId = body<RoundBody>(secondRoundRes).id;
+    const secondRatingRes = await server()
+      .post(`/rounds/${secondRoundId}/ratings`)
+      .set('Cookie', cookie)
+      .send({ difficulty: 3, fluency: 4, clarity: 5, focus: 4 })
+      .expect(201);
+    const secondRatingId = body<{ id: string }>(secondRatingRes).id;
+
+    await reject(ratingId, {
+      rejectionReasonCategory: 'identifying_information',
+      reviewNote: 'Named the interviewer directly.',
+    });
+    // secondRatingId stays pending, untouched.
+
+    const res = await server().get('/me/submissions').set('Cookie', cookie).expect(200);
+    const [entry] = body<MySubmissionsEntry[]>(res);
+
+    const rejected = entry.roundRatings.find((r) => r.id === ratingId);
+    expect(rejected).toMatchObject({
+      status: 'rejected',
+      rejectionReasonCategory: 'identifying_information',
+      reviewNote: 'Named the interviewer directly.',
+    });
+
+    const pending = entry.roundRatings.find((r) => r.id === secondRatingId);
+    expect(pending).toMatchObject({
+      status: 'pending',
+      rejectionReasonCategory: null,
+      reviewNote: null,
+    });
   }, 20000);
 
   it("never surfaces another candidate's submissions", async () => {

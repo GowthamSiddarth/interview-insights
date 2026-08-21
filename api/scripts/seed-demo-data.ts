@@ -25,6 +25,7 @@ import {
   CompanySizeBucket,
   ModerationEntityType,
   ModerationFlagReason,
+  ModerationRejectionReason,
   ProcessOutcome,
   RoundType,
   StaffRole,
@@ -122,6 +123,15 @@ export function pickModerationOutcome(): ModerationOutcome {
 // was actually triaged.
 export function pickFlagReason(): ModerationFlagReason {
   return faker.helpers.arrayElement(Object.values(ModerationFlagReason));
+}
+
+// GitHub issue #729 (follow-up to #688, Phase 49) — ModerationService.reject()
+// now 400s without a rejectionReasonCategory, so a seeded rejection needs
+// one too; picks across the full enum, same "synthetic demo data, not a
+// claim about how any specific entry was actually triaged" reasoning as
+// pickFlagReason() above.
+export function pickRejectionReason(): ModerationRejectionReason {
+  return faker.helpers.arrayElement(Object.values(ModerationRejectionReason));
 }
 
 // GitHub issue #524 (Phase 41) — "a handful" of real Moderator rows so
@@ -312,8 +322,9 @@ async function applyModerationOutcome(
 
   const dto = { reviewedBy: SEEDER_LABEL };
   if (outcome === 'approved') await moderationService.approve(entry.id, dto);
-  else if (outcome === 'rejected') await moderationService.reject(entry.id, dto);
-  else await moderationService.flag(entry.id, { ...dto, flagReason: pickFlagReason() });
+  else if (outcome === 'rejected') {
+    await moderationService.reject(entry.id, { ...dto, rejectionReasonCategory: pickRejectionReason() });
+  } else await moderationService.flag(entry.id, { ...dto, flagReason: pickFlagReason() });
 }
 
 async function moderateGeneratedEntities(

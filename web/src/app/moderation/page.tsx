@@ -17,7 +17,6 @@ import {
   ModerationQueueGroup,
   ModerationQueuePriorReview,
   ModerationQueueStatus,
-  ModerationRejectionReason,
   StaffRole,
 } from '@/lib/api';
 import { Button } from '@/components/Button';
@@ -28,6 +27,7 @@ import { PageContainer } from '@/components/PageContainer';
 import { StatusPill } from '@/components/StatusPill';
 import { formatRoundLabel } from '@/lib/format-round-label';
 import { formatSlaStatus } from '@/lib/format-sla-status';
+import { REJECTION_REASON_LABEL } from '@/lib/status';
 import { ROUND_TYPE_LABELS } from '../wizard/round-type-labels';
 
 const ENTITY_TYPE_LABEL: Record<ModerationQueueEntry['entityType'], string> = {
@@ -72,19 +72,6 @@ const CATEGORY_LABEL: Record<ModerationQueueCategory, string> = {
 function CategoryBadge({ category }: { category: ModerationQueueCategory }) {
   return <Chip>{CATEGORY_LABEL[category]}</Chip>;
 }
-
-// GitHub issue #688/#691 (Phase 49, D104) — a moderator's own stated
-// rejection reason, human-readable. Never surfaced before now — #688 only
-// added the field to the backend DTO, this page is the first place it's
-// actually rendered.
-const REJECTION_REASON_LABEL: Record<ModerationRejectionReason, string> = {
-  low_quality: 'Low quality',
-  guideline_violation: 'Guideline violation',
-  identifying_information: 'Identifying information',
-  spam_or_promotional: 'Spam or promotional',
-  inaccurate_or_unverifiable: 'Inaccurate or unverifiable',
-  other: 'Other',
-};
 
 const DECISION_LABEL: Record<'approved' | 'rejected' | 'flagged', string> = {
   approved: 'Approved',

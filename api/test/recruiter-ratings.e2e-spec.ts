@@ -182,7 +182,7 @@ describe('Recruiter interactions + ratings (e2e)', () => {
     await server()
       .post(`/moderation/queue/${entry.id}/reject`)
       .set('Cookie', adminCookie)
-      .send({})
+      .send({ rejectionReasonCategory: 'other' })
       .expect(201);
 
     const publicRatings = await server()

@@ -683,7 +683,10 @@ function notificationFor(event: ModerationEvent): { subject: string; text: strin
     return pendingReviewSubjectAndBody(event.isResubmission ?? false);
   }
   if (isStatusChangedEvent(event) && (event.newStatus === 'approved' || event.newStatus === 'rejected')) {
-    return subjectAndBodyFor(event.newStatus);
+    // GitHub issue #729 (follow-up to #688, Phase 49) — undefined on an
+    // 'approved' event, same "harmless when absent" shape
+    // subjectAndBodyFor() already treats them as.
+    return subjectAndBodyFor(event.newStatus, event.rejectionReasonCategory, event.reviewNote);
   }
   return null;
 }

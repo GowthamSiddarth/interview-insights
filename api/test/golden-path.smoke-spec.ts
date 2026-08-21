@@ -141,7 +141,7 @@ describe('Full golden path (e2e smoke test)', () => {
     await server()
       .post(`/moderation/queue/${entry.id}/reject`)
       .set('Cookie', adminCookie)
-      .send({})
+      .send({ rejectionReasonCategory: 'other' })
       .expect(201);
   }
 

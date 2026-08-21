@@ -108,6 +108,13 @@ company resubmission produces no ack email, only the eventual
 `*.status_changed` event additionally carries `previousStatus`
 (always `'pending'` — `ModerationService.review()` only ever runs against
 an unreviewed entry), `newStatus`, and the optional `reviewedBy` label.
+GitHub issue #729 (follow-up to #688, Phase 49) added two more optional
+fields, same non-breaking v1 addition as `moderationQueueEntryId`
+before it: `rejectionReasonCategory`/`reviewNote`, the moderator's own
+stated rejection reason — populated only when `reject()` is the caller
+(undefined on every `approve()`-produced event), and consumed by
+`notification-service`'s rejection email and `api`'s `/me/submissions`
+alike.
 Every `*.verdict_computed` event carries the full LLM verdict payload
 (`verdict`, `autoApprovalEligible`, `confidence`, `model`,
 `promptContent`, `responseText`) plus an optional `stalled: true` marker

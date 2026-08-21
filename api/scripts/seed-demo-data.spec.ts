@@ -1,4 +1,4 @@
-import { ModerationFlagReason } from '@prisma/client';
+import { ModerationFlagReason, ModerationRejectionReason } from '@prisma/client';
 import {
   assertSeedingAllowed,
   buildTypeMetadata,
@@ -7,6 +7,7 @@ import {
   pickFlagReason,
   pickModerationOutcome,
   pickProcessCount,
+  pickRejectionReason,
   seedModerators,
   SEED_MODERATOR_COUNT,
 } from './seed-demo-data';
@@ -137,6 +138,27 @@ describe('seed-demo-data', () => {
       const seen = new Set<string>();
       for (let i = 0; i < 500; i++) seen.add(pickFlagReason());
       for (const reason of Object.values(ModerationFlagReason)) {
+        expect(seen.has(reason)).toBe(true);
+      }
+    });
+  });
+
+  // GitHub issue #729 (follow-up to #688, Phase 49) — mirrors pickFlagReason's
+  // own coverage: ModerationService.reject() now requires a
+  // rejectionReasonCategory, so a seeded rejection needs one drawn from
+  // the full enum.
+  describe('pickRejectionReason', () => {
+    it('only ever returns a value from the full ModerationRejectionReason enum', () => {
+      const validReasons = new Set(Object.values(ModerationRejectionReason));
+      for (let i = 0; i < 50; i++) {
+        expect(validReasons.has(pickRejectionReason())).toBe(true);
+      }
+    });
+
+    it('is capable of returning every enum member, not just a subset', () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 500; i++) seen.add(pickRejectionReason());
+      for (const reason of Object.values(ModerationRejectionReason)) {
         expect(seen.has(reason)).toBe(true);
       }
     });

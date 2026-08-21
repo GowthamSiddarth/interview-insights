@@ -80,6 +80,20 @@ enum ModerationStatus {
   flagged
 }
 
+// GitHub issue #729 (follow-up to #688, Phase 49) — same purely-for-typing
+// mirror reasoning as ModerationStatus above, needed to type the new
+// `rejectionReasonCategory` field on the *.status_changed.v1 event
+// schemas. Must stay byte-for-byte identical to api's own
+// ModerationRejectionReason enum — see docs/EVENTS.md.
+enum ModerationRejectionReason {
+  low_quality
+  guideline_violation
+  identifying_information
+  spam_or_promotional
+  inaccurate_or_unverifiable
+  other
+}
+
 // GitHub issue #711 (Phase 49, D104) — ReconciliationSweepService's read
 // needs, same minimal-mirror D75 pattern as Candidate/Moderator above.
 // Deliberately narrow: only reviewedAt (to find stale reviewed entries)

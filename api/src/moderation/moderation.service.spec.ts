@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
@@ -956,10 +956,20 @@ describe('ModerationService', () => {
       await expect(service.approve('queue-1', {})).resolves.toBeDefined();
     });
 
+    // GitHub issue #729 (follow-up to #688, Phase 49).
+    it('reject() 400s when no rejectionReasonCategory is given, before touching the entry at all', async () => {
+      mockPendingRoundRatingEntry();
+
+      await expect(service.reject('queue-1', {})).rejects.toThrow(BadRequestException);
+
+      expect(prisma.moderationQueueEntry.updateMany).not.toHaveBeenCalled();
+      expect(prisma.roundRating.update).not.toHaveBeenCalled();
+    });
+
     it('reject() flips the round rating to rejected, does not index it, and does not refresh the analytics view', async () => {
       mockPendingRoundRatingEntry();
 
-      await service.reject('queue-1', {});
+      await service.reject('queue-1', { rejectionReasonCategory: 'other' });
 
       expect(prisma.roundRating.update).toHaveBeenCalledWith({
         where: { id: 'rating-1' },
@@ -987,7 +997,7 @@ describe('ModerationService', () => {
         round: { roundType: 'coding', process: { companyId: 'company-1', roleTitle: 'Engineer' } },
       });
 
-      await service.reject('queue-1', {});
+      await service.reject('queue-1', { rejectionReasonCategory: 'other' });
 
       expect(prisma.roundRating.update).toHaveBeenCalledWith({
         where: { id: 'rating-1' },
@@ -1171,7 +1181,7 @@ describe('ModerationService', () => {
       const state = mockPendingRoundRatingEntry();
       Object.assign(state, { slaDeadline, breachNotifiedAt: null, warningNotifiedAt });
 
-      await service.reject('queue-1', {});
+      await service.reject('queue-1', { rejectionReasonCategory: 'other' });
 
       expect(domainEventPublisher.publish).toHaveBeenCalledWith(
         'moderation.queue.sla_resolved.v1',
@@ -1209,7 +1219,7 @@ describe('ModerationService', () => {
     it('reject() flips a recruiter rating to rejected', async () => {
       mockPendingRecruiterRatingEntry();
 
-      await service.reject('queue-2', {});
+      await service.reject('queue-2', { rejectionReasonCategory: 'other' });
 
       expect(prisma.recruiterRating.update).toHaveBeenCalledWith({
         where: { id: 'rating-2' },
@@ -1246,7 +1256,7 @@ describe('ModerationService', () => {
     it('reject() flips an overall review to rejected', async () => {
       mockPendingOverallReviewEntry();
 
-      await service.reject('queue-3', {});
+      await service.reject('queue-3', { rejectionReasonCategory: 'other' });
 
       expect(prisma.overallReview.update).toHaveBeenCalledWith({
         where: { id: 'review-1' },
@@ -1310,7 +1320,7 @@ describe('ModerationService', () => {
     it('reject() flips a company to rejected and never indexes it', async () => {
       mockPendingCompanyEntry();
 
-      await service.reject('queue-4', {});
+      await service.reject('queue-4', { rejectionReasonCategory: 'other' });
 
       expect(prisma.company.update).toHaveBeenCalledWith({
         where: { id: 'company-1' },
@@ -1333,7 +1343,7 @@ describe('ModerationService', () => {
     it('reject() removes the entry from the moderator search index', async () => {
       mockPendingRoundRatingEntry();
 
-      await service.reject('queue-1', {});
+      await service.reject('queue-1', { rejectionReasonCategory: 'other' });
 
       expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('round_rating', 'rating-1');
     });
@@ -1349,7 +1359,7 @@ describe('ModerationService', () => {
     it('reject() on a company removes it from the moderator search index too', async () => {
       mockPendingCompanyEntry();
 
-      await service.reject('queue-4', {});
+      await service.reject('queue-4', { rejectionReasonCategory: 'other' });
 
       expect(moderationQueueSearchService.removeEntry).toHaveBeenCalledWith('company', 'company-1');
     });
@@ -1405,7 +1415,7 @@ describe('ModerationService', () => {
     it('reject() publishes a recruiter_rating status_changed event', async () => {
       mockPendingRecruiterRatingEntry();
 
-      await service.reject('queue-2', {});
+      await service.reject('queue-2', { rejectionReasonCategory: 'other' });
 
       expect(domainEventPublisher.publish).toHaveBeenCalledWith(
         'moderation.recruiter_rating.status_changed.v1',
@@ -1417,6 +1427,42 @@ describe('ModerationService', () => {
           companyId: 'company-2',
           previousStatus: 'pending',
           newStatus: 'rejected',
+        }),
+        'rating-2',
+      );
+    });
+
+    // GitHub issue #729 (follow-up to #688, Phase 49) — the notification
+    // email and /me both need this to actually be on the wire, not just
+    // persisted on the queue entry.
+    it('reject() carries rejectionReasonCategory and reviewNote on the published status_changed event', async () => {
+      mockPendingRecruiterRatingEntry();
+
+      await service.reject('queue-2', {
+        rejectionReasonCategory: 'guideline_violation',
+        reviewNote: 'Names a specific interviewer.',
+      });
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.recruiter_rating.status_changed.v1',
+        expect.objectContaining({
+          rejectionReasonCategory: 'guideline_violation',
+          reviewNote: 'Names a specific interviewer.',
+        }),
+        'rating-2',
+      );
+    });
+
+    it('approve() publishes no rejectionReasonCategory/reviewNote on the status_changed event', async () => {
+      mockPendingRecruiterRatingEntry();
+
+      await service.approve('queue-2', {});
+
+      expect(domainEventPublisher.publish).toHaveBeenCalledWith(
+        'moderation.recruiter_rating.status_changed.v1',
+        expect.objectContaining({
+          rejectionReasonCategory: undefined,
+          reviewNote: undefined,
         }),
         'rating-2',
       );

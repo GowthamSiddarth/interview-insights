@@ -1,4 +1,4 @@
-import { ModerationStatus } from '@prisma/client';
+import { ModerationRejectionReason, ModerationStatus } from '@prisma/client';
 
 // Duplicated from api/src/events/schemas/round-rating-status-changed.event.ts
 // — same duplicate-rather-than-share reasoning as docs/DECISIONS.md D73/D75.
@@ -21,4 +21,8 @@ export interface RoundRatingStatusChangedEventV1 {
   // round-rating-status-changed.event.ts comment for why. Optional,
   // non-breaking addition to the existing v1 contract per docs/EVENTS.md.
   moderationQueueEntryId?: string;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — see api's own
+  // round-rating-status-changed.event.ts comment for why.
+  rejectionReasonCategory?: ModerationRejectionReason;
+  reviewNote?: string;
 }

@@ -413,6 +413,33 @@ describe('NotificationConsumerService', () => {
       });
     });
 
+    // GitHub issue #729 (follow-up to #688, Phase 49).
+    it('includes the rejectionReasonCategory/reviewNote from the event in the rejected email', async () => {
+      prisma.notificationLog.findUnique.mockResolvedValue(null);
+      prisma.candidate.findUnique.mockResolvedValue({
+        id: 'candidate-1',
+        emailEncrypted: encryptFixture('candidate@example.com'),
+      });
+      prisma.notificationLog.create.mockResolvedValue({});
+
+      await service.processEvent({
+        ...statusChangedEvent('rejected'),
+        rejectionReasonCategory: 'guideline_violation',
+        reviewNote: 'Names a specific interviewer.',
+      });
+
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('The reason given was: a guideline violation.') as string,
+        }),
+      );
+      expect(mailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('Moderator note: "Names a specific interviewer."') as string,
+        }),
+      );
+    });
+
     it('is a no-op for "flagged" — no email sent, no idempotency lookup, no log row written', async () => {
       await service.processEvent(statusChangedEvent('flagged'));
 

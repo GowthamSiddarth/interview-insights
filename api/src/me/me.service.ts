@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ModerationEntityType, ModerationRejectionReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewSearchService } from '../search/review-search.service';
 
@@ -15,6 +16,13 @@ export interface MySubmissionRoundRating {
   technicalDepth: number | null;
   freeText: string | null;
   createdAt: Date;
+  // GitHub issue #729 (follow-up to #688, Phase 49) — the moderator's own
+  // stated reason, when this item's current status is 'rejected'/
+  // 'permanently_rejected'. Null otherwise, or if the rejection predates
+  // #688 (no backfill exists for those, same "honestly unknown" reasoning
+  // as ModerationQueuePriorReview's own comment).
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
 }
 
 export interface MySubmissionRecruiterRating {
@@ -27,6 +35,8 @@ export interface MySubmissionRecruiterRating {
   rejectionMessageAuthenticity: number | null;
   freeText: string | null;
   createdAt: Date;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
 }
 
 export interface MySubmissionOverallReview {
@@ -36,6 +46,8 @@ export interface MySubmissionOverallReview {
   wouldRecommend: boolean;
   reviewText: string | null;
   createdAt: Date;
+  rejectionReasonCategory: ModerationRejectionReason | null;
+  reviewNote: string | null;
 }
 
 export interface MyProcessSubmissions {
@@ -89,6 +101,29 @@ export class MeService {
       },
     });
 
+    // GitHub issue #729 (follow-up to #688, Phase 49) — rejectionReasonCategory/
+    // reviewNote live on moderation_queue, not on the rated entity itself
+    // (the reference is polymorphic, docs/DATA_MODEL.md), so they need
+    // their own batched lookup, same OR-of-refs shape
+    // ModerationService.fetchPriorReviews() already established. Only the
+    // *most recent* reviewed entry per entityId is relevant here — a
+    // candidate's current rejected status corresponds to exactly one
+    // queue entry (the one that set it; a later resubmission would have
+    // already reenqueue()'d and changed status away from rejected).
+    const rejectionReasonsByKey = await this.fetchLatestRejectionReasons(
+      processes.flatMap((process) => [
+        ...process.rounds.flatMap((round) =>
+          round.ratings.map((rating) => ({ entityType: 'round_rating' as const, entityId: rating.id })),
+        ),
+        ...process.recruiterInteractions.flatMap((interaction) =>
+          interaction.ratings.map((rating) => ({ entityType: 'recruiter_rating' as const, entityId: rating.id })),
+        ),
+        ...(process.overallReview
+          ? [{ entityType: 'overall_review' as const, entityId: process.overallReview.id }]
+          : []),
+      ]),
+    );
+
     return processes.map((process) => ({
       processId: process.id,
       companyId: process.companyId,
@@ -113,6 +148,10 @@ export class MeService {
           technicalDepth: rating.technicalDepth,
           freeText: rating.freeText,
           createdAt: rating.createdAt,
+          ...(rejectionReasonsByKey.get(`round_rating:${rating.id}`) ?? {
+            rejectionReasonCategory: null,
+            reviewNote: null,
+          }),
         })),
       ),
       recruiterRatings: process.recruiterInteractions.flatMap((interaction) =>
@@ -126,6 +165,10 @@ export class MeService {
           rejectionMessageAuthenticity: rating.rejectionMessageAuthenticity,
           freeText: rating.freeText,
           createdAt: rating.createdAt,
+          ...(rejectionReasonsByKey.get(`recruiter_rating:${rating.id}`) ?? {
+            rejectionReasonCategory: null,
+            reviewNote: null,
+          }),
         })),
       ),
       overallReview: process.overallReview
@@ -136,9 +179,44 @@ export class MeService {
             wouldRecommend: process.overallReview.wouldRecommend,
             reviewText: process.overallReview.reviewText,
             createdAt: process.overallReview.createdAt,
+            ...(rejectionReasonsByKey.get(`overall_review:${process.overallReview.id}`) ?? {
+              rejectionReasonCategory: null,
+              reviewNote: null,
+            }),
           }
         : null,
     }));
+  }
+
+  // GitHub issue #729 (follow-up to #688, Phase 49) — same "OR of
+  // entityType/entityId refs, ordered reviewedAt desc" shape
+  // ModerationService.fetchPriorReviews() already established, just
+  // keeping only the first (most recent) hit per key instead of a full
+  // history array — /me only ever needs "why is this currently
+  // rejected," not the whole resubmission trail (that's the moderator
+  // queue's own job, ModerationQueuePriorReview).
+  private async fetchLatestRejectionReasons(
+    refs: Array<{ entityType: ModerationEntityType; entityId: string }>,
+  ): Promise<Map<string, { rejectionReasonCategory: ModerationRejectionReason | null; reviewNote: string | null }>> {
+    const byKey = new Map<
+      string,
+      { rejectionReasonCategory: ModerationRejectionReason | null; reviewNote: string | null }
+    >();
+    if (refs.length === 0) return byKey;
+
+    const rows = await this.prisma.moderationQueueEntry.findMany({
+      where: { reviewedAt: { not: null }, OR: refs },
+      orderBy: { reviewedAt: 'desc' },
+      select: { entityType: true, entityId: true, rejectionReasonCategory: true, reviewNote: true },
+    });
+
+    for (const row of rows) {
+      const key = `${row.entityType}:${row.entityId}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, { rejectionReasonCategory: row.rejectionReasonCategory, reviewNote: row.reviewNote });
+      }
+    }
+    return byKey;
   }
 
   // GitHub issue #151 (GDPR erasure). Deletes every row this candidate
