@@ -5355,6 +5355,17 @@ itself.
 Secrets Manager becomes the natural home then, same revisit condition
 D102 already carried.
 
+**Update (GitHub issue #809, Phase 55/57):** `HETZNER_GHCR_PAT` above
+was originally one token, reused both to `docker login ghcr.io` (push,
+needs `write:packages`) and as `ghcr-pull-secret`'s credential on the
+cluster itself. Split into two: `HETZNER_GHCR_PAT` stays
+`write:packages`-scoped and never leaves GitHub Actions; a new
+`HETZNER_GHCR_PULL_PAT`, `read:packages`-only, is the one that reaches
+the cluster as `ghcr-pull-secret` — so a compromised/leaked
+`ghcr-pull-secret` (readable by anyone with cluster access, per this
+decision's own accepted blast-radius tradeoff above) can pull images
+but never push/overwrite one.
+
 ---
 
 ### D106 — notification-service reconciliation sweep, not a Kafka dead-letter topic; fixed via Phase 49, not Phase 8g (GitHub issue #711, Phase 49)
