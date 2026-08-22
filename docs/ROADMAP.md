@@ -2832,6 +2832,22 @@ Ordered by dependency:
       `HETZNER_GHCR_PAT` (CI push only) and a separate
       `read:packages`-only `HETZNER_GHCR_PULL_PAT` (the cluster's pull
       secret)
+- [x] Mail sent from interviewinsights.fyi has no SPF/DKIM/DMARC
+      (GitHub issue #852) — not part of the original 8-issue planning
+      batch above; surfaced 2026-08-21 while brainstorming pre-lean-launch
+      gaps, filed as an ad-hoc addition under this phase's epic per the
+      ad-hoc-work-under-an-epic convention. Verified directly against
+      Cloudflare's authoritative nameservers: `interviewinsights.fyi` had
+      no DKIM, DMARC, or SPF records, so Brevo mail (#655) was
+      unauthenticated — a real risk of magic-link/password-reset email
+      landing in spam or being dropped for real users. Fixed by running
+      Brevo's domain-authentication wizard (branded subdomain `mail`,
+      confirmed unused beforehand); DKIM (`brevo1`/`brevo2._domainkey`
+      CNAMEs) and DMARC (`p=none` report-only) are now live and
+      re-verified against Cloudflare directly. No dedicated SPF record
+      needed — no custom MAIL FROM domain was configured, so the
+      envelope sender stays on Brevo's own SPF-valid domain and DMARC
+      passes via DKIM alignment.
 - [ ] Engineering blog (last) (GitHub issue #810) — 7 of 8 issues
       blogged (`wiki/blog/phase-55-infrastructure-cicd-secrets-hardening/`);
       closes once #806 lands
