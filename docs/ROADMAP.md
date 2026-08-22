@@ -2950,3 +2950,48 @@ Ordered by dependency:
       `MailService`/`mail-transporter.provider.ts` and `PrismaService`
       in all three services (api, notification-service, review-analyzer).
 - [x] Engineering blog (last) (GitHub issue #832)
+
+## Phase 58 — Lean-Launch Readiness
+
+Filed 2026-08-21, from brainstorming what's left before opening the app
+to real public users — a distinct pass from the 2026-08-20 six-domain
+audit (Phases 52-57): that audit covered security, data integrity,
+business process, infra/secrets, frontend/UX, and code quality, but
+none of those passes were scoped to ask "is this ready for a real
+stranger to sign up and use it." Six new gaps came out of that:
+no CAPTCHA/bot-challenge on signup or submission (existing fraud
+defenses are all IP/rate-based, bypassable by distributing requests),
+no Terms of Service/Privacy Policy page despite storing real candidate
+PII and internally-identifiable interviewer/recruiter data, no
+uptime/error-rate observability or alerting beyond disk monitoring
+(#667), no guardrail on Brevo's 300-email/day free-tier cap, no
+cold-start/empty-content strategy for real company pages given the
+`n<3` shrinkage-scoring rule (D4), and no SEO basics (sitemap,
+robots.txt, OG tags). A seventh topic from that same brainstorm — the
+unverified Postgres restore drill — is already tracked as #806 under
+Phase 55's epic (#801); it stays there per GitHub's one-parent-per-
+sub-issue limit rather than being duplicated or re-parented, same
+precedent as #729's relationship to Phase 54. An eighth topic from the
+same brainstorm, mail deliverability (no SPF/DKIM/DMARC), was found,
+fixed, and closed same-day as #852 under Phase 55's epic — not part of
+this phase's scope either, for the same reason. Milestone: "Phase 58 —
+Lean-Launch Readiness". Epic: GitHub issue #854.
+
+Ordered by dependency:
+
+- [ ] No CAPTCHA/bot protection on signup or submission forms (GitHub
+      issue #855)
+- [ ] No Terms of Service or Privacy Policy page (GitHub issue #856)
+- [ ] No uptime/error-rate observability or alerting (GitHub issue
+      #857) — deliberately lighter-weight than Phase 8f's full
+      logs/tracing/metrics stack, scoped to "know within minutes if the
+      site is down," per D9's anti-premature-infrastructure reasoning
+- [ ] No guardrail on Brevo's 300-email/day free-tier cap (GitHub issue
+      #858)
+- [ ] No cold-start/empty-content strategy for real company pages
+      (GitHub issue #859)
+- [ ] No SEO basics — sitemap, robots.txt, Open Graph tags (GitHub
+      issue #860)
+- [ ] Engineering blog (last) (GitHub issue #861) — one post per issue
+      in this phase, plus #852 (same brainstorm pass, filed and closed
+      under Phase 55's epic instead)

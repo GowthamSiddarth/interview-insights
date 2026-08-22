@@ -270,7 +270,19 @@ post per phase — this file no longer inlines that running history.
   (issues #821-#832, epic #820 closed). Once #806 resolves, Phase 55's
   epic/blog close too and Phase 40 (CI Infrastructure: Self-Hosted
   GitHub Actions Runner) is next up again, still blocked on Oracle
-  A1.Flex capacity.
+  A1.Flex capacity. Phase 58 (Lean-Launch Readiness, epic #854,
+  milestone #62) is now planned but not yet implemented — filed
+  2026-08-21 from brainstorming what's left before opening the app to
+  real public users: no CAPTCHA/bot protection (#855), no Terms of
+  Service/Privacy Policy page (#856), no uptime/error-rate observability
+  or alerting (#857), no guardrail on Brevo's 300-email/day cap (#858),
+  no cold-start/empty-content strategy for real company pages (#859), no
+  SEO basics (#860), plus a closing blog issue (#861). Distinct from the
+  2026-08-20 six-domain audit that produced Phases 52-57 — this pass
+  asked "is this ready for a real stranger to use it," not
+  security/data/process/infra/frontend/code-quality correctness. Per
+  this project's "plan before implementing" convention, none of #855-861
+  are started yet.
 
 ## Open decisions still to make
 
