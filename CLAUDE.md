@@ -245,7 +245,13 @@ post per phase — this file no longer inlines that running history.
   live (checked 2026-08-21: `/etc/cron.d/pilot-pg-backup` installed,
   two consecutive successful nightly runs in the log, 4 dumps on disk,
   rotation healthy) — the one thing still unverified is a real restore
-  drill via `pilot-pg-restore.sh`, never yet exercised. Phase 56 (Frontend & UX
+  drill via `pilot-pg-restore.sh`, never yet exercised. A separate
+  ad-hoc finding under this same epic, **#852** (mail from
+  interviewinsights.fyi had no SPF/DKIM/DMARC), is fixed and closed —
+  Brevo's domain-authentication wizard set up DKIM and a report-only
+  DMARC policy, both re-verified live against Cloudflare's authoritative
+  nameservers; no SPF record was needed since mail's envelope sender
+  stays on Brevo's own domain. Phase 56 (Frontend & UX
   Hardening) is fully done and closed — a "don't include real names"
   wizard caption, a type-level guard comment against a future
   interviewer-name leak, required-field enforcement documentation, a
